@@ -472,12 +472,16 @@ create table if not exists public.media_cleanup_queue (
   reason      text not null check (reason in ('car_deleted', 'post_deleted', 'listing_deleted')),
   enqueued_at timestamptz not null default now(),
   attempts    int not null default 0,
+  -- Backoff: a failing object waits (15 minutes, doubling, at most a day)
+  -- instead of being retried by every batch of one run, so a passing
+  -- problem can't use up all ten attempts at once.
+  next_attempt_at timestamptz not null default now(),
   last_error  text,
   primary key (bucket, path)
 );
 comment on table public.media_cleanup_queue is
   'Photos of deleted cars, posts and listings, removed by the media worker only once nothing references them. Service role only.';
-create index if not exists media_cleanup_queue_due_idx on public.media_cleanup_queue (enqueued_at);
+create index if not exists media_cleanup_queue_due_idx on public.media_cleanup_queue (next_attempt_at) where attempts < 10;
 create index if not exists media_cleanup_queue_owner_idx on public.media_cleanup_queue (owner_id, enqueued_at);
 alter table public.media_cleanup_queue enable row level security;
 revoke all on public.media_cleanup_queue from public, anon, authenticated;
@@ -544,7 +548,7 @@ begin
      and split_part(k, '/', 1) in ('avatars', 'car-images', 'activity-images', 'listing-images')
      and split_part(k, '/', 2) = v_owner::text
   on conflict (bucket, path) do update
-    set enqueued_at = now(), attempts = 0, last_error = null, reason = excluded.reason
+    set enqueued_at = now(), attempts = 0, next_attempt_at = now(), last_error = null, reason = excluded.reason
     where media_cleanup_queue.owner_id = excluded.owner_id;
   return old;
 end;

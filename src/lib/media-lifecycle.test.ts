@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
+const sendAdminAlert = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock("@/lib/admin/alerts", () => ({ sendAdminAlert }));
 
 const state = vi.hoisted(() => ({
   referenced: false as boolean | null,
@@ -20,11 +22,15 @@ const defaultRpc = async (name: string): Promise<RpcResult> => {
 };
 const rpc = vi.fn<(name: string, args: Record<string, unknown>) => Promise<RpcResult>>(defaultRpc);
 const writes: { table: string; op: string; filters: [string, unknown][]; values?: unknown }[] = [];
+const queries: { table: string; op: string; filters: [string, unknown][] }[] = [];
 
 function builder(table: string) {
   const entry: { table: string; op: string; filters: [string, unknown][]; values?: unknown } = { table, op: "select", filters: [] };
+  queries.push(entry);
   const b: Record<string, unknown> = {};
-  for (const method of ["select", "order", "limit", "lt", "is"]) b[method] = () => b;
+  for (const method of ["select", "order", "limit", "is"]) b[method] = () => b;
+  b.lt = (column: string, value: unknown) => { entry.filters.push([`lt:${column}`, value]); return b; };
+  b.lte = (column: string, value: unknown) => { entry.filters.push([`lte:${column}`, value]); return b; };
   b.eq = (column: string, value: unknown) => { entry.filters.push([column, value]); return b; };
   b.in = (column: string, value: unknown) => { entry.filters.push([column, value]); return b; };
   b.delete = () => { entry.op = "delete"; writes.push(entry); return b; };
@@ -38,7 +44,15 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => admin }));
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
 
-import { deleteMediaIfUnreferenced, finalizeMediaUrls, ownedDeletionTarget, processMediaCleanupQueue, removeMediaObject } from "./media-lifecycle";
+import {
+  cleanupBackoffMs,
+  deleteMediaIfUnreferenced,
+  finalizeMediaUrls,
+  isDefinitiveStorageRefusal,
+  ownedDeletionTarget,
+  processMediaCleanupQueue,
+  removeMediaObject,
+} from "./media-lifecycle";
 
 const ME = "11111111-1111-4111-8111-111111111111";
 const THEM = "22222222-2222-4222-8222-222222222222";
@@ -51,6 +65,8 @@ beforeEach(() => {
   rpc.mockReset();
   rpc.mockImplementation(defaultRpc);
   writes.length = 0;
+  queries.length = 0;
+  sendAdminAlert.mockClear();
   state.referenced = false;
   state.rpcError = null;
   state.queue = [];
@@ -134,8 +150,8 @@ describe("removeMediaObject — claim before delete (N12 race)", () => {
     expect(remove).not.toHaveBeenCalled();
   });
 
-  it("releases only its own claim when the storage delete fails, and completes it when it succeeds", async () => {
-    remove.mockResolvedValueOnce({ error: { message: "storage down" } });
+  it("releases only its own claim when Storage refuses outright, and completes it when the delete succeeds", async () => {
+    remove.mockResolvedValueOnce({ error: { message: "Forbidden", status: 403, statusCode: "403" } });
     expect(await removeMediaObject(url(ME), ME)).toBe("failed");
     expect(rpc).toHaveBeenCalledWith("release_media_claim", { p_bucket: "listing-images", p_path: `${ME}/photo.webp`, p_token: "token-1" });
     rpc.mockClear();
@@ -205,7 +221,7 @@ describe("two removers of one object (claim tokens)", () => {
     expect(await removeMediaObject(evidence, ME)).toBe("busy");
     expect(remove).toHaveBeenCalledTimes(1);
     // A's delete fails; it releases its own claim (t1) and only that.
-    failA({ error: { message: "storage down" } });
+    failA({ error: { message: "Forbidden", status: 403, statusCode: "403" } });
     expect(await a).toBe("failed");
     expect(claims.has(`${evidence.bucket}/${evidence.path}`)).toBe(false);
     // The evidence is attached, then B retries late: it finds the reference.
@@ -235,7 +251,59 @@ describe("two removers of one object (claim tokens)", () => {
     const run = await processMediaCleanupQueue();
     expect(run).toMatchObject({ busy: 1, failed: 0 });
     expect(remove).not.toHaveBeenCalled();
-    expect(writes.some((w) => w.table === "media_cleanup_queue")).toBe(false);
+    // Deferred past the holder's lease, attempts untouched.
+    expect(writes).toEqual([
+      expect.objectContaining({ table: "media_cleanup_queue", op: "update", values: { next_attempt_at: expect.any(String) } }),
+    ]);
+  });
+
+  /**
+   * Codex P1 (third review): Storage can delete the object and lose the
+   * response. Releasing the claim then let evidence attach to a photo that
+   * no longer existed. An ambiguous failure keeps the claim; the delete is
+   * idempotent, so it is retried, and the claim ends as a tombstone.
+   */
+  const lostResponse = () => ({ error: { name: "StorageUnknownError", message: "fetch failed" } });
+  const attach = (k: string) => {
+    if (claims.has(k)) throw new Error("That photo has been removed from storage. Upload it again.");
+    references.add(k);
+  };
+
+  it("a lost delete response keeps the claim and the immediate idempotent retry completes it", async () => {
+    const evidence = { bucket: "dispute-evidence", path: `${ME}/order/lost.jpg` };
+    const k = `${evidence.bucket}/${evidence.path}`;
+    remove.mockResolvedValueOnce(lostResponse()).mockResolvedValueOnce({ error: null });
+    expect(await removeMediaObject(evidence, ME)).toBe("removed");
+    expect(remove).toHaveBeenCalledTimes(2);
+    expect(rpc.mock.calls.map(([name]) => name)).not.toContain("release_media_claim");
+    expect(claims.get(k)).toEqual({ token: "t1", state: "done" });
+    expect(() => attach(k)).toThrow(/removed from storage/);
+  });
+
+  it("while the outcome stays unknown the claim is kept, so nothing can attach; a later run takes it over and completes", async () => {
+    const evidence = { bucket: "dispute-evidence", path: `${ME}/order/unknown.jpg` };
+    const k = `${evidence.bucket}/${evidence.path}`;
+    remove.mockResolvedValueOnce(lostResponse()).mockResolvedValueOnce(lostResponse());
+    expect(await removeMediaObject(evidence, ME)).toBe("failed");
+    expect(rpc.mock.calls.map(([name]) => name)).not.toContain("release_media_claim");
+    expect(claims.get(k)).toEqual({ token: "t1", state: "active" });
+    // addDisputeEvidence now: refused, the object may already be gone.
+    expect(() => attach(k)).toThrow(/removed from storage/);
+    // Within the lease a second remover is busy; once the lease ends (the
+    // database's takeover), a run repeats the delete and completes.
+    expect(await removeMediaObject(evidence, ME)).toBe("busy");
+    claims.delete(k);
+    expect(await removeMediaObject(evidence, ME)).toBe("removed");
+    expect(claims.get(k)).toEqual({ token: "t2", state: "done" });
+    expect(references.has(k)).toBe(false);
+  });
+
+  it("treats only explicit 4xx refusals as 'nothing was deleted'", () => {
+    for (const status of [400, 401, 403, 404]) expect(isDefinitiveStorageRefusal({ status, statusCode: String(status) })).toBe(true);
+    expect(isDefinitiveStorageRefusal({ statusCode: "403" })).toBe(true);
+    for (const error of [{ status: 500 }, { status: 502 }, { status: 409 }, { message: "fetch failed" }, { name: "AbortError" }, null, "x"]) {
+      expect(isDefinitiveStorageRefusal(error)).toBe(false);
+    }
   });
 });
 
@@ -279,20 +347,68 @@ describe("processMediaCleanupQueue (N51)", () => {
       name === "claim_media_deletion" ? { data: claimed(args.p_path === `${ME}/sold.webp`), error: null } : defaultRpc(name)
     );
     const run = await processMediaCleanupQueue();
-    expect(run).toEqual({ scanned: 2, removed: 1, retained: 1, rejected: 0, busy: 0, failed: 0 });
+    expect(run).toEqual({ scanned: 2, removed: 1, retained: 1, rejected: 0, busy: 0, failed: 0, exhausted: 0 });
     expect(remove).toHaveBeenCalledTimes(1);
     expect(remove).toHaveBeenCalledWith([`${ME}/car/gone.webp`]);
     expect(writes.filter((w) => w.table === "media_cleanup_queue" && w.op === "delete")).toHaveLength(2);
     rpc.mockImplementation(defaultRpc);
   });
 
-  it("retries a transient failure later instead of dropping it", async () => {
+  it("retries a transient failure later, with backoff, instead of dropping it", async () => {
     state.queue = [{ bucket: "car-images", path: `${ME}/car/x.webp`, owner_id: ME, attempts: 2 }];
     state.rpcError = { message: "timeout" };
-    const run = await processMediaCleanupQueue();
+    const at = Date.parse("2026-11-07T12:00:00Z");
+    const run = await processMediaCleanupQueue({ now: () => at });
     expect(run.failed).toBe(1);
-    expect(writes).toContainEqual(expect.objectContaining({ table: "media_cleanup_queue", op: "update", values: expect.objectContaining({ attempts: 3 }) }));
+    expect(writes).toContainEqual(
+      expect.objectContaining({
+        table: "media_cleanup_queue",
+        op: "update",
+        values: { attempts: 3, next_attempt_at: new Date(at + cleanupBackoffMs(3)).toISOString(), last_error: "transient failure" },
+      })
+    );
     expect(writes.some((w) => w.table === "media_cleanup_queue" && w.op === "delete")).toBe(false);
+  });
+
+  it("only picks rows that are due and have attempts left", async () => {
+    const at = Date.parse("2026-11-07T12:00:00Z");
+    await processMediaCleanupQueue({ now: () => at });
+    expect(queries.find((q) => q.table === "media_cleanup_queue" && q.op === "select")?.filters).toEqual([
+      ["lt:attempts", 10],
+      ["lte:next_attempt_at", new Date(at).toISOString()],
+    ]);
+  });
+
+  /**
+   * Codex P2 (third review): with one failing object in a backlog, every
+   * batch of one run picked it again and spent all ten attempts at once.
+   * Now each object is tried at most once per run, waits out a growing
+   * backoff (always past the 10-minute claim lease), and an operator is
+   * alerted when its last attempt goes.
+   */
+  it("tries a failing object once per run however many batches drain, and backs off past the claim lease", async () => {
+    const stuck = { bucket: "car-images", path: `${ME}/car/stuck.webp`, owner_id: ME, attempts: 0 };
+    state.queue = [stuck];
+    state.rpcError = { message: "timeout" };
+    const seen = new Set<string>();
+    await processMediaCleanupQueue({ seen });
+    await processMediaCleanupQueue({ seen });
+    await processMediaCleanupQueue({ seen });
+    expect(rpc.mock.calls.filter(([name]) => name === "claim_media_deletion")).toHaveLength(1);
+    expect(writes.filter((w) => w.table === "media_cleanup_queue" && w.op === "update")).toHaveLength(1);
+    expect(cleanupBackoffMs(1)).toBeGreaterThan(10 * 60_000);
+    expect(cleanupBackoffMs(2)).toBe(2 * cleanupBackoffMs(1));
+    expect(cleanupBackoffMs(20)).toBe(24 * 60 * 60_000);
+  });
+
+  it("alerts operators, once per object, when the last attempt fails", async () => {
+    state.queue = [{ bucket: "car-images", path: `${ME}/car/last.webp`, owner_id: ME, attempts: 9 }];
+    state.rpcError = { message: "timeout" };
+    const run = await processMediaCleanupQueue();
+    expect(run.exhausted).toBe(1);
+    expect(sendAdminAlert).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "media_cleanup_stuck", dedupKey: `media-cleanup:car-images/${ME}/car/last.webp` })
+    );
   });
 
   it("never removes a queued object that isn't in its owner's folder", async () => {

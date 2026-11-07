@@ -399,6 +399,9 @@ begin
   select count(*) into n from public.media_cleanup_queue where owner_id = seller;
   -- 6 named above plus the legacy body-only photo from check 4.
   if n <> 7 then raise exception 'FAIL 6: expected 7 queued photos, found %', n; end if;
+  if exists (select 1 from public.media_cleanup_queue where owner_id = seller and (next_attempt_at > now() or attempts <> 0)) then
+    raise exception 'FAIL 6: newly queued photos are not due straight away';
+  end if;
   if exists (select 1 from public.media_cleanup_queue where owner_id = buyer or path like buyer || '/%' or path like seller || '/offsite%') then
     raise exception 'FAIL 6: deleting content queued another member''s upload, or one off our storage';
   end if;

@@ -50,9 +50,11 @@ async function run(request: Request) {
     // backlog still clears within the day the privacy page promises. Stop
     // early when a batch makes no progress (only busy or failing rows left).
     const started = Date.now();
-    const cleanup = { scanned: 0, removed: 0, retained: 0, rejected: 0, busy: 0, failed: 0 };
+    const cleanup = { scanned: 0, removed: 0, retained: 0, rejected: 0, busy: 0, failed: 0, exhausted: 0 };
+    // Each queued object at most once per run (failures are deferred anyway).
+    const seen = new Set<string>();
     for (;;) {
-      const batch = await processMediaCleanupQueue({ admin, limit: BATCH });
+      const batch = await processMediaCleanupQueue({ admin, limit: BATCH, seen });
       for (const key of Object.keys(cleanup) as (keyof typeof cleanup)[]) cleanup[key] += batch[key];
       const progressed = batch.removed + batch.retained + batch.rejected;
       if (batch.scanned < BATCH || progressed === 0 || Date.now() - started > CLEANUP_BUDGET_MS) break;

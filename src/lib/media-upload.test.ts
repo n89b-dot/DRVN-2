@@ -115,6 +115,30 @@ describe("upload failures stay per file and readable (N64)", () => {
     expect(result.failed).toEqual([expect.objectContaining({ reason: expect.stringMatching(/IMG_2\.HEIC is a HEIC photo.*JPEG/), retryable: false })]);
   });
 
+  it("converts a HEIC to JPEG in a browser that can decode it, and uploads the JPEG", async () => {
+    // A browser that decodes HEIC (Safari): createImageBitmap + canvas work.
+    const close = vi.fn();
+    vi.stubGlobal("createImageBitmap", vi.fn(async () => ({ width: 4032, height: 3024, close })));
+    vi.stubGlobal("document", {
+      createElement: () => ({
+        width: 0,
+        height: 0,
+        getContext: () => ({ drawImage: vi.fn() }),
+        toBlob: (done: (blob: Blob) => void, type: string) => done(new Blob(["jpeg bytes"], { type })),
+      }),
+    });
+    const fetch = vi.fn(async () => Response.json({ url: "https://cdn.test/u1/x.webp", path: "u1/x.webp" }));
+    vi.stubGlobal("fetch", fetch);
+    // Small HEIC: the size/scale shortcut must not skip it.
+    const heic = new File(["tiny heic"], "IMG_4.HEIC", { type: "image/heic" });
+    const result = await uploadImages({ files: [heic], bucket: "car-images", pathPrefix: "u1" });
+    expect(result.failed).toEqual([]);
+    const sent = (fetch.mock.calls[0] as unknown as [string, { body: FormData }])[1].body.get("file") as File;
+    expect(sent.name).toBe("IMG_4.jpg");
+    expect(sent.type).toBe("image/jpeg");
+    expect(close).toHaveBeenCalled();
+  });
+
   it("explains a HEIC the browser can't convert rather than uploading what the server can't decode", async () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);

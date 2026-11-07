@@ -2617,6 +2617,7 @@ export type Database = {
           bucket: string
           enqueued_at: string
           last_error: string | null
+          next_attempt_at: string
           owner_id: string
           path: string
           reason: string
@@ -2626,6 +2627,7 @@ export type Database = {
           bucket: string
           enqueued_at?: string
           last_error?: string | null
+          next_attempt_at?: string
           owner_id: string
           path: string
           reason: string
@@ -2635,6 +2637,7 @@ export type Database = {
           bucket?: string
           enqueued_at?: string
           last_error?: string | null
+          next_attempt_at?: string
           owner_id?: string
           path?: string
           reason?: string

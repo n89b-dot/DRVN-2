@@ -10,6 +10,7 @@ import {
   type StorageObjectRef,
 } from "@/lib/media-url";
 import { reportError } from "@/lib/monitoring";
+import { sendAdminAlert } from "@/lib/admin/alerts";
 
 /**
  * Uploaded-media lifecycle (migrations 0029, 20261107150500).
@@ -40,6 +41,20 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 export type MediaRemovalOutcome = "removed" | "referenced" | "invalid" | "busy" | "failed";
 
 type ClaimAnswer = { status: "claimed"; token: string } | { status: "referenced" | "busy" | "gone" | "invalid" };
+
+/**
+ * A Storage refusal that guarantees nothing was deleted: the request was
+ * rejected (bad request, not authorised, forbidden, no such bucket) before
+ * any object was touched. Anything else — a network failure, a timeout, a
+ * 5xx, a response that couldn't be read — may have deleted the object and
+ * lost the answer, so it must never reopen the object to new references.
+ */
+export function isDefinitiveStorageRefusal(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const { status, statusCode } = error as { status?: unknown; statusCode?: unknown };
+  const code = typeof status === "number" ? status : Number(statusCode);
+  return code === 400 || code === 401 || code === 403 || code === 404;
+}
 
 function readClaim(data: unknown): ClaimAnswer | null {
   if (!data || typeof data !== "object") return null;
@@ -99,11 +114,25 @@ export async function removeMediaObject(
     if (claim.status === "busy") return "busy";
 
     if (claim.status === "claimed") {
-      const { error: removeError } = await admin.storage.from(ref.bucket).remove([ref.path]);
+      const bucket = admin.storage.from(ref.bucket);
+      let { error: removeError } = await bucket.remove([ref.path]);
+      if (removeError && !isDefinitiveStorageRefusal(removeError)) {
+        // Ambiguous: Storage may have deleted it and lost the response. The
+        // delete is idempotent (removing a missing object succeeds), so try
+        // once more; success means the object is gone either way.
+        ({ error: removeError } = await bucket.remove([ref.path]));
+      }
       if (removeError) {
-        // The object is still there: release OUR claim so it can be used again.
-        const released = await admin.rpc("release_media_claim", { p_bucket: ref.bucket, p_path: ref.path, p_token: claim.token });
-        if (released.error) reportError("[media-gc] claim release failed", { bucket: ref.bucket, error: released.error });
+        if (isDefinitiveStorageRefusal(removeError)) {
+          // Nothing was deleted: release OUR claim so it can be used again.
+          const released = await admin.rpc("release_media_claim", { p_bucket: ref.bucket, p_path: ref.path, p_token: claim.token });
+          if (released.error) reportError("[media-gc] claim release failed", { bucket: ref.bucket, error: released.error });
+        } else {
+          // Still ambiguous: KEEP the claim. The object may already be gone,
+          // so nothing may attach to it; a later run takes the claim over
+          // when its lease ends, repeats the idempotent delete and completes.
+          reportError("[media-gc] storage delete outcome unknown; claim kept", { bucket: ref.bucket, removeError });
+        }
         if (options.strict) throw new Error("Storage remove failed");
         reportError("[media-gc] storage remove failed", { bucket: ref.bucket, removeError });
         return "failed";
@@ -169,47 +198,93 @@ export async function deleteMediaIfUnreferenced(
 }
 
 const CLEANUP_MAX_ATTEMPTS = 10;
+/** Retry delay after a failure: 15 minutes, doubling, at most a day. Always
+ *  past the 10-minute claim lease, so the retry can take a kept claim over. */
+export function cleanupBackoffMs(attempts: number): number {
+  return Math.min(15 * 60_000 * 2 ** Math.max(0, attempts - 1), 24 * 60 * 60_000);
+}
+/** Another remover holds the claim: look again once its lease has passed. */
+const BUSY_DEFER_MS = 11 * 60_000;
 
-export type CleanupRun = { scanned: number; removed: number; retained: number; rejected: number; busy: number; failed: number };
+export type CleanupRun = {
+  scanned: number;
+  removed: number;
+  retained: number;
+  rejected: number;
+  busy: number;
+  failed: number;
+  /** Rows that just used their last attempt; an operator alert went out. */
+  exhausted: number;
+};
 
 /**
  * Works the durable cleanup queue (N51): photos of deleted cars, posts and
  * listings, queued by the database in the same transaction as the delete.
  * Each object goes only if nothing references it any more — a photo a
- * buyer's order snapshot keeps stays. A transient failure is retried on a
- * later run; after ten tries the row stays put for an operator.
+ * buyer's order snapshot keeps stays. A transient failure is retried with
+ * backoff on a later run; after ten tries the row stays put and an operator
+ * alert goes out.
  */
 export async function processMediaCleanupQueue(
-  options: { ownerId?: string; limit?: number; admin?: AdminClient } = {}
+  options: { ownerId?: string; limit?: number; admin?: AdminClient; seen?: Set<string>; now?: () => number } = {}
 ): Promise<CleanupRun> {
   const admin = options.admin ?? createAdminClient();
-  const run: CleanupRun = { scanned: 0, removed: 0, retained: 0, rejected: 0, busy: 0, failed: 0 };
+  const now = options.now ?? Date.now;
+  const run: CleanupRun = { scanned: 0, removed: 0, retained: 0, rejected: 0, busy: 0, failed: 0, exhausted: 0 };
   let query = admin
     .from("media_cleanup_queue")
     .select("bucket, path, owner_id, attempts")
     .lt("attempts", CLEANUP_MAX_ATTEMPTS)
-    .order("enqueued_at")
+    .lte("next_attempt_at", new Date(now()).toISOString())
+    .order("next_attempt_at")
     .limit(options.limit ?? 200);
   if (options.ownerId) query = query.eq("owner_id", options.ownerId);
   const { data, error } = await query;
   if (error) throw new Error("Media cleanup queue unavailable");
 
   for (const row of data ?? []) {
+    // At most once per invocation: a caller draining several batches passes
+    // one `seen` set, and every processed row is either dequeued or deferred.
+    const key = `${row.bucket}/${row.path}`;
+    if (options.seen?.has(key)) continue;
+    options.seen?.add(key);
     run.scanned += 1;
     const outcome = await removeMediaObject({ bucket: row.bucket, path: row.path }, row.owner_id, { admin });
     if (outcome === "busy") {
-      // Another run holds it; it stays queued, attempts untouched.
+      // Another run holds it: look again after its lease, attempts untouched.
       run.busy += 1;
+      const defer = await admin
+        .from("media_cleanup_queue")
+        .update({ next_attempt_at: new Date(now() + BUSY_DEFER_MS).toISOString() })
+        .eq("bucket", row.bucket)
+        .eq("path", row.path);
+      if (defer.error) reportError("[media-cleanup] busy deferral failed", defer.error);
       continue;
     }
     if (outcome === "failed") {
       run.failed += 1;
+      const attempts = row.attempts + 1;
       const retry = await admin
         .from("media_cleanup_queue")
-        .update({ attempts: row.attempts + 1, last_error: "transient failure" })
+        .update({
+          attempts,
+          next_attempt_at: new Date(now() + cleanupBackoffMs(attempts)).toISOString(),
+          last_error: "transient failure",
+        })
         .eq("bucket", row.bucket)
         .eq("path", row.path);
       if (retry.error) reportError("[media-cleanup] retry bookkeeping failed", retry.error);
+      if (attempts >= CLEANUP_MAX_ATTEMPTS) {
+        // Out of retries: the deleted content's photo is still public. Say
+        // so where operators look (the admin alert outbox), once per object.
+        run.exhausted += 1;
+        await sendAdminAlert({
+          kind: "media_cleanup_stuck",
+          title: "A deleted photo could not be removed from storage",
+          detail: `${row.bucket}/${row.path} failed ${attempts} cleanup attempts and is no longer retried. Fix the cause, then set its media_cleanup_queue attempts back to 0.`,
+          dedupKey: `media-cleanup:${row.bucket}/${row.path}`,
+        });
+      }
       continue;
     }
     if (outcome === "removed") run.removed += 1;
