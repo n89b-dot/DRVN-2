@@ -317,7 +317,7 @@ begin
   loop
     v_email := null;
     select u.email into v_email from auth.users u
-    where u.id = v_row.user_id and u.email_confirmed_at is not null and nullif(btrim(u.email), '') is not null;
+    where u.id = v_row.user_id and u.confirmed_at is not null and nullif(btrim(u.email), '') is not null;
 
     v_reason := case
       when not v_row.alert then 'alert_off'

@@ -40,7 +40,7 @@ declare
   v_code text;
   n integer;
 begin
-  insert into auth.users(id, email, email_confirmed_at) values
+  insert into auth.users(id, email, confirmed_at) values
     (v_user, 'digest-member@drvn.test', now()),
     (v_other, 'digest-other@drvn.test', now());
   insert into public.profiles(id, username) values (v_user, 'digest_member'), (v_other, 'digest_other')
@@ -271,12 +271,12 @@ begin
   end if;
   update public.profiles set notification_prefs = '{}' where id = v_user;
   update public.saved_search_email_digests set status = 'pending', skip_reason = null where id = v_second;
-  update auth.users set email_confirmed_at = null where id = v_user;
+  update auth.users set confirmed_at = null where id = v_user;
   perform 1 from public.claim_saved_search_digests(200, 300);
   if (select skip_reason from public.saved_search_email_digests where id = v_second) is distinct from 'no_address' then
     raise exception 'FAIL I2: an unconfirmed address was mailed';
   end if;
-  update auth.users set email_confirmed_at = now() where id = v_user;
+  update auth.users set confirmed_at = now() where id = v_user;
   update public.saved_search_email_digests set status = 'pending', skip_reason = null where id = v_second;
   insert into public.account_deletion_requests(user_id, outcome, next_action) values (v_user, 'cleanup_pending', 'zz guard');
   perform 1 from public.claim_saved_search_digests(200, 300);
