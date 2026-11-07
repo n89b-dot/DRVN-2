@@ -1,7 +1,14 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { adminReplayWebhookEvent, adminReplaceFailedRefund, adminResolveRecovery, adminRunTransferWorker } from "@/lib/admin/actions";
+import {
+  adminCancelCarryPayout,
+  adminReplayWebhookEvent,
+  adminReplaceFailedRefund,
+  adminResolveRecovery,
+  adminRetryCarryPayout,
+  adminRunTransferWorker,
+} from "@/lib/admin/actions";
 import { payoutAlertChip, refundChip, transferChip } from "@/lib/admin/presentation";
 import { getPaymentsOps } from "@/lib/admin/queries";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
@@ -10,7 +17,7 @@ import { cx, isPersonStub, personLabel } from "@/lib/format";
 import { ActionDialog } from "../_components/action-dialog";
 import { ConsoleEmpty } from "../_components/console-empty";
 import { PayloadViewer } from "../_components/payload-viewer";
-import { SearchField } from "@/components/ui";
+import { ObjectRow, SearchField } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -118,6 +125,9 @@ export default async function AdminPaymentsPage({
                         kind: "select",
                         name: "outcome",
                         label: "Outcome",
+                        // Never answered by default: an operator chooses
+                        // recovered or written off, or the form won't submit.
+                        placeholder: "Choose an outcome",
                         options: [
                           { value: "recovered", label: "Recovered" },
                           { value: "written_off", label: "Written off" },
@@ -226,6 +236,70 @@ export default async function AdminPaymentsPage({
             mark="—"
             title="No held or stuck transfers"
             body="Sellers who sold before finishing payout onboarding appear here instead of vanishing into an error log."
+          />
+        )}
+      </section>
+
+      <section aria-label="Seller credit payouts" className="mb-8">
+        <span className="microlabel">Seller credit payouts stuck ({ops.stuckCarryPayouts.length})</span>
+        {ops.stuckCarryPayouts.length ? (
+          <div className="rowlist">
+            {ops.stuckCarryPayouts.map((p) => (
+              <ObjectRow
+                key={p.id}
+                title={
+                  <>
+                    <span className={cx(isPersonStub(p.seller) && "person--stub")}>{personLabel(p.seller)}</span>
+                    {" · "}
+                    <span className="kv">{formatPrice(p.amount_cents)}</span>
+                  </>
+                }
+                meta={
+                  <>
+                    {p.attempts} attempt{p.attempts === 1 ? "" : "s"} · since {new Date(p.created_at).toLocaleDateString()} ·{" "}
+                    {p.provider_call_may_have_occurred ? "Stripe may have been called" : "nothing sent"} · {p.id.slice(0, 8)}
+                    {p.last_error && <span className="mt-0.5 block">{p.last_error}</span>}
+                  </>
+                }
+                actions={
+                  <>
+                    <ActionDialog
+                      action={adminRetryCarryPayout}
+                      title="Retry seller credit payout"
+                      trigger="Retry"
+                      triggerClassName="relbtn !static"
+                      hidden={{ payout_id: p.id }}
+                      confirmNote={
+                        p.provider_call_may_have_occurred
+                          ? `Puts the payout back in the queue. Stripe may already hold a transfer in group carry-payout:${p.id}; the worker looks it up first and completes rather than sends again.`
+                          : "Puts the payout back in the queue with its attempts reset. The next worker pass sends it; it fails back here if the cause remains."
+                      }
+                      fields={[{ kind: "reason", placeholder: "e.g. platform balance topped up, seller finished onboarding" }]}
+                      submitLabel="Queue again"
+                    />
+                    <ActionDialog
+                      action={adminCancelCarryPayout}
+                      title="Cancel seller credit payout"
+                      trigger="Cancel"
+                      triggerClassName="relbtn !static"
+                      triggerDisabled={p.provider_call_may_have_occurred}
+                      hidden={{ payout_id: p.id }}
+                      danger
+                      confirmNote={`Ends this payout and puts ${formatPrice(p.amount_cents)} back on the seller's credit balance, where the next payout run or transfer collects it. Only possible while nothing was sent to Stripe.`}
+                      fields={[{ kind: "reason", placeholder: "e.g. account closing, credit to be settled on the next transfer" }]}
+                      submitLabel="Cancel payout"
+                    />
+                  </>
+                }
+              />
+            ))}
+          </div>
+        ) : (
+          <ConsoleEmpty
+            className="mt-2"
+            mark="—"
+            title="No stuck credit payouts"
+            body="A seller credit the worker gave up paying out (20261008100100) lands here with Retry and Cancel instead of only an alert."
           />
         )}
       </section>

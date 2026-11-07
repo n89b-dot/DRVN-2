@@ -1,4 +1,4 @@
 <h2>Confirm your new sign-in email</h2>
-<p><a href="{{ .ConfirmationURL }}">Confirm the change</a></p>
-<p>Someone asked to change the sign-in email for a DRVN account from {{ .Email }} to {{ .NewEmail }}. This email goes to both addresses. The change happens only after both links are opened.</p>
+<p><a href="{{ .SiteURL }}/confirm?token_hash={{ .TokenHash }}&amp;type=email_change&amp;redirect_to={{ .RedirectTo }}">Confirm the change</a></p>
+<p>Someone asked to change the sign-in email for a DRVN account from {{ .Email }} to {{ .NewEmail }}. This email goes to both addresses. The change happens only after both links are opened. The link works once, on any device, and expires in one hour.</p>
 <p>If you did not ask for this, do not open the link, and change your password in Settings.</p>

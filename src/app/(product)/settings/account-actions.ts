@@ -4,6 +4,9 @@ import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 
 import { reportError } from "@/lib/monitoring";
+import { deliverNotification } from "@/lib/notifications/deliver";
+import { safeRedirectPath } from "@/lib/safe-redirect";
+import { siteUrl } from "@/lib/site";
 import { createClient } from "@/lib/supabase/server";
 
 export type AccountState = { error?: string; ok?: string; pendingEmail?: boolean };
@@ -46,8 +49,14 @@ export async function changeEmail(_prev: AccountState, formData: FormData): Prom
     };
   }
 
+  // The confirmation link lands on /confirm (token hash, any device), which
+  // reads `next` out of this address and sends the member back to Settings
+  // with a notice — not the home page (readiness 53).
+  const confirmed = new URL("/confirm", siteUrl());
+  confirmed.searchParams.set("next", safeRedirectPath("/settings?changed=email", "/settings"));
+
   try {
-    const { error } = await supabase.auth.updateUser({ email });
+    const { error } = await supabase.auth.updateUser({ email }, { emailRedirectTo: confirmed.toString() });
     if (error) {
       reportError("[settings] email change failed", { userId: user.id, error });
       return { error: error.message };
@@ -116,7 +125,7 @@ export async function changePassword(
     const { error } = await supabase.auth.updateUser({ password: next });
     if (error) {
       const requestedPasswordWorks = await passwordWorks(next);
-      if (requestedPasswordWorks) return { ok: "Password updated." };
+      if (requestedPasswordWorks) return await passwordChanged(user.id);
       if (requestedPasswordWorks === null) {
         return { error: "Couldn't confirm the password change. Try again." };
       }
@@ -124,10 +133,34 @@ export async function changePassword(
       return { error: error.message };
     }
   } catch (error) {
-    if (await passwordWorks(next)) return { ok: "Password updated." };
+    if (await passwordWorks(next)) return await passwordChanged(user.id);
     reportError("[settings] password change transport failed", { userId: user.id, error });
     return { error: "Couldn't confirm the password change. Try again." };
   }
 
+  return passwordChanged(user.id);
+}
+
+/**
+ * The change went through: tell the owner, so a change they didn't make is
+ * something they hear about. Supabase Auth's own "password changed" email is
+ * a project setting that is off by default (and off in config.toml), so DRVN
+ * never relies on it: this goes through DRVN's notification door
+ * (deliver.ts), which is always on. Best-effort: the password is already
+ * changed, so a failed notice never turns the result into an error.
+ */
+async function passwordChanged(userId: string): Promise<AccountState> {
+  try {
+    await deliverNotification({
+      userId,
+      kind: "password_changed",
+      section: "marketplace",
+      title: "Your password was changed",
+      body: "If this was you, nothing else to do. If it wasn't, reset your password now from the sign-in page and contact support.",
+      href: "/settings#account",
+    });
+  } catch (error) {
+    reportError("[settings] password-changed notice failed", { userId, error });
+  }
   return { ok: "Password updated." };
 }

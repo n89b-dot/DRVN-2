@@ -17,7 +17,7 @@ vi.mock("@/lib/supabase/admin", () => ({
     from: (table: string) => {
       const result = state.tables[table] ?? { data: [], count: 0, error: null };
       const builder: Record<string, unknown> = {};
-      for (const m of ["select", "eq", "neq", "lt", "gte", "in", "not", "order", "limit"]) builder[m] = () => builder;
+      for (const m of ["select", "eq", "neq", "lt", "gte", "in", "is", "not", "order", "limit"]) builder[m] = () => builder;
       builder.maybeSingle = async () => result;
       builder.then = (resolve: (value: Result) => unknown) => resolve(result);
       return builder;
@@ -69,6 +69,22 @@ describe("queues", () => {
   it("getPaymentsOps throws when a queue can't be read", async () => {
     state.tables.refund_operations = { data: null, error: { message: "timeout" } };
     await expect(getPaymentsOps()).rejects.toThrow("refund operations");
+  });
+
+  it("getPaymentsOps throws when the stuck seller credit payouts can't be read, never showing none", async () => {
+    state.tables.seller_carry_payouts = { data: null, error: { message: "timeout" } };
+    await expect(getPaymentsOps()).rejects.toThrow("stuck seller credit payouts");
+  });
+
+  it("getPaymentsOps lists stuck seller credit payouts with their seller", async () => {
+    state.tables.seller_carry_payouts = {
+      data: [{ id: "p1", seller_id: "s1", amount_cents: 2500, currency: "USD", status: "failed", attempts: 8, last_error: "exhausted", provider_call_may_have_occurred: false, created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-02T00:00:00Z" }],
+      error: null,
+    };
+    state.tables.profiles = { data: [{ id: "s1", username: "kaito", display_name: "Kaito" }], error: null };
+    const ops = await getPaymentsOps();
+    expect(ops.stuckCarryPayouts).toHaveLength(1);
+    expect(ops.stuckCarryPayouts[0]).toMatchObject({ id: "p1", attempts: 8, seller: { username: "kaito" } });
   });
 
   it("listOpsCases throws when the cases can't be read", async () => {

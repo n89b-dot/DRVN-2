@@ -10,15 +10,37 @@ function origin(request: Request) { return new URL(process.env.NEXT_PUBLIC_SITE_
 // PKCE code that only the browser that asked can exchange: a reset or signup
 // email opened on a phone failed.)
 //
-//   magiclink  a guest's order link while "Confirm email" is off
-//   email      the Confirm signup email: a guest's order link once "Confirm
-//              email" is on, or a member confirming a new account
-//   recovery   a password reset
+//   magiclink     a guest's order link while "Confirm email" is off
+//   email         the Confirm signup email: a guest's order link once "Confirm
+//                 email" is on, or a member confirming a new account
+//   recovery      a password reset
+//   email_change  a member confirming a new sign-in email (sent to both the
+//                 old and the new address; the change completes when both
+//                 have been opened). Lands back on Settings.
 //
 // Nothing else is accepted.
-const LINK_TYPES = new Set(["magiclink", "email", "recovery"]);
-type LinkType = "magiclink" | "email" | "recovery";
-type Flow = "orders" | "signup" | "recovery";
+const LINK_TYPES = new Set(["magiclink", "email", "recovery", "email_change"]);
+type LinkType = "magiclink" | "email" | "recovery" | "email_change";
+type Flow = "orders" | "signup" | "recovery" | "email_change";
+const EMAIL_CHANGE_LANDING = "/settings?changed=email";
+/**
+ * Where an email-change link lands when it didn't sign anyone in: the first
+ * of the two links (the change waits on the other), or a finished change in a
+ * browser with no session. Public, because /settings would bounce a
+ * signed-out visitor to Login without saying the link worked.
+ */
+const EMAIL_CHANGE_RESULT = "/email-change";
+
+/** Settings itself or a page under it — not a lookalike such as /settings-x. */
+function isSettingsPath(path: string, site: string): boolean {
+  if (!path) return false;
+  try {
+    const { pathname } = new URL(path, site);
+    return pathname === "/settings" || pathname.startsWith("/settings/");
+  } catch {
+    return false;
+  }
+}
 
 /**
  * The member emails carry the address the app asked Supabase to return to
@@ -38,6 +60,13 @@ function nextFromRedirectTo(value: string | null, site: string): string {
 /** What the link is for, and where it leads once verified. */
 function linkPlan(type: string, next: string | null, redirectTo: string | null, flow: string | null, site: string): { flow: Flow; next: string } {
   if (type === "recovery") return { flow: "recovery", next: "/login/reset" };
+  if (type === "email_change") {
+    // Only Settings, however the link was built: a destination carried in
+    // the address Supabase was asked to return to is used when it is one of
+    // Settings' own, otherwise the account section.
+    const carried = safeRedirectPath(next, "") || nextFromRedirectTo(redirectTo, site);
+    return { flow: "email_change", next: isSettingsPath(carried, site) ? carried : EMAIL_CHANGE_LANDING };
+  }
   if (type === "email" && (flow === "signup" || redirectTo)) {
     return { flow: "signup", next: safeRedirectPath(next, "") || nextFromRedirectTo(redirectTo, site) };
   }
@@ -48,6 +77,7 @@ const COPY: Record<Flow, { title: string; heading: string; body: string; button:
   orders: { title: "Open your orders", heading: "Open your DRVN orders", body: "Continue to sign in securely. This link can be used once.", button: "Continue to orders" },
   signup: { title: "Confirm your email", heading: "Confirm your email", body: "Continue to finish setting up your DRVN account. This link can be used once.", button: "Confirm and continue" },
   recovery: { title: "Reset your password", heading: "Reset your DRVN password", body: "Continue to choose a new password. This link can be used once.", button: "Choose a new password" },
+  email_change: { title: "Confirm your new email", heading: "Confirm your new DRVN email", body: "Continue to confirm the change to your sign-in email. Both the old and the new address receive a link; the change completes once both have been opened. This link can be used once.", button: "Confirm the change" },
 };
 
 /** GET/HEAD/prefetch never consumes a token or creates a session. */
@@ -81,10 +111,22 @@ export async function POST(request: Request) {
   const type = form.get("type") ?? "magiclink";
   if (token && token.length <= 512 && LINK_TYPES.has(type)) {
     const client = await createClient();
-    const { error } = await client.auth.verifyOtp({ token_hash: token, type: type as LinkType });
+    const { data, error } = await client.auth.verifyOtp({ token_hash: token, type: type as LinkType });
     if (!error) {
       const plan = linkPlan(type, form.get("next"), null, form.get("flow"), site);
       let destination = plan.next;
+      if (plan.flow === "email_change" && !data?.session) {
+        // With both addresses confirming, the first link verifies without a
+        // session (Supabase answers "proceed to the other link"); a link
+        // opened in a signed-out browser has none either. Say it worked on
+        // a public page instead of sending them through Login.
+        // Never judged from the browser's session: it may belong to another
+        // account than the token's. Done only when the verification itself
+        // returns the token's account with no change still waiting.
+        const owner = data?.user;
+        const step = owner && !owner.new_email ? "done" : "pending";
+        return NextResponse.redirect(`${site}${EMAIL_CHANGE_RESULT}?step=${step}`, { status: 303, headers });
+      }
       if (plan.flow === "signup") {
         // The same landing as /callback: a new account picks its handle
         // first, and the destination travels with it.

@@ -107,7 +107,8 @@ Authentication → URL configuration:
 2. **Redirect URLs** (allowlist): `https://<staging-origin>/callback` and
    `https://<staging-origin>/callback?**` (signup confirmation, password
    reset `?next=/login/reset`, Google return), and
-   `https://<staging-origin>/confirm?**` (guest order-access link). Nothing
+   `https://<staging-origin>/confirm?**` (guest order-access link, and the
+   return address of the email-change link). Nothing
    else — a wildcard host would let a link land anywhere.
 
 Authentication → Providers / settings:

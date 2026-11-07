@@ -54,6 +54,7 @@ export const NOTIFICATION_KINDS: NotificationKind[] = [
   { kind: "comment_removed", section: "engagement", pref: null, source: "app", description: "Moderation removed one of your replies." },
   { kind: "account_suspended", section: "marketplace", pref: null, source: "app", description: "Your account was suspended, with the reason. Posting, replying, messaging, Q&A and offers are blocked." },
   { kind: "account_restored", section: "marketplace", pref: null, source: "app", description: "Your suspension was lifted." },
+  { kind: "password_changed", section: "marketplace", pref: null, source: "app", description: "Your password was changed from Settings (readiness 53). Always sent: Supabase Auth's own password-changed email is off unless the project turns it on. Never muted." },
   { kind: "saved_search", section: "marketplace", pref: "saved_searches", source: "app", description: "New inventory matching a saved search with alerts on." },
 ];
 

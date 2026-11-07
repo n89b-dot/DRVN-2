@@ -27,6 +27,7 @@ import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { markNotificationsReadForPage } from "@/lib/notifications-read";
 
 import { ReviewForm } from "../review-form";
+import { UNPROVEN_BUYER_REVIEW_MESSAGE } from "@/features/commerce/review-refusal";
 import { nextAction } from "../next-action";
 import { OrderPipeline, StatusChip } from "@/components/commerce";
 import {
@@ -131,6 +132,7 @@ export default async function OrderDetailPage({
     { data: originOffer },
     ,
     dispatchRisk,
+    { data: buyerReviewable },
   ] = await Promise.all([
     supabase.from("order_items").select("*").eq("order_id", id),
     counterpartyId
@@ -194,6 +196,11 @@ export default async function OrderDetailPage({
     isSeller && order.status === "paid" && !order.is_collection
       ? readSettlementRisk(supabase)
       : Promise.resolve(null),
+    // Whether the seller may review this buyer (20261005101000): a buyer who
+    // checked out as a guest without a confirmed email can't be reviewed on
+    // this order, so the form isn't offered.
+    // Answers only a party to the order; the buyer's own review is unaffected.
+    isSeller ? supabase.rpc("order_buyer_reviewable", { p_order: id }) : Promise.resolve({ data: null }),
   ]);
   const trackingRequiredFrom = dispatchRisk?.trackingRequiredFromCents ?? null;
   const needsFollowedTracking = trackingRequiredFrom !== null && order.total_cents >= trackingRequiredFrom;
@@ -353,8 +360,11 @@ export default async function OrderDetailPage({
 
   const myReview = (reviews ?? []).find((r) => r.reviewer_id === user.id);
   const reviewedByMe = Boolean(myReview);
-  const canReview =
-    ["delivered", "completed"].includes(order.status) && !reviewedByMe;
+  const reviewWindowOpen = ["delivered", "completed"].includes(order.status) && !reviewedByMe;
+  // The seller's form is held back while the buyer is unproven; the database
+  // trigger refuses the insert anyway, and the form would only say so after.
+  const buyerUnproven = isSeller && buyerReviewable === false;
+  const canReview = reviewWindowOpen && !buyerUnproven;
   // R2-04: the same projection the Payouts ledger uses — refunds take back
   // their share and label costs come off. Unreadable adjustments leave the
   // payout unknown rather than higher than it is (R2-05). Charges carried to
@@ -629,6 +639,15 @@ export default async function OrderDetailPage({
               <div className="mt-3">
                 <ReviewForm orderId={id} revieweeName={counterpartyName} />
               </div>
+            </Rv>
+          )}
+
+          {reviewWindowOpen && buyerUnproven && (
+            <Rv className="tile" stagger={3}>
+              <span className="microlabel microlabel--ink">
+                Rate this trade
+              </span>
+              <p className="mt-2 text-dim">{UNPROVEN_BUYER_REVIEW_MESSAGE}</p>
             </Rv>
           )}
 

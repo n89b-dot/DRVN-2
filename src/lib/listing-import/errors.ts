@@ -21,6 +21,7 @@ export const IMPORT_ERROR_CODES = [
   "ai_unavailable",
   "ai_failed",
   "ai_invalid_output",
+  "ai_spend_cap",
   "media_fetch_failed",
   "media_invalid",
   "import_expired",
@@ -76,6 +77,9 @@ const MESSAGES: Record<ImportErrorCode, string> = {
   ai_unavailable: "Listing organization is temporarily unavailable. Try again in a minute.",
   ai_failed: "We couldn't finish organizing the details. Try again — your source is saved.",
   ai_invalid_output: "We couldn't finish organizing the details. Try again — your source is saved.",
+  // Not retryable today: the cap is daily. The source is kept, so the seller
+  // can fill the form in by hand now or import again tomorrow.
+  ai_spend_cap: "That's today's limit for organizing listings. Your source is saved — fill in the details yourself, or import again tomorrow.",
   media_fetch_failed:
     "We couldn't bring over the photos. Your listing details are ready — add your original photos on review.",
   media_invalid:

@@ -14,6 +14,12 @@ describe("resolveImportConfig", () => {
     expect(config.model).toBe("claude-opus-5");
   });
 
+  it("is disabled for a model with no price, since its spend can't be capped", () => {
+    const config = resolveImportConfig({ ANTHROPIC_API_KEY: "k", LISTING_IMPORT_MODEL: "claude-unpriced-1" });
+    expect(config.aiMode).toBe("disabled");
+    expect(resolveImportConfig({ ANTHROPIC_API_KEY: "k", LISTING_IMPORT_MODEL: "claude-sonnet-5-5" }).aiMode).toBe("anthropic");
+  });
+
   it("falls back to the stub outside production", () => {
     expect(resolveImportConfig({ NODE_ENV: "development" }).aiMode).toBe("stub");
     expect(resolveImportConfig({ NODE_ENV: "test" }).aiMode).toBe("stub");
