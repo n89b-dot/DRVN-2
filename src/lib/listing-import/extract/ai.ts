@@ -4,6 +4,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 
 import { anthropicClient } from "@/lib/ai/client";
 import { estimateCostUsd } from "@/lib/ai/config";
+import { providerRejected } from "@/lib/ai/outcome";
 import { databaseLedger, type SpendLedger } from "@/lib/ai/spend";
 import { logUsage, usageRecord } from "@/lib/ai/usage";
 
@@ -214,8 +215,9 @@ async function extractWithAnthropic(
 ): Promise<AiExtractionOutcome> {
   // A model with no price can't be capped: its usage would be stored with no
   // cost and the daily sums would never move. Refused, never made for free.
+  const system = buildSystemPrompt();
   const content = buildUserContent(source);
-  const reserveUsd = importReserveUsd(config.model, content);
+  const reserveUsd = importReserveUsd(config.model, system, content);
   if (reserveUsd === null) return { ok: false, code: "ai_unavailable" };
   const ledger = options.spend ?? databaseLedger();
   // One call's worst case, held before it is made. An unreadable ledger
@@ -224,18 +226,31 @@ async function extractWithAnthropic(
   if (!reservation.ok) return { ok: false, code: reservation.reason === "spend_cap" ? "ai_spend_cap" : "ai_unavailable" };
   let inputTokens = 0;
   let outputTokens = 0;
+  // Spend we can't see: the call's worst case while its outcome is unknown.
+  // A request that timed out, lost its connection, was aborted or got a 5xx
+  // or 408/409/429 may have been processed and billed, so it is charged at
+  // the reservation, never released as free. Only a 4xx the provider refused
+  // outright costs nothing (providerRejected, as the agent's runner does).
+  let unresolvedUsd = 0;
   try {
     const client = options.client ?? (await anthropicClient());
+    unresolvedUsd = reserveUsd;
     // No sampling parameters and no forced tool: current models answer both
     // with a 400. Structured output gives the same guarantee as the old
     // forced tool call; low effort keeps a field extraction cheap.
-    const response = await client.messages.create({
-      model: config.model,
-      max_tokens: IMPORT_MAX_TOKENS,
-      system: buildSystemPrompt(),
-      output_config: { effort: "low", format: { type: "json_schema", schema: LISTING_OUTPUT_SCHEMA } },
-      messages: [{ role: "user", content }],
-    });
+    const response = await client.messages.create(
+      {
+        model: config.model,
+        max_tokens: IMPORT_MAX_TOKENS,
+        system,
+        output_config: { effort: "low", format: { type: "json_schema", schema: LISTING_OUTPUT_SCHEMA } },
+        messages: [{ role: "user", content }],
+      },
+      // One attempt only: the reservation covers one call's worst case, and a
+      // hidden SDK retry could hide a billed attempt behind the final answer.
+      { maxRetries: 0 }
+    );
+    unresolvedUsd = 0;
     inputTokens = response.usage.input_tokens;
     outputTokens = response.usage.output_tokens;
     // A refusal or a cut-off answer may not match the schema: not a listing.
@@ -247,25 +262,40 @@ async function extractWithAnthropic(
     if (!text) return { ok: false, code: "ai_failed" };
     // validate.ts re-checks every field; this only has to be JSON.
     return { ok: true, raw: JSON.parse(text) as unknown };
-  } catch {
+  } catch (error) {
+    if (providerRejected(error)) unresolvedUsd = 0;
     return { ok: false, code: "ai_failed" };
   } finally {
-    // Swaps the hold for what was used; nothing is stored for zero tokens.
-    const usage = usageRecord({ model: config.model, inputTokens, outputTokens, taskId: null, feature: "listing_import" });
-    if (inputTokens + outputTokens > 0) logUsage(usage);
+    // Swaps the hold for what was used, or for the worst case when that is
+    // unknown; nothing is stored for a call that certainly cost nothing.
+    const counted = usageRecord({ model: config.model, inputTokens, outputTokens, taskId: null, feature: "listing_import" });
+    const usage = unresolvedUsd > 0 ? { ...counted, costUsd: (counted.costUsd ?? 0) + unresolvedUsd } : counted;
+    if (inputTokens + outputTokens > 0 || unresolvedUsd > 0) logUsage(usage);
     await ledger.settle(options.ownerId, reservation.hold, usage);
   }
 }
 
 /** Room for adaptive thinking at low effort and the full JSON answer. */
 const IMPORT_MAX_TOKENS = 8000;
+/** The request's framing beyond its text: roles, the format wrapper, the structured-output preamble. */
+const REQUEST_OVERHEAD_TOKENS = 2_000;
+
+/** UTF-8 bytes: an upper bound on the tokens text can become (every token is at least one byte). */
+function utf8Bytes(text: string): number {
+  return Buffer.byteLength(text, "utf8");
+}
+
 /**
- * The call's worst case: the source (about three characters a token, never
- * fewer), the system prompt and schema, and a full answer. Null for a model
- * with no price, which the importer refuses to call.
+ * The call's worst case, never an estimate: every input token is at least
+ * one UTF-8 byte, so the bytes of the system prompt, the source and the
+ * output schema bound the input whatever the script (a token-dense paste
+ * can't cost more than it reserved), plus a full answer. The source is
+ * already capped (MAX_TEXT in schema.ts), so the bound stays small. Null for
+ * a model with no price, which the importer refuses to call.
  */
-export function importReserveUsd(model: string, content: string): number | null {
-  const inputTokens = Math.ceil(content.length / 3) + 3_000;
+export function importReserveUsd(model: string, system: string, content: string): number | null {
+  const inputTokens =
+    utf8Bytes(system) + utf8Bytes(content) + utf8Bytes(JSON.stringify(LISTING_OUTPUT_SCHEMA)) + REQUEST_OVERHEAD_TOKENS;
   return estimateCostUsd(model, inputTokens, IMPORT_MAX_TOKENS);
 }
 

@@ -5,6 +5,8 @@ import { databaseLedger, type SpendLedger, type SpendReservation } from "@/lib/a
 import type { ImportConfig } from "../config";
 import type { NormalizedImportSource } from "../schema";
 import { parseExtraction } from "../schema";
+import { estimateCostUsd } from "@/lib/ai/config";
+
 import { DEFAULT_IMPORT_MODEL } from "../config";
 import { LISTING_OUTPUT_SCHEMA, extractListing, extractWithHeuristics, importReserveUsd } from "./ai";
 
@@ -45,7 +47,9 @@ const db = vi.hoisted(() => {
     if (name === "agent_spend_settle") {
       const hold = state.holds.get(args.p_hold as string);
       if (hold && hold.owner === args.p_owner) state.holds.delete(args.p_hold as string);
-      if ((args.p_input_tokens as number) + (args.p_output_tokens as number) > 0) {
+      // As agent_spend_settle stores it once #79 (20261107190500) is in: a
+      // row for any tokens, or for a cost charged with none (a lost request).
+      if ((args.p_input_tokens as number) + (args.p_output_tokens as number) > 0 || ((args.p_cost_usd as number | undefined) ?? 0) > 0) {
         state.usage.push({
           owner: args.p_owner as string,
           feature: args.p_feature as string,
@@ -208,11 +212,11 @@ describe("extractListing spend", () => {
     expect(outcome).toEqual({ ok: false, code: "ai_unavailable" });
     expect(spend.reserve).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
-    expect(importReserveUsd("claude-unpriced-1", "x")).toBeNull();
+    expect(importReserveUsd("claude-unpriced-1", "", "x")).toBeNull();
   });
 
   it("prices the default importer model", () => {
-    expect(importReserveUsd(DEFAULT_IMPORT_MODEL, "x")).toBeGreaterThan(0);
+    expect(importReserveUsd(DEFAULT_IMPORT_MODEL, "", "x")).toBeGreaterThan(0);
   });
 
   it("stops at the cap through the real ledger: every settled call carries its cost", async () => {
@@ -263,18 +267,105 @@ describe("extractListing spend", () => {
     expect(spend.settle).toHaveBeenCalledWith(owner, "hold-1", expect.objectContaining({ feature: "listing_import", model: DEFAULT_IMPORT_MODEL, inputTokens: 1200, outputTokens: 300, taskId: null, costUsd: expect.any(Number) }));
   });
 
-  it("settles the hold when the model call fails, so the hold never lingers", async () => {
-    const create = vi.fn(async () => { throw new Error("overloaded"); });
+  // A request whose outcome is unknown may have been processed and billed.
+  const statusError = (status: number) => Object.assign(new Error(`status ${status}`), { status });
+  const reservedFor = (text: string) => {
+    let held = 0;
+    return {
+      spend: {
+        reserve: vi.fn<SpendLedger["reserve"]>(async (_owner, _feature, amount) => {
+          held = amount;
+          return { ok: true, hold: "h" };
+        }),
+        settle: vi.fn<SpendLedger["settle"]>(async () => {}),
+      },
+      held: () => held,
+      text,
+    };
+  };
+
+  it("sends one attempt only: no hidden SDK retry behind the answer", async () => {
+    const create = vi.fn(async () => reply());
+    await extractListing(src("FS: thing $100"), config, { ownerId: owner, spend: ledger({ ok: true, hold: "h" }), client: { messages: { create } } as never });
+    expect((create.mock.calls[0] as unknown[])[1]).toEqual({ maxRetries: 0 });
+  });
+
+  it.each([
+    ["a lost connection", new Error("Connection error.")],
+    ["a timeout", Object.assign(new Error("Request timed out."), { name: "APIConnectionTimeoutError" })],
+    ["an abort", Object.assign(new Error("aborted"), { name: "AbortError" })],
+    ["a 500", statusError(500)],
+    ["a 529", statusError(529)],
+    ["a 408", statusError(408)],
+    ["a 409", statusError(409)],
+    ["a 429", statusError(429)],
+  ])("charges %s at the reserved worst case, never as free", async (_label, error) => {
+    const create = vi.fn(async () => { throw error; });
+    const run = reservedFor("FS: thing $100");
+    const outcome = await extractListing(src(run.text), config, { ownerId: owner, spend: run.spend, client: { messages: { create } } as never });
+    expect(outcome).toEqual({ ok: false, code: "ai_failed" });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(run.spend.settle).toHaveBeenCalledWith(owner, "h", expect.objectContaining({ inputTokens: 0, outputTokens: 0, costUsd: run.held() }));
+    expect(run.held()).toBeGreaterThan(0);
+  });
+
+  it.each([400, 401, 403, 404, 413, 422])("a %s the provider refused outright costs nothing", async (status) => {
+    const create = vi.fn(async () => { throw statusError(status); });
     const outcome = await extractListing(src("FS: thing $100"), config, { ownerId: owner, spend: databaseLedger(), client: { messages: { create } } as never });
     expect(outcome).toEqual({ ok: false, code: "ai_failed" });
     expect(db.state.holds.size).toBe(0);
     expect(db.state.usage).toHaveLength(0);
   });
 
-  it("holds more for a longer source", () => {
-    expect(importReserveUsd("claude-sonnet-5-5", "x".repeat(30_000))!).toBeGreaterThan(importReserveUsd("claude-sonnet-5-5", "x")!);
-    // A full answer is always held: 8,000 output tokens at least.
-    expect(importReserveUsd("claude-sonnet-5-5", "x")!).toBeGreaterThanOrEqual((8_000 * 10) / 1_000_000);
+  it("repeated lost requests reach the cap through the real ledger instead of running free", async () => {
+    const create = vi.fn(async () => { throw new Error("Connection error."); });
+    const outcomes: string[] = [];
+    for (let i = 0; i < 50; i++) {
+      const outcome = await extractListing(src("FS: thing $100"), config, { ownerId: owner, client: { messages: { create } } as never });
+      outcomes.push(outcome.ok ? "ok" : outcome.code);
+      if (outcome.ok || outcome.code === "ai_spend_cap") break;
+    }
+    expect(outcomes.at(-1)).toBe("ai_spend_cap");
+    expect(create.mock.calls.length).toBeLessThan(50);
+    expect(db.state.holds.size).toBe(0);
+    const charged = db.state.usage.reduce((total, u) => total + (u.cost ?? 0), 0);
+    expect(charged).toBeGreaterThan(0);
+    expect(charged).toBeLessThanOrEqual(db.state.memberCapUsd);
+  });
+
+  it("holds more for a longer source, and always a full answer", () => {
+    expect(importReserveUsd("claude-sonnet-5-5", "", "x".repeat(30_000))!).toBeGreaterThan(importReserveUsd("claude-sonnet-5-5", "", "x")!);
+    expect(importReserveUsd("claude-sonnet-5-5", "", "x")!).toBeGreaterThanOrEqual((8_000 * 10) / 1_000_000);
+  });
+
+  it("bounds a token-dense source by its UTF-8 bytes, so it can't cost more than it reserved", () => {
+    // 20,000 characters (the importer's cap) of CJK: 60,000 UTF-8 bytes, far
+    // more tokens than characters / 3 would have held.
+    const dense = "\u4e2d".repeat(20_000);
+    const bytes = Buffer.byteLength(dense, "utf8");
+    const reserved = importReserveUsd(DEFAULT_IMPORT_MODEL, "", dense)!;
+    // Even at one token per byte with a full answer, the call fits its hold.
+    expect(reserved).toBeGreaterThanOrEqual(estimateCostUsd(DEFAULT_IMPORT_MODEL, bytes, 8_000)!);
+    expect(reserved).toBeLessThanOrEqual(5); // agent_spend_reserve's ceiling on one hold
+  });
+
+  it("near the cap, a token-dense paste is refused before the call rather than run over it", async () => {
+    const dense = "\u4e2d".repeat(19_000);
+    const ascii = "FS: thing $100";
+    const denseHold = importReserveUsd(DEFAULT_IMPORT_MODEL, "", dense)!;
+    const asciiHold = importReserveUsd(DEFAULT_IMPORT_MODEL, "", ascii)!;
+    expect(denseHold).toBeGreaterThan(asciiHold);
+    // Room for a short post's worst case, not a dense one's.
+    db.state.memberCapUsd = (asciiHold + denseHold) / 2;
+    // Whatever the dense paste would really have cost, at one token a byte.
+    const create = vi.fn(async () => reply({ input_tokens: Buffer.byteLength(dense, "utf8"), output_tokens: 8_000 }));
+    const refused = await extractListing(src(dense), config, { ownerId: owner, client: { messages: { create } } as never });
+    expect(refused).toEqual({ ok: false, code: "ai_spend_cap" });
+    expect(create).not.toHaveBeenCalled();
+    const allowed = await extractListing(src(ascii), config, { ownerId: owner, client: { messages: { create: vi.fn(async () => reply()) } } as never });
+    expect(allowed.ok).toBe(true);
+    const spent = db.state.usage.reduce((total, u) => total + (u.cost ?? 0), 0);
+    expect(spent).toBeLessThanOrEqual(db.state.memberCapUsd);
   });
 
   it("costs nothing in stub mode, so the ledger isn't consulted", async () => {
