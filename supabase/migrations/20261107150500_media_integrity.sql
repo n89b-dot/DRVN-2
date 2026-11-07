@@ -29,14 +29,19 @@
 --  5. Member media references (N55) — a member's write to a photo column
 --     (car cover and gallery, hotspots, mod thumbnail, listing gallery,
 --     post photos and post-body media, avatar) must name a canonical public
---     URL in a public bucket under that member's own folder, and on our
---     storage origin once `job_config.media_storage_origin` is set (the
---     media-gc job records it from the server's own configuration). Server
---     writers (service role, migrations) are not members and are unaffected.
+--     URL in a public bucket under that member's own folder, on our storage
+--     origin, `job_config.media_storage_origin`. That is fail-closed: the
+--     migration can't know the origin, so until the deploy step records it
+--     (docs/production-runbook.md; the upload route and media-gc also record
+--     it from the server's own configuration) no new member photo reference
+--     is accepted. Server writers (service role, migrations) are unaffected.
 --  6. media_cleanup_queue (N51) — deleting a car, a post (including an
 --     admin's removal) or a listing queues its photos; the media worker then
 --     removes each object only if nothing references it any more, so photos a
 --     buyer's order snapshot keeps stay.
+--  7. Deletion claims (N12) — removal claims an object under a lock first,
+--     and every reference write refuses a claimed object, so evidence
+--     attached mid-removal is never lost.
 --
 -- Idempotent.
 -- ============================================================================
@@ -145,6 +150,25 @@ create index if not exists mod_items_image_media_key_idx on public.mod_items (pr
 create index if not exists car_hotspots_image_media_key_idx on public.car_hotspots (private.media_object_key(image_url));
 create index if not exists dispute_evidence_storage_path_idx on public.dispute_evidence (storage_path);
 
+-- Every object key any string anywhere in a JSON document names. A post body
+-- or a commercial snapshot may spell a URL with escapes (`%70hoto.webp`); a
+-- substring test on the decoded path would miss it (N99), so the strings are
+-- canonicalised one by one.
+create or replace function private.json_media_keys(p jsonb)
+returns text[]
+language sql
+immutable
+parallel safe
+set search_path = pg_catalog, pg_temp
+as $$
+  select coalesce(array_agg(distinct k) filter (where k is not null), '{}')
+    from (
+      select private.media_object_key(s #>> '{}') as k
+        from jsonb_path_query(coalesce(p, 'null'::jsonb), 'lax $.** ? (@.type() == "string")') s
+    ) x;
+$$;
+revoke all on function private.json_media_keys(jsonb) from public, anon, authenticated;
+
 -- ============================================================
 -- 2. The one reference check
 -- ============================================================
@@ -180,11 +204,15 @@ begin
     -- Message photos are stored on the message by path (20260928140000).
     or (p_bucket = 'message-photos' and exists (
       select 1 from public.messages where attachments @> array[p_path]))
-    -- Embedded references: the commercial snapshot and post bodies. A
-    -- canonical path has nothing JSON escapes, so a substring test is exact
-    -- enough and errs towards keeping.
-    or exists (select 1 from public.order_items where position(p_path in commercial_snapshot::text) > 0)
-    or exists (select 1 from public.activity_posts where position(p_path in body::text) > 0);
+    -- Embedded references: the commercial snapshot and post bodies. Every
+    -- URL string in them is canonicalised (an escaped spelling still names
+    -- its object); the substring test also keeps any bare path.
+    or exists (select 1 from public.order_items
+                where position(p_path in commercial_snapshot::text) > 0
+                   or (strpos(commercial_snapshot::text, '/storage/v1/') > 0 and k = any(private.json_media_keys(commercial_snapshot))))
+    or exists (select 1 from public.activity_posts
+                where position(p_path in body::text) > 0
+                   or (strpos(body::text, '/storage/v1/') > 0 and k = any(private.json_media_keys(body))));
 end;
 $$;
 revoke all on function public.media_object_referenced(text, text) from public, anon, authenticated;
@@ -301,11 +329,14 @@ begin
      or split_part(k, '/', 2) <> p_owner::text then
     return false;
   end if;
+  -- Fail closed: until the deployment records its storage origin (see
+  -- docs/production-runbook.md), no new member photo reference is accepted —
+  -- otherwise one saved on another host before then would never be
+  -- revalidated.
   select value into v_origin from public.job_config where key = 'media_storage_origin';
-  if v_origin is not null then
-    v_prefix := rtrim(v_origin, '/') || '/storage/v1/object/public/';
-    if left(p_url, length(v_prefix)) <> v_prefix then return false; end if;
-  end if;
+  if v_origin is null or v_origin !~ '^https?://[^/?#@]+/?$' then return false; end if;
+  v_prefix := rtrim(v_origin, '/') || '/storage/v1/object/public/';
+  if left(p_url, length(v_prefix)) <> v_prefix then return false; end if;
   return true;
 end;
 $$;
@@ -446,6 +477,7 @@ set search_path = public, pg_temp
 as $$
 declare
   v_urls text[];
+  v_keys text[] := '{}';
   v_reason text;
 begin
   if tg_table_name = 'cars' then
@@ -454,6 +486,9 @@ begin
       select old.cover_image_url as u
       union all select url from public.car_images where car_id = old.id
       union all select image_url from public.mod_items where car_id = old.id
+      -- A pin's photo can outlive its gallery row (removed from the gallery,
+      -- pins left on it); the cascade would drop it unqueued.
+      union all select image_url from public.car_hotspots where car_id = old.id
     ) s;
   elsif tg_table_name = 'activity_posts' then
     v_reason := 'post_deleted';
@@ -461,6 +496,8 @@ begin
       select url as u from public.activity_images where post_id = old.id
       union all select unnest(private.activity_body_media(old.body))
     ) s;
+    -- Body media in any shape or spelling, already canonical keys.
+    v_keys := private.json_media_keys(old.body);
   elsif tg_table_name = 'listings' then
     v_reason := 'listing_deleted';
     select array_agg(url) into v_urls from public.listing_images where listing_id = old.id;
@@ -468,7 +505,11 @@ begin
 
   insert into public.media_cleanup_queue (bucket, path, owner_id, reason)
   select split_part(k, '/', 1), substr(k, length(split_part(k, '/', 1)) + 2), split_part(k, '/', 2)::uuid, v_reason
-    from (select distinct private.media_object_key(u) as k from unnest(coalesce(v_urls, '{}')) u) keys
+    from (
+      select private.media_object_key(u) as k from unnest(coalesce(v_urls, '{}')) u
+      union
+      select k from unnest(v_keys) k
+    ) keys
    where k is not null
      and split_part(k, '/', 1) in ('avatars', 'car-images', 'activity-images', 'listing-images')
      and split_part(k, '/', 2) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
@@ -488,6 +529,160 @@ create trigger enqueue_deleted_media before delete on public.activity_posts
 drop trigger if exists enqueue_deleted_media on public.listings;
 create trigger enqueue_deleted_media before delete on public.listings
   for each row execute function private.enqueue_deleted_media();
+
+-- ============================================================
+-- 7. Deletion claims — no check-then-delete race (N12)
+-- ============================================================
+-- Removing an object is two steps: the reference check here, then the
+-- Storage delete over HTTP. Without a claim, evidence attached between the
+-- two was deleted anyway. Now the worker claims the object first: under a
+-- per-object transaction lock it re-checks every reference and records a
+-- claim, and every write that would add a reference takes the same lock and
+-- refuses a claimed object. Whichever commits first wins, and the loser
+-- sees it. A claim stays as a tombstone once the object is gone, so a later
+-- write can't adopt a deleted path either; a failed Storage delete releases
+-- it.
+create table if not exists private.media_deletion_claims (
+  bucket     text not null,
+  path       text not null,
+  claimed_at timestamptz not null default now(),
+  primary key (bucket, path)
+);
+revoke all on private.media_deletion_claims from public, anon, authenticated;
+
+create or replace function public.claim_media_deletion(p_bucket text, p_path text)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if p_bucket is null or p_bucket !~ '^[a-z0-9_-]{1,63}$' or not coalesce(private.media_path_ok(p_path), false) then
+    return false;
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended('drvn-media:' || p_bucket || '/' || p_path, 0));
+  -- A fresh statement after the lock: it sees any reference committed by a
+  -- writer that held the lock before us.
+  if public.media_object_referenced(p_bucket, p_path) then return false; end if;
+  insert into private.media_deletion_claims (bucket, path) values (p_bucket, p_path)
+    on conflict (bucket, path) do nothing;
+  return true;
+end;
+$$;
+revoke all on function public.claim_media_deletion(text, text) from public, anon, authenticated;
+grant execute on function public.claim_media_deletion(text, text) to service_role;
+
+create or replace function public.release_media_claim(p_bucket text, p_path text)
+returns void
+language sql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+  delete from private.media_deletion_claims where bucket = p_bucket and path = p_path;
+$$;
+revoke all on function public.release_media_claim(text, text) from public, anon, authenticated;
+grant execute on function public.release_media_claim(text, text) to service_role;
+
+-- The keys a row's reference column names. TG_ARGV[0] is the column;
+-- TG_ARGV[1] how to read it: 'url', 'json', 'evidence' (storage_path and
+-- url) or 'paths:<bucket>' (a text[] of object paths).
+create or replace function private.row_media_keys(p_row jsonb, p_column text, p_kind text)
+returns text[]
+language plpgsql
+immutable
+set search_path = public, pg_temp
+as $$
+declare
+  v_keys text[];
+begin
+  if p_row is null then return '{}'; end if;
+  if p_kind = 'url' then
+    v_keys := array[private.media_object_key(p_row ->> p_column)];
+  elsif p_kind = 'json' then
+    v_keys := private.json_media_keys(p_row -> p_column);
+  elsif p_kind = 'evidence' then
+    v_keys := array[
+      case when private.media_path_ok(p_row ->> 'storage_path') then 'dispute-evidence/' || (p_row ->> 'storage_path') end,
+      private.media_object_key(p_row ->> 'url'),
+      case when private.media_path_ok(p_row ->> 'url') then 'dispute-evidence/' || (p_row ->> 'url') end
+    ];
+  elsif p_kind like 'paths:%' then
+    select array_agg(substr(p_kind, 7) || '/' || e) into v_keys
+      from jsonb_array_elements_text(case when jsonb_typeof(p_row -> p_column) = 'array' then p_row -> p_column else '[]'::jsonb end) e
+     where private.media_path_ok(e);
+  end if;
+  return coalesce(array(select distinct k from unnest(v_keys) k where k is not null order by k), '{}');
+end;
+$$;
+revoke all on function private.row_media_keys(jsonb, text, text) from public, anon, authenticated;
+
+create or replace function private.refuse_claimed_media()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_old text[] := '{}';
+  k text;
+begin
+  if tg_op = 'UPDATE' then
+    v_old := private.row_media_keys(to_jsonb(old), tg_argv[0], tg_argv[1]);
+  end if;
+  -- Sorted, so two writers lock in the same order.
+  foreach k in array private.row_media_keys(to_jsonb(new), tg_argv[0], tg_argv[1]) loop
+    continue when k = any(v_old);
+    perform pg_advisory_xact_lock(hashtextextended('drvn-media:' || k, 0));
+    if exists (select 1 from private.media_deletion_claims c
+                where c.bucket = split_part(k, '/', 1) and c.path = substr(k, length(split_part(k, '/', 1)) + 2)) then
+      raise exception 'That photo has been removed from storage. Upload it again.' using errcode = '55000';
+    end if;
+  end loop;
+  return new;
+end;
+$$;
+revoke all on function private.refuse_claimed_media() from public, anon, authenticated;
+
+-- Named to run after every other BEFORE trigger (the commercial snapshot is
+-- filled by one), and for every writer: the server attaches evidence.
+drop trigger if exists zz_media_claim_guard on public.car_images;
+create trigger zz_media_claim_guard before insert or update of url on public.car_images
+  for each row execute function private.refuse_claimed_media('url', 'url');
+drop trigger if exists zz_media_claim_guard on public.listing_images;
+create trigger zz_media_claim_guard before insert or update of url on public.listing_images
+  for each row execute function private.refuse_claimed_media('url', 'url');
+drop trigger if exists zz_media_claim_guard on public.activity_images;
+create trigger zz_media_claim_guard before insert or update of url on public.activity_images
+  for each row execute function private.refuse_claimed_media('url', 'url');
+drop trigger if exists zz_media_claim_guard on public.order_item_snapshot_images;
+create trigger zz_media_claim_guard before insert or update of url on public.order_item_snapshot_images
+  for each row execute function private.refuse_claimed_media('url', 'url');
+drop trigger if exists zz_media_claim_guard on public.profiles;
+create trigger zz_media_claim_guard before insert or update of avatar_url on public.profiles
+  for each row execute function private.refuse_claimed_media('avatar_url', 'url');
+drop trigger if exists zz_media_claim_guard on public.cars;
+create trigger zz_media_claim_guard before insert or update of cover_image_url on public.cars
+  for each row execute function private.refuse_claimed_media('cover_image_url', 'url');
+drop trigger if exists zz_media_claim_guard on public.mod_items;
+create trigger zz_media_claim_guard before insert or update of image_url on public.mod_items
+  for each row execute function private.refuse_claimed_media('image_url', 'url');
+drop trigger if exists zz_media_claim_guard on public.car_hotspots;
+create trigger zz_media_claim_guard before insert or update of image_url on public.car_hotspots
+  for each row execute function private.refuse_claimed_media('image_url', 'url');
+drop trigger if exists zz_media_claim_guard on public.dispute_evidence;
+create trigger zz_media_claim_guard before insert or update of url, storage_path on public.dispute_evidence
+  for each row execute function private.refuse_claimed_media('url', 'evidence');
+drop trigger if exists zz_media_claim_guard on public.messages;
+create trigger zz_media_claim_guard before insert or update of attachments on public.messages
+  for each row execute function private.refuse_claimed_media('attachments', 'paths:message-photos');
+drop trigger if exists zz_media_claim_guard on public.activity_posts;
+create trigger zz_media_claim_guard before insert or update of body on public.activity_posts
+  for each row execute function private.refuse_claimed_media('body', 'json');
+drop trigger if exists zz_media_claim_guard on public.order_items;
+create trigger zz_media_claim_guard before insert or update of commercial_snapshot on public.order_items
+  for each row execute function private.refuse_claimed_media('commercial_snapshot', 'json');
 
 -- ============================================================
 -- Self-checks

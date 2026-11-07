@@ -6397,6 +6397,10 @@ export type Database = {
         Args: { p_payload_hash: string; p_request: string }
         Returns: Json
       }
+      claim_media_deletion: {
+        Args: { p_bucket: string; p_path: string }
+        Returns: boolean
+      }
       claim_outbound_label_void: {
         Args: { p_shipment: string; p_worker: string }
         Returns: Json
@@ -7691,6 +7695,10 @@ export type Database = {
       refresh_marketplace_facet_counts: { Args: never; Returns: undefined }
       refresh_search_words: { Args: never; Returns: undefined }
       release_expired_reservations: { Args: never; Returns: Json }
+      release_media_claim: {
+        Args: { p_bucket: string; p_path: string }
+        Returns: undefined
+      }
       release_seller_carry_payout: {
         Args: {
           p_attempts: number

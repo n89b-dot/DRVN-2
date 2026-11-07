@@ -2,11 +2,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
-const fixture = vi.hoisted(() => ({ bytes: Buffer.alloc(0), user: { id: "11111111-1111-4111-8111-111111111111" } as { id: string } | null, staged: vi.fn(async () => ({ error: null })) }));
+const fixture = vi.hoisted(() => ({ bytes: Buffer.alloc(0), user: { id: "11111111-1111-4111-8111-111111111111" } as { id: string } | null, staged: vi.fn(async () => ({ error: null })), origin: vi.fn(async () => ({ error: null })) }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: async () => ({ data: { user: fixture.user } }) } }) }));
 vi.mock("@/lib/rate-limit", () => ({ allowAction: async () => true }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({
-  from: () => ({ insert: fixture.staged }),
+  from: (table: string) => (table === "job_config" ? { upsert: fixture.origin } : { insert: fixture.staged }),
   storage: { from: () => ({ getPublicUrl: (path: string) => ({ data: { publicUrl: `https://storage.example/${path}` } }), upload: async (_path: string, bytes: Buffer) => { fixture.bytes = Buffer.from(bytes); return { error: null }; } }) },
 }) }));
 import { POST } from "./route";
@@ -34,6 +34,17 @@ describe("public photo trust boundary", () => {
     const result = await sharp(fixture.bytes).metadata();
     expect(result.format).toBe("webp"); expect(result.exif).toBeUndefined(); expect(result.icc).toBeUndefined();
     expect(fixture.staged).toHaveBeenCalledOnce();
+  });
+  it("records the storage origin the database checks member photo URLs against (N55)", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://proj.supabase.co";
+    fixture.origin.mockClear();
+    const source = await sharp({ create: { width: 4, height: 4, channels: 3, background: "red" } }).jpeg().toBuffer();
+    expect((await POST(request(source))).status).toBe(200);
+    expect(fixture.origin).toHaveBeenCalledWith(
+      { key: "media_storage_origin", value: "https://proj.supabase.co" },
+      { onConflict: "key", ignoreDuplicates: true }
+    );
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
   });
   it("rejects forged image content without publishing anything", async () => {
     expect((await POST(request(Buffer.from("not an image")))).status).toBe(422);

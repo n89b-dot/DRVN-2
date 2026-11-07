@@ -69,18 +69,25 @@ export async function removeMediaObject(
   if (!ref) return "invalid";
   try {
     const admin = options.admin ?? createAdminClient();
-    const referenced = await admin.rpc("media_object_referenced", { p_bucket: ref.bucket, p_path: ref.path });
+    // Claim, don't just check: under a per-object lock the database re-checks
+    // every reference and records a claim that every reference write then
+    // refuses (20261107150500 §7). A check followed by a delete let evidence
+    // attached in between be deleted anyway.
+    const claimed = await admin.rpc("claim_media_deletion", { p_bucket: ref.bucket, p_path: ref.path });
     // An unanswerable check is never "unreferenced" — deleting storage on
     // partial information is the one mistake this module exists to prevent.
-    if (referenced.error || typeof referenced.data !== "boolean") {
+    if (claimed.error || typeof claimed.data !== "boolean") {
       if (options.strict) throw new Error("Media reference lookup failed");
-      reportError("[media-gc] reference check failed", { bucket: ref.bucket, error: referenced.error });
+      reportError("[media-gc] reference check failed", { bucket: ref.bucket, error: claimed.error });
       return "failed";
     }
-    if (referenced.data) return "referenced";
+    if (!claimed.data) return "referenced";
 
     const { error: removeError } = await admin.storage.from(ref.bucket).remove([ref.path]);
     if (removeError) {
+      // The object is still there: let it be referenced again.
+      const released = await admin.rpc("release_media_claim", { p_bucket: ref.bucket, p_path: ref.path });
+      if (released.error) reportError("[media-gc] claim release failed", { bucket: ref.bucket, error: released.error });
       if (options.strict) throw new Error("Storage remove failed");
       reportError("[media-gc] storage remove failed", { bucket: ref.bucket, removeError });
       return "failed";
@@ -211,10 +218,12 @@ export function scheduleMediaCleanup(ownerId: string): void {
 }
 
 /**
- * The database accepts a member's photo URL only on our storage origin once
- * it knows that origin (20261107150500, `job_config.media_storage_origin`).
- * The media job records it from the server's own configuration the first
- * time it runs; a value an operator set is never overwritten.
+ * The database accepts a member's photo URL only on our storage origin,
+ * `job_config.media_storage_origin` (20261107150500), and refuses every new
+ * one while that's missing. The deploy step sets it (docs/production-
+ * runbook.md); the upload route and the media job also record it from the
+ * server's own configuration, so a missed step heals on the first upload. A
+ * value an operator set is never overwritten.
  */
 export async function ensureMediaStorageOrigin(admin: AdminClient): Promise<void> {
   const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;

@@ -9,9 +9,11 @@ const state = vi.hoisted(() => ({
   queue: [] as { bucket: string; path: string; owner_id: string; attempts: number }[],
 }));
 const remove = vi.fn<(paths: string[]) => Promise<{ error: unknown }>>(async () => ({ error: null }));
-const rpc = vi.fn<(name: string, args: Record<string, unknown>) => Promise<{ data: boolean | null; error: unknown }>>(
-  async () => ({ data: state.referenced, error: state.rpcError })
-);
+// claim_media_deletion answers true when it claimed the object (nothing
+// references it), false when something does.
+const defaultRpc = async (name: string) =>
+  name === "claim_media_deletion" ? { data: state.rpcError ? null : !state.referenced, error: state.rpcError } : { data: null, error: null };
+const rpc = vi.fn<(name: string, args: Record<string, unknown>) => Promise<{ data: boolean | null; error: unknown }>>(defaultRpc);
 const writes: { table: string; op: string; filters: [string, unknown][]; values?: unknown }[] = [];
 
 function builder(table: string) {
@@ -79,7 +81,7 @@ describe("deleteMediaIfUnreferenced", () => {
   ])("checks references for the canonical object behind %s", async (_label, target) => {
     state.referenced = true;
     expect(await deleteMediaIfUnreferenced(target, false, ME)).toBe("referenced");
-    expect(rpc).toHaveBeenCalledWith("media_object_referenced", { p_bucket: "listing-images", p_path: `${ME}/photo.webp` });
+    expect(rpc).toHaveBeenCalledWith("claim_media_deletion", { p_bucket: "listing-images", p_path: `${ME}/photo.webp` });
     expect(remove).not.toHaveBeenCalled();
   });
 
@@ -112,6 +114,26 @@ describe("deleteMediaIfUnreferenced", () => {
   });
 });
 
+describe("removeMediaObject — claim before delete (N12 race)", () => {
+  it("claims the object in the database before touching storage", async () => {
+    expect(await removeMediaObject(url(ME), ME)).toBe("removed");
+    expect(rpc.mock.calls[0]).toEqual(["claim_media_deletion", { p_bucket: "listing-images", p_path: `${ME}/photo.webp` }]);
+    expect(remove.mock.invocationCallOrder[0]).toBeGreaterThan(rpc.mock.invocationCallOrder[0]);
+  });
+
+  it("never deletes an object the claim found referenced, e.g. evidence attached meanwhile", async () => {
+    state.referenced = true;
+    expect(await removeMediaObject({ bucket: "dispute-evidence", path: `${ME}/order/e.jpg` }, ME)).toBe("referenced");
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("releases the claim when the storage delete fails, so the object can be used again", async () => {
+    remove.mockResolvedValueOnce({ error: { message: "storage down" } });
+    expect(await removeMediaObject(url(ME), ME)).toBe("failed");
+    expect(rpc).toHaveBeenCalledWith("release_media_claim", { p_bucket: "listing-images", p_path: `${ME}/photo.webp` });
+  });
+});
+
 describe("removeMediaObject — the GC's owner check (N12)", () => {
   it("treats an object outside the verified owner's folder as invalid, never touching storage", async () => {
     // B5: the other party's staged row named the buyer's evidence.
@@ -123,7 +145,7 @@ describe("removeMediaObject — the GC's owner check (N12)", () => {
   it("keeps attached evidence: the database answers 'referenced' by storage path", async () => {
     state.referenced = true;
     expect(await removeMediaObject({ bucket: "dispute-evidence", path: `${ME}/order/e.jpg` }, ME)).toBe("referenced");
-    expect(rpc).toHaveBeenCalledWith("media_object_referenced", { p_bucket: "dispute-evidence", p_path: `${ME}/order/e.jpg` });
+    expect(rpc).toHaveBeenCalledWith("claim_media_deletion", { p_bucket: "dispute-evidence", p_path: `${ME}/order/e.jpg` });
   });
 
   it("only acts on buckets members upload to", () => {
@@ -148,13 +170,13 @@ describe("processMediaCleanupQueue (N51)", () => {
       { bucket: "car-images", path: `${ME}/car/gone.webp`, owner_id: ME, attempts: 0 },
       { bucket: "listing-images", path: `${ME}/sold.webp`, owner_id: ME, attempts: 0 },
     ];
-    rpc.mockImplementation(async (_name, args) => ({ data: args.p_path === `${ME}/sold.webp`, error: null }));
+    rpc.mockImplementation(async (_name, args) => ({ data: args.p_path !== `${ME}/sold.webp`, error: null }));
     const run = await processMediaCleanupQueue();
     expect(run).toEqual({ scanned: 2, removed: 1, retained: 1, rejected: 0, failed: 0 });
     expect(remove).toHaveBeenCalledTimes(1);
     expect(remove).toHaveBeenCalledWith([`${ME}/car/gone.webp`]);
     expect(writes.filter((w) => w.table === "media_cleanup_queue" && w.op === "delete")).toHaveLength(2);
-    rpc.mockImplementation(async () => ({ data: state.referenced, error: state.rpcError }));
+    rpc.mockImplementation(defaultRpc);
   });
 
   it("retries a transient failure later instead of dropping it", async () => {

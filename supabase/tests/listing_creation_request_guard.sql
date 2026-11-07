@@ -49,6 +49,9 @@ declare
   numbers_payload jsonb := jsonb_build_array('ABC123','06M 145 722 H');
   rejected boolean := false;
 begin
+  -- Member photo writes need the storage origin recorded (20261107150500).
+  insert into public.job_config(key, value) values ('media_storage_origin', 'https://proj.supabase.co')
+    on conflict (key) do update set value = excluded.value;
   update public.beta_access_config set enforced=false where singleton=true;
   insert into auth.users(id,email,raw_user_meta_data)
   values

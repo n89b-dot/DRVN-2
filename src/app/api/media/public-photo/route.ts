@@ -3,6 +3,7 @@ import sharp from "sharp";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { allowAction } from "@/lib/rate-limit";
+import { ensureMediaStorageOrigin } from "@/lib/media-lifecycle";
 
 const BUCKETS = new Set(["avatars", "car-images", "activity-images", "listing-images"]);
 /**
@@ -74,6 +75,9 @@ export async function POST(request: Request) {
     heic = false; // decoded: any later failure is ours, not the format's
     const path = `${prefix}/${randomUUID()}.webp`;
     const admin = createAdminClient();
+    // The database refuses member photo references until it knows our
+    // storage origin; record it before handing out a URL to save.
+    await ensureMediaStorageOrigin(admin);
     const { data: { publicUrl: url } } = admin.storage.from(bucket).getPublicUrl(path);
     // Ledger first: a crash after storage succeeds still leaves a GC candidate.
     const staged = await admin.from("staged_uploads").insert({ owner_id: user.id, bucket, path, url });

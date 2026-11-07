@@ -44,6 +44,9 @@ declare
   rejected boolean := false;
 begin
   update public.beta_access_config set enforced = false where singleton = true;
+  -- Member photo writes need the storage origin recorded (20261107150500).
+  insert into public.job_config(key, value) values ('media_storage_origin', 'https://proj.supabase.co')
+    on conflict (key) do update set value = excluded.value;
   insert into auth.users(id, email, raw_user_meta_data) values
     (seller, 'listing-edit-seller@drvn.test', '{}'),
     (stranger, 'listing-edit-stranger@drvn.test', '{}');

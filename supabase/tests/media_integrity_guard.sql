@@ -1,13 +1,17 @@
 -- 20261107150500 (OS-W15): media integrity and lifecycle, attacked with
 -- member credentials the way a client holding its own JWT can.
---   N12  staged-upload registration is server-only and owner-bound; members
+--   N12  removal claims its object under a lock and reference writes refuse a
+--        claimed one (no check-then-delete race); staged-upload
+--        registration is server-only and owner-bound; members
 --        can't delete or overwrite evidence or media in Storage; dispute
 --        evidence counts as "in use" by its storage path.
 --   N99  the reference check compares one canonical (bucket, path), so an
 --        encoded or variant URL can't make an in-use photo look unused.
 --   N100 evidence uploads only into an open dispute the uploader is party to.
---   N55  a member's photo columns only take their own canonical uploads.
---   N51  deleting a car, post or listing queues its photos for cleanup.
+--   N55  a member's photo columns only take their own canonical uploads, on
+--        the recorded storage origin, and none while it's unrecorded.
+--   N51  deleting a car, post or listing queues its photos for cleanup,
+--        including a pin's photo no longer in the gallery.
 -- Transactional; disposable local or CI database only.
 begin;
 -- Hosted Supabase grants these; the CI image's storage stand-in doesn't.
@@ -242,15 +246,38 @@ begin
   if not public.media_object_referenced('car-images', seller || '/../' || seller || '/x.webp') then
     raise exception 'FAIL 4: an unnameable path read as safe to delete';
   end if;
+  -- A legacy post body that alone references a photo, spelled with an
+  -- escape, still keeps it (no activity_images row, no plain substring).
+  insert into public.activity_posts(id, car_id, author_id, title, body, published_at)
+    values (gen_random_uuid(), car, seller, 'Legacy body', jsonb_build_array(jsonb_build_object('type', 'images', 'urls',
+      jsonb_build_array(base || 'car-images/' || seller || '/' || car || '/%62ody-only.webp'))), now());
+  if not public.media_object_referenced('car-images', seller || '/' || car || '/body-only.webp') then
+    raise exception 'FAIL 4: an escaped, body-only reference hid an in-use photo';
+  end if;
   raise notice 'PASS 4: references and deletion targets share one (bucket, path) identity (N12, N99)';
 
   -- ------------------------------------------------------------------
   -- 5. N55: a member's photo columns only take their own canonical uploads
   -- ------------------------------------------------------------------
+  -- Fail closed: with no storage origin recorded, not even the member's own
+  -- canonical upload is accepted (a reference on another host saved before
+  -- the origin was known would never be revalidated).
+  delete from public.job_config where key = 'media_storage_origin';
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', seller, 'role', 'authenticated')::text, true);
+  foreach evidence in array array[photo, 'https://attacker.example/storage/v1/object/public/avatars/' || seller || '/pixel.jpg'] loop
+    blocked := false;
+    begin
+      update public.profiles set avatar_url = evidence where id = seller;
+    exception when insufficient_privilege then
+      blocked := sqlerrm like 'Photos must be your own uploads%';
+    end;
+    if not blocked then raise exception 'FAIL 5: % was accepted before the storage origin was recorded', evidence; end if;
+  end loop;
+  perform set_config('role', 'none', true);
   insert into public.job_config(key, value) values ('media_storage_origin', 'https://proj.supabase.co')
     on conflict (key) do update set value = excluded.value;
   perform set_config('role', 'authenticated', true);
-  perform set_config('request.jwt.claims', json_build_object('sub', seller, 'role', 'authenticated')::text, true);
   foreach evidence in array array[
     base || 'car-images/' || buyer || '/theirs.webp',                              -- another member's photo
     'https://evil.example/storage/v1/object/public/car-images/' || seller || '/a.webp', -- off our storage (SSRF bait)
@@ -315,7 +342,6 @@ begin
   perform set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
   update public.profiles set avatar_url = 'https://lh3.googleusercontent.com/a/oauth-avatar' where id = buyer;
   perform set_config('role', 'none', true);
-  delete from public.job_config where key = 'media_storage_origin';
   raise notice 'PASS 5: member photo writes take only their own canonical uploads (N55)';
 
   -- ------------------------------------------------------------------
@@ -325,6 +351,9 @@ begin
   insert into public.listings(seller_id, title, category, price_cents, shipping_cents, status, currency)
     values (seller, 'Media guard part', 'engine', 5000, 500, 'draft', 'USD') returning id into listing;
   insert into public.listing_images(listing_id, url, position) values (listing, base || 'listing-images/' || seller || '/part.webp', 0);
+  -- A pin whose photo has since left the gallery: only the hotspot names it.
+  insert into public.car_hotspots(car_id, image_url, x, y, label)
+    values (car, base || 'car-images/' || seller || '/' || car || '/pin.webp', 0.5, 0.5, 'Turbo');
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims', json_build_object('sub', seller, 'role', 'authenticated')::text, true);
   delete from public.listings where id = listing;
@@ -343,7 +372,8 @@ begin
       'activity-images/' || seller || '/post.webp',
       'activity-images/' || seller || '/before.webp',
       'activity-images/' || seller || '/after.webp',
-      'listing-images/' || seller || '/part.webp'])
+      'listing-images/' || seller || '/part.webp',
+      'car-images/' || seller || '/' || car || '/pin.webp'])
   loop
     if not exists (
       select 1 from public.media_cleanup_queue q
@@ -353,8 +383,72 @@ begin
     end if;
   end loop;
   select count(*) into n from public.media_cleanup_queue where owner_id = seller;
-  if n <> 5 then raise exception 'FAIL 6: expected 5 queued photos, found %', n; end if;
+  -- 6 named above plus the legacy body-only photo from check 4.
+  if n <> 7 then raise exception 'FAIL 6: expected 7 queued photos, found %', n; end if;
   raise notice 'PASS 6: deleted content queues its photos for reference-checked removal (N51)';
+
+  -- ------------------------------------------------------------------
+  -- 7. N12: removal claims an object; reference writes refuse a claimed one
+  -- ------------------------------------------------------------------
+  perform set_config('request.jwt.claims', '', true);
+  evidence := buyer || '/' || dispute || '/' || gen_random_uuid() || '.jpg';
+  if not public.claim_media_deletion('dispute-evidence', evidence) then
+    raise exception 'FAIL 7: an unattached evidence upload could not be claimed';
+  end if;
+  if not exists (select 1 from pg_locks where locktype = 'advisory' and pid = pg_backend_pid() and granted) then
+    raise exception 'FAIL 7: the claim took no per-object lock';
+  end if;
+  -- The race: GC claimed it, then addDisputeEvidence (service role) attaches it.
+  perform set_config('role', 'service_role', true);
+  perform set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
+  blocked := false;
+  begin
+    insert into public.dispute_evidence(order_id, uploader_id, url, storage_path) values (dispute, buyer, evidence, evidence);
+  exception when object_not_in_prerequisite_state then
+    blocked := sqlerrm like '%removed from storage%';
+  end;
+  if not blocked then raise exception 'FAIL 7: evidence claimed for deletion was attached anyway'; end if;
+  perform set_config('role', 'none', true);
+  perform set_config('request.jwt.claims', '', true);
+  -- A member adopting a claimed upload into a photo column is refused too.
+  if not public.claim_media_deletion('avatars', seller || '/claimed.webp') then
+    raise exception 'FAIL 7: an unreferenced avatar could not be claimed';
+  end if;
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', seller, 'role', 'authenticated')::text, true);
+  blocked := false;
+  begin
+    update public.profiles set avatar_url = base || 'avatars/' || seller || '/claimed.webp' where id = seller;
+  exception when object_not_in_prerequisite_state then
+    blocked := true;
+  end;
+  if not blocked then raise exception 'FAIL 7: a member adopted an upload claimed for deletion'; end if;
+  blocked := false;
+  begin
+    perform public.claim_media_deletion('avatars', seller || '/other.webp');
+  exception when insufficient_privilege then
+    blocked := true;
+  end;
+  if not blocked then raise exception 'FAIL 7: a member can claim objects for deletion'; end if;
+  perform set_config('role', 'none', true);
+  perform set_config('request.jwt.claims', '', true);
+  -- The other order: attached first, then the claim sees it and refuses.
+  photo := buyer || '/' || dispute || '/' || gen_random_uuid() || '.jpg';
+  insert into public.dispute_evidence(order_id, uploader_id, url, storage_path) values (dispute, buyer, photo, photo);
+  if public.claim_media_deletion('dispute-evidence', photo) then
+    raise exception 'FAIL 7: attached evidence was claimed for deletion';
+  end if;
+  if exists (select 1 from private.media_deletion_claims where bucket = 'dispute-evidence' and path = photo) then
+    raise exception 'FAIL 7: a refused claim left a claim behind';
+  end if;
+  -- A failed Storage delete releases the claim; the object can be used again.
+  perform public.release_media_claim('dispute-evidence', evidence);
+  insert into public.dispute_evidence(order_id, uploader_id, url, storage_path) values (dispute, buyer, evidence, evidence);
+  if has_function_privilege('authenticated', 'public.claim_media_deletion(text,text)', 'execute')
+     or has_function_privilege('anon', 'public.release_media_claim(text,text)', 'execute') then
+    raise exception 'FAIL 7: claims are callable by a client role';
+  end if;
+  raise notice 'PASS 7: a removal claims its object, and reference writes refuse a claimed one (N12 race)';
 
   raise notice 'all media integrity checks passed';
 end $$;
