@@ -53,13 +53,22 @@ export async function runMoneyWorkerPass(admin: Admin): Promise<MoneyWorkerPass>
     },
     transferReconciliation: () => reconcileTransferRecords(admin),
     refunds: () => resumeIncompleteRefunds(admin, { batch: 3 }),
-    // The shipping provider's queues: unused-label refunds, then carrier
+    // The shipping provider's queues: unused-label refunds and carrier
     // trackers for seller-entered tracking (N110). One family, one health
-    // check; either side's failures fail it.
+    // check, but each queue runs whatever happens to the other: label voids
+    // need DRVN Shipping on (getShippingProvider throws when it's off), and
+    // trackers only need an EasyPost key. Failures are combined afterwards.
     labelVoids: async () => {
-      const voids = await reconcileOutboundLabelVoids(admin, { batch: 5 });
-      const trackers = await processTrackerRegistrations(admin, { batch: 10 });
-      return { ...voids, failed: voids.failed + trackers.failed, trackers };
+      const [voids, trackers] = await Promise.allSettled([
+        reconcileOutboundLabelVoids(admin, { batch: 5 }),
+        processTrackerRegistrations(admin, { batch: 10 }),
+      ]);
+      for (const [queue, outcome] of [["labelVoids", voids], ["trackers", trackers]] as const) {
+        if (outcome.status === "rejected") reportError("[worker] shipping queue failed", { queue, error: outcome.reason });
+      }
+      const voidSummary = voids.status === "fulfilled" ? voids.value : { failed: 1, error: "Label void queue failed" };
+      const trackerSummary = trackers.status === "fulfilled" ? trackers.value : { failed: 1, error: "Tracker queue failed" };
+      return { ...voidSummary, failed: voidSummary.failed + trackerSummary.failed, trackers: trackerSummary };
     },
     returns: () => processReturnTimers(admin),
     disputes: () => processDisputeSla(admin),

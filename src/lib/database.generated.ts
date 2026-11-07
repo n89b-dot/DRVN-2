@@ -5572,6 +5572,7 @@ export type Database = {
           provider: string
           provider_shipment_id: string
           rate_ref: string
+          request_fingerprint: string | null
           service: string
           service_label: string
         }
@@ -5591,6 +5592,7 @@ export type Database = {
           provider: string
           provider_shipment_id: string
           rate_ref: string
+          request_fingerprint?: string | null
           service: string
           service_label: string
         }
@@ -5610,6 +5612,7 @@ export type Database = {
           provider?: string
           provider_shipment_id?: string
           rate_ref?: string
+          request_fingerprint?: string | null
           service?: string
           service_label?: string
         }

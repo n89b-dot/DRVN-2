@@ -22,6 +22,14 @@
 --    not DRVN Shipping (labels, rates) is on. With no tracking provider
 --    configured the job waits; dispatch never depends on it.
 --
+-- 4. N96 (Codex review of #82): a stored shipping quote is reused only for
+--    the exact provider shipment request it was rated from.
+--    shipping_rate_quotes.request_fingerprint is a hash of the provider, both
+--    full addresses, the seller's postage identity and the parcel; a label
+--    is bought on the quote's provider shipment, so a changed apartment,
+--    recipient or ship-from must re-rate. Older rows have none and are never
+--    reused.
+--
 -- Latest definitions restated: mark_order_dispatched (20261009100000,
 -- nothing later on main or on an open branch), remediation_jobs_kind_check
 -- (20260905185725). Idempotent.
@@ -34,6 +42,15 @@ begin;
 alter table public.remediation_jobs drop constraint if exists remediation_jobs_kind_check;
 alter table public.remediation_jobs add constraint remediation_jobs_kind_check
   check (kind in ('receipt','search','delete_account','account_export','reservation_expiry','analytics','tracker_registration'));
+
+-- ============================================================
+-- shipping_rate_quotes: what a reusable quote was rated from
+-- ============================================================
+alter table public.shipping_rate_quotes
+  add column if not exists request_fingerprint text;
+
+comment on column public.shipping_rate_quotes.request_fingerprint is
+  'sha256 of every provider-shipment input (provider, from and to addresses in full, end shipper, parcel). Reuse needs an exact match (20261107200100).';
 
 -- ============================================================
 -- settlement_settings: the $1,000 dispatch rule is off and unused

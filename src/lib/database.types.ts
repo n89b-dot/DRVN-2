@@ -576,6 +576,8 @@ export type ShippingRateQuote = {
   currency: string;
   est_delivery_days: number | null;
   destination_hash: string;
+  /** Every provider-shipment input (20261107200100); reuse needs an exact match. */
+  request_fingerprint: string | null;
   parcel: Json;
   consumed_order_id: string | null;
   expires_at: string;

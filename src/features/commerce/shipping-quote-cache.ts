@@ -1,3 +1,7 @@
+import { createHash } from "node:crypto";
+
+import type { ShippingAddress } from "@/lib/shipping/types";
+
 import type { QuoteOption } from "./shipping-quote-actions";
 
 /**
@@ -16,8 +20,62 @@ export type StoredQuote = {
   est_delivery_days: number | null;
   provider_shipment_id: string;
   parcel: unknown;
+  request_fingerprint: string | null;
   created_at: string;
 };
+
+/** JSON with sorted keys and undefined as null, so equal inputs hash equally. */
+function canonical(value: unknown): string {
+  if (value === undefined || value === null) return "null";
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([key, v]) => `${JSON.stringify(key)}:${canonical(v)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/**
+ * Everything the provider shipment behind a quote was created from: the
+ * provider, both full addresses (every field — apartment, recipient, state,
+ * phone…), the seller's postage identity and the parcel. A stored quote is
+ * reused only when this matches exactly, because a later label buy uses the
+ * quote's provider shipment as it was created (Codex review of #82): a
+ * changed apartment or ship-from must never print the old one.
+ */
+export function quoteRequestFingerprint(input: {
+  provider: string;
+  from: ShippingAddress;
+  to: ShippingAddress;
+  parcel: Parcel;
+  endShipperRef: string | null;
+}): string {
+  const address = (a: ShippingAddress) => ({
+    name: a.name,
+    company: a.company ?? null,
+    street1: a.street1,
+    street2: a.street2 ?? null,
+    city: a.city,
+    state: a.state ?? null,
+    postalCode: a.postalCode,
+    country: a.country,
+    phone: a.phone ?? null,
+    email: a.email ?? null,
+  });
+  return createHash("sha256")
+    .update(
+      canonical({
+        v: 1,
+        provider: input.provider,
+        from: address(input.from),
+        to: address(input.to),
+        endShipperRef: input.endShipperRef,
+        parcel: input.parcel,
+      }),
+      "utf8",
+    )
+    .digest("hex");
+}
 
 function sameParcel(stored: unknown, parcel: Parcel): boolean {
   if (!stored || typeof stored !== "object") return false;
@@ -31,13 +89,13 @@ function sameParcel(stored: unknown, parcel: Parcel): boolean {
 }
 
 /**
- * The newest still-valid set of rates for this line, buyer and destination,
- * or null. Reuse is free: no provider call, no new rows (N96). A quote that
+ * The newest still-valid set of rates for exactly this shipment request
+ * (fingerprint) and buyer, or null. Reuse is free: no provider call, no new rows (N96). A quote that
  * was consumed by an order, belongs to someone else, or would expire before
  * the buyer could reasonably pay is never offered again.
  */
-export function reusableQuoteSet(rows: StoredQuote[], parcel: Parcel): QuoteOption[] | null {
-  const valid = rows.filter((row) => sameParcel(row.parcel, parcel));
+export function reusableQuoteSet(rows: StoredQuote[], parcel: Parcel, fingerprint: string): QuoteOption[] | null {
+  const valid = rows.filter((row) => row.request_fingerprint === fingerprint && sameParcel(row.parcel, parcel));
   if (!valid.length) return null;
   const newest = valid.reduce((a, b) => (a.created_at >= b.created_at ? a : b));
   const set = valid

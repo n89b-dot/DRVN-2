@@ -12,7 +12,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 import { hashDestination } from "./checkout-shipping";
-import { MAX_RATES_PER_LINE, reusableQuoteSet, type Parcel, type StoredQuote } from "./shipping-quote-cache";
+import {
+  MAX_RATES_PER_LINE,
+  quoteRequestFingerprint,
+  reusableQuoteSet,
+  type Parcel,
+  type StoredQuote,
+} from "./shipping-quote-cache";
 import { loadFulfillmentProfile, shipFromAddress } from "./fulfillment";
 
 /**
@@ -107,6 +113,8 @@ export async function quoteCartShipping(
     listing: (typeof listings)[number];
     parcel: Parcel;
     profile: NonNullable<Awaited<ReturnType<typeof loadFulfillmentProfile>>>;
+    from: ReturnType<typeof shipFromAddress>;
+    fingerprint: string;
     cached: QuoteOption[] | null;
   };
   const planned: Line[] = [];
@@ -130,12 +138,23 @@ export async function quoteCartShipping(
       widthIn: Number(listing.width_in),
       heightIn: Number(listing.height_in),
     };
+    const from = shipFromAddress(profile);
+    // The whole provider request, not just the checkout's destination hash:
+    // reuse hands back the provider shipment a label is later bought on.
+    const fingerprint = quoteRequestFingerprint({
+      provider: provider.name,
+      from,
+      to: toAddress,
+      parcel,
+      endShipperRef: profile.easypost_end_shipper_id,
+    });
 
     let stored = admin
       .from("shipping_rate_quotes")
-      .select("id, service_label, amount_cents, est_delivery_days, provider_shipment_id, parcel, created_at")
+      .select("id, service_label, amount_cents, est_delivery_days, provider_shipment_id, parcel, request_fingerprint, created_at")
       .eq("listing_id", listing.id)
       .eq("destination_hash", destHash)
+      .eq("request_fingerprint", fingerprint)
       .eq("provider", provider.name)
       .is("consumed_order_id", null)
       .gt("expires_at", reusableAfter);
@@ -151,7 +170,9 @@ export async function quoteCartShipping(
       listing,
       parcel,
       profile,
-      cached: storedError ? null : reusableQuoteSet((storedRows ?? []) as StoredQuote[], parcel),
+      from,
+      fingerprint,
+      cached: storedError ? null : reusableQuoteSet((storedRows ?? []) as StoredQuote[], parcel, fingerprint),
     });
   }
 
@@ -168,7 +189,7 @@ export async function quoteCartShipping(
   }
 
   const groups: CartShippingQuotes["groups"] = [];
-  for (const { listing, parcel, profile, cached } of planned) {
+  for (const { listing, parcel, profile, from, fingerprint, cached } of planned) {
     if (cached) {
       groups.push({ listingId: listing.id, title: listing.title, options: cached });
       continue;
@@ -177,7 +198,7 @@ export async function quoteCartShipping(
     let rated;
     try {
       rated = await provider.getRates({
-        from: shipFromAddress(profile),
+        from,
         to: toAddress,
         parcel,
         endShipperRef: profile.easypost_end_shipper_id,
@@ -217,6 +238,7 @@ export async function quoteCartShipping(
           currency: rate.currency,
           est_delivery_days: rate.estDeliveryDays,
           destination_hash: destHash,
+          request_fingerprint: fingerprint,
           parcel,
           expires_at: expiresAt,
         }))
