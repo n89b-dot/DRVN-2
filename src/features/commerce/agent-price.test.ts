@@ -64,4 +64,15 @@ describe("agentPriceLine (AG-4: the checkout says when an agent set the price)",
     expect(agentPriceLine([])).toBeNull();
     expect(agentPriceLine([round(1, "buyer", "offer", 23200, true), round(2, "seller", "decline", null)])).toBeNull();
   });
+
+  it("reads the agent from the mandate version once the task link has cleared", () => {
+    // actor_task_id is set null when the agent's task is deleted (account
+    // deletion, retention); mandate_version has no foreign key and stays.
+    const cleared = (r: PriceRound): PriceRound => ({ ...r, actor_task_id: null, mandate_version: 3 });
+    const line = agentPriceLine([round(1, "buyer", "offer", 105000), round(2, "seller", "counter", 128000), cleared(round(3, "buyer", "accept", null))]);
+    expect(line?.by).toBe("your_agent");
+    expect(agentPriceLine([round(1, "buyer", "offer", 105000), cleared(round(2, "seller", "counter", 128000)), round(3, "buyer", "accept", null)])?.by).toBe(
+      "sellers_agent",
+    );
+  });
 });

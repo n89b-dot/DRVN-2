@@ -16,7 +16,7 @@ import { AskAgentButton } from "@/features/agent/ask-agent-button";
 import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
 import { loadAgentMode } from "@/lib/agent/member-mode";
 import { agentModeAllowsChat, agentModeRefusal } from "@/lib/agent/mode";
-import { agentPriceLine, type PriceRound } from "@/features/commerce/agent-price";
+import { PRICE_ROUND_COLUMNS, agentPriceLine, type PriceRound } from "@/features/commerce/agent-price";
 import { CancelOrder } from "@/features/commerce/cancel-order";
 import { OfferDecision } from "@/features/commerce/offer-decision";
 import { offerHistoryFromRounds, type HistoryMandate, type OfferRound } from "@/features/commerce/offer-history";
@@ -103,7 +103,7 @@ export default async function OfferThreadPage({
       // unreadable rounds fall back to the history the offer row implies.
       supabase
         .from("offer_rounds")
-        .select("round_no, actor_role, kind, amount_cents, created_at, actor_task_id")
+        .select(PRICE_ROUND_COLUMNS)
         .eq("offer_id", id)
         .order("round_no"),
       // The buyer's offers on this part, across every thread: 3 in all,
