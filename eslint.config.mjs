@@ -27,6 +27,11 @@ const eslintConfig = defineConfig([
     "storybook-static/**",
     // Historical review probes are standalone CommonJS evidence, not application modules.
     "docs/review-evidence/**",
+    // Local, untracked Intelligence OS evidence export (bundled design
+    // support scripts). Not application code and never in CI's checkout;
+    // linting it locally reported 1 error and ~650 warnings that buried
+    // the real findings in src/.
+    "intelligence-os-export/**",
   ]),
 ]);
 

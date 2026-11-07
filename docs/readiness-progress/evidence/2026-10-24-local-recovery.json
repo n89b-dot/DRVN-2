@@ -1,0 +1,19 @@
+{
+  "observedAt": "2026-10-25T02:19:10.103Z",
+  "scope": "Fresh synthetic local database and separate object archive; not hosted recovery, provider reconciliation or approved RPO/RTO",
+  "migrations": 219,
+  "elapsedSeconds": 16,
+  "matchingTables": 123,
+  "matchingRows": 40,
+  "databaseArchiveSha256": "b40bbf1b55e4f6570eeb5eba97f6093bb3a603e5b12705d6de721fcccd794452",
+  "object": {
+    "bucket": "dispute-evidence",
+    "path": "recovery-fixture/evidence.txt",
+    "sha256": "cea98570d829080625a29cb378eea9772200073048de3b4d01d2164a57750838",
+    "restoredReferenceVerified": true
+  },
+  "outboundConfigCleared": true,
+  "activeSchedules": 0,
+  "restoreIntegrity": "passed",
+  "tableFingerprints": "matched"
+}

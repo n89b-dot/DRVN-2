@@ -14,6 +14,8 @@ import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
 export const metadata = { title: "Agent - DRVN" };
+/** A chat turn may run up to TURN_TIMEOUT_MS (run.ts); the action that serves it gets twice that. */
+export const maxDuration = 180;
 
 type Task = {
   id: string;

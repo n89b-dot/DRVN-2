@@ -112,15 +112,24 @@ export function AgentChat({
     else window.scrollTo({ top: document.documentElement.scrollHeight, behavior });
   }, [messages]);
 
+  // One id per message sent: sending the same words and photos again after
+  // a failure reuses it, so the server replays that turn instead of storing
+  // the message twice and asking the model again (OS-W04 N121).
+  const attempt = useRef<{ key: string; id: string } | null>(null);
+
   function send() {
     const text = draft.trim();
     if ((!text && !ready.length) || pending || uploading) return;
     setError(null);
+    const key = JSON.stringify([text, ready]);
+    if (attempt.current?.key !== key) attempt.current = { key, id: crypto.randomUUID() };
+    const requestId = attempt.current.id;
     startTransition(async () => {
       try {
-        const result = await sendAgentMessage({ text, about: context ? { kind: context.kind, id: context.id } : undefined, images: ready });
+        const result = await sendAgentMessage({ text, about: context ? { kind: context.kind, id: context.id } : undefined, images: ready, requestId });
         if (result.error) setError(result.error);
         if (result.messages?.length) {
+          attempt.current = null;
           sent.current = true;
           setMessages((current) => [...current, ...result.messages!]);
           setDraft("");
