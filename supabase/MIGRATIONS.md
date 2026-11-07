@@ -1,10 +1,10 @@
 # Applying migrations
 
-## November 7 — Settlement correctness and reconciliation, OS-W20 (not applied anywhere)
+## November 7 — Settlement correctness and reconciliation, OS-W20
 
 | File | Applied to |
 |---|---|
-| `20261107210100_settlement_reconciliation.sql` | not applied |
+| `20261107210100_settlement_reconciliation.sql` | shared dev project (present by probe, 7 Nov 2026; apply date not recorded) |
 
 Apply after every earlier migration. Restates `claim_transfer_intents` (latest 20261107130000, #72), `invoke_remediation_worker` and `private.scheduled_job_inventory()` (latest 20261107200300, #84, whose `saved-search-digests` family and `drvn-saved-search-digests` row are kept); the payment_recoveries kind check (latest 20260905174828). Admission (N114): a `blocked_unpayable` payout is admitted only when its seller has a Stripe account with payouts enabled, or its provider call may have happened (that one reconciles when its `next_attempt_at` is due); due work is served longest-due first. Readiness, payout dates, the attempt budget and the chargeback freeze are unchanged. New `admin_retry_transfer_intent(order)` (service role only, called by the console's audited "Retry payout"): resets the attempt budget of a payout that spent all eight, keeping its frozen request and provider-call flag. New `ledger_reconciliation_runs` (service role only) and the `ledger_discrepancy` recovery kind for the daily read-only reconciliation, scheduled as `drvn-ledger-reconciliation` (05:50 UTC) and added to the job inventory with the `ledgerReconciliation` family. Anything that restates the inventory or the invoker later must keep `drvn-ledger-reconciliation` and `ledger-reconciliation`. Guard: `supabase/tests/settlement_reconciliation_guard.sql`, which fails on the schema before this migration (FAIL 1).
 
@@ -47,9 +47,10 @@ was then probed on the shared dev project, read-only, for an object only that
 file creates; every one is **present**, so each was applied there after it
 merged, on a date this record doesn't have. None is on production (there is
 no production project yet). Staging has the 229 files on `main` at 836d636
-(`docs/staging-setup.md`): of the twelve, all but `20261107130000`,
-`20261107190500` and `20261107200300` (and `20261107200100`,
-`20261107203000` above, which merged later).
+(`docs/staging-setup.md`): of the sixteen, all but `20261107130000`,
+`20261107190500`, `20261107200300`, `200500`, `200510`, `200520` and
+`210000` (nor `20261107200100`, `20261107203000` or `20261107210100`
+above, which also merged later).
 
 | File | Merged in | Shared dev, by probe | Probe |
 |---|---|---|---|
@@ -65,19 +66,23 @@ no production project yet). Staging has the 229 files on `main` at 836d636
 | `20261107190500_agent_spend_lock_order.sql` | #79 | present | `public.agent_chat_turn_status` exists |
 | `20261107191000_job_inventory_health.sql` | #80 | present | `cron.job` has `drvn-cron-history-prune` |
 | `20261107200300_saved_search_email_digests.sql` | #84 | present | `cron.job` has `drvn-saved-search-digests` |
+| `20261107200500_admin_mfa_enrolment.sql` | #87 | present | `admin_users.mfa_confirmed_at` exists |
+| `20261107200510_admin_refund_refusal_release.sql` | #87 | present | `public.release_refused_admin_refund` exists |
+| `20261107200520_admin_complete_reads.sql` | #87 | present | `public.admin_audit_actor_ids` exists |
+| `20261107210000_listing_write_boundary.sql` | #89 | present | `private.guard_member_listing_publish` exists |
 
 What each does is in the file's own header comment and its PR. Two of them
 change what an operator checks:
 
-- With `20261107191000` and `20261107200300`, `cron.job` holds **twenty**
+- With `20261107191000`, `20261107200300` and `20261107210100`, `cron.job` holds **twenty-one**
   rows on a complete database: `private.scheduled_job_inventory()`, mirrored
   in `src/lib/job-inventory.ts` and listed in `docs/production-runbook.md`
-  §4. Shared dev has twenty.
+  §4. Shared dev has twenty-one.
 - `20261107203000` needs `job_config.media_storage_origin` set in the same
   step (`docs/production-runbook.md` §4); it is set on shared dev.
 
-The three "not applied anywhere" entries above (`20261107200100`,
-`20261107203000`, `20261107170000` + `20261107190000`) were written before
+The four "not applied anywhere" entries above (`20261107210100`,
+`20261107200100`, `20261107203000`, `20261107170000` + `20261107190000`) were written before
 they merged; their "Applied to" cells now say what the probe found. The
 older gaps, `0057` and `20260919171500`, are in "Explore search — two files
 this record never mentioned" further down.

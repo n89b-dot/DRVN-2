@@ -69,7 +69,11 @@ describe("the one job inventory", () => {
     const runbook = readFileSync(resolve(__dirname, "..", "..", "docs", "production-runbook.md"), "utf8");
     const rows = [...runbook.matchAll(/^\| `(drvn-[a-z-]+)` \| `([^`]+)` \|/gm)].map((match) => `${match[1]} ${match[2]}`);
     expect(rows.sort()).toEqual(JOB_INVENTORY.map((entry) => `${entry.job} ${entry.schedule}`).sort());
-    const count = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"][JOB_INVENTORY.length];
+    const ones = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+    const teens = ["ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+    const n = JOB_INVENTORY.length;
+    const count = n < 10 ? ones[n] : n < 20 ? teens[n - 10] : `twenty${n % 10 ? `-${ones[n % 10]}` : ""}`;
+    expect(n).toBeLessThan(30);
     expect(runbook).toContain(`Confirm the ${count} pg_cron jobs`);
   });
 

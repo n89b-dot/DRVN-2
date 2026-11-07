@@ -77,7 +77,7 @@ Then verify:
   suites; each must print `all … checks passed`). Confirm that job is green
   for the exact commit you applied.
 - On the hosted project: every file's self-check NOTICEs appeared with no
-  error; `select jobname, schedule from cron.job order by 1;` lists the twenty
+  error; `select jobname, schedule from cron.job order by 1;` lists the twenty-one
   jobs in §4; `select id, public from storage.buckets order by 1;` lists the
   buckets the migrations create (avatars, car-images, activity-images,
   listing-images public; dispute-evidence, message-photos, account-exports

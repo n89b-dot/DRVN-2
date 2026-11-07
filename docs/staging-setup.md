@@ -100,10 +100,11 @@ every table in `public`.
      → both. (0020 swallows a pg_net install failure with a NOTICE; if it is
      missing, enable it under Database → Extensions and re-apply
      `0020_transfer_scheduling.sql`.)
-   - `select jobname, schedule from cron.job order by 1;` → the twenty
+   - `select jobname, schedule from cron.job order by 1;` → the twenty-one
      `drvn-*` jobs in runbook §4 (`private.scheduled_job_inventory()`).
-     Staging listed 19 on 7 Nov 2026, before `20261107200300` added
-     `drvn-saved-search-digests`; apply it and the count is twenty.
+     Staging listed 19 on 7 Nov 2026, before `20261107200300` and
+     `20261107210100` added `drvn-saved-search-digests` and
+     `drvn-ledger-reconciliation`; apply them and the count is twenty-one.
    - `select id, public from storage.buckets order by 1;` → `account-exports`
      f, `activity-images` t, `avatars` t, `car-images` t, `dispute-evidence`
      f, `listing-images` t, `message-photos` f. **Buckets and their policies
