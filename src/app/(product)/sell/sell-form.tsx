@@ -21,6 +21,7 @@ import {
   TextField,
   ValidationSummary,
 } from "@/components/ui";
+import { SELLER_AGENT_HINT } from "@/lib/agent/copy";
 import { expand } from "@/lib/motion";
 import { checklistFor, GRADES, type ChecklistAnswer } from "@/lib/marketplace/grading";
 import { CATEGORIES, CONDITIONS } from "@/lib/marketplace/taxonomy";
@@ -1168,10 +1169,7 @@ export function SellForm({
                   </Link>
                 </p>
               ) : (
-                <p className="field__hint !mt-0">
-                  Your agent counters within the limits below, straight away, so offers don&apos;t sit waiting. It never accepts
-                  for you: when an offer reaches your target, it tells you why and you tap Accept.
-                </p>
+                <p className="field__hint !mt-0">{SELLER_AGENT_HINT}</p>
               )}
               {agentOn && (
                 <>
