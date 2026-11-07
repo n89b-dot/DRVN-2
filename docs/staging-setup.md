@@ -19,6 +19,23 @@ production); this file is the order to do them in for staging. The owner's
 whole pre-beta list, in order, is `docs/owner/README.md`. Record every
 value you create in the password manager entry "DRVN staging".
 
+## Status (7 November 2026)
+
+| Step | State |
+|---|---|
+| 1. Supabase project | **Done.** The organisation is on Pro. Project `drvn-staging`, ref `zubstjuviwourzgrziqc`, region `us-east-1`, Postgres 17. |
+| 2. Schema | **Done** for steps 2.1–2.4: all 229 migrations at `main` 836d636 applied in order with no errors, and the CLI history seeded with 229 rows. Step 2.5 waits for step 12. |
+| 3–13 | Not started. Most wait on a hosting account and domain (step 4). |
+
+The owner's rulings that day:
+
+- **Region `us-east-1`**, the same as the shared dev project, not a UK region. Production should match.
+- **No point-in-time recovery for now** (about $100 a month for 7 days). The `restore-rollback` gate uses Pro's daily backups on staging. Revisit before production.
+
+Parity with shared dev was checked at 765c7cd, before the last two migrations: the same 115 public tables, 137 policies and 19 cron jobs, and 383 public functions whose `pg_get_functiondef` bodies match byte for byte. Row-level security is on for every public table, all seven buckets are present, and `job_config` is empty, so outbound jobs are off.
+
+**Keeping staging current:** every migration merged to `main` must also be applied to staging, the same as dev. Apply it from the staging-only checkout (step 2.1), then rerun the history seed. Migrations can merge with timestamps earlier than ones already applied, so find new files with `git diff --name-only --diff-filter=A <last applied commit> origin/main -- supabase/migrations`, not by filename order.
+
 ---
 
 ## 0. Before you start [OWNER]
@@ -39,15 +56,15 @@ value you create in the password manager entry "DRVN staging".
 
 ## 1. Supabase project [OWNER]
 
-1. **Capacity.** The current Supabase organisation is on the Free plan and
-   has no free active-project slot (`docs/remediation-release-and-monitoring.md`).
-   Choose one: upgrade the organisation to a paid plan (recommended — the
-   `restore-rollback` gate needs a real hosted recovery point, and backups /
-   point-in-time recovery are paid-plan features; check what the chosen plan
-   actually includes), or create a separate organisation. Do **not** pause or
-   reuse the shared dev project `grunnjojhdevhuckujmc`.
-2. Create the project `drvn-staging`, region close to the UK user base.
-   Generate a strong database password.
+1. **Capacity.** Done 7 Nov 2026: the organisation is on Pro. The
+   `restore-rollback` gate needs a real hosted recovery point, and Pro's
+   daily backups provide one; point-in-time recovery is a separate add-on,
+   deferred. Projects on a paid plan cannot be paused, and each active
+   project bills compute, so unrelated projects belong in a separate free
+   organisation (the YT Digest project was moved to "Personal (free)").
+   Do **not** pause or reuse the shared dev project `grunnjojhdevhuckujmc`.
+2. Create the project `drvn-staging` in `us-east-1`, the same region as dev
+   (owner's ruling, 7 Nov 2026). Generate a strong database password.
 3. From **Project Settings → API keys**, record: project ref, project URL,
    the publishable key (`sb_publishable_…`) and a secret key (`sb_secret_…`).
    Record the database password.
@@ -83,8 +100,9 @@ every table in `public`.
      → both. (0020 swallows a pg_net install failure with a NOTICE; if it is
      missing, enable it under Database → Extensions and re-apply
      `0020_transfer_scheduling.sql`.)
-   - `select jobname, schedule from cron.job order by 1;` → the nine jobs in
-     runbook §4.
+   - `select jobname, schedule from cron.job order by 1;` → the 19 `drvn-*`
+     jobs the migrations schedule (as of 7 Nov 2026; the same list as on
+     shared dev).
    - `select id, public from storage.buckets order by 1;` → `account-exports`
      f, `activity-images` t, `avatars` t, `car-images` t, `dispute-evidence`
      f, `listing-images` t, `message-photos` f. **Buckets and their policies
@@ -212,7 +230,7 @@ Only if staging declares `shippingMode: "easypost-test"`.
 
 ## 7. Scheduler → app [ENGINEER]
 
-The migrations already created the nine pg_cron jobs; the HTTP ones do
+The migrations already created the pg_cron jobs (19 as of 7 Nov 2026); the HTTP ones do
 nothing until the database knows where the app is. In the SQL editor:
 
 ```sql
