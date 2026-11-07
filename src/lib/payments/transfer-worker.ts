@@ -31,6 +31,13 @@ import { sendAdminAlert } from "@/lib/admin/alerts";
  * Partial refunds no longer cancel the seller's whole payout: the payable
  * amount is the intent minus the refund's proportional share, mirroring the
  * reversal arithmetic in refunds.ts.
+ *
+ * An unresolved bank chargeback freezes the payout whatever the order's
+ * status says (20261107130000, readiness B9): closing an in-app dispute or a
+ * refund completing can put the order back to delivered while the bank's case
+ * is still running. Both order reads below also read the provider dispute
+ * journal, and the database refuses the same payouts at readiness, admission
+ * and dispatch.
  */
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -40,6 +47,18 @@ const BATCH_SIZE = 8;
 const LEASE_SECONDS = 300;
 const TRANSFER_PAGE_SIZE = 100;
 const MAX_TRANSFER_PAGES = 10;
+
+/**
+ * Terminal provider outcomes. Any other journal state — open, loss_pending,
+ * recovery, or one added later — is an unresolved chargeback. Mirrors
+ * private.order_has_unresolved_chargeback (20261107130000); fails closed.
+ */
+const RESOLVED_CHARGEBACK_STATES = new Set(["won", "warning_closed", "lost"]);
+export const CHARGEBACK_HOLD_REASON =
+  "Payout frozen: a bank chargeback on this order is unresolved";
+
+const TRANSFER_ORDER_COLUMNS =
+  "id, status, seller_id, total_cents, platform_fee_cents, refunded_cents, transfer_reference, delivered_at";
 
 export type TransferWorkerSummary = {
   transferred: number;
@@ -355,19 +374,40 @@ async function createTransfer(dispatch: TransferDispatch): Promise<Stripe.Transf
   );
 }
 
+/**
+ * The order and whether a bank chargeback on it is unresolved. The journal,
+ * not orders.stripe_dispute_id, is the truth: provider closure leaves that id
+ * set, and a chargeback that arrives during an in-app dispute is recorded
+ * only in the journal. An unreadable journal throws (retry), never pays.
+ */
+async function readTransferOrder(admin: Admin, orderId: string, failure: string) {
+  const { data: order, error: orderError } = await admin
+    .from("orders")
+    .select(TRANSFER_ORDER_COLUMNS)
+    .eq("id", orderId)
+    .maybeSingle();
+  if (orderError) throw new Error(failure);
+  const { data: disputes, error: disputeError } = await admin
+    .from("stripe_dispute_journal")
+    .select("dispute_id, state")
+    .contains("order_ids", [orderId]);
+  if (disputeError) throw new Error("Could not read the order's bank chargebacks");
+  const chargebackUnresolved = (disputes ?? []).some(
+    (dispute) => !RESOLVED_CHARGEBACK_STATES.has(dispute.state)
+  );
+  return { order, chargebackUnresolved };
+}
+
 async function processOne(
   admin: Admin,
   intent: IntentRow,
   workerId: string
 ): Promise<keyof TransferWorkerSummary> {
-  const { data: order, error: orderError } = await admin
-    .from("orders")
-    .select(
-      "id, status, seller_id, total_cents, platform_fee_cents, refunded_cents, transfer_reference, delivered_at"
-    )
-    .eq("id", intent.order_id)
-    .maybeSingle();
-  if (orderError) throw new Error("Could not read transfer order");
+  const { order, chargebackUnresolved } = await readTransferOrder(
+    admin,
+    intent.order_id,
+    "Could not read transfer order"
+  );
 
   if (!order) {
     if (intent.provider_call_may_have_occurred) {
@@ -432,6 +472,16 @@ async function processOne(
     new Date(intent.available_at).getTime() > Date.now()
   ) {
     await setIntent(admin, intent.order_id, workerId, { status: "holding", last_error: null });
+    return "requeued";
+  }
+  // Delivered again after an in-app close or a refund, but the bank's case is
+  // still running: back on the shelf; readiness re-marks it once resolved.
+  // An uncertain row reconciles first (below) and is shelved after.
+  if (!intent.provider_call_may_have_occurred && chargebackUnresolved) {
+    await setIntent(admin, intent.order_id, workerId, {
+      status: "holding",
+      last_error: CHARGEBACK_HOLD_REASON,
+    });
     return "requeued";
   }
 
@@ -515,14 +565,8 @@ async function processOne(
     // Provider lookup may consume the rest of this owner's lease, and order
     // eligibility may change while it is in flight. Refresh the canonical
     // order before treating an absent result as permission to create.
-    const { data: currentOrder, error: currentOrderError } = await admin
-      .from("orders")
-      .select(
-        "id, status, seller_id, total_cents, platform_fee_cents, refunded_cents, transfer_reference, delivered_at"
-      )
-      .eq("id", intent.order_id)
-      .maybeSingle();
-    if (currentOrderError) throw new Error("Could not refresh transfer order");
+    const { order: currentOrder, chargebackUnresolved: currentChargebackUnresolved } =
+      await readTransferOrder(admin, intent.order_id, "Could not refresh transfer order");
     if (!currentOrder) {
       await recordOperatorRecovery(
         admin,
@@ -560,6 +604,17 @@ async function processOne(
       await setIntent(admin, intent.order_id, workerId, {
         status: "holding",
         last_error: null,
+      });
+      return "requeued";
+    }
+    // No transfer exists, and a chargeback is unresolved: never create one
+    // now. The row keeps its frozen payload and uncertainty flag, so the pass
+    // after the chargeback resolves reconciles again with the same
+    // idempotency key before anything is sent.
+    if (currentChargebackUnresolved) {
+      await setIntent(admin, intent.order_id, workerId, {
+        status: "holding",
+        last_error: CHARGEBACK_HOLD_REASON,
       });
       return "requeued";
     }
