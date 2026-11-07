@@ -120,8 +120,11 @@ export async function POST(request: Request) {
         // session (Supabase answers "proceed to the other link"); a link
         // opened in a signed-out browser has none either. Say it worked on
         // a public page instead of sending them through Login.
-        const { data: { user } } = await client.auth.getUser();
-        const step = user && !user.new_email ? "done" : "pending";
+        // Never judged from the browser's session: it may belong to another
+        // account than the token's. Done only when the verification itself
+        // returns the token's account with no change still waiting.
+        const owner = data?.user;
+        const step = owner && !owner.new_email ? "done" : "pending";
         return NextResponse.redirect(`${site}${EMAIL_CHANGE_RESULT}?step=${step}`, { status: 303, headers });
       }
       if (plan.flow === "signup") {

@@ -165,6 +165,25 @@ describe("email change links land on Settings", () => {
     expect(response.headers.get("location")).toBe(`${SITE}/email-change?step=pending`);
   });
 
+  it("account A's first link opened in a browser signed in as account B still says pending", async () => {
+    // Verify returns no session and no user for A; B's own session has no
+    // pending change, which says nothing about A's.
+    verifyOtp.mockResolvedValue({ data: { user: null, session: null }, error: null });
+    viewer.user = { id: "account-b" };
+    const response = await POST(post({ token_hash: "a-first", type: "email_change", flow: "email_change", next: "/settings?changed=email" }));
+    expect(response.headers.get("location")).toBe(`${SITE}/email-change?step=pending`);
+  });
+
+  it("says done without a session only when the verification returns the token's own account, finished", async () => {
+    verifyOtp.mockResolvedValue({ data: { user: { id: "account-a", new_email: null }, session: null }, error: null });
+    viewer.user = { id: "account-b" };
+    const done = await POST(post({ token_hash: "a-second", type: "email_change", flow: "email_change", next: "/settings?changed=email" }));
+    expect(done.headers.get("location")).toBe(`${SITE}/email-change?step=done`);
+    verifyOtp.mockResolvedValue({ data: { user: { id: "account-a", new_email: "a-new@drvn.test" }, session: null }, error: null });
+    const waiting = await POST(post({ token_hash: "a-first", type: "email_change", flow: "email_change", next: "/settings?changed=email" }));
+    expect(waiting.headers.get("location")).toBe(`${SITE}/email-change?step=pending`);
+  });
+
   it("the second link, opened in a browser with no session, signs in and lands on Settings", async () => {
     // The completing verification returns the session; the client stores it.
     verifyOtp.mockResolvedValue({ data: { user: { id: "user-1" }, session: { access_token: "t" } }, error: null });
