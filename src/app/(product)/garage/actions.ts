@@ -272,6 +272,38 @@ export async function updateCar(_prev: ActionState, formData: FormData): Promise
   return { ok: decodeNote || "Changes saved." };
 }
 
+/**
+ * Which generation is this car? Asked on the sheet on a changeover year
+ * (readiness 83; vehicles.md, "Generations"). The owner updates their own car
+ * (RLS); car_generation_before_write keeps the choice only when it fits the
+ * car's model and year and marks it 'owner' — so the row is checked after the
+ * write rather than trusted.
+ */
+export async function setCarGeneration(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const { supabase } = await requireUser();
+  const carId = String(formData.get("car_id") ?? "");
+  const generationId = Number(formData.get("generation_id"));
+  if (!carId || !Number.isInteger(generationId) || generationId <= 0) return { error: "Pick a generation." };
+
+  const { data: updated, error } = await supabase
+    .from("cars")
+    .update({ generation_id: generationId, updated_at: new Date().toISOString() })
+    .eq("id", carId)
+    .select("slug, generation_id, generation_source")
+    .maybeSingle();
+  if (error) {
+    reportError("[garage] set generation failed", { carId, code: error.code });
+    return { error: "Couldn't save that. Try again." };
+  }
+  if (!updated) return { error: "Car not found." };
+  if (updated.generation_id !== generationId || updated.generation_source !== "owner") {
+    return { error: "That generation doesn't fit this car's model and year." };
+  }
+  revalidatePath("/garage");
+  revalidatePath(`/cars/${updated.slug}`);
+  return { ok: "Generation saved." };
+}
+
 export async function deleteCar(
   _previous: ActionState,
   formData: FormData

@@ -1,4 +1,4 @@
-import { Button, KeyValueTable, ObjectRow, PageHead, TextField, TileHead } from "@/components/ui";
+import { Alert, Button, ButtonLink, KeyValueTable, ObjectRow, PageHead, TextField, TileHead } from "@/components/ui";
 import { getAdminContext } from "@/lib/admin/guard";
 import { AGENT_MEASURES, formatMeasure } from "@/lib/agent/measures";
 import { alertsToRaise, type AgentHealth } from "@/lib/agent/monitor";
@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { setAgentBetaStep, setAgentSpendLimits } from "./actions";
 import { AgentActionForm } from "./agent-admin-forms";
 import { AgentSwitchForm } from "./agent-switch-form";
+import { killHeadline, readKillState } from "./kill-state";
 import { AGENT_SWITCH_SCOPES, switchLabel } from "./switches";
 
 export const dynamic = "force-dynamic";
@@ -22,8 +23,6 @@ const AGENTS_BETA_STEPS = [
   { step: "chat", label: "A3c · Chat", what: "The model for the first time: setting up and checking negotiations in words." },
   { step: "jobs", label: "A3d · More jobs", what: "Post an update, list parts that came off, paste a build, listing from photos." },
 ] as const;
-
-type ControlRow = { id: string; scope: string; subject_id: string | null; reason: string; set_at: string };
 
 const HEALTH_LABEL: Record<string, string> = {
   stuck_tasks: "Tasks working with nothing queued",
@@ -60,9 +59,11 @@ export default async function AdminAgentPage() {
   const days = [...new Set((metrics.data ?? []).map((row) => row.day))].sort();
   const valueOf = (day: string, scope: string, measure: string) =>
     (metrics.data ?? []).find((row) => row.day === day && row.scope === scope && row.measure === measure);
-  const live = (controls.data ?? []) as ControlRow[];
-  const isOn = (scope: string) => live.some((row) => row.scope === scope && row.subject_id === null);
-  const targeted = live.filter((row) => row.subject_id !== null);
+  // A failed read is "unknown", never "nothing is paused" (R-audit-killstate):
+  // the page offers no Pause or Lift until the switches load.
+  const kill = readKillState(controls);
+  const headline = killHeadline(kill);
+  const stepsKnown = !steps.error;
   const counts = health.data as unknown as AgentHealth | null;
   const alerts = counts ? alertsToRaise(counts) : [];
   const canAct = context?.role === "admin";
@@ -74,11 +75,14 @@ export default async function AdminAgentPage() {
         title="Kill switches"
         sub="Pause the agent for everyone, one side, one member, mandate, listing or account. Offers and orders already made stay exactly as they are."
       >
-        <span className={`chip ${isOn("all") ? "chip--live" : "chip--ok"}`}>{isOn("all") ? "Paused for everyone" : "Running"}</span>
+        <span className={`chip chip--${headline.tone}`}>{headline.label}</span>
       </PageHead>
 
       <section className="tile mb-8" aria-label="Beta steps">
-        <TileHead label="Beta steps" end={<span className="chip">{AGENTS_BETA_STEPS.filter((item) => stepOpen.get(item.step)?.open).length} open</span>} />
+        <TileHead
+          label="Beta steps"
+          end={<span className="chip">{stepsKnown ? `${AGENTS_BETA_STEPS.filter((item) => stepOpen.get(item.step)?.open).length} open` : "unknown"}</span>}
+        />
         <p className="order__meta mb-3">
           Opening a step shows its controls to every member; AGENTS_BETA must also be on in this environment. Whether the agent acts is still the
           kill switches&apos; call below.
@@ -89,10 +93,12 @@ export default async function AdminAgentPage() {
             return (
               <ObjectRow
                 key={item.step}
-                title={`${item.label} · ${open ? "open" : "closed"}`}
+                title={`${item.label} · ${stepsKnown ? (open ? "open" : "closed") : "unknown"}`}
                 meta={item.what}
                 actions={
-                  canAct ? (
+                  !stepsKnown ? (
+                    <span className="chip chip--warn">unknown</span>
+                  ) : canAct ? (
                     <AgentActionForm
                       action={setAgentBetaStep}
                       id={`agent-step-${item.step}`}
@@ -111,15 +117,27 @@ export default async function AdminAgentPage() {
         </div>
       </section>
 
-      {controls.error || health.error ? (
-        <p className="order__meta mb-8" role="alert">Couldn&apos;t read the agent&apos;s state. Reload to try again.</p>
+      {!kill.known ? (
+        <Alert tone="live" role="alert" title="Kill switch state unknown" className="mb-8">
+          Couldn&apos;t read the kill switches, so this page can&apos;t say whether the agent is running or paused. Pausing and
+          lifting are off until they load.{" "}
+          <ButtonLink href="/admin/agent" variant="ghost">
+            Reload
+          </ButtonLink>
+        </Alert>
+      ) : null}
+      {health.error || steps.error ? (
+        <p className="order__meta mb-8" role="alert">Couldn&apos;t read {health.error ? "the agent's health" : "the beta steps"}. Reload to try again.</p>
       ) : null}
 
       <section className="tile mb-8" aria-label="Everyone and each side">
         <TileHead label="Everyone and each side" />
         <div className="rowlist">
           {AGENT_SWITCH_SCOPES.filter((item) => ["all", "seller", "buyer"].includes(item.scope)).map((item) => {
-            const on = isOn(item.scope);
+            if (!kill.known) {
+              return <ObjectRow key={item.scope} title={item.label} meta={`${item.stops} State unknown.`} actions={<span className="chip chip--warn">unknown</span>} />;
+            }
+            const on = kill.isOn(item.scope);
             return (
               <ObjectRow
                 key={item.scope}
@@ -134,10 +152,12 @@ export default async function AdminAgentPage() {
 
       <div className="deck deck--two mb-8">
         <section className="tile" aria-label="Targeted switches">
-          <TileHead label="Targeted switches" end={<span className="chip">{targeted.length}</span>} />
-          {targeted.length ? (
+          <TileHead label="Targeted switches" end={<span className={`chip${kill.known ? "" : " chip--warn"}`}>{kill.known ? kill.targeted.length : "unknown"}</span>} />
+          {!kill.known ? (
+            <p className="order__meta">Couldn&apos;t read which members, mandates, listings or accounts are paused.</p>
+          ) : kill.targeted.length ? (
             <div className="rowlist">
-              {targeted.map((row) => (
+              {kill.targeted.map((row) => (
                 <ObjectRow
                   key={row.id}
                   title={switchLabel(row.scope)}
@@ -149,7 +169,7 @@ export default async function AdminAgentPage() {
           ) : (
             <p className="order__meta">No member, mandate, listing or account is paused.</p>
           )}
-          {canAct ? <div className="mt-4"><AgentSwitchForm add on /></div> : null}
+          {canAct && kill.known ? <div className="mt-4"><AgentSwitchForm add on /></div> : null}
         </section>
 
         <section className="tile" aria-label="Health">

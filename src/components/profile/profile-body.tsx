@@ -5,6 +5,7 @@ import { useState, type ReactNode } from "react";
 
 import { ListingRow } from "@/components/commerce";
 import {
+  ButtonLink,
   DataRow,
   EmptyState,
   Media,
@@ -212,6 +213,7 @@ export function ProfileBody({
   partsPanel,
   partsCount,
   storeNote,
+  savedHref,
 }: {
   bio: string | null;
   view: ProfileView;
@@ -224,6 +226,8 @@ export function ProfileBody({
   partsCount?: number | null;
   /** One short line above the grid (P-8). */
   storeNote?: string | null;
+  /** The owner's own profile: a Saved tab that points at their saved parts and cars (/saved). */
+  savedHref?: string;
 }) {
   // The rail shows a slice of what the Garage and Parts tabs show in full,
   // so it steps aside on those tabs — on Parts the store takes the whole
@@ -357,6 +361,28 @@ export function ProfileBody({
       count: view.reviewCount || null,
       panel: <ReviewRows view={view} basePath={basePath} />,
     },
+    ...(savedHref
+      ? [
+          {
+            key: "saved",
+            label: "Saved",
+            panel: (
+              <div className="mt-8">
+                <EmptyState
+                  title="Your saved parts and cars live on one page."
+                  action={
+                    <ButtonLink href={savedHref} variant="live">
+                      Open Saved →
+                    </ButtonLink>
+                  }
+                >
+                  Only you see what you&apos;ve saved; it isn&apos;t part of your public profile.
+                </EmptyState>
+              </div>
+            ),
+          } satisfies SheetTab,
+        ]
+      : []),
   ];
   return (
     <div className={showRail ? "deck deck--aside mt-8" : "deck deck--aside deck--aside--solo mt-8"}>

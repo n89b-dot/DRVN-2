@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+
+import { AskAgentButton } from "@/features/agent/ask-agent-button";
 import { useState } from "react";
 
 import { ListingRow } from "@/components/commerce";
@@ -79,6 +81,7 @@ function ModRow({
   off = false,
   group,
   plate = false,
+  agentAsk = null,
 }: {
   mod: ModLine;
   carId: string;
@@ -87,6 +90,7 @@ function ModRow({
   /** The line's group, when the list is flat rather than under headings. */
   group?: string;
   plate?: boolean;
+  agentAsk?: { disabledReason: string | null } | null;
 }) {
   const name = [mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw || "Component";
   // The line a buyer reads back on their own build sheet. A private source
@@ -122,7 +126,16 @@ function ModRow({
       media={plate ? { src: mod.imageUrl ?? undefined, alt: "" } : undefined}
       title={name}
       meta={meta ?? undefined}
-      actions={<ModState mod={mod} carId={carId} isOwner={isOwner} off={off} />}
+      actions={
+        isOwner && agentAsk ? (
+          <span className="flex flex-wrap items-center justify-end gap-2">
+            <AskAgentButton about={{ kind: "car", id: carId }} disabledReason={agentAsk.disabledReason} />
+            <ModState mod={mod} carId={carId} isOwner={isOwner} off={off} />
+          </span>
+        ) : (
+          <ModState mod={mod} carId={carId} isOwner={isOwner} off={off} />
+        )
+      }
     />
   );
 }
@@ -190,6 +203,7 @@ export function CarTabs({
   initialTab,
   showcase,
   evolution,
+  agentAsk = null,
 }: {
   about: string | null;
   gallery: GalleryImage[];
@@ -211,6 +225,9 @@ export function CarTabs({
   showcase?: { imageUrl: string; pins: ShowcasePin[] } | null;
   /** Dated update milestones for the Build Evolution strip (§V). */
   evolution?: EvolutionMilestone[];
+  /** "Ask your agent" on the owner's build lines (A3c): present when the chat
+   *  is open to this owner; `disabledReason` when their agent is off (AG-7). */
+  agentAsk?: { disabledReason: string | null } | null;
 }) {
   const [lightbox, setLightbox] = useState<number | null>(null);
 
@@ -242,7 +259,7 @@ export function CarTabs({
             <div className="rowlist">
               {modGroups.flatMap((group) =>
                 group.items.map((mod) => (
-                  <ModRow
+                  <ModRow agentAsk={agentAsk}
                     key={mod.id}
                     mod={mod}
                     carId={carId}
@@ -265,7 +282,7 @@ export function CarTabs({
                     stamped "Fitted" on every entry regardless. */}
                 <div className="rowlist">
                   {group.items.map((mod) => (
-                    <ModRow key={mod.id} mod={mod} carId={carId} isOwner={isOwner} plate={buildHasPhotos} />
+                    <ModRow agentAsk={agentAsk} key={mod.id} mod={mod} carId={carId} isOwner={isOwner} plate={buildHasPhotos} />
                   ))}
                 </div>
               </div>
@@ -282,7 +299,7 @@ export function CarTabs({
               </div>
               <div className="rowlist">
                 {cameOff.map((mod) => (
-                  <ModRow
+                  <ModRow agentAsk={agentAsk}
                     key={mod.id}
                     mod={mod}
                     carId={carId}

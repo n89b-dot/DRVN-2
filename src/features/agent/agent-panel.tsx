@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { unstable_rethrow, usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { ButtonLink, SidePanel, SkeletonRows, useSidePanel } from "@/components/ui";
+import { Badge, ButtonLink, SidePanel, SkeletonRows, useSidePanel } from "@/components/ui";
 
 import { AgentChat } from "./agent-chat";
+import { AGENT_CHAT_CLEARED, AGENT_MODE_SAVED, useAgentEvent } from "./chat-events";
 import { openAgentChat, type ChatMessage } from "./chat";
 import type { ChatAbout } from "./chat-load";
 
@@ -29,7 +31,11 @@ export function AgentPanel() {
     <SidePanel
       panelKey="agent"
       label="Your agent"
-      title="Agent"
+      title={
+        <>
+          Agent <Badge>Beta</Badge>
+        </>
+      }
       actions={
         <ButtonLink href={fullHref} variant="quiet">
           Full page
@@ -41,21 +47,41 @@ export function AgentPanel() {
   );
 }
 
-function PanelThread({ aboutRef }: { aboutRef: AgentAboutRef | null }) {
+/** Exported for its test; the layouts render AgentPanel. */
+export function PanelThread({ aboutRef }: { aboutRef: AgentAboutRef | null }) {
   const [messages, setMessages] = useState<ChatMessage[] | null>(null);
   const [about, setAbout] = useState<ChatAbout | null>(null);
   const [jobs, setJobs] = useState(false);
   const [userId, setUserId] = useState<string | undefined>(undefined);
   const [failed, setFailed] = useState(false);
+  // AG-7: the member's agent is Off in Settings.
+  const [disabled, setDisabled] = useState<string | null>(null);
+  // A new agent setting saved in Settings: load again, so a panel opened
+  // under Off works once it is back on (and says so if it went Off).
+  const [loads, setLoads] = useState(0);
+  useAgentEvent(AGENT_MODE_SAVED, () => setLoads((n) => n + 1));
+  // Cleared anywhere: drop the copy the panel keeps for its next open, and
+  // what a load already in flight brings back from before the clear.
+  const generation = useRef(0);
+  useAgentEvent(AGENT_CHAT_CLEARED, () => {
+    generation.current += 1;
+    setMessages((current) => (current ? [] : current));
+  });
   const key = aboutRef ? `${aboutRef.kind}:${aboutRef.id}` : "";
 
   useEffect(() => {
     let live = true;
+    const loadedIn = generation.current;
     openAgentChat(aboutRef)
       .then((result) => {
         if (!live) return;
         if (!result) return setFailed(true);
-        setMessages((current) => current ?? result.messages);
+        if ("disabled" in result) return setDisabled(result.disabled);
+        setDisabled(null);
+        setFailed(false);
+        // The thread as stored now: a remount after Off, or a clear, starts
+        // from it. A mounted AgentChat keeps its own copy meanwhile.
+        setMessages(loadedIn === generation.current ? result.messages : []);
         setAbout(result.about);
         setJobs(result.jobs);
         setUserId(result.userId);
@@ -67,10 +93,20 @@ function PanelThread({ aboutRef }: { aboutRef: AgentAboutRef | null }) {
     return () => {
       live = false;
     };
-    // Re-read only when the opener changes what it's about.
+    // Re-read when the opener changes what it's about, or a setting is saved.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, loads]);
 
+  if (disabled) {
+    return (
+      <p className="field__hint mt-4">
+        {disabled}{" "}
+        <Link href="/settings#agent" className="jumplink">
+          Change it →
+        </Link>
+      </p>
+    );
+  }
   if (failed) return <p className="field__hint mt-4">Couldn&apos;t open your agent here. Try the full page.</p>;
   if (!messages) return <SkeletonRows rows={3} />;
   return <AgentChat initial={messages} about={about} jobs={jobs} userId={userId} />;

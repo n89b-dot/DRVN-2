@@ -1,7 +1,11 @@
 import { redirect } from "next/navigation";
 
+import { AgentChatPrivacy } from "./agent-chat-privacy";
+import { AgentSection } from "./agent-section";
 import { loadAnalyticsConsent } from "./analytics-consent";
 import { AnalyticsConsentForm } from "./analytics-consent-form";
+import { agentTabOpen } from "@/lib/agent/beta";
+import { loadAgentMode } from "@/lib/agent/member-mode";
 import { loadFulfillmentProfile } from "@/features/commerce/fulfillment";
 import { COUNTRIES } from "@/lib/geo/countries";
 import { getConnectAccountId } from "@/lib/payments/connect";
@@ -35,6 +39,8 @@ export default async function SettingsPage() {
     savedCards,
     fulfillment,
     analyticsEnabled,
+    agentOpen,
+    { count: agentChatMessages },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -61,7 +67,19 @@ export default async function SettingsPage() {
     listSavedCards(user.id).catch(() => []),
     loadFulfillmentProfile(user.id),
     loadAnalyticsConsent(supabase, user.id),
+    agentTabOpen(),
+    // N125: the stored agent chat, read as the member, for Clear chat under
+    // Privacy — whatever the agent's mode or beta steps say.
+    supabase.from("agent_messages").select("id", { count: "exact", head: true }).eq("owner_id", user.id),
   ]);
+  // AG-7: the agent's mode and how many mandates are live, for the Agent
+  // section — only while the Agent tab exists for members at all.
+  const [agentMode, { count: agentRunning }] = agentOpen
+    ? await Promise.all([
+        loadAgentMode(user.id),
+        supabase.from("agent_mandates").select("id", { count: "exact", head: true }).eq("owner_id", user.id).in("status", ["active", "paused"]),
+      ])
+    : ["act" as const, { count: 0 }];
   // Never render the profile form over a row that failed to load: its
   // fields would seed as empty strings and Save would blank the profile.
   if (!profile) throw new Error("Settings could not load your profile.");
@@ -102,7 +120,13 @@ export default async function SettingsPage() {
           notification_prefs: profile?.notification_prefs ?? {},
         }}
         logout={logout}
-        privacySection={<AnalyticsConsentForm initialEnabled={analyticsEnabled} />}
+        privacySection={
+          <div className="grid gap-6">
+            <AnalyticsConsentForm initialEnabled={analyticsEnabled} />
+            {agentChatMessages ? <AgentChatPrivacy messages={agentChatMessages} /> : null}
+          </div>
+        }
+        agentSection={agentOpen ? <AgentSection initialMode={agentMode} running={agentRunning ?? 0} /> : undefined}
         shippingSection={
           <ShippingSection
             countries={COUNTRIES}

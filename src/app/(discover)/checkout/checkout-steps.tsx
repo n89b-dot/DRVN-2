@@ -73,6 +73,7 @@ export function CheckoutSteps({
   orderId,
   drvnListings = [],
   totalsBase,
+  priceNote,
 }: {
   idempotencyKey: string;
   /** Signed-out checkout: collect the email the order confirmation goes to. */
@@ -99,6 +100,10 @@ export function CheckoutSteps({
    *  shown comes from `checkoutTotals` (RR-10); without it (a single
    *  reserved order) `total` is shown until the payment's amount is known. */
   totalsBase?: { goodsCents: number; flatShippingCents: number };
+  /** Who set the agreed price, when an agent did (PRD AG-4): shown with the
+   *  totals, right before payment. The caller derives it from the offer's
+   *  recorded rounds (agentPriceLine); cart checkout has none. */
+  priceNote?: string | null;
 }) {
   const [state, formAction, pending] = useActionState<CommerceState, FormData>(async (previous, data) => {
     try {
@@ -298,6 +303,7 @@ export function CheckoutSteps({
                 </div>
               </div>
             )}
+            {priceNote && <p className="order__meta">{priceNote}</p>}
           </div>
 
           <div className="tile">

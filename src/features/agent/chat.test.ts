@@ -7,6 +7,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 const state = vi.hoisted(() => ({
   suspended: false as boolean | null,
+  mode: "act" as "off" | "suggest" | "act",
+  beginError: null as { code: string } | null,
+  finishError: null as { code: string } | null,
   calls: [] as string[],
   begin: { replayed: false, member: null as unknown, reply: null as unknown },
 }));
@@ -18,6 +21,7 @@ vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 vi.mock("@/lib/analytics", () => ({ capture: vi.fn() }));
 vi.mock("@/lib/agent/beta", () => ({ agentStepOpen: vi.fn(async () => true) }));
+vi.mock("@/lib/agent/member-mode", () => ({ loadAgentMode: async () => (state.calls.push("mode"), state.mode) }));
 vi.mock("@/lib/rate-limit", () => ({
   RATE_LIMITS: { agentChat: {} },
   allowAction: vi.fn(async () => (state.calls.push("rate_limit"), true)),
@@ -39,8 +43,8 @@ vi.mock("@/lib/supabase/admin", () => ({
       from: () => query,
       rpc: async (name: string) => {
         state.calls.push(`admin:${name}`);
-        if (name === "agent_chat_turn_begin") return { data: state.begin, error: null };
-        if (name === "agent_chat_turn_finish") return { data: reply, error: null };
+        if (name === "agent_chat_turn_begin") return state.beginError ? { data: null, error: state.beginError } : { data: state.begin, error: null };
+        if (name === "agent_chat_turn_finish") return state.finishError ? { data: null, error: state.finishError } : { data: reply, error: null };
         return { data: null, error: null };
       },
     };
@@ -62,6 +66,9 @@ const fetchSpy = vi.spyOn(globalThis, "fetch");
 describe("sendAgentMessage", () => {
   beforeEach(() => {
     state.suspended = false;
+    state.mode = "act";
+    state.beginError = null;
+    state.finishError = null;
     state.calls = [];
     state.begin = { replayed: false, member, reply: null };
     vi.mocked(runAgentTurn).mockClear();
@@ -96,7 +103,7 @@ describe("sendAgentMessage", () => {
 
   it("runs one turn with a deadline, then stores the reply against the same request", async () => {
     const result = await sendAgentMessage({ text: "hi", requestId: "33333333-3333-4333-8333-333333333333" });
-    expect(state.calls).toEqual(["member:is_suspended", "rate_limit", "admin:agent_chat_turn_begin", "history", "model", "admin:agent_chat_turn_finish"]);
+    expect(state.calls).toEqual(["member:is_suspended", "mode", "rate_limit", "admin:agent_chat_turn_begin", "history", "model", "admin:agent_chat_turn_finish"]);
     const turn = vi.mocked(runAgentTurn).mock.calls[0][0];
     expect(turn.deadline).toBeGreaterThan(Date.now());
     expect(turn.deadline! - Date.now()).toBeLessThanOrEqual(120_000);
@@ -118,6 +125,39 @@ describe("sendAgentMessage", () => {
     expect(runAgentTurn).not.toHaveBeenCalled();
     expect(result.messages?.map((m) => m.id)).toEqual(["m-1"]);
     expect(result.error).toMatch(/still answering/);
+  });
+
+  it("answers nothing when the member's agent is Off in Settings (AG-7, readiness 64)", async () => {
+    state.mode = "off";
+    const result = await sendAgentMessage({ text: "hi" });
+    expect(result).toEqual({ error: "Agent is off in Settings." });
+    expect(state.calls).toEqual(["member:is_suspended", "mode"]);
+    expect(runAgentTurn).not.toHaveBeenCalled();
+  });
+
+  it("stops at the database when Off was saved after the app read Act (R-agentmode)", async () => {
+    // The app's read said Act; another tab saved Off before
+    // agent_chat_turn_begin, which refuses under the member's lock.
+    state.beginError = { code: "AG009" };
+    const result = await sendAgentMessage({ text: "hi" });
+    expect(result).toEqual({ error: "Agent is off in Settings." });
+    expect(state.calls).toContain("mode");
+    expect(runAgentTurn).not.toHaveBeenCalled();
+  });
+
+  it("returns nothing, not the deleted message, when the chat was cleared mid-turn (N125)", async () => {
+    // The clear deleted the member's message; agent_chat_turn_finish finds
+    // the request without it and stores no reply.
+    state.finishError = { code: "P0002" };
+    const result = await sendAgentMessage({ text: "hi" });
+    expect(result).toEqual({ messages: [], cleared: true });
+  });
+
+  it("still answers under Suggest: the chat is a suggestion, never a negotiation", async () => {
+    state.mode = "suggest";
+    const result = await sendAgentMessage({ text: "hi" });
+    expect(runAgentTurn).toHaveBeenCalledOnce();
+    expect(result.messages?.map((m) => m.id)).toEqual(["m-1", "r-1"]);
   });
 
   it("refuses a request id that isn't one", async () => {

@@ -8,6 +8,8 @@ import { listSavedCards } from "@/lib/payments/customers";
 import { Rv } from "@/components/livesheet";
 import { Foot, ObjectRow } from "@/components/ui";
 import { completeReservedOrder } from "@/features/commerce/actions";
+import { PRICE_ROUND_COLUMNS, agentPriceLine, type PriceRound } from "@/features/commerce/agent-price";
+import { requiredRead } from "@/lib/supabase/required-read";
 import { formatPrice } from "@/lib/payments/fee";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
@@ -96,6 +98,22 @@ export default async function CompleteOrderPage({
   const sellerName =
     seller?.display_name ?? (seller?.username ? `@${seller.username}` : order.seller_label) ?? "the seller";
 
+  // AG-4 (readiness 65): when an agent fixed the price being paid, the money
+  // block and the review right before payment both say whose. From the origin offer's rounds — a read the line can't
+  // stand in for, so a failed one throws rather than quietly saying nothing.
+  const priceLine = order.origin_offer_id
+    ? agentPriceLine(
+        requiredRead(
+          await supabase
+            .from("offer_rounds")
+            .select(PRICE_ROUND_COLUMNS)
+            .eq("offer_id", order.origin_offer_id)
+            .order("round_no"),
+          "this order's negotiation",
+        ) as PriceRound[],
+      )
+    : null;
+
   const expiresSoon = order.created_at
     ? new Date(new Date(order.created_at).getTime() + 24 * 60 * 60 * 1000)
     : null;
@@ -171,6 +189,7 @@ export default async function CompleteOrderPage({
               savedCards={await listSavedCards(user.id).catch(() => [])}
               action={completeReservedOrder}
               orderId={id}
+              priceNote={priceLine?.text}
             />
           </Rv>
         </div>
@@ -194,6 +213,9 @@ export default async function CompleteOrderPage({
               <b>{formatPrice(order.total_cents)}</b>
             </dd>
           </dl>
+          {priceLine && (
+            <p className="spec-note mt-3 border-t border-[color:var(--rule-soft)] pt-3">{priceLine.text}</p>
+          )}
         </Rv>
       </section>
 

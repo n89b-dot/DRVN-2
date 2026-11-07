@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 
 import { agentStepOpen } from "@/lib/agent/beta";
 import { modelContext, type AgentScope } from "@/lib/agent/context";
+import { loadAgentMode } from "@/lib/agent/member-mode";
+import { agentModeAllowsChat, agentModeRefusal } from "@/lib/agent/mode";
 import { capture } from "@/lib/analytics";
 import { runAgentTurn, type TurnCard, type TurnImage } from "@/lib/ai/run";
 import { isOwnedStorageUrl } from "@/lib/media-url";
@@ -18,7 +20,12 @@ import { createClient } from "@/lib/supabase/server";
 import { SUSPENDED_MESSAGE } from "@/lib/suspension";
 
 export type ChatMessage = { id: string; role: "member" | "agent"; body: string; cards: ResolvedCard[]; images: string[]; created_at: string };
-export type ChatState = { error?: string; messages?: ChatMessage[] };
+export type ChatState = {
+  error?: string;
+  messages?: ChatMessage[];
+  /** The chat was cleared while this send ran: show nothing from it. */
+  cleared?: boolean;
+};
 
 const MAX_LENGTH = 4000;
 const HISTORY = 20;
@@ -93,6 +100,10 @@ export async function sendAgentMessage(input: { text: string; scope?: AgentScope
   const suspended = await supabase.rpc("is_suspended", { uid: user.id });
   if (suspended.error) return { error: "Couldn't send that. Try again." };
   if (suspended.data === true) return { error: SUSPENDED_MESSAGE };
+  // AG-7: an agent set to Off answers nothing, from /agent or the side panel
+  // (readiness 64). Refused before anything is stored or sent.
+  const mode = await loadAgentMode(user.id);
+  if (!agentModeAllowsChat(mode)) return { error: agentModeRefusal(mode) ?? "Agent is off in Settings." };
 
   // Photos (A3d) only once the jobs step is open, and only the member's own
   // listing-images uploads; the database checks the folder again.
@@ -113,6 +124,9 @@ export async function sendAgentMessage(input: { text: string; scope?: AgentScope
   const begun = await admin.rpc("agent_chat_turn_begin", { p_owner: user.id, p_request: requestId, p_body: text, p_images: images });
   if (begun.error || !begun.data) {
     if (begun.error?.code === "42501") return { error: SUSPENDED_MESSAGE };
+    // Off saved in another tab after the read above: the database's own
+    // check, under the member's lock (R-agentmode, 20261107190000).
+    if (begun.error?.code === "AG009") return { error: agentModeRefusal("off") ?? "Agent is off in Settings." };
     reportError("[agent] message not stored", { code: begun.error?.code });
     return { error: "Couldn't send that. Try again." };
   }
@@ -163,6 +177,10 @@ export async function sendAgentMessage(input: { text: string; scope?: AgentScope
   const replyCards = turn.ok ? turn.cards : [];
 
   const reply = await admin.rpc("agent_chat_turn_finish", { p_owner: user.id, p_request: requestId, p_body: replyBody.slice(0, 8000), p_cards: replyCards });
+  // The member cleared the chat while this turn ran (N125): their message is
+  // gone, so the request has no member message and nothing is stored. Return
+  // nothing either, or the deleted message would come back on screen.
+  if (reply.error?.code === "P0002") return { messages: [], cleared: true };
   if (reply.error || !reply.data) reportError("[agent] reply not stored", { code: reply.error?.code });
   const stored = (reply.data ?? null) as StoredMessage | null;
 
@@ -187,12 +205,17 @@ function toChatMessages(rows: StoredMessage[], resolved: Map<string, ResolvedCar
  * what the opener asked about, read as the member. Loaded when the panel
  * first opens, never with every page.
  */
-export async function openAgentChat(about?: { kind: string; id: string } | null): Promise<{ messages: ChatMessage[]; about: ChatAbout | null; jobs: boolean; userId: string } | null> {
+export async function openAgentChat(
+  about?: { kind: string; id: string } | null,
+): Promise<{ messages: ChatMessage[]; about: ChatAbout | null; jobs: boolean; userId: string } | { disabled: string } | null> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user || !(await agentStepOpen("chat"))) return null;
+  // AG-7: Off in Settings closes the panel's chat too, saying where to change it.
+  const mode = await loadAgentMode(user.id);
+  if (!agentModeAllowsChat(mode)) return { disabled: agentModeRefusal(mode) ?? "Agent is off in Settings." };
   const [messages, resolved, jobs] = await Promise.all([loadChat(supabase, user.id), resolveAbout(supabase, user.id, about), agentStepOpen("jobs")]);
   return { messages, about: resolved, jobs, userId: user.id };
 }

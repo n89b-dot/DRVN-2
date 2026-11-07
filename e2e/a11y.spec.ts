@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { Client } from "pg";
+
 import { assertAccessible } from "./accessibility";
 import { createDiscoveryFixture } from "./fixtures";
 import { cleanupE2eUsers, makeUser, signUp } from "./helpers";
@@ -155,4 +157,70 @@ test("authenticated cart and checkout meet automated WCAG A/AA at desktop and 40
     await listing.cleanup();
   }
 });
+/**
+ * The agent's surfaces (readiness 74): /agent with its chat, the desktop side
+ * panel open beside a page, the phone bottom bar, and an offer page. The
+ * agent steps start closed (20261024100000), so this opens them through the
+ * isolated local stack's database, like e2e/buyer-agent.spec.ts — and is
+ * restricted to that stack the same way.
+ */
+test.describe("agent surfaces meet automated WCAG A/AA", () => {
+  test.setTimeout(180_000);
+  let db: Client;
+
+  test.beforeAll(async () => {
+    test.skip(process.env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation", "Agent fixtures are restricted to the isolated local stack");
+    db = new Client({ host: "127.0.0.1", port: 54322, user: "supabase_admin", password: "postgres", database: "postgres" });
+    await db.connect();
+    await db.query("update public.agent_beta_steps set open = true where step in ('seller', 'buyer', 'chat')");
+  });
+  test.afterAll(async () => {
+    if (db) await db.end();
+  });
+
+  test("/agent, the side panel, the bottom bar and an offer page", async ({ page }) => {
+    const listing = await createDiscoveryFixture();
+    const user = makeUser("a11y-agent", Date.now());
+    try {
+      await signUp(page, user);
+
+      // The Agent tab, with the chat's live thread and composer.
+      await page.goto("/agent");
+      await expect(page.locator("main")).toBeVisible();
+      await assertAccessible(page, "/agent");
+
+      // The side panel beside a page, open (desktop width).
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(listing.listingPath);
+      await page.getByRole("button", { name: "Ask your agent" }).or(page.getByRole("link", { name: "Ask your agent" })).first().click();
+      const panel = page.getByRole("complementary", { name: "Your agent" });
+      await expect(panel).toBeVisible();
+      await expect(panel.getByRole("heading", { name: /Agent/ })).toBeFocused();
+      await assertAccessible(page, "listing with the agent panel open");
+
+      // Narrowed to a phone with the panel still open: the bottom bar must
+      // come back (the panel's hidden composer used to hide it).
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto("/home");
+      await expect(page.locator(".bnav")).toBeVisible();
+      await assertAccessible(page, "/home with the bottom bar");
+
+      // An offer page, as the buyer who made it.
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await page.goto(listing.listingPath);
+      await page.getByRole("button", { name: "Make an offer" }).first().click();
+      await page.getByLabel("Your offer").fill("90");
+      await page.getByRole("button", { name: /send offer/i }).click();
+      await expect(page.getByText(/Offer sent/)).toBeVisible();
+      await page.goto(listing.listingPath);
+      await page.getByRole("link", { name: /view offer/i }).click();
+      await expect(page).toHaveURL(/\/offers\//);
+      await expect(page.locator("main")).toBeVisible();
+      await assertAccessible(page, "offer page");
+    } finally {
+      await listing.cleanup();
+    }
+  });
+});
+
 test.afterAll(async()=>{await cleanupE2eUsers();});

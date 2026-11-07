@@ -152,8 +152,12 @@ Where the build had to choose, it chose this:
   One floor, as §6 says. When the mandate is paused, turned off or ends, the
   listing's own floor applies again.
 - **Lock order, extended.** The agent's rows come after the negotiation:
-  listing → offer → agent job → mandate → task → approval → order → payment.
-  Every agent function locks the listing and offer before the job.
+  listing → offer → agent job → member → mandate → task → approval → order →
+  payment. Every agent function locks the listing and offer before the job.
+  "Member" is `agent_member_lock_key(owner)` (R-agentmode, 20261107190000):
+  mandate starts, resumes and every worker write hold it shared and read
+  the member's agent setting under it; `agent_mode_set` holds it
+  exclusively and takes no listing, offer or job lock.
 - **A sale ends the seller's task only when it completes.** Accepting an
   offer finishes the buyer's task and mandate; the seller's stay open (and the
   agent's minimum stays in force) until the listing is sold, so a cancelled

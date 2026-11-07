@@ -4122,6 +4122,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          agent_mode: string
           avatar_url: string | null
           bio: string | null
           country: string | null
@@ -4147,6 +4148,7 @@ export type Database = {
           username: string | null
         }
         Insert: {
+          agent_mode?: string
           avatar_url?: string | null
           bio?: string | null
           country?: string | null
@@ -4172,6 +4174,7 @@ export type Database = {
           username?: string | null
         }
         Update: {
+          agent_mode?: string
           avatar_url?: string | null
           bio?: string | null
           country?: string | null
@@ -6168,6 +6171,8 @@ export type Database = {
         Args: { p_mandate: string; p_status: string }
         Returns: string
       }
+      agent_member_lock_key: { Args: { p_owner: string }; Returns: number }
+      agent_mode_set: { Args: { p_mode: string }; Returns: Json }
       agent_offer_move: {
         Args: {
           p_amount: number

@@ -37,6 +37,8 @@ import { ReportButton } from "@/features/moderation/report-button";
 import { PurchaseActions } from "./purchase-actions";
 import { AskAgentButton } from "@/features/agent/ask-agent-button";
 import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
+import { loadAgentMode } from "@/lib/agent/member-mode";
+import { agentModeAllowsChat, agentModeAllowsMandates, agentModeRefusal } from "@/lib/agent/mode";
 import { QASection, type QAItem } from "./qa-section";
 import { postHeadline } from "@/lib/activity/headline";
 import { postHref } from "@/lib/activity/href";
@@ -128,6 +130,8 @@ export default async function ListingPage({
   // The viewer is a local token check (no network), so it can be known
   // before the first round and let viewer-only reads join it.
   const user = await getViewer();
+  // AG-7: the viewer's own agent mode, for the agent entry points below.
+  const agentMode = user && (await agentTabOpen()) ? await loadAgentMode(user.id) : "act";
 
   // Round 1: everything that needs only the listing id or the viewer.
   const [{ data: listing }, { data: images }, selectedVehicle, betaBuyerAccess, { data: taggedPostRows }] =
@@ -511,12 +515,17 @@ export default async function ListingPage({
                 resumeAction={resumeAction}
                 returnPath={detailPath}
                 agentOffers={Boolean(user) && listing.shipping_mode !== "drvn" && (await agentStepOpen("buyer"))}
+                agentRefusal={user && agentModeAllowsMandates(agentMode) ? null : agentModeRefusal(agentMode)}
               />
             )}
             {/* Ask about this listing (A3c): beside the page on desktop, /agent on a phone. */}
             {user && (await agentTabOpen()) && (await agentStepOpen("chat")) && (
               <div className="mt-2 grid">
-                <AskAgentButton about={{ kind: "listing", id: listing.id }} className="w-full" />
+                <AskAgentButton
+                  about={{ kind: "listing", id: listing.id }}
+                  className="w-full"
+                  disabledReason={agentModeAllowsChat(agentMode) ? null : agentModeRefusal(agentMode)}
+                />
               </div>
             )}
 

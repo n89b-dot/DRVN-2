@@ -62,7 +62,15 @@ export function AddToCar({
       </Link>
     );
   }
-  if (!cars.length) return null;
+  // No garage yet: say so, and point at where a car is added, instead of
+  // rendering nothing beside a part that could go on one.
+  if (!cars.length) {
+    return (
+      <Link href="/garage" className="jumplink">
+        Add a car first →
+      </Link>
+    );
+  }
 
   function add(carId: string) {
     setError(null);

@@ -4,6 +4,7 @@ import { LiveDim, Rv } from "@/components/livesheet";
 import { Media } from "@/components/ui";
 
 import type { GarageSheet } from "./garage-data";
+import { GenerationPicker } from "./generation-picker";
 import { PlateSwiper } from "./plate-swiper";
 import { SheetActions } from "./sheet-actions";
 import { SheetDetails } from "./sheet-details";
@@ -182,6 +183,11 @@ export function GarageSheetCard({
             {/* Next — open work orders, or the all-clear. */}
             <div className="gsheet__note">
               <span className="microlabel microlabel--ink">Next</span>
+              {/* A changeover year: which generation is it? Asked here, once,
+                  before the work orders — fitment hangs on the answer. */}
+              {s.generationId == null && s.generationChoices.length > 1 && (
+                <GenerationPicker carId={s.id} choices={s.generationChoices} />
+              )}
               {orders.length ? (
                 <ul className="gsheet__orders">
                   {orders.map((o) => (

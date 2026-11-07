@@ -1,4 +1,6 @@
 import { agentStepOpen } from "@/lib/agent/beta";
+import { loadAgentMode } from "@/lib/agent/member-mode";
+import { agentModeAllowsMandates, agentModeRefusal } from "@/lib/agent/mode";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -28,6 +30,13 @@ import { reportError } from "@/lib/monitoring";
 import { orderCars } from "@/lib/cars/order";
 import type { TurnCard } from "@/lib/ai/run";
 import { isOwnedStorageUrl } from "@/lib/media-url";
+
+/** AG-7: why "Let DRVN handle offers" can't be turned on, when it can't. */
+async function sellerAgentRefusal(userId: string): Promise<string | null> {
+  if (!(await agentStepOpen("seller"))) return null;
+  const mode = await loadAgentMode(userId);
+  return agentModeAllowsMandates(mode) ? null : agentModeRefusal(mode);
+}
 
 export const metadata = { title: "Sell a part - DRVN" };
 
@@ -336,6 +345,7 @@ export default async function SellPage({
 
       <SellForm
         agentBeta={await agentStepOpen("seller")}
+        agentRefusal={await sellerAgentRefusal(user.id)}
         defaultOfferFloorPct={offerFloorPct ?? null}
         cars={orderedCars}
         makes={makes.map((m) => m.name)}
