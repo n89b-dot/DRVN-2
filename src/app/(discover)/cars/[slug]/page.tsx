@@ -9,6 +9,7 @@ import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
 import { loadAgentMode } from "@/lib/agent/member-mode";
 import { agentModeAllowsChat, agentModeRefusal } from "@/lib/agent/mode";
 import { FollowButton, SaveButton } from "@/features/social/buttons";
+import { ReportButton } from "@/features/moderation/report-button";
 import { formatPrice } from "@/lib/payments/fee";
 import { getPublicPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 
@@ -381,6 +382,8 @@ export default async function CarPage({
                 initialSaved={isSaved}
                 isLoggedIn={Boolean(user)}
               />
+              {/* N53: a build's name, description or photos can be reported. */}
+              <ReportButton subjectType="car" subjectId={car.id} subjectLabel="this build" isLoggedIn={Boolean(user)} />
             </span>
           )}
         </div>

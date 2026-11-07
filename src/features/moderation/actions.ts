@@ -2,8 +2,9 @@
 
 import { redirect } from "next/navigation";
 
-import type { ReportReason } from "@/lib/database.types";
+import type { ReportReason, ReportSubjectType } from "@/lib/database.types";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
+import { isDatabaseQuotaError } from "@/lib/db-write-quotas";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -15,6 +16,8 @@ import { createClient } from "@/lib/supabase/server";
  */
 
 export type ReportState = { error?: string; ok?: string } | null;
+
+const REPORT_SUBJECTS: ReportSubjectType[] = ["listing", "user", "post", "comment", "car"];
 
 const REASONS: ReportReason[] = [
   "prohibited_item",
@@ -43,8 +46,9 @@ export async function fileReport(_prev: ReportState, formData: FormData): Promis
   const typed = String(formData.get("detail") ?? "").trim();
   const detail = (context ? `${context}${typed ? `\n${typed}` : ""}` : typed).slice(0, 1000);
 
-  // A post or a reply on one (20260928182300) as well as a listing or a member.
-  if (!["listing", "user", "post", "comment"].includes(subjectType) || !subjectId) {
+  // A post or a reply on one (20260928182300) as well as a listing or a
+  // member, and a build (N53, 20261107220010).
+  if (!REPORT_SUBJECTS.includes(subjectType as ReportSubjectType) || !subjectId) {
     return { error: "Missing what you're reporting." };
   }
   if (!REASONS.includes(reason)) return { error: "Pick what's wrong." };
@@ -70,7 +74,7 @@ export async function fileReport(_prev: ReportState, formData: FormData): Promis
   const { error } = await supabase.from("reports").insert({
     id: reportId,
     reporter_id: user.id,
-    subject_type: subjectType as "listing" | "user" | "post" | "comment",
+    subject_type: subjectType as ReportSubjectType,
     subject_id: subjectId,
     reason,
     detail: detail || null,
@@ -78,6 +82,7 @@ export async function fileReport(_prev: ReportState, formData: FormData): Promis
   if (error) {
     const committed = await readExisting();
     if (committed.error || !committed.data || !matches(committed.data)) {
+      if (isDatabaseQuotaError(error)) return { error: rateLimitMessage(RATE_LIMITS.fileReport) };
       return { error: "The report couldn't be confirmed — try again with the same details." };
     }
   }

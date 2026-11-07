@@ -1155,8 +1155,10 @@ export type AdminReportRow = Report & {
   /** "Listing" · "User" · "Post" · "Reply" — what the row names. */
   subjectKind: string;
   /** Where the reviewer looks at it: the console search for a listing or a
-   *  member, the public post for a post or a reply. */
+   *  member, the public post for a post or a reply, the build page for a car. */
   subjectHref: string;
+  /** A reported build under a moderation hold (N53), so the row offers to lift it. */
+  carHidden?: boolean;
 };
 
 export const REPORTS_PAGE_SIZE = 50;
@@ -1193,7 +1195,8 @@ export async function getReports(
   const userIds = rows.filter((r) => r.subject_type === "user").map((r) => r.subject_id);
   const postIds = rows.filter((r) => r.subject_type === "post").map((r) => r.subject_id);
   const commentIds = rows.filter((r) => r.subject_type === "comment").map((r) => r.subject_id);
-  const [{ data: listings }, users, { data: posts }, { data: comments }] = await Promise.all([
+  const carIds = rows.filter((r) => r.subject_type === "car").map((r) => r.subject_id);
+  const [{ data: listings }, users, { data: posts }, { data: comments }, { data: cars }] = await Promise.all([
     listingIds.length
       ? a.from("listings").select("id, title").in("id", listingIds)
       : Promise.resolve({ data: [] as { id: string; title: string }[] }),
@@ -1204,12 +1207,25 @@ export async function getReports(
     commentIds.length
       ? a.from("activity_comments").select("id, post_id, body").in("id", commentIds)
       : Promise.resolve({ data: [] }),
+    carIds.length
+      ? a.from("cars").select("id, slug, name, car_moderation_holds(car_id)").in("id", carIds)
+      : Promise.resolve({ data: [] as { id: string; slug: string; name: string; car_moderation_holds: { car_id: string } | null }[] }),
   ]);
+  const carById = new Map((cars ?? []).map((c) => [c.id, c]));
   const listingTitles = new Map((listings ?? []).map((l) => [l.id, l.title]));
   const postById = new Map((posts ?? []).map((p) => [p.id, p]));
   const commentById = new Map((comments ?? []).map((c) => [c.id, c]));
   const clip = (text: string) => (text.length > 80 ? `${text.slice(0, 79)}…` : text);
-  function subject(r: Report): { subjectLabel: string; subjectKind: string; subjectHref: string } {
+  function subject(r: Report): { subjectLabel: string; subjectKind: string; subjectHref: string; carHidden?: boolean } {
+    if (r.subject_type === "car") {
+      const car = carById.get(r.subject_id);
+      return {
+        subjectLabel: car ? clip(car.name) : "Build (deleted)",
+        subjectKind: "Build",
+        subjectHref: car ? `/cars/${car.slug}` : "/admin/reports",
+        carHidden: Boolean(car?.car_moderation_holds),
+      };
+    }
     if (r.subject_type === "listing") {
       const label = listingTitles.get(r.subject_id) ?? "Listing (deleted)";
       return { subjectLabel: label, subjectKind: "Listing", subjectHref: `/admin/listings?q=${encodeURIComponent(label)}` };

@@ -3,6 +3,7 @@
 import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
+import { isDatabaseQuotaError } from "@/lib/db-write-quotas";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
@@ -123,6 +124,8 @@ export async function sendThreadMessage(
   if (error) {
     const committed = await existingMessage();
     if (committed.error || !committed.data || !matches(committed.data)) {
+      // The database holds the same limit (N247) for writes that skip this action.
+      if (isDatabaseQuotaError(error)) return { error: rateLimitMessage(RATE_LIMITS.sendMessage) };
       // A suspended member's insert is refused by 20260929110000's policy —
       // say so rather than inviting a retry that can't succeed.
       if (await isSuspended(supabase, user.id)) return { error: SUSPENDED_MESSAGE };

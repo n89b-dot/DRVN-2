@@ -1590,6 +1590,52 @@ export type Database = {
           },
         ]
       }
+      car_moderation_holds: {
+        Row: {
+          car_id: string
+          created_at: string
+          hidden_by: string | null
+          reason: string
+          report_id: string | null
+        }
+        Insert: {
+          car_id: string
+          created_at?: string
+          hidden_by?: string | null
+          reason: string
+          report_id?: string | null
+        }
+        Update: {
+          car_id?: string
+          created_at?: string
+          hidden_by?: string | null
+          reason?: string
+          report_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "car_moderation_holds_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: true
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "car_moderation_holds_hidden_by_fkey"
+            columns: ["hidden_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "car_moderation_holds_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cars: {
         Row: {
           about: string | null
@@ -1612,8 +1658,6 @@ export type Database = {
           make_key: string | null
           model: string | null
           model_key: string | null
-          moderation_hidden_at: string | null
-          moderation_hidden_reason: string | null
           name: string
           owner_id: string
           slug: string
@@ -1645,8 +1689,6 @@ export type Database = {
           make_key?: string | null
           model?: string | null
           model_key?: string | null
-          moderation_hidden_at?: string | null
-          moderation_hidden_reason?: string | null
           name: string
           owner_id: string
           slug: string
@@ -1678,8 +1720,6 @@ export type Database = {
           make_key?: string | null
           model?: string | null
           model_key?: string | null
-          moderation_hidden_at?: string | null
-          moderation_hidden_reason?: string | null
           name?: string
           owner_id?: string
           slug?: string
@@ -6774,8 +6814,6 @@ export type Database = {
           make_key: string | null
           model: string | null
           model_key: string | null
-          moderation_hidden_at: string | null
-          moderation_hidden_reason: string | null
           name: string
           owner_id: string
           slug: string

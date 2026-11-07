@@ -7,13 +7,15 @@ import { Dialog } from "@/components/ui";
 
 import { fileReport, type ReportState } from "./actions";
 
-export type ReportSubject = "listing" | "user" | "post" | "comment";
+export type ReportSubject = "listing" | "user" | "post" | "comment" | "car";
 
 const SUBJECT_WORDS: Record<ReportSubject, { trigger: string; owner: string }> = {
   listing: { trigger: "Report this listing", owner: "seller" },
   user: { trigger: "Report this seller", owner: "user" },
   post: { trigger: "Report this post", owner: "author" },
   comment: { trigger: "Report", owner: "author" },
+  // N53: a build's name, description or photos (20261107220010).
+  car: { trigger: "Report this build", owner: "owner" },
 };
 
 const REASON_OPTIONS = [

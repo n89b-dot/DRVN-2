@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { adminRemoveReportedContent, adminResolveReport, adminResolveReports } from "@/lib/admin/actions";
+import { adminHideReportedCar, adminRemoveReportedContent, adminResolveReport, adminResolveReports } from "@/lib/admin/actions";
 import type { AdminReportRow } from "@/lib/admin/queries";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
@@ -28,7 +28,7 @@ const OUTCOME_FIELDS = [
     // wrote a note recorded a takedown that never happened.
     options: [
       { value: "", label: "Choose…" },
-      { value: "actioned", label: "Actioned — content removed / seller handled" },
+      { value: "actioned", label: "Actioned — handled elsewhere (suspension, listing takedown)" },
       { value: "dismissed", label: "Dismissed — no breach" },
     ],
   },
@@ -119,7 +119,7 @@ export function OpenReportsList({ rows }: { rows: AdminReportRow[] }) {
                 trigger="Resolve"
                 triggerClassName="relbtn !static"
                 hidden={{ report_id: r.id }}
-                confirmNote="Actioned = you took the subject down or suspended the seller (do that from Listings/Users, or Remove below for a post or reply). Dismissed = no breach. The reporter is told it was reviewed."
+                confirmNote="Actioned = you dealt with it elsewhere (a suspension from Users, a takedown from Listings); the reporter is told it was reviewed and followed up, not that anything was removed. To take down a post, reply or build, use its button below instead. Dismissed = no breach."
                 fields={OUTCOME_FIELDS}
                 submitLabel="Resolve report"
               />
@@ -130,9 +130,21 @@ export function OpenReportsList({ rows }: { rows: AdminReportRow[] }) {
                   trigger={r.subject_type === "post" ? "Remove post" : "Remove reply"}
                   triggerClassName="relbtn !static"
                   hidden={{ report_id: r.id }}
-                  confirmNote="Deletes it for everyone (its text is kept in the audit log) and then deletes its photos from storage, tells the author why, marks this report actioned and tells the reporter."
+                  confirmNote="Deletes it for everyone (its text is kept in the audit log) and then deletes its photos from storage, tells the author why, and closes this and every other open report on it (and on a post's replies), telling each reporter."
                   fields={[{ kind: "reason" as const, name: "reason", label: "Reason — shown to the author" }]}
                   submitLabel="Remove"
+                />
+              )}
+              {r.subject_type === "car" && !r.carHidden && (
+                <ActionDialog
+                  action={adminHideReportedCar}
+                  title="Hide this build"
+                  trigger="Hide build"
+                  triggerClassName="relbtn !static"
+                  hidden={{ report_id: r.id }}
+                  confirmNote="Makes the build private and holds it there — the owner can't republish it until you lift the hold from Resolved. Nothing is deleted. The owner is told why; this and every other open report on the build are closed and each reporter is told."
+                  fields={[{ kind: "reason" as const, name: "reason", label: "Reason — shown to the owner" }]}
+                  submitLabel="Hide build"
                 />
               )}
             </div>

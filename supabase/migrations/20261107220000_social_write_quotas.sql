@@ -149,9 +149,9 @@ create trigger notifications_zz_dedupe_relationship
   before insert on public.notifications
   for each row execute function private.dedupe_relationship_notification();
 
-create index if not exists notifications_relationship_dedupe_idx
-  on public.notifications (user_id, actor_id, kind, created_at desc)
-  where actor_id is not null;
+-- The check reads one recipient's last day of notifications, which the
+-- existing per-recipient indexes already serve; no new index (a partial one
+-- here would shadow notifications.actor_id's foreign-key index).
 
 -- ------------------------------------------------------------
 -- 3. Dispute-evidence uploads: cap what sits in the folder

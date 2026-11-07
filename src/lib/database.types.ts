@@ -928,11 +928,14 @@ export type ReportReason =
   | "wrong_category"
   | "other";
 
+/** 'post' and 'comment' since 20260928182300 (a post, or a reply on one);
+ *  'car' since 20261107220010 (N53). */
+export type ReportSubjectType = "listing" | "user" | "post" | "comment" | "car";
+
 export type Report = {
   id: string;
   reporter_id: string | null;
-  /** 'post' and 'comment' since 20260928182300 (a post, or a reply on one). */
-  subject_type: "listing" | "user" | "post" | "comment";
+  subject_type: ReportSubjectType;
   subject_id: string;
   reason: ReportReason;
   detail: string | null;
