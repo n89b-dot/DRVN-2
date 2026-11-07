@@ -252,7 +252,7 @@ export function listingRowsQuery(supabase: SupabaseClient<Database>, raw: Listin
     ...(workerViewer ? { p_viewer: workerViewer } : {}),
     // An exact count makes the database produce every matching part before
     // it returns the first page; callers that already know the total skip it.
-  }, options.count === false ? {} : { count: "exact" }).select("id, title, description, created_at, price_cents, shipping_cents, shipping_mode, allows_collection, condition, location, source_car_id, part_number, brand, part_miles, part_miles_unit, seller_id");
+  }, options.count === false ? {} : { count: "exact" }).select("id, title, description, created_at, published_at, price_cents, shipping_cents, shipping_mode, allows_collection, condition, location, source_car_id, part_number, brand, part_miles, part_miles_unit, seller_id");
   if (filters.category) query = query.eq("category", filters.category);
   if (filters.subcategory) query = query.eq("subcategory", filters.subcategory);
   if (filters.condition) query = query.eq("condition", filters.condition as "new" | "like_new" | "used" | "for_parts");
@@ -275,7 +275,7 @@ export const COUNT_CAP = 10_000;
  *  exactly. */
 export const SEARCH_CAP = 1_000;
 
-const CARD_COLUMNS = "id, title, description, created_at, price_cents, shipping_cents, shipping_mode, allows_collection, condition, location, source_car_id, part_number, brand, part_miles, part_miles_unit, seller_id";
+const CARD_COLUMNS = "id, title, description, created_at, published_at, price_cents, shipping_cents, shipping_mode, allows_collection, condition, location, source_car_id, part_number, brand, part_miles, part_miles_unit, seller_id";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -283,10 +283,12 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * its id — as one URL-safe token. Next links carry the last part shown,
  * Previous links the first. The date is kept as the database's own string:
  * a JS Date holds milliseconds, the database microseconds, and a rounded
- * position would skip or repeat parts.
+ * position would skip or repeat parts. Newest is by when a part first went
+ * on sale (published_at, migration 20261107153200), so that is the date a
+ * Newest position holds; a part for sale always has one.
  */
-export function encodePosition(sort: ListingSort, row: { id: string; created_at: string; price_cents: number }): string {
-  const key = sort === "newest" ? row.created_at : String(row.price_cents);
+export function encodePosition(sort: ListingSort, row: { id: string; created_at: string; published_at?: string | null; price_cents: number }): string {
+  const key = sort === "newest" ? (row.published_at ?? row.created_at) : String(row.price_cents);
   return btoa(`${sort}|${key}|${row.id}`).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
@@ -375,7 +377,7 @@ export async function fetchListings(
       : { p_offset: (page - 1) * PAGE_SIZE }),
   }).select(CARD_COLUMNS);
   // The function returns its page in order; asking again costs a sort of 25.
-  if (sort === "newest") pageQuery = pageQuery.order("created_at", { ascending: false }).order("id", { ascending: false });
+  if (sort === "newest") pageQuery = pageQuery.order("published_at", { ascending: false }).order("id", { ascending: false });
   else pageQuery = pageQuery.order("price_cents", { ascending: sort === "price_asc" }).order("id", { ascending: sort === "price_asc" });
 
   // A typed search the engine can answer: its page of ids and exact count,
@@ -504,7 +506,7 @@ async function fetchListingsByOffset(
     let query = listingRowsQuery(supabase, filters, undefined, { searchEntry, count: counted });
     if (sort === "price_asc") query = query.order("price_cents", { ascending: true });
     else if (sort === "price_desc") query = query.order("price_cents", { ascending: false });
-    else query = query.order("created_at", { ascending: false });
+    else query = query.order("published_at", { ascending: false });
     return query.order("id").range(from, from + PAGE_SIZE - 1);
   };
 

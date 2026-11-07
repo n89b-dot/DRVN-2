@@ -12,13 +12,17 @@ export const dynamic = "force-dynamic";
 
 /**
  * Saved-search matching (brief §C/§D). One pass: for every saved search with
- * alerts ON, find active listings created since the last check that match its
+ * alerts ON, find active listings published since the last check that match its
  * params, and raise ONE quiet in-app notification summarizing them — never a
  * per-listing flood. Runs behind CRON_SECRET like the transfer worker and
  * media GC; schedule it every ~30 min (see docs/production-runbook.md).
  *
  * The first pass for a search only stamps last_checked_at — nobody gets
  * alerted about inventory that predates their opt-in.
+ *
+ * "Published", not "created" (N73): a part saved as a draft and put on sale
+ * later goes on the market when it is published, so that is when it enters
+ * a window (listings.published_at, first publication, set by the database).
  */
 async function run(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -62,8 +66,8 @@ async function run(request: Request) {
       // All criteria and visibility run before the limit; unlike the old
       // candidate-prefix path, a new match cannot be lost behind older rows.
       const { data: matches, count, error } = await listingRowsQuery(admin, params, search.user_id)
-        .gt("created_at", since).lte("created_at", started).neq("seller_id", search.user_id)
-        .order("created_at", { ascending: false }).order("id").limit(3);
+        .gt("published_at", since).lte("published_at", started).neq("seller_id", search.user_id)
+        .order("published_at", { ascending: false }).order("id").limit(3);
       if (error) {
         failed += 1;
         reportError("[saved-searches] match query failed", { id: search.id, code: error.code });

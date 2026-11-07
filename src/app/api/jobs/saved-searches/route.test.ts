@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   searches: [] as Array<Record<string, unknown>>, searchError: null as { code: string } | null,
   matches: { data: [{ title: "Matched part" }], count: 7, error: null as { code: string } | null },
-  deliver: vi.fn(), update: vi.fn(), listingQuery: vi.fn(),
+  deliver: vi.fn(), update: vi.fn(), listingQuery: vi.fn(), window: [] as unknown[][],
 }));
 vi.mock("@/lib/tracked-worker", () => ({ trackedWorker: (_name: string, _request: Request, run: () => Promise<Response>) => run() }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn(), flushMonitoring: vi.fn() }));
@@ -14,7 +14,13 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ from: () =>
 }) }) }));
 vi.mock("@/lib/marketplace/query", () => ({ listingRowsQuery: (...args: unknown[]) => {
   state.listingQuery(...args);
-  const query = { gt: () => query, lte: () => query, neq: () => query, order: () => query, limit: async () => state.matches };
+  const query = {
+    gt: (...a: unknown[]) => { state.window.push(["gt", ...a]); return query; },
+    lte: (...a: unknown[]) => { state.window.push(["lte", ...a]); return query; },
+    neq: () => query,
+    order: (...a: unknown[]) => { state.window.push(["order", ...a]); return query; },
+    limit: async () => state.matches,
+  };
   return query;
 } }));
 import { POST } from "./route";
@@ -24,6 +30,7 @@ beforeEach(() => {
   state.searchError = null;
   state.searches = [{ id: "search", user_id: "owner", name: "My part", last_checked_at: "2026-01-01T00:00:00Z", params: { _version: "2", category: "interior", vehicle: "1-2", vyear: "2018", sort: "price_asc", min: "10", max: "200", ymin: "2010", ymax: "2020" } }];
   state.matches = { data: [{ title: "Matched part" }], count: 7, error: null };
+  state.window = [];
   state.update.mockClear(); state.listingQuery.mockClear(); state.deliver.mockReset().mockResolvedValue("delivered");
 });
 it("uses the complete saved definition and links to the same normalized search", async () => {
@@ -65,4 +72,13 @@ it("a failed search inventory lookup fails visibly", async () => {
   state.searchError = { code: "42501" };
   expect((await POST(request())).status).toBe(500);
   expect(state.update).not.toHaveBeenCalled();
+});
+it("a part published from a draft enters the window when it is published, not when it was saved (N73)", async () => {
+  expect((await POST(request())).status).toBe(200);
+  const [gt, lte, order] = state.window;
+  expect(gt).toEqual(["gt", "published_at", "2026-01-01T00:00:00Z"]);
+  expect(lte?.[0]).toBe("lte");
+  expect(lte?.[1]).toBe("published_at");
+  expect(order).toEqual(["order", "published_at", { ascending: false }]);
+  expect(state.window.some((call) => call[1] === "created_at")).toBe(false);
 });
