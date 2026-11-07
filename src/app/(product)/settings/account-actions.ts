@@ -143,10 +143,11 @@ export async function changePassword(
 
 /**
  * The change went through: tell the owner, so a change they didn't make is
- * something they hear about. Supabase Auth sends no "password changed" email
- * of its own, so this goes through DRVN's notification door (deliver.ts);
- * the email channel arrives with the provider. Best-effort: the password is
- * already changed, so a failed notice never turns the result into an error.
+ * something they hear about. Supabase Auth's own "password changed" email is
+ * a project setting that is off by default (and off in config.toml), so DRVN
+ * never relies on it: this goes through DRVN's notification door
+ * (deliver.ts), which is always on. Best-effort: the password is already
+ * changed, so a failed notice never turns the result into an error.
  */
 async function passwordChanged(userId: string): Promise<AccountState> {
   try {

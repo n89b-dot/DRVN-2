@@ -117,8 +117,8 @@ In the staging (then production) project:
 ## 5. How each link works
 
 Checked against the code on 4 October 2026; signup and reset moved to token
-links on 8 October. Every link except the email change lands on `/confirm`
-with a token hash. `/confirm` shows a button, and pressing it verifies the
+links on 8 October, the email change on 24 October. Every link lands on
+`/confirm` with a token hash. `/confirm` shows a button, and pressing it verifies the
 token (`src/app/(auth)/confirm/route.ts`), so the email can be opened in any
 browser or on any device, and a mail scanner that only fetches the link does
 not use it up.
@@ -127,7 +127,7 @@ not use it up.
 |---|---|---|---|
 | Confirm signup (member) | `signUp` in `src/app/(auth)/actions.ts` | `{{ .SiteURL }}/confirm?token_hash=…&type=email&flow=signup&redirect_to={{ .RedirectTo }}` | `/confirm` → signed in → onboarding for a new account, then the page they were on (taken from `redirect_to`'s `next`, same-origin paths only) |
 | Reset password | `resetPasswordForEmail`, same file | `{{ .SiteURL }}/confirm?token_hash=…&type=recovery` | `/confirm` → `/login/reset` with a recovery session |
-| Change email | `updateUser({ email })` in `src/app/(product)/settings/account-actions.ts` | `{{ .ConfirmationURL }}`, sent to both old and new address | No redirect is passed, so it lands on the Site URL. The change applies once both links are opened |
+| Change email | `updateUser({ email }, { emailRedirectTo })` in `src/app/(product)/settings/account-actions.ts` | `{{ .SiteURL }}/confirm?token_hash=…&type=email_change&redirect_to={{ .RedirectTo }}`, sent to both old and new address | `/confirm` → `/settings?changed=email` (only a Settings path is accepted), with a notice: "One link confirmed" until both links are opened, then "Sign-in email updated" |
 | Guest order access | `signInWithOtp` in `deliverOrderAccessLink` | `{{ .SiteURL }}/confirm?token_hash=…&type=…&next=%2Forders` | `/confirm` → `/orders` |
 | Guest auto-confirm warning | the transfers job (`src/lib/auto-confirm-email.ts`) | the guest order access email, with a paragraph giving the date | `/confirm` → `/orders` |
 
@@ -184,8 +184,14 @@ subject, that the link's host is the site origin, and that it works once.
       template is reached only for accounts that were confirmed some other
       way. If you can't reach it, note "not reachable" in the evidence.
 - [ ] **[OWNER]** Email change: Settings → change email. Both the old and new
-      inbox get "Confirm your new DRVN email". Open both → Settings shows the
-      new address; signing in with the new address works.
+      inbox get "Confirm your new DRVN email". Open the first → "Confirm the
+      change" → Settings with "One link confirmed". Open the second →
+      Settings with "Sign-in email updated" and the new address; signing in
+      with the new address works.
+- [ ] **[OWNER]** Password change: Settings → change password → the bell
+      shows "Your password was changed". (Supabase's own password-changed
+      email is a separate project setting, off by default; DRVN's notice
+      doesn't depend on it.)
 - [ ] **[OWNER]** Headers: in Gmail, "Show original" on one email → SPF,
       DKIM and DMARC all `PASS`.
 - [ ] **[ENGINEER]** Save screenshots and the "Show original" headers as
