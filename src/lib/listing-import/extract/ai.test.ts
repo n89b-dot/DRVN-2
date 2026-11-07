@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { SpendLedger } from "@/lib/ai/spend";
+import type { SpendLedger, SpendReservation } from "@/lib/ai/spend";
 
 import type { ImportConfig } from "../config";
 import type { NormalizedImportSource } from "../schema";
 import { parseExtraction } from "../schema";
-import { extractListing, extractWithHeuristics } from "./ai";
+import { extractListing, extractWithHeuristics, importReserveUsd } from "./ai";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => { throw new Error("the ledger is injected in these tests"); } }));
@@ -94,7 +94,8 @@ describe("extractWithHeuristics", () => {
 });
 
 // Readiness 78: every importer model call goes through the member's spend
-// ledger — refused before the call when over the cap, recorded after it.
+// ledger — its worst case reserved before the call (refused over the cap),
+// settled with what it really used after, a failed call included.
 describe("extractListing spend", () => {
   const config: ImportConfig = { aiMode: "anthropic", model: "claude-test-1" } as ImportConfig;
   const owner = "33333333-3333-4333-8333-333333333333";
@@ -102,32 +103,59 @@ describe("extractListing spend", () => {
     usage: { input_tokens: 1200, output_tokens: 300 },
     content: [{ type: "tool_use", id: "t1", name: "record_listing_extraction", input: { isSalePost: true, multipleItems: false, rawFitmentMentions: [] } }],
   };
-  function ledger(allowed: boolean): SpendLedger & { recorded: unknown[] } {
-    const recorded: unknown[] = [];
-    return { recorded, allowed: vi.fn(async () => allowed), record: vi.fn(async (_owner, usage) => { recorded.push(usage); }) };
+  function ledger(answer: SpendReservation) {
+    return {
+      reserve: vi.fn<SpendLedger["reserve"]>(async () => answer),
+      settle: vi.fn<SpendLedger["settle"]>(async () => {}),
+    };
   }
 
   it("refuses with ai_spend_cap before calling the model when the member is over today's cap", async () => {
     const create = vi.fn();
-    const spend = ledger(false);
+    const spend = ledger({ ok: false, reason: "spend_cap" });
     const outcome = await extractListing(src("FS: thing $100"), config, { ownerId: owner, spend, client: { messages: { create } } as never });
     expect(outcome).toEqual({ ok: false, code: "ai_spend_cap" });
     expect(create).not.toHaveBeenCalled();
-    expect(spend.allowed).toHaveBeenCalledWith(owner);
+    expect(spend.reserve).toHaveBeenCalledWith(owner, "listing_import", expect.any(Number));
+    expect(spend.settle).not.toHaveBeenCalled();
   });
 
-  it("records the call's usage against the importing member as listing_import", async () => {
+  it("reads a paused or suspended reservation as unavailable, never calling the model", async () => {
+    for (const reason of ["paused", "suspended"] as const) {
+      const create = vi.fn();
+      const outcome = await extractListing(src("FS: thing $100"), config, { ownerId: owner, spend: ledger({ ok: false, reason }), client: { messages: { create } } as never });
+      expect(outcome).toEqual({ ok: false, code: "ai_unavailable" });
+      expect(create).not.toHaveBeenCalled();
+    }
+  });
+
+  it("settles the hold with the call's usage against the importing member as listing_import", async () => {
     const create = vi.fn(async () => reply);
-    const spend = ledger(true);
+    const spend = ledger({ ok: true, hold: "hold-1" });
     const outcome = await extractListing(src("FS: thing $100"), config, { ownerId: owner, spend, client: { messages: { create } } as never });
     expect(outcome.ok).toBe(true);
-    expect(spend.record).toHaveBeenCalledWith(owner, expect.objectContaining({ feature: "listing_import", model: "claude-test-1", inputTokens: 1200, outputTokens: 300, taskId: null }));
+    expect(spend.settle).toHaveBeenCalledWith(owner, "hold-1", expect.objectContaining({ feature: "listing_import", model: "claude-test-1", inputTokens: 1200, outputTokens: 300, taskId: null }));
+  });
+
+  it("settles the hold when the model call fails, so the hold never lingers", async () => {
+    const create = vi.fn(async () => { throw new Error("overloaded"); });
+    const spend = ledger({ ok: true, hold: "hold-2" });
+    const outcome = await extractListing(src("FS: thing $100"), config, { ownerId: owner, spend, client: { messages: { create } } as never });
+    expect(outcome).toEqual({ ok: false, code: "ai_failed" });
+    expect(spend.settle).toHaveBeenCalledWith(owner, "hold-2", expect.objectContaining({ inputTokens: 0, outputTokens: 0 }));
+  });
+
+  it("holds more for a longer source, and something for an unpriced model", () => {
+    expect(importReserveUsd("claude-sonnet-5-5", "x".repeat(30_000))).toBeGreaterThan(importReserveUsd("claude-sonnet-5-5", "x"));
+    // A full answer is always held: 3,000 output tokens at least.
+    expect(importReserveUsd("claude-sonnet-5-5", "x")).toBeGreaterThanOrEqual((3_000 * 10) / 1_000_000);
+    expect(importReserveUsd("claude-test-1", "x")).toBeGreaterThan(0);
   });
 
   it("costs nothing in stub mode, so the ledger isn't consulted", async () => {
-    const spend = ledger(false);
+    const spend = ledger({ ok: false, reason: "spend_cap" });
     const outcome = await extractListing(src("FS: thing $100"), { aiMode: "stub", model: "stub" } as ImportConfig, { ownerId: owner, spend });
     expect(outcome.ok).toBe(true);
-    expect(spend.allowed).not.toHaveBeenCalled();
+    expect(spend.reserve).not.toHaveBeenCalled();
   });
 });

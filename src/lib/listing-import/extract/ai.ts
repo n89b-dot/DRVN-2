@@ -3,6 +3,7 @@ import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 
 import { anthropicClient } from "@/lib/ai/client";
+import { estimateCostUsd } from "@/lib/ai/config";
 import { databaseLedger, type SpendLedger } from "@/lib/ai/spend";
 import { logUsage, usageRecord } from "@/lib/ai/usage";
 
@@ -23,10 +24,13 @@ import { CATEGORIES } from "@/lib/marketplace/taxonomy";
  * mistaken for a working one in CI.
  *
  * Every model call is counted against the importing member's daily spend
- * (agent_spend_limits via databaseLedger, readiness 78): checked before the
- * call, recorded after it with feature "listing_import". Over the cap, the
- * import stops at `ai_spend_cap` with its own sentence; the source stays
- * saved. Stub mode costs nothing and is not counted.
+ * (agent_spend_limits via databaseLedger, readiness 78): the call's worst
+ * case is reserved before it is made (agent_spend_reserve, 20261107100000)
+ * and settled with what it really used afterwards, feature
+ * "listing_import" — a failed call included. Over the cap, the import stops
+ * at `ai_spend_cap` with its own sentence; the source stays saved. A
+ * reservation refused for a suspended member or a kill switch reads as
+ * `ai_unavailable`. Stub mode costs nothing and is not counted.
  */
 
 export type AiExtractionOutcome =
@@ -193,23 +197,26 @@ async function extractWithAnthropic(
   options: ExtractionOptions
 ): Promise<AiExtractionOutcome> {
   const ledger = options.spend ?? databaseLedger();
-  // Unknown spend reads as over the cap inside the ledger: no call is better
-  // than an uncounted one.
-  if (!(await ledger.allowed(options.ownerId))) return { ok: false, code: "ai_spend_cap" };
+  const content = buildUserContent(source);
+  // One call's worst case, held before it is made. An unreadable ledger
+  // refuses inside databaseLedger: no call is better than an uncounted one.
+  const reservation = await ledger.reserve(options.ownerId, "listing_import", importReserveUsd(config.model, content));
+  if (!reservation.ok) return { ok: false, code: reservation.reason === "spend_cap" ? "ai_spend_cap" : "ai_unavailable" };
+  let inputTokens = 0;
+  let outputTokens = 0;
   try {
     const client = options.client ?? (await anthropicClient());
     const response = await client.messages.create({
       model: config.model,
-      max_tokens: 3000,
+      max_tokens: IMPORT_MAX_TOKENS,
       temperature: 0,
       system: buildSystemPrompt(),
       tools: [OUTPUT_TOOL],
       tool_choice: { type: "tool", name: OUTPUT_TOOL.name },
-      messages: [{ role: "user", content: buildUserContent(source) }],
+      messages: [{ role: "user", content }],
     });
-    const usage = usageRecord({ model: config.model, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, taskId: null, feature: "listing_import" });
-    logUsage(usage);
-    await ledger.record(options.ownerId, usage);
+    inputTokens = response.usage.input_tokens;
+    outputTokens = response.usage.output_tokens;
     const toolUse = response.content.find(
       (block): block is Extract<(typeof response.content)[number], { type: "tool_use" }> =>
         block.type === "tool_use"
@@ -218,7 +225,23 @@ async function extractWithAnthropic(
     return { ok: true, raw: toolUse.input };
   } catch {
     return { ok: false, code: "ai_failed" };
+  } finally {
+    // Swaps the hold for what was used; nothing is stored for zero tokens.
+    const usage = usageRecord({ model: config.model, inputTokens, outputTokens, taskId: null, feature: "listing_import" });
+    if (inputTokens + outputTokens > 0) logUsage(usage);
+    await ledger.settle(options.ownerId, reservation.hold, usage);
   }
+}
+
+const IMPORT_MAX_TOKENS = 3000;
+/**
+ * The call's worst case: the source (about three characters a token, never
+ * fewer), the system prompt and output tool, and a full answer. An unpriced
+ * model holds a flat amount.
+ */
+export function importReserveUsd(model: string, content: string): number {
+  const inputTokens = Math.ceil(content.length / 3) + 3_000;
+  return estimateCostUsd(model, inputTokens, IMPORT_MAX_TOKENS) ?? 0.25;
 }
 
 // ---------------------------------------------------------------------------
