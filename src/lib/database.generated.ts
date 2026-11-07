@@ -1612,6 +1612,8 @@ export type Database = {
           make_key: string | null
           model: string | null
           model_key: string | null
+          moderation_hidden_at: string | null
+          moderation_hidden_reason: string | null
           name: string
           owner_id: string
           slug: string
@@ -1643,6 +1645,8 @@ export type Database = {
           make_key?: string | null
           model?: string | null
           model_key?: string | null
+          moderation_hidden_at?: string | null
+          moderation_hidden_reason?: string | null
           name: string
           owner_id: string
           slug: string
@@ -1674,6 +1678,8 @@ export type Database = {
           make_key?: string | null
           model?: string | null
           model_key?: string | null
+          moderation_hidden_at?: string | null
+          moderation_hidden_reason?: string | null
           name?: string
           owner_id?: string
           slug?: string
@@ -6768,6 +6774,8 @@ export type Database = {
           make_key: string | null
           model: string | null
           model_key: string | null
+          moderation_hidden_at: string | null
+          moderation_hidden_reason: string | null
           name: string
           owner_id: string
           slug: string
@@ -7493,7 +7501,12 @@ export type Database = {
       }
       my_car_vin: { Args: { p_car: string }; Returns: string }
       my_default_offer_floor: { Args: never; Returns: number }
+      my_dispute_evidence_upload_count: {
+        Args: { p_order: string }
+        Returns: number
+      }
       my_listing_offer_floor: { Args: { p_listing: string }; Returns: number }
+      my_notification_prefs: { Args: never; Returns: Json }
       notification_href_target: { Args: { p_href: string }; Returns: string }
       notify: {
         Args: {

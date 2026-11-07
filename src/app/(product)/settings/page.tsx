@@ -51,11 +51,12 @@ export default async function SettingsPage({
     { count: agentChatMessages },
     claims,
     google,
+    { data: notificationPrefs },
   ] = await Promise.all([
     supabase
       .from("profiles")
       .select(
-        "username, display_name, headline, bio, location, country, region, store_note, links, notification_prefs, payouts_enabled, profile_type"
+        "username, display_name, headline, bio, location, country, region, store_note, links, payouts_enabled, profile_type"
       )
       .eq("id", user.id)
       .single(),
@@ -85,6 +86,9 @@ export default async function SettingsPage({
     // session's verified claims (no extra round trip; getViewer did the same).
     supabase.auth.getClaims().then(({ data }) => data?.claims ?? null, () => null),
     googleSignInEnabled(),
+    // N62: notification settings are closed to other members; the caller's
+    // own come from a function that answers only for them.
+    supabase.rpc("my_notification_prefs"),
   ]);
   // AG-7: the agent's mode and how many mandates are live, for the Agent
   // section — only while the Agent tab exists for members at all.
@@ -141,7 +145,7 @@ export default async function SettingsPage({
           default_offer_floor_pct: offerFloorPct ?? null,
           store_note: profile?.store_note ?? null,
           links,
-          notification_prefs: profile?.notification_prefs ?? {},
+          notification_prefs: notificationPrefs ?? {},
         }}
         logout={logout}
         identityProof={{
