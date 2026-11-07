@@ -15,10 +15,12 @@
 --      transaction.
 --   2. agent_mandate_set and a resume (agent_mandate_set_status 'active')
 --      refuse below Act with AG009, read under the member's lock, shared.
---   3. The worker: agent_claim_jobs cancels a job whose owner is below Act;
+--   3. The worker: agent_claim_jobs reads the owner's mode under the same
+--      lock, shared (a try: a job whose owner's save is in flight steps back
+--      a minute), and cancels a job whose owner is below Act;
 --      agent_authority, which every worker write passes through
 --      (agent_offer_move, agent_offer_open, agent_request_approval,
---      agent_record_decision), refuses with AG003 under the same shared lock.
+--      agent_record_decision), takes the lock shared and refuses with AG003.
 --
 -- Lock order: listing → offer → job → member (agent_member_lock_key) →
 -- mandate → task → approval. agent_mode_set takes no listing, offer or job
@@ -241,8 +243,16 @@ begin
       where id = v_job.id;
       continue;
     end if;
-    -- AG-7 (R-agentmode): the owner's agent is set below Act. Saving that
-    -- revoked their mandates; a job that outlived it has nothing to do.
+    -- AG-7 (R-agentmode): read the owner's mode under their lock, shared,
+    -- after the job's (job → member, as the lock order says). A save in
+    -- flight holds it exclusively: try, and if it is held, step the job back
+    -- a minute rather than hold up the whole claim.
+    if not pg_try_advisory_xact_lock_shared(public.agent_member_lock_key(v_mandate.owner_id)) then
+      update public.agent_jobs set available_at = now() + interval '1 minute' where id = v_job.id;
+      continue;
+    end if;
+    -- Below Act: saving that revoked their mandates; a job that outlived it
+    -- has nothing to do.
     if (select p.agent_mode from public.profiles p where p.id = v_mandate.owner_id) is distinct from 'act' then
       update public.agent_jobs set status = 'cancelled', lease_id = null, lease_expires_at = null, finished_at = now(),
         last_error = 'agent set below act'
