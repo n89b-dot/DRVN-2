@@ -26,14 +26,11 @@ export type PayoutHoldPolicy = {
 };
 
 /**
- * What the code uses when the settings row is missing. NOT the live rule:
- * the owner's rule (Neil, 4 October 2026, docs/decisions/payout-hold.md) is
- * that sellers are paid 2 days after delivery, set on the row by
- * 20261009100000. This fallback (and the SQL coalesce in
- * payout_available_at()) still says 7 here; Neil ruled on 7 November 2026
- * that it becomes 2 as well, which the R-hold follow-up does.
+ * What a missing settings row means, here and in the SQL: the owner's rule,
+ * a fixed 2 days after delivery (Neil, 4 October 2026, set on the row by
+ * 20261009100000; the fallbacks followed on 7 November 2026, 20261107220900).
  */
-export const DEFAULT_PAYOUT_HOLD: PayoutHoldPolicy = { mode: "fixed", holdDays: 7 };
+export const DEFAULT_PAYOUT_HOLD: PayoutHoldPolicy = { mode: "fixed", holdDays: 2 };
 
 const DAY_MS = 86_400_000;
 

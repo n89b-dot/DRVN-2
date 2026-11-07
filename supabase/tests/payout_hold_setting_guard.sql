@@ -134,12 +134,17 @@ begin
   end loop;
   raise notice 'PASS 6: out-of-range values and a second row are refused';
 
-  -- 7. A missing row falls back to 7 days rather than stranding a payout.
+  -- 7. A missing row falls back to the owner's 2 days rather than stranding
+  --    a payout (R-hold, 20261107220900), and so does a new row.
   delete from public.settlement_settings;
-  if public.payout_available_at(plain, stamp) is distinct from stamp + interval '7 days' then
-    raise exception 'FAIL 7: a missing settings row did not fall back to 7 days';
+  if public.payout_available_at(plain, stamp) is distinct from stamp + interval '2 days' then
+    raise exception 'FAIL 7: a missing settings row did not fall back to 2 days';
   end if;
-  raise notice 'PASS 7: missing settings fall back to the 7-day default';
+  insert into public.settlement_settings default values;
+  if (select payout_hold_days from public.settlement_settings where id) is distinct from 2 then
+    raise exception 'FAIL 7: a new settings row does not default to 2 days';
+  end if;
+  raise notice 'PASS 7: missing settings and a new row fall back to the 2-day default';
 
   raise notice 'all payout hold setting checks passed';
 end $$;

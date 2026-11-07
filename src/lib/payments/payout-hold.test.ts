@@ -17,6 +17,8 @@ import {
 } from "./payout-hold";
 
 const MIGRATION = readFileSync("supabase/migrations/20261006100000_payout_hold_setting.sql", "utf8");
+// R-hold (20261107220900): the column default and payout_available_at()'s missing-row fallback.
+const FALLBACK = readFileSync("supabase/migrations/20261107220900_payout_hold_fallback_two_days.sql", "utf8");
 
 function fakeClient(result: { data: unknown; error: unknown }) {
   return {
@@ -32,10 +34,13 @@ function fakeClient(result: { data: unknown; error: unknown }) {
 describe("payout hold", () => {
   it("mirrors the SQL defaults and the problem window it hard-codes", () => {
     // payout_available_at() can't import a TS constant; these keep the two in step.
-    expect(MIGRATION).toMatch(/payout_hold_days integer not null default 7,/);
     expect(MIGRATION).toMatch(/payout_hold_mode text not null default 'fixed',/);
-    expect(MIGRATION).toContain(`greatest(policy.days, ${DISPUTE_WINDOW_DAYS}, coalesce(shop.window_days, 0))`);
-    expect(DEFAULT_PAYOUT_HOLD).toEqual({ mode: "fixed", holdDays: 7 });
+    expect(FALLBACK).toContain("alter table public.settlement_settings alter column payout_hold_days set default 2;");
+    expect(FALLBACK).toContain("from public.settlement_settings s where s.id), 2) as days,");
+    expect(FALLBACK).toContain("from public.settlement_settings s where s.id), 'fixed') as mode");
+    expect(FALLBACK).toContain(`greatest(policy.days, ${DISPUTE_WINDOW_DAYS}, coalesce(shop.window_days, 0))`);
+    // The app's fallback is the owner's rule, a fixed 2 days (R-hold, Neil 7 Nov 2026).
+    expect(DEFAULT_PAYOUT_HOLD).toEqual({ mode: "fixed", holdDays: 2 });
   });
 
   it("counts a fixed hold from delivery", () => {
@@ -61,7 +66,7 @@ describe("payout hold", () => {
   });
 
   it("says the rule in words", () => {
-    expect(payoutHoldPhrase(DEFAULT_PAYOUT_HOLD)).toBe("7 days");
+    expect(payoutHoldPhrase(DEFAULT_PAYOUT_HOLD)).toBe("2 days");
     expect(payoutHoldPhrase({ mode: "fixed", holdDays: 1 })).toBe("1 day");
     expect(payoutHoldPhrase({ mode: "claim_window", holdDays: 7 })).toBe(
       `${DISPUTE_WINDOW_DAYS} days (or once the shop's return window closes, if later)`
