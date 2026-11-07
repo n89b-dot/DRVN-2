@@ -103,7 +103,7 @@ Notes:
 
 ## Listings and discovery
 
-Proof PR: opened from `cloud/os-proof-sweep-listings`.
+Proof PR: #100, from `cloud/os-proof-sweep-listings`.
 
 | Item | Title | Status | Plan id / batch | PR / commit | Proving test (file › test name) |
 |---|---|---|---|---|---|
