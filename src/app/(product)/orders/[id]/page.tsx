@@ -196,8 +196,9 @@ export default async function OrderDetailPage({
     isSeller && order.status === "paid" && !order.is_collection
       ? readSettlementRisk(supabase)
       : Promise.resolve(null),
-    // Whether the seller may review this buyer (20261005101000): a guest who
-    // never confirmed their email can't be reviewed, so the form isn't offered.
+    // Whether the seller may review this buyer (20261005101000): a buyer who
+    // checked out as a guest without a confirmed email can't be reviewed on
+    // this order, so the form isn't offered.
     // Answers only a party to the order; the buyer's own review is unaffected.
     isSeller ? supabase.rpc("order_buyer_reviewable", { p_order: id }) : Promise.resolve({ data: null }),
   ]);

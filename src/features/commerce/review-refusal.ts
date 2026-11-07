@@ -7,9 +7,13 @@
  * trigger raises `42501` with a sentence about guest checkout; mapped here so
  * the form says what happened instead of asking for a retry that can't work.
  * The order page shows the same sentence in place of the form.
+ *
+ * Whether the buyer had proven the address is recorded when the order is
+ * placed, so confirming it later doesn't open the review: the sentence says
+ * "on this order", never "yet".
  */
 export const UNPROVEN_BUYER_REVIEW_MESSAGE =
-  "This buyer hasn't confirmed their email, so a review can't be left yet.";
+  "This buyer checked out as a guest without a confirmed email, so they can't be reviewed on this order.";
 
 export function isUnprovenBuyerRefusal(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
