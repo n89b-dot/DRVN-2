@@ -10,8 +10,8 @@ import { loadHomeFeedPage } from "./actions";
 import type { HomeTab } from "./tabs";
 
 /**
- * The rest of Home's feed: what the server rendered after the first three
- * posts, then each further page as the reader nears the end (H-4) — the same
+ * The rest of Home's feed: what the server rendered after the eighth post
+ * (H-5's second fold, ./fold.ts), then each further page as the reader nears the end (H-4) — the same
  * mechanism as the Explore wall, one page at a time and one in flight.
  *
  * The "More" button is the same path for keyboard users, and for a browser

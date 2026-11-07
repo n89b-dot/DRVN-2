@@ -1,22 +1,22 @@
 "use server";
 
-import { revalidatePath } from "@/lib/revalidate";
-
 import { allowAction, RATE_LIMITS, rateLimitMessage } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { SUSPENDED_MESSAGE, isSuspended } from "@/lib/suspension";
 
 import { ACTIVITY_EMOJIS } from "./constants";
+import { revalidatePostPages } from "./post-paths";
 
 /**
  * Flips one reaction, or — given `want` — sets it. The card's heart passes
  * the state the member tapped for, so a stale or doubled tap can't turn an
  * "unlike" into a new 🔥; the post page's emoji bar still toggles.
+ *
+ * What to refresh comes from the post, never from the browser (N58).
  */
 export async function toggleReaction(
   postId: string,
   emoji: string,
-  path: string,
   want?: boolean
 ): Promise<{ reacted: boolean } | { error: string }> {
   if (!ACTIVITY_EMOJIS.includes(emoji as (typeof ACTIVITY_EMOJIS)[number])) {
@@ -53,7 +53,7 @@ export async function toggleReaction(
       .eq("post_id", postId)
       .eq("user_id", user.id)
       .eq("emoji", emoji);
-    revalidatePath(path);
+    await revalidatePostPages(supabase, postId);
     return { reacted: false };
   }
 
@@ -61,7 +61,7 @@ export async function toggleReaction(
     .from("activity_reactions")
     .insert({ post_id: postId, user_id: user.id, emoji });
   if (error) return { error: error.message };
-  revalidatePath(path);
+  await revalidatePostPages(supabase, postId);
   return { reacted: true };
 }
 
@@ -76,7 +76,6 @@ export async function addComment(_prev: CommentState, formData: FormData): Promi
 
   const postId = String(formData.get("post_id") ?? "");
   const body = String(formData.get("body") ?? "").trim();
-  const path = String(formData.get("path") ?? "");
   if (!postId || !body) return { error: "Write a reply first." };
   // Every reply notifies the post's author, so an unthrottled loop was a
   // notification flood aimed at one member.
@@ -92,7 +91,7 @@ export async function addComment(_prev: CommentState, formData: FormData): Promi
     return { error: "Your reply didn't send. It's still here — try again." };
   }
 
-  if (path) revalidatePath(path);
+  await revalidatePostPages(supabase, postId);
   return {};
 }
 
@@ -101,7 +100,7 @@ export async function addComment(_prev: CommentState, formData: FormData): Promi
  * post it sits under (20260928182200) — RLS decides which; a delete that
  * matched nothing means neither, and says so.
  */
-export async function deleteComment(commentId: string, path: string): Promise<{ ok: true } | { error: string }> {
+export async function deleteComment(commentId: string): Promise<{ ok: true } | { error: string }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -109,10 +108,10 @@ export async function deleteComment(commentId: string, path: string): Promise<{ 
   if (!user) return { error: "login" };
   if (!commentId) return { error: "That reply wasn't found." };
 
-  const { data, error } = await supabase.from("activity_comments").delete().eq("id", commentId).select("id");
+  const { data, error } = await supabase.from("activity_comments").delete().eq("id", commentId).select("id, post_id");
   if (error) return { error: "Couldn't delete that reply. Try again." };
   if (!data?.length) return { error: "You can only delete your own replies, or replies on your post." };
 
-  if (path) revalidatePath(path);
+  await revalidatePostPages(supabase, data[0].post_id);
   return { ok: true };
 }

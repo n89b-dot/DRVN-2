@@ -24,7 +24,7 @@ export type CommentView = {
 };
 
 /** "Delete" under a reply — two taps, because it can't be undone. */
-function DeleteReply({ commentId, path }: { commentId: string; path: string }) {
+function DeleteReply({ commentId }: { commentId: string }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +33,7 @@ function DeleteReply({ commentId, path }: { commentId: string; path: string }) {
   function remove() {
     setError(null);
     startTransition(async () => {
-      const result = await deleteComment(commentId, path);
+      const result = await deleteComment(commentId);
       if ("error" in result) {
         setError(result.error === "login" ? "Sign in again to delete this." : result.error);
         return;
@@ -137,7 +137,7 @@ export function ActivityEngagement({
     setReactError(null);
     startTransition(async () => {
       applyToggle(emoji);
-      const result = await toggleReaction(postId, emoji, path);
+      const result = await toggleReaction(postId, emoji);
       if ("error" in result && result.error) {
         if (result.error === "login") goLogin();
         else setReactError("That reaction didn't save — try again.");
@@ -178,7 +178,7 @@ export function ActivityEngagement({
               meta={
                 comment.canDelete || !comment.mine ? (
                   <span className="inline-flex flex-wrap items-center gap-3">
-                    {comment.canDelete && <DeleteReply commentId={comment.id} path={path} />}
+                    {comment.canDelete && <DeleteReply commentId={comment.id} />}
                     {!comment.mine && (
                       <ReportButton
                         subjectType="comment"
@@ -234,7 +234,6 @@ export function ActivityEngagement({
               if (!body || pending) return;
               const fd = new FormData();
               fd.set("post_id", postId);
-              fd.set("path", path);
               fd.set("body", body);
               setReplyError(null);
               startReply(async () => {
