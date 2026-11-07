@@ -518,6 +518,60 @@ begin
   end if;
   raise notice 'PASS 10: a full refund cancels unsent payouts at once, reconciles possibly-sent ones, and records a late transfer with an operator case, without an automatic reversal';
 
+  -- 11. A full refund after the reconciliation budget is spent. The payout
+  --     already went to an operator ('failed', attempts 8, case open);
+  --     claim_transfer_intents will never admit it again, so the refund must
+  --     not re-shelve it as if a reconciliation were coming. It stays with
+  --     the operator, whose case gets a note of the refund (and is reopened
+  --     if it had been closed); a transfer its owner still reports is
+  --     recorded with a transfer_after_refund case.
+  o := pg_temp.w18_order(buyer, seller, 'pi_w18_exhausted');
+  update public.transfer_intents
+  set status = 'processing', locked_by = 'w18-exhausted', lease_expires_at = now() + interval '5 minutes',
+      attempts = 7, operation_key = 'transfer:' || o::text, dispatch_amount_cents = 9000, dispatch_currency = 'usd',
+      dispatch_destination = 'acct_w18_seller', dispatch_source_transaction = 'ch_pi_w18_exhausted',
+      dispatch_transfer_group = 'pi_w18_exhausted', provider_call_may_have_occurred = true
+  where order_id = o;
+  if public.record_transfer_recovery(o, 'w18-exhausted', 'transfer-unresolved:' || o::text,
+       'No exact Stripe transfer was found after 8 attempts', 9000) is null then
+    raise exception 'Fixture 11: the operator case was not opened';
+  end if;
+  -- The operator had closed the case before the refund arrived.
+  update public.payment_recoveries set status = 'recovered', resolved_at = now(), resolution_note = 'checked'
+  where recovery_key = 'transfer-unresolved:' || o::text;
+  r := public.begin_refund_operation(
+    p_order_id => o, p_amount_cents => 10000, p_reason => 'chargeback guard: refund after exhaustion',
+    p_requested_by => 'stripe:webhook', p_actor_role => 'system', p_resolve_dispute => false,
+    p_dispute_outcome => null, p_payment_reference => 'pi_w18_exhausted', p_external => true);
+  perform public.settle_refund_operation((r->>'operation_id')::uuid);
+  if not exists (
+    select 1 from public.transfer_intents
+    where order_id = o and status = 'failed' and attempts >= 8 and next_attempt_at is null
+      and provider_call_may_have_occurred and last_error like 'order fully refunded;%'
+  ) then
+    raise exception 'FAIL 11: a full refund re-shelved (or cancelled) a payout whose reconciliation budget was spent: %',
+      (select row(status, attempts, next_attempt_at) from public.transfer_intents where order_id = o);
+  end if;
+  if not exists (
+    select 1 from public.payment_recoveries
+    where recovery_key = 'transfer-unresolved:' || o::text and status = 'open' and resolved_at is null
+      and detail like 'The order was fully refunded while this seller transfer was unresolved%'
+  ) then
+    raise exception 'FAIL 11: the operator case was not reopened with a note of the refund';
+  end if;
+  if exists (select 1 from public.claim_transfer_intents('w18-exhausted-claim', 200, 300, 8) c where c.order_id = o) then
+    raise exception 'FAIL 11: an exhausted payout was admitted again';
+  end if;
+  v_result := public.complete_transfer_intent(o, 'w18-exhausted', 'transfer:' || o::text, 'tr_w18_exhausted');
+  if v_result <> 'recovery' or not exists (
+    select 1 from public.transfer_intents where order_id = o and status = 'transferred' and transfer_reference = 'tr_w18_exhausted'
+  ) or not exists (
+    select 1 from public.payment_recoveries where order_id = o and kind = 'transfer_after_refund' and status = 'open'
+  ) then
+    raise exception 'FAIL 11: the exhausted payout''s reported transfer was not recorded with a case (%)', v_result;
+  end if;
+  raise notice 'PASS 11: a refund after the budget is spent leaves the payout with the operator, notes the refund, and still records a reported transfer';
+
   -- 9. The predicate stays private.
   if has_function_privilege('authenticated', 'private.order_has_unresolved_chargeback(uuid)', 'execute')
      or has_function_privilege('anon', 'private.order_has_unresolved_chargeback(uuid)', 'execute')

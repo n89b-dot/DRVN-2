@@ -200,7 +200,11 @@ async function recordFailure(
   });
 }
 
-/** Bounded exponential backoff: 2, 4, … 64, then 120 minutes. */
+/**
+ * Bounded exponential backoff: 2, 4, 8, 16, 32, then 64 minutes for every
+ * later attempt (the exponent stops at 6, so the 120-minute ceiling is never
+ * reached). Unchanged from the worker's original failure backoff.
+ */
 function retryAt(attempts: number): string {
   const backoffMinutes = Math.min(2 ** Math.min(attempts, 6), 120);
   return new Date(Date.now() + backoffMinutes * 60_000).toISOString();

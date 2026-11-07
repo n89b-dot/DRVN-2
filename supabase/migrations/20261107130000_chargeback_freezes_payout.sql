@@ -195,8 +195,9 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- 3. Dispatch. Latest: 20260905173052_transfer_dispatch_recovery.sql.
---    Changed: the order row is key-share locked first (the lock a provider
---    dispute admission conflicts with), then an unresolved chargeback refuses
+--    Changed: the order row is locked first (it waits for a chargeback
+--    admission in progress, which locks the order before writing the
+--    journal: section 6), then an unresolved chargeback refuses
 --    the dispatch and returns the row to 'holding' under the caller's live
 --    lease. Returns false, as for a lost lease: the caller must not call
 --    Stripe and must not touch the row again.
@@ -245,8 +246,15 @@ begin
   end if;
 
   -- 20261107130000: parent lock first (refund settlement, transfer completion
-  -- and record_transfer_recovery take the same order -> intent order).
-  perform 1 from public.orders where id = p_order for key share;
+  -- and record_transfer_recovery take the same order -> intent order). FOR
+  -- UPDATE, not KEY SHARE: it must wait for any chargeback admission in
+  -- progress, and every admission locks the order before it writes the
+  -- journal (hold_stripe_dispute, apply_stripe_dispute_event: section 6),
+  -- so the check below reads the journal as committed. (KEY SHARE let the
+  -- check run first and only waited later, in guard_late_refund_payout's
+  -- FOR UPDATE, after the decision was made. Taking FOR UPDATE here also
+  -- means that trigger never has to upgrade a weaker lock.)
+  perform 1 from public.orders where id = p_order for update;
 
   if private.order_has_unresolved_chargeback(p_order) then
     update public.transfer_intents
@@ -374,11 +382,12 @@ begin
     -- A processing row owned by anybody else remains untouched.
     -- 20261107130000: a full refund now shelves such a payout ('holding',
     -- settle_refund_operation) instead of cancelling it; the same evidence
-    -- applies to it. Any other shelved row stays 'lost' here and is found by
-    -- the worker's next reconciliation.
+    -- applies to it, and to an exhausted one the refund left 'failed' with
+    -- its operator case. Any other shelved row stays 'lost' here and is found
+    -- by the worker's next reconciliation.
     if (
          v_intent.status = 'cancelled'
-         or (v_intent.status = 'holding'
+         or (v_intent.status in ('holding', 'failed')
              and (v_order.status = 'refunded' or v_order.refunded_cents >= v_order.total_cents))
        )
        and v_intent.provider_call_may_have_occurred
@@ -618,6 +627,8 @@ declare
   v_reversed  int;
   -- 20261007100400
   v_closed      record;
+  -- 20261107130000
+  v_exhausted   int;
   v_adjustments int;
   v_net_before  int;
   v_net_after   int;
@@ -764,7 +775,9 @@ begin
     -- prepare nor overwrite it). The worker records a transfer it finds,
     -- with a 'transfer_after_refund' case for an operator to decide on a
     -- reversal, and cancels the payout itself once its attempt budget has
-    -- found none.
+    -- found none. One whose attempt budget is already spent (the worker's
+    -- 8; claim_transfer_intents would never admit it again) stays with the
+    -- operator instead: 'failed', its case open, with a note of the refund.
     update public.transfer_intents
     set status = 'cancelled', last_error = 'order fully refunded', updated_at = now()
     where order_id = v_op.order_id
@@ -780,7 +793,33 @@ begin
         updated_at = now()
     where order_id = v_op.order_id
       and status in ('holding', 'ready', 'blocked_unpayable', 'failed', 'processing')
-      and provider_call_may_have_occurred;
+      and provider_call_may_have_occurred
+      and attempts < 8;
+    update public.transfer_intents
+    set status = 'failed',
+        next_attempt_at = null,
+        last_error = left('order fully refunded; ' || coalesce(last_error, ''), 500),
+        locked_at = null,
+        locked_by = null,
+        lease_expires_at = null,
+        updated_at = now()
+    where order_id = v_op.order_id
+      and status in ('holding', 'ready', 'blocked_unpayable', 'failed', 'processing')
+      and provider_call_may_have_occurred
+      and attempts >= 8
+    returning coalesce(dispatch_amount_cents, amount_cents) into v_exhausted;
+    if found then
+      insert into public.payment_recoveries (order_id, kind, recovery_key, amount_cents, detail)
+      values (
+        v_op.order_id, 'transfer_unresolved', 'transfer-unresolved:' || v_op.order_id::text, v_exhausted,
+        'The order was fully refunded while this seller transfer was unresolved (Stripe may have been called); check Stripe before closing.'
+      )
+      on conflict (recovery_key) do update
+      set detail = left('The order was fully refunded while this seller transfer was unresolved; check Stripe before closing. '
+                        || coalesce(public.payment_recoveries.detail, ''), 1000),
+          last_seen_at = now(), status = 'open',
+          resolved_by = null, resolved_at = null, resolution_note = null;
+    end if;
   end if;
 
   -- 20261005110100
@@ -809,6 +848,124 @@ begin
 end;
 $function$;
 
+-- ---------------------------------------------------------------------------
+-- 6. Chargeback admission takes the order locks first. Latest of both:
+--    20260905195518_provider_dispute_ordering.sql. Changed (marked
+--    20261107130000): one `for update` on the basket's orders before any
+--    journal write. A partial or mismatched chargeback went to
+--    hold_stripe_dispute before the explicit order lock, and an order
+--    already in an in-app dispute was never locked at all, so a concurrent
+--    dispatch could pass while the unresolved entry was still uncommitted.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.hold_stripe_dispute(p_dispute text,p_detail text) returns text
+language plpgsql security definer set search_path=public,pg_temp as $$
+declare entry public.stripe_dispute_journal%rowtype; recovery uuid;
+begin
+ select * into strict entry from public.stripe_dispute_journal where dispute_id=p_dispute for update;
+ -- 20261107130000: lock every order of the basket, already-disputed ones
+ -- included, before the journal changes, so a concurrent
+ -- prepare_transfer_dispatch (FOR UPDATE on the order, then the journal)
+ -- waits for this commit and then sees the unresolved entry.
+ perform 1 from public.orders where id=any(entry.order_ids) order by id for update;
+ update public.stripe_dispute_journal set state='recovery',lease_id=null,lease_expires_at=null,updated_at=now() where dispute_id=p_dispute;
+ -- Freeze the basket while attribution is reviewed; never infer that a
+ -- partial chargeback refunded every order on its PaymentIntent.
+ update public.orders set pre_dispute_status=status,status='disputed',disputed_at=now(),
+  dispute_resolved_at=null,dispute_outcome=null,dispute_category='other',
+  dispute_reason='Card dispute requires reconciliation — '||p_dispute,stripe_dispute_id=p_dispute
+ where id=any(entry.order_ids) and status in ('paid','shipped','delivered','completed');
+ insert into public.payment_recoveries(order_id,kind,recovery_key,amount_cents,detail)
+ values(case when cardinality(entry.order_ids)=1 then entry.order_ids[1] else null end,
+ 'partial_refund_unattributed','stripe:dispute:'||p_dispute,entry.amount_cents,left(p_detail,2000))
+ on conflict(recovery_key) do update set last_seen_at=now()
+ returning id into recovery;
+ insert into public.admin_alert_outbox(kind,title,detail,order_id,amount_cents,payload,dedup_key)
+ values('recovery_case_opened','Card dispute requires reconciliation',left(p_detail,2000),
+ case when cardinality(entry.order_ids)=1 then entry.order_ids[1] else null end,entry.amount_cents,
+ jsonb_build_object('recovery_id',recovery,'dispute_id',p_dispute),'stripe-dispute:'||p_dispute)
+ on conflict(dedup_key) do nothing;
+ return 'recovery_recorded';
+end $$;
+
+create or replace function public.apply_stripe_dispute_event(
+ p_dispute text,p_intent text,p_amount integer,p_currency text,p_status text,
+ p_closed boolean,p_event text,p_created bigint,p_lease uuid
+) returns text language plpgsql security definer set search_path=public,pg_temp as $$
+declare entry public.stripe_dispute_journal%rowtype; ids uuid[]; total bigint;
+ valid boolean; order_row public.orders%rowtype; prior_exists boolean;
+begin
+ if p_closed is null then raise exception 'Missing dispute event phase'; end if;
+ if p_closed and (p_status in ('won','warning_closed','lost')) is distinct from true then return 'retry'; end if;
+ if p_dispute is null or p_intent is null or p_event is null or p_lease is null or p_created is null or p_amount<=0 or p_currency!~'^[a-z]{3}$' then raise exception 'Invalid dispute event'; end if;
+ perform pg_advisory_xact_lock(hashtextextended('stripe-dispute:'||p_intent,0));
+ select * into entry from public.stripe_dispute_journal where dispute_id=p_dispute for update;
+ prior_exists:=found;
+ if prior_exists then
+  if entry.payment_reference<>p_intent or entry.amount_cents<>p_amount or entry.currency<>p_currency then return public.hold_stripe_dispute(p_dispute,'Provider dispute identity, amount or currency changed. Reconcile against the original journal.'); end if;
+  if entry.state='recovery' then return 'recovery_recorded'; end if;
+  if not p_closed and entry.state<>'open' then return 'committed'; end if;
+  if p_closed and entry.state in ('won','warning_closed','lost') then
+   if entry.state=p_status then return 'committed'; end if;
+   return public.hold_stripe_dispute(p_dispute,'Conflicting terminal provider dispute outcomes require review.');
+  end if;
+  if entry.state='loss_pending' and p_closed and p_status<>'lost' then return public.hold_stripe_dispute(p_dispute,'Conflicting terminal outcome during chargeback booking.'); end if;
+  if entry.state='loss_pending' and entry.lease_expires_at>now() then return 'retry'; end if;
+  if not p_closed and p_created<=entry.last_event_created then return 'committed'; end if;
+ end if;
+ select array_agg(distinct p.order_id order by p.order_id),sum(p.amount_cents),
+ bool_and(lower(p.currency)=p_currency and p.status in ('succeeded','partially_refunded','refunded'))
+ into ids,total,valid from public.payments p where p.provider='stripe' and p.provider_reference=p_intent;
+ if ids is null then return 'retry'; end if;
+ -- 20261107130000: the basket's orders are locked before any journal write
+ -- below (the insert, or hold_stripe_dispute), in the order dispatch uses.
+ perform 1 from public.orders where id=any(ids) order by id for update;
+ if not prior_exists then
+  insert into public.stripe_dispute_journal(dispute_id,payment_reference,amount_cents,currency,state,last_event_id,last_event_created,order_ids)
+  values(p_dispute,p_intent,p_amount,p_currency,'open',p_event,p_created,ids)
+  returning * into entry;
+ end if;
+ if cardinality(ids)>50 then return public.hold_stripe_dispute(p_dispute,'Dispute basket exceeds the bounded automatic-processing limit.'); end if;
+ if ids is distinct from entry.order_ids or total<>p_amount or valid is distinct from true then
+  return public.hold_stripe_dispute(p_dispute,'The dispute does not exactly match the frozen payment basket and currency. Allocate the provider amount before booking any refund.');
+ end if;
+ perform id from public.orders where id=any(ids) order by id for update;
+ if (select sum(total_cents) from public.orders where id=any(ids))<>p_amount or exists(select 1 from public.orders o where o.id=any(ids) and lower(o.currency)<>p_currency) then
+  return public.hold_stripe_dispute(p_dispute,'Order and provider dispute currencies differ.');
+ end if;
+ if p_closed and p_status not in ('won','warning_closed','lost') then return 'retry'; end if;
+ -- Won/closed-before-created is journaled without inventing a prior hold.
+ if p_closed and p_status in ('won','warning_closed') then
+  if exists(select 1 from public.orders o where o.id=any(ids) and o.status='disputed' and o.stripe_dispute_id=p_dispute and o.dispute_reason not like '% — '||p_dispute) then
+   return public.hold_stripe_dispute(p_dispute,'A newer in-app dispute owns an order; provider closure cannot resolve it.');
+  end if;
+  update public.orders set status=coalesce(pre_dispute_status,'paid'),dispute_resolved_at=now()
+   where id=any(ids) and status='disputed' and stripe_dispute_id=p_dispute
+   and dispute_reason like '% — '||p_dispute;
+  update public.stripe_dispute_journal set state=p_status,last_event_id=p_event,last_event_created=p_created,updated_at=now() where dispute_id=p_dispute;
+  return 'committed';
+ end if;
+ if exists(select 1 from public.orders o where o.id=any(ids) and (
+  (o.status='disputed' and o.stripe_dispute_id is distinct from p_dispute)
+  or (o.status not in ('paid','shipped','delivered','completed','disputed') and entry.state<>'loss_pending')
+  or (p_status='lost' and p_closed and o.refunded_cents>0 and entry.state<>'loss_pending')
+ )) then return public.hold_stripe_dispute(p_dispute,'Existing order/dispute/refund state prevents safe automatic chargeback allocation.'); end if;
+ for order_row in select * from public.orders where id=any(ids) loop
+  if order_row.status<>'disputed' and entry.state<>'loss_pending' then
+   update public.orders set status='disputed',pre_dispute_status=order_row.status,
+    disputed_at=now(),dispute_resolved_at=null,dispute_outcome=null,dispute_category='other',
+    dispute_reason='Card dispute via Stripe — '||p_dispute,stripe_dispute_id=p_dispute
+   where id=order_row.id;
+  end if;
+ end loop;
+ update public.stripe_dispute_journal set state=case when p_closed then 'loss_pending' else 'open' end,
+ last_event_id=p_event,last_event_created=p_created,
+ lease_id=case when p_closed then p_lease else null end,
+ lease_expires_at=case when p_closed then now()+interval '5 minutes' else null end,updated_at=now()
+ where dispute_id=p_dispute;
+ return case when p_closed then 'apply_loss' else 'committed' end;
+end $$;
+
 -- create or replace keeps each function's grants; restate them so this file
 -- alone shows who may call what.
 revoke all on function public.mark_due_transfer_intents() from public, anon, authenticated;
@@ -821,9 +978,13 @@ revoke all on function public.complete_transfer_intent(uuid, text, text, text) f
 grant execute on function public.complete_transfer_intent(uuid, text, text, text) to service_role;
 revoke all on function public.settle_refund_operation(uuid) from public, anon, authenticated;
 grant execute on function public.settle_refund_operation(uuid) to service_role;
+revoke all on function public.hold_stripe_dispute(text, text) from public, anon, authenticated;
+grant execute on function public.hold_stripe_dispute(text, text) to service_role;
+revoke all on function public.apply_stripe_dispute_event(text, text, integer, text, text, boolean, text, bigint, uuid) from public, anon, authenticated;
+grant execute on function public.apply_stripe_dispute_event(text, text, integer, text, text, boolean, text, bigint, uuid) to service_role;
 
 -- ---------------------------------------------------------------------------
--- 6. Self-checks
+-- 7. Self-checks
 -- ---------------------------------------------------------------------------
 
 do $$
