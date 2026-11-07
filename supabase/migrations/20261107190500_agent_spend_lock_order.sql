@@ -1,4 +1,4 @@
--- 20261107180000 — the agent's model boundary, follow-up to 20261107100000
+-- 20261107190500 — the agent's model boundary, follow-up to 20261107100000
 -- (OS-PR64 / OS-W04, after GPT's review of #64).
 --
 -- 1. A reservation could miss spend settled at the same moment (readiness

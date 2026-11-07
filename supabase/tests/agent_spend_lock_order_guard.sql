@@ -1,4 +1,4 @@
--- Reservation and settlement can't interleave (20261107180000; OS-PR64 R67
+-- Reservation and settlement can't interleave (20261107190500; OS-PR64 R67
 -- follow-up). Disposable local DB only.
 --   1. agent_spend_settle takes the agent_spend_limits row lock before it
 --      touches a hold or usage, and agent_spend_reserve takes it before it
