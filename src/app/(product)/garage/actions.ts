@@ -16,6 +16,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { capture } from "@/lib/analytics";
 import { reportError } from "@/lib/monitoring";
 import { confirmIdentity } from "@/lib/confirm-identity";
+import { signsInWithPassword } from "@/lib/reauthentication";
 
 import { decodeVin, decodeVinResult } from "@/lib/vehicles/vpic";
 import { matchCatalogByName, resolveCatalogSelection } from "@/lib/vehicles/catalog";
@@ -1292,13 +1293,24 @@ export async function deleteAccount(_prev: ActionState, formData: FormData): Pro
   }
   // N41: typing DELETE proves nothing about who is at the session. The
   // password typed now, or a Google sign-in moments ago, is checked
-  // server-side before the request is made.
+  // server-side before the request is made; request_account_deletion()
+  // refuses a token without a sign-in in the last ten minutes on its own,
+  // so calling the RPC directly with an old token gets nowhere either.
   const identity = await confirmIdentity(supabase, user, String(formData.get("current_password") ?? ""));
   if (!identity.ok) return { error: identity.error, reauth: identity.reauth };
 
   const { data, error } = await supabase.rpc("request_account_deletion");
   if (error) {
     // N49: the database's wording stays in telemetry.
+    // The database checks the same freshness itself (20261107200450), so a
+    // token that went stale between the two checks is asked again too.
+    if (error.code === "42501" && /recent sign-in required/i.test(error.message ?? "")) {
+      const reauth = signsInWithPassword(user.app_metadata) ? "password" : "oauth";
+      return {
+        error: reauth === "password" ? "Enter your password to confirm it's you." : "Confirm it's you with Google first, then try again.",
+        reauth,
+      };
+    }
     if (error.code === "42501" && /suspended/i.test(error.message ?? "")) {
       return { error: "Your account is suspended, so deletion can't be requested here yet. Email hello@drvn.app and we'll handle it." };
     }
