@@ -47,6 +47,26 @@ describe("agentPriceLine (AG-4: the checkout says when an agent set the price)",
     expect(line?.by).toBe("your_agent");
   });
 
+  it("names the buyer's agent when the seller accepted its opening offer by hand", () => {
+    // The buyer's agent offers $800; the seller taps Accept. The accept is a
+    // person's, but the price is the one the agent offered.
+    const line = agentPriceLine([round(1, "buyer", "offer", 80000, true), round(2, "seller", "accept", null)]);
+    expect(line?.by).toBe("your_agent");
+    expect(line?.at).toBe(at(1));
+    expect(line?.text).toMatch(/^Your agent offered this price on .+, within the max you set, and the seller accepted\.$/);
+  });
+
+  it("names the buyer's agent when the seller accepted its counter", () => {
+    const line = agentPriceLine([
+      round(1, "buyer", "offer", 70000),
+      round(2, "seller", "counter", 90000),
+      round(3, "buyer", "counter", 82000, true),
+      round(4, "seller", "accept", null),
+    ]);
+    expect(line?.by).toBe("your_agent");
+    expect(line?.at).toBe(at(3));
+  });
+
   it("says nothing when people set the price", () => {
     expect(agentPriceLine([round(1, "buyer", "offer", 23200), round(2, "seller", "counter", 24000), round(3, "buyer", "accept", null)])).toBeNull();
     // The seller accepted the buyer's own offer; their agent had only countered earlier.

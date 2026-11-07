@@ -12,6 +12,9 @@
  *
  * - The buyer's agent accepted the seller's counter: the price is the one it
  *   accepted, within the max the buyer set — "Price set by your agent".
+ * - The seller accepted an amount the buyer's agent offered or countered
+ *   with: the agent set that price, within the buyer's max, though a person
+ *   accepted it — "Your agent offered this price".
  * - A person accepted, but the amount they accepted was the seller's agent's
  *   counter — "Price agreed with the seller's agent".
  * - Both agents, one accepting the other's counter: the buyer's own agent is
@@ -56,10 +59,19 @@ export function agentPriceLine(rounds: readonly PriceRound[]): AgentPriceLine | 
   if (accept.actor_role === "buyer" && byAgent(accept)) {
     return { by: "your_agent", at: accept.created_at, text: `Price set by your agent on ${DAY(accept.created_at)}, within the max you set.` };
   }
-  // The amount accepted is the last priced move before the acceptance; the
-  // seller's agent set it when that move was its counter.
+  // The amount accepted is the last priced move before the acceptance. An
+  // agent set it when that move was the agent's: the buyer's agent's offer or
+  // counter the seller took, or the seller's agent's counter.
   const priced = ordered.filter((round) => round.round_no < accept.round_no && round.amount_cents != null && round.kind !== "below_minimum").at(-1);
-  if (priced && priced.actor_role === "seller" && priced.kind === "counter" && byAgent(priced)) {
+  if (!priced || !byAgent(priced)) return null;
+  if (priced.actor_role === "buyer" && (priced.kind === "offer" || priced.kind === "counter")) {
+    return {
+      by: "your_agent",
+      at: priced.created_at,
+      text: `Your agent offered this price on ${DAY(priced.created_at)}, within the max you set, and the seller accepted.`,
+    };
+  }
+  if (priced.actor_role === "seller" && priced.kind === "counter") {
     return { by: "sellers_agent", at: priced.created_at, text: `Price agreed with the seller's agent on ${DAY(priced.created_at)}.` };
   }
   return null;
