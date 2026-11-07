@@ -29,14 +29,22 @@
 --                                   20260905173052). A row whose provider call
 --                                   may already have happened is still
 --                                   admitted: it must reconcile, never be
---                                   abandoned.
+--                                   abandoned. That includes one shelved
+--                                   ('holding') during the chargeback once its
+--                                   reconciliation backoff (next_attempt_at)
+--                                   is due — Stripe may complete an in-flight
+--                                   request after a lookup found nothing.
 --   3. prepare_transfer_dispatch  — the last durable boundary before Stripe
 --                                   (latest: 20260905173052). Refuses, and
 --                                   puts the row back on the shelf ('holding')
 --                                   under the caller's live lease, keeping any
 --                                   frozen payload so a later pass reconciles
 --                                   it with the same idempotency key instead
---                                   of issuing a second transfer.
+--                                   of issuing a second transfer. A row whose
+--                                   provider call may have happened is shelved
+--                                   with a reconciliation time, so it comes
+--                                   back for reconciliation (2) while the
+--                                   chargeback lasts.
 --   4. complete_transfer_intent   — a transfer found (reconciled) while a
 --                                   chargeback is unresolved is recorded and
 --                                   opens a transfer_unresolved recovery for
@@ -113,7 +121,12 @@ $$;
 --    Changed: a fresh (provider-certain) row on an order with an unresolved
 --    chargeback is not admitted; it waits where it is and is admitted on the
 --    first pass after the chargeback resolves. Uncertain rows and expired
---    leases are admitted exactly as before.
+--    leases are admitted exactly as before, and an uncertain row shelved
+--    with a reconciliation time is admitted when that time is due, whatever
+--    the chargeback: the worker reconciles it against Stripe (recording any
+--    transfer it finds) and never creates a new one while the chargeback is
+--    unresolved. Rows shelved for any other reason have no next_attempt_at
+--    and keep waiting for readiness, as before.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.claim_transfer_intents(
@@ -137,6 +150,13 @@ as $$
           provider_call_may_have_occurred
           or not private.order_has_unresolved_chargeback(order_id)
         )
+      )
+      or (
+        status = 'holding'
+        and provider_call_may_have_occurred
+        and next_attempt_at is not null
+        and next_attempt_at <= now()
+        and attempts < p_max_attempts
       )
       or (
         status = 'processing'
@@ -172,7 +192,9 @@ $$;
 --    carry-forward decision, which freeze_transfer_carry may re-decide freely,
 --    so a frozen payout doesn't reserve the seller's carried charges. A row
 --    with a frozen payload or a possible provider call keeps everything:
---    operation key, payload, carry and the uncertainty flag.
+--    operation key, payload, carry and the uncertainty flag, and is given a
+--    reconciliation time five minutes out, so claim_transfer_intents brings
+--    it back to reconcile (the worker then backs off on its own schedule).
 -- ---------------------------------------------------------------------------
 
 create or replace function public.prepare_transfer_dispatch(
@@ -220,7 +242,10 @@ begin
           when operation_key is null and not provider_call_may_have_occurred then null
           else dispatch_carry_cents
         end,
-        next_attempt_at = null,
+        next_attempt_at = case
+          when operation_key is null and not provider_call_may_have_occurred then null
+          else now() + interval '5 minutes'
+        end,
         last_error = 'Payout frozen: a bank chargeback on this order is unresolved',
         locked_at = null,
         locked_by = null,

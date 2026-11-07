@@ -9,7 +9,9 @@
 -- (claim_transfer_intents) and dispatch (prepare_transfer_dispatch). A won
 -- chargeback lets the normal schedule resume. A transfer whose provider call
 -- may already have happened is still reconciled, never abandoned and never
--- sent twice. Every fixture order is delivered and past its clearing time,
+-- sent twice: shelved with a backed-off reconciliation time that admission
+-- honours during the chargeback, so a request Stripe completes late is still
+-- recorded. Every fixture order is delivered and past its clearing time,
 -- so the chargeback is the only thing standing between it and a payout.
 -- Disposable database only; everything rolls back.
 begin;
@@ -116,9 +118,14 @@ begin
     where order_id = p_order and status = 'holding' and locked_by is null
       and lease_expires_at is null and operation_key is null
       and dispatch_amount_cents is null and not provider_call_may_have_occurred
+      and next_attempt_at is null
       and last_error like 'Payout frozen: a bank chargeback%'
   ) then
     raise exception 'FAIL %: the refused dispatch did not return the payout to the shelf untouched', p_label;
+  end if;
+  -- A shelved fresh payout waits for readiness: no claim admits it.
+  if exists (select 1 from public.claim_transfer_intents('w18-shelf', 200, 300, 8) c where c.order_id = p_order) then
+    raise exception 'FAIL %: a shelved fresh payout was admitted during an unresolved chargeback', p_label;
   end if;
 end $$;
 
@@ -272,17 +279,42 @@ begin
     where order_id = o and status = 'holding' and locked_by is null
       and operation_key = 'transfer:' || o::text and dispatch_amount_cents = 9000
       and provider_call_may_have_occurred
+      and next_attempt_at between now() + interval '4 minutes' and now() + interval '6 minutes'
   ) then
-    raise exception 'FAIL 8: a refused uncertain re-dispatch lost its frozen request or uncertainty';
+    raise exception 'FAIL 8: a refused uncertain re-dispatch lost its frozen request, uncertainty or reconciliation time';
   end if;
   if pg_temp.w18_after_mark(o) <> 'holding' then
     raise exception 'FAIL 8: readiness re-marked a shelved uncertain payout during the chargeback';
   end if;
-  -- A later reconciliation finds the transfer the first call made.
-  update public.transfer_intents
-  set status = 'processing', locked_by = 'w18-reconcile', lease_expires_at = now() + interval '5 minutes'
-  where order_id = o;
-  v_result := public.complete_transfer_intent(o, 'w18-reconcile', 'transfer:' || o::text, 'tr_w18_found');
+  if exists (select 1 from public.claim_transfer_intents('w18-early', 200, 300, 8) c where c.order_id = o) then
+    raise exception 'FAIL 8: a shelved uncertain payout was admitted before its reconciliation time';
+  end if;
+  -- Five minutes pass. Still during the chargeback, a real claim brings the
+  -- row back to reconcile, with its request and uncertainty intact.
+  update public.transfer_intents set next_attempt_at = now() - interval '1 second' where order_id = o;
+  if not exists (
+    select 1 from public.claim_transfer_intents('w18-reconcile-2', 200, 300, 8) c
+    where c.order_id = o and c.provider_call_may_have_occurred
+      and c.operation_key = 'transfer:' || o::text and c.dispatch_amount_cents = 9000
+  ) then
+    raise exception 'FAIL 8: a shelved uncertain payout became unreachable for reconciliation during the chargeback';
+  end if;
+  -- Stripe still shows nothing, so the worker shelves it again with backoff
+  -- (the release the worker makes, transfer-worker.ts).
+  if not public.release_transfer_intent(o, 'w18-reconcile-2', 'holding',
+       'Payout frozen: a bank chargeback on this order is unresolved', 1, now() + interval '2 minutes') then
+    raise exception 'Fixture 8: the worker could not shelve the reconciled row';
+  end if;
+  if exists (select 1 from public.claim_transfer_intents('w18-early', 200, 300, 8) c where c.order_id = o) then
+    raise exception 'FAIL 8: the backoff was not respected';
+  end if;
+  -- Meanwhile the in-flight request completes at Stripe. The next due pass is
+  -- admitted and records the transfer it finds, with an operator case.
+  update public.transfer_intents set next_attempt_at = now() - interval '1 second' where order_id = o;
+  if not exists (select 1 from public.claim_transfer_intents('w18-reconcile-3', 200, 300, 8) c where c.order_id = o) then
+    raise exception 'FAIL 8: the backed-off reconciliation was not admitted';
+  end if;
+  v_result := public.complete_transfer_intent(o, 'w18-reconcile-3', 'transfer:' || o::text, 'tr_w18_found');
   if v_result <> 'recovery' then
     raise exception 'FAIL 8: a transfer found during a chargeback completed silently (%)', v_result;
   end if;
@@ -300,7 +332,7 @@ begin
   if exists (select 1 from public.claim_transfer_intents('w18-again', 200, 300, 8) c where c.order_id = o) then
     raise exception 'FAIL 8: a recorded transfer was admitted again';
   end if;
-  raise notice 'PASS 8: uncertain payouts reconcile through a chargeback, keep their request, and are never sent twice';
+  raise notice 'PASS 8: uncertain payouts stay reachable for reconciliation through a chargeback, with backoff, keep their request, record a late transfer and are never sent twice';
 
   -- 9. The predicate stays private.
   if has_function_privilege('authenticated', 'private.order_has_unresolved_chargeback(uuid)', 'execute')

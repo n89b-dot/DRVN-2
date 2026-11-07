@@ -192,13 +192,18 @@ async function recordFailure(
     );
     return;
   }
-  const backoffMinutes = Math.min(2 ** Math.min(attempts, 6), 120);
   await setIntent(admin, intent.order_id, workerId, {
     status: "failed",
     attempts,
-    next_attempt_at: new Date(Date.now() + backoffMinutes * 60_000).toISOString(),
+    next_attempt_at: retryAt(attempts),
     last_error: message.slice(0, 500),
   });
+}
+
+/** Bounded exponential backoff: 2, 4, … 64, then 120 minutes. */
+function retryAt(attempts: number): string {
+  const backoffMinutes = Math.min(2 ** Math.min(attempts, 6), 120);
+  return new Date(Date.now() + backoffMinutes * 60_000).toISOString();
 }
 
 type TransferDispatch = {
@@ -607,13 +612,30 @@ async function processOne(
       });
       return "requeued";
     }
-    // No transfer exists, and a chargeback is unresolved: never create one
-    // now. The row keeps its frozen payload and uncertainty flag, so the pass
-    // after the chargeback resolves reconciles again with the same
-    // idempotency key before anything is sent.
+    // No transfer found, and a chargeback is unresolved: never create one
+    // now. But the earlier request may still be in flight at Stripe, so the
+    // row stays reachable: shelved with its frozen payload, its uncertainty
+    // flag and a backed-off reconciliation time that claim_transfer_intents
+    // honours during the chargeback (20261107130000). A transfer that turns
+    // up is recorded with an operator case (complete_transfer_intent); after
+    // the attempt budget an operator is asked instead. Once the chargeback
+    // resolves, the same idempotency key is used before anything is sent.
     if (currentChargebackUnresolved) {
+      const attempts = intent.attempts + 1;
+      if (attempts >= MAX_ATTEMPTS) {
+        await recordOperatorRecovery(
+          admin,
+          intent,
+          workerId,
+          `Stripe may have been called for this payout, but no transfer was found after ${attempts} checks while a bank chargeback on the order is unresolved`,
+          dispatch.amountCents
+        );
+        return "failed";
+      }
       await setIntent(admin, intent.order_id, workerId, {
         status: "holding",
+        attempts,
+        next_attempt_at: retryAt(attempts),
         last_error: CHARGEBACK_HOLD_REASON,
       });
       return "requeued";
