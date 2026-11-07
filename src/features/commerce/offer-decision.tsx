@@ -22,6 +22,8 @@ import { useRecoverableAction } from "./use-recoverable-action";
  *   buyer,  open       → waiting on the seller · Withdraw
  *   buyer,  countered  → Accept counter · Counter back · Withdraw
  *
+ * Once the offer settles, only the result of this visit's move stays.
+ *
  * A countered offer never offers the seller "Accept": accepting there would
  * reserve the part at a price the buyer never agreed to. Turns alternate and
  * a buyer has 3 offers per part, counter-backs included (negotiation v2);
@@ -75,7 +77,28 @@ export function OfferDecision({
   const [showCounter, setShowCounter] = useState(false);
   const counterId = useId();
 
-  if (status !== "open" && status !== "countered") return null;
+  const results = { respond: respondState, back: backState, withdraw: withdrawState, counter: counterState };
+
+  // A move that settles the offer returns with the settled page (the action
+  // revalidates it, then the refresh above), so the status prop can flip in
+  // the commit next to the one that delivers the move's result. If the card
+  // vanished with its buttons, the result ("Offer accepted", or "couldn't
+  // notify the buyer — message them") showed only for the gap between those
+  // two commits. So the result outlives the buttons: callers keep this
+  // mounted across the settle, and a settled offer keeps what this visit's
+  // move said — all but the lost-response notice, whose "check the saved
+  // result" the settled page now answers.
+  if (status !== "open" && status !== "countered") {
+    const kept = Object.entries(results).filter(([, result]) => result.ok || (result.error && result.error !== failure));
+    if (!kept.length) return null;
+    return (
+      <>
+        {kept.map(([move, result]) => (
+          <ResultNote key={move} error={result.error} ok={result.ok} />
+        ))}
+      </>
+    );
+  }
 
   const countered = status === "countered" && counterAmountCents != null;
   const live = countered ? counterAmountCents! : amountCents;
