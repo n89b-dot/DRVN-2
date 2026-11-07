@@ -405,6 +405,25 @@ begin
   if exists (select 1 from public.media_cleanup_queue where owner_id = buyer or path like buyer || '/%' or path like seller || '/offsite%') then
     raise exception 'FAIL 6: deleting content queued another member''s upload, or one off our storage';
   end if;
+  -- Fifth review: the same photo queued again while a worker holds the old
+  -- request (a second listing using it is deleted) gets a fresh generation,
+  -- and the worker's acknowledgement of the old one leaves it queued.
+  select generation into token_a from public.media_cleanup_queue
+   where bucket = 'car-images' and path = seller || '/' || car || '/photo.webp';
+  insert into public.listings(seller_id, title, category, price_cents, shipping_cents, status, currency)
+    values (seller, 'Reuses the car photo', 'engine', 5000, 500, 'draft', 'USD') returning id into listing;
+  insert into public.listing_images(listing_id, url, position) values (listing, base || 'car-images/' || seller || '/' || car || '/photo.webp', 0);
+  delete from public.listings where id = listing;
+  select generation into token_b from public.media_cleanup_queue
+   where bucket = 'car-images' and path = seller || '/' || car || '/photo.webp';
+  if token_b is null or token_b = token_a then
+    raise exception 'FAIL 6: queuing a photo again did not start a new generation';
+  end if;
+  delete from public.media_cleanup_queue
+   where bucket = 'car-images' and path = seller || '/' || car || '/photo.webp' and generation = token_a;
+  if not exists (select 1 from public.media_cleanup_queue where bucket = 'car-images' and path = seller || '/' || car || '/photo.webp') then
+    raise exception 'FAIL 6: an older acknowledgement removed a request queued again meanwhile';
+  end if;
   raise notice 'PASS 6: deleted content queues its photos for reference-checked removal (N51)';
 
   -- ------------------------------------------------------------------

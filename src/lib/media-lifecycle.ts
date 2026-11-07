@@ -270,7 +270,7 @@ export async function processMediaCleanupQueue(
   const run: CleanupRun = { scanned: 0, removed: 0, retained: 0, rejected: 0, busy: 0, failed: 0, exhausted: 0 };
   let query = admin
     .from("media_cleanup_queue")
-    .select("bucket, path, owner_id, attempts")
+    .select("bucket, path, owner_id, attempts, generation")
     .lt("attempts", CLEANUP_MAX_ATTEMPTS)
     .lte("next_attempt_at", new Date(now()).toISOString())
     .order("next_attempt_at")
@@ -300,7 +300,8 @@ export async function processMediaCleanupQueue(
         .from("media_cleanup_queue")
         .update({ next_attempt_at: new Date(now() + BUSY_DEFER_MS).toISOString() })
         .eq("bucket", row.bucket)
-        .eq("path", row.path);
+        .eq("path", row.path)
+        .eq("generation", row.generation);
       if (defer.error) reportError("[media-cleanup] busy deferral failed", defer.error);
       continue;
     }
@@ -315,7 +316,8 @@ export async function processMediaCleanupQueue(
           last_error: "transient failure",
         })
         .eq("bucket", row.bucket)
-        .eq("path", row.path);
+        .eq("path", row.path)
+        .eq("generation", row.generation);
       if (retry.error) reportError("[media-cleanup] retry bookkeeping failed", retry.error);
       if (attempts >= CLEANUP_MAX_ATTEMPTS) {
         // Out of retries: the deleted content's photo is still public. Say
@@ -336,7 +338,15 @@ export async function processMediaCleanupQueue(
       run.rejected += 1;
       reportError("[media-cleanup] queued object is not its owner's", { bucket: row.bucket });
     }
-    const done = await admin.from("media_cleanup_queue").delete().eq("bucket", row.bucket).eq("path", row.path);
+    // Only the generation read above: if the object was queued again while
+    // we worked (another post using it was deleted), that request survives
+    // for its own after() run or the next job.
+    const done = await admin
+      .from("media_cleanup_queue")
+      .delete()
+      .eq("bucket", row.bucket)
+      .eq("path", row.path)
+      .eq("generation", row.generation);
     if (done.error) reportError("[media-cleanup] dequeue failed", done.error);
   }
   return run;

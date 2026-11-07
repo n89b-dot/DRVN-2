@@ -8,7 +8,7 @@ vi.mock("@/lib/admin/alerts", () => ({ sendAdminAlert }));
 const state = vi.hoisted(() => ({
   referenced: false as boolean | null,
   rpcError: null as unknown,
-  queue: [] as { bucket: string; path: string; owner_id: string; attempts: number }[],
+  queue: [] as { bucket: string; path: string; owner_id: string; attempts: number; generation?: string }[],
 }));
 const remove = vi.fn<(paths: string[]) => Promise<{ error: unknown }>>(async () => ({ error: null }));
 // claim_media_deletion answers {status: "claimed", token} when nothing
@@ -35,8 +35,16 @@ function builder(table: string) {
   b.in = (column: string, value: unknown) => { entry.filters.push([column, value]); return b; };
   b.delete = () => { entry.op = "delete"; writes.push(entry); return b; };
   b.update = (values: unknown) => { entry.op = "update"; entry.values = values; writes.push(entry); return b; };
-  b.then = (resolve: (value: unknown) => unknown) =>
-    resolve({ data: table === "media_cleanup_queue" && entry.op === "select" ? state.queue : [], error: null });
+  b.then = (resolve: (value: unknown) => unknown) => {
+    // The queue behaves like the table: a delete or update touches only rows
+    // its equality filters match.
+    if (table === "media_cleanup_queue" && entry.op !== "select") {
+      const matches = (row: Record<string, unknown>) => entry.filters.every(([column, value]) => column.includes(":") || row[column] === value);
+      if (entry.op === "delete") state.queue = state.queue.filter((row) => !matches(row));
+      else for (const row of state.queue) if (matches(row)) Object.assign(row, entry.values);
+    }
+    return resolve({ data: table === "media_cleanup_queue" && entry.op === "select" ? state.queue.map((row) => ({ ...row })) : [], error: null });
+  };
   return b;
 }
 const admin = { from: (table: string) => builder(table), rpc, storage: { from: () => ({ remove }) } };
@@ -486,6 +494,45 @@ describe("processMediaCleanupQueue (N51)", () => {
     // Started at 0 s, 20 s and 40 s; at 60 s the deadline has passed.
     expect(run).toMatchObject({ scanned: 3, removed: 3, outOfTime: true });
     expect(rpc.mock.calls.filter(([name]) => name === "claim_media_deletion")).toHaveLength(3);
+  });
+
+  /**
+   * Codex P2 (fifth review): photo X is in posts A and B. Deleting A queues
+   * X; the worker finds it referenced (B still exists); before the worker
+   * dequeues, B is deleted and its trigger refreshes the same row. The
+   * unconditional dequeue then swallowed B's request and X stayed public.
+   * Each enqueue now has a fresh generation, and the ack names the one read.
+   */
+  it("an older worker's acknowledgement never swallows a request queued again meanwhile", async () => {
+    const x = { bucket: "activity-images", path: `${ME}/shared.webp` };
+    state.queue = [{ ...x, owner_id: ME, attempts: 0, generation: "g1" }];
+    rpc.mockImplementationOnce(async () => {
+      // While the worker checks X (post B still uses it), B is deleted:
+      // its trigger refreshes the row with a new generation.
+      Object.assign(state.queue[0], { generation: "g2", attempts: 0 });
+      return { data: { status: "referenced" }, error: null };
+    });
+    expect(await processMediaCleanupQueue()).toMatchObject({ retained: 1 });
+    expect(writes).toContainEqual(
+      expect.objectContaining({ table: "media_cleanup_queue", op: "delete", filters: [["bucket", x.bucket], ["path", x.path], ["generation", "g1"]] })
+    );
+    expect(state.queue).toEqual([expect.objectContaining({ ...x, generation: "g2" })]);
+    // B's own after() run then finds the request and removes the photo.
+    expect(await processMediaCleanupQueue({ ownerId: ME })).toMatchObject({ removed: 1 });
+    expect(remove).toHaveBeenCalledWith([x.path]);
+    expect(state.queue).toEqual([]);
+  });
+
+  it("an older worker's retry bookkeeping doesn't rewrite a request queued again meanwhile", async () => {
+    const x = { bucket: "activity-images", path: `${ME}/flaky.webp` };
+    state.queue = [{ ...x, owner_id: ME, attempts: 3, generation: "g1" }];
+    rpc.mockImplementationOnce(async () => {
+      Object.assign(state.queue[0], { generation: "g2", attempts: 0 });
+      return { data: null, error: { message: "timeout" } };
+    });
+    expect(await processMediaCleanupQueue()).toMatchObject({ failed: 1 });
+    // The fresh request keeps attempts 0 and stays due now.
+    expect(state.queue).toEqual([expect.objectContaining({ generation: "g2", attempts: 0 })]);
   });
 
   it("alerts operators, once per object, when the last attempt fails", async () => {

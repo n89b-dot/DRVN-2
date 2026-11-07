@@ -477,6 +477,11 @@ create table if not exists public.media_cleanup_queue (
   -- problem can't use up all ten attempts at once.
   next_attempt_at timestamptz not null default now(),
   last_error  text,
+  -- A fresh value on every enqueue. A worker acknowledges (dequeues) or
+  -- reschedules only the generation it read, so a delete that re-queues the
+  -- object while the worker is busy with it (a second post using the same
+  -- photo, say) is never swallowed by the older acknowledgement.
+  generation  uuid not null default gen_random_uuid(),
   primary key (bucket, path)
 );
 comment on table public.media_cleanup_queue is
@@ -548,7 +553,8 @@ begin
      and split_part(k, '/', 1) in ('avatars', 'car-images', 'activity-images', 'listing-images')
      and split_part(k, '/', 2) = v_owner::text
   on conflict (bucket, path) do update
-    set enqueued_at = now(), attempts = 0, next_attempt_at = now(), last_error = null, reason = excluded.reason
+    set enqueued_at = now(), attempts = 0, next_attempt_at = now(), last_error = null, reason = excluded.reason,
+        generation = gen_random_uuid()
     where media_cleanup_queue.owner_id = excluded.owner_id;
   return old;
 end;
