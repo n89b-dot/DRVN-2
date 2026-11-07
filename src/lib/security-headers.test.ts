@@ -14,8 +14,9 @@ describe("Permissions-Policy", () => {
     return new Map(value.split(/,\s*/).map((directive) => directive.split("=") as [string, string]));
   }
 
-  it("lets this origin and Stripe.js's frame use payment, and nothing else", async () => {
-    expect((await policy()).get("payment")).toBe('(self "https://js.stripe.com")');
+  it("lets this origin and Stripe.js's frame origins use payment, and nothing else", async () => {
+    // The same Stripe.js frame origins the CSP's frame-src admits (src/lib/csp.ts).
+    expect((await policy()).get("payment")).toBe('(self "https://js.stripe.com" "https://*.js.stripe.com")');
   });
 
   it("keeps camera, microphone and geolocation off", async () => {

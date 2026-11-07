@@ -25,6 +25,10 @@ export type RateLimitRule = {
 export const RATE_LIMITS = {
   checkout: { action: "checkout", limit: 10, windowSeconds: 600, failClosed: true },
   clientError: { action: "client-error", limit: 20, windowSeconds: 60, failClosed: true },
+  /** CSP violation reports (src/app/api/monitoring/csp): per visitor, plus
+   *  one ceiling across everyone so a broken policy can't flood monitoring. */
+  cspReport: { action: "csp-report", limit: 20, windowSeconds: 60, failClosed: true },
+  cspReportCeiling: { action: "csp-report-all", limit: 120, windowSeconds: 60, failClosed: true },
   makeOffer: { action: "offer", limit: 10, windowSeconds: 60 * 10 },
   askQuestion: { action: "question", limit: 10, windowSeconds: 60 * 10 },
   addComment: { action: "comment", limit: 20, windowSeconds: 60 * 10 },
