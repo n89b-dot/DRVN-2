@@ -54,7 +54,6 @@ export default async function UpdateCard({
         }}
       >
         {image?.url && (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={image.url} alt="" style={{ width: 660, height: 630, objectFit: "cover" }} />
         )}
         <div

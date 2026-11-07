@@ -17,12 +17,22 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege (the repository is public): every job's GITHUB_TOKEN can
+# only read the code. A job that needs more declares it on the job itself
+# (today only `secrets`, which reads the PR's commit list). This workflow
+# runs on `pull_request`, never `pull_request_target`, so a fork's PR gets
+# no repository secrets and a read-only token — see stripe-integration's gate.
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -40,8 +50,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # Zero warnings, not just zero errors: a warning that is real gets
+      # fixed, a deliberate exception carries an inline reason.
       - name: Lint
-        run: npm run lint
+        run: npm run lint -- --max-warnings 0
 
       - name: Tests
         run: npm test
@@ -209,17 +221,24 @@ jobs:
 
   # The commerce guarantees live in Postgres (conditional UPDATEs, terminal-
   # state guards, dispute constraints, notification triggers) — Node tests
-  # cannot see them. This job rebuilds the schema from the migration files on
-  # Supabase's own Postgres image (auth/storage schemas and pg_cron included)
-  # and runs the nine-assertion guard in supabase/tests/purchase_guard.sql.
+  # cannot see them. This job rebuilds the schema from every migration file on
+  # Supabase's own Postgres image (auth schema and pg_cron included; storage
+  # comes from supabase/tests/ci_shim.sql) and runs every
+  # supabase/tests/*_guard.sql suite.
+  #
+  # The image is the one supabase/config.toml declares (`[db] major_version =
+  # 17`) and the one Supabase CLI 2.116.0 starts for that major in the e2e and
+  # stripe-integration jobs (its templates/Dockerfile pins
+  # supabase/postgres:17.6.1.165), so migrations and guards run on the same
+  # Postgres as the browser suite. The first step fails if they ever drift.
   sql-guard:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       db:
-        # Linux/amd64 manifest for 15.14.1.158; prevents a mutable tag from
-        # changing the database beneath the guard suite.
-        image: supabase/postgres@sha256:3e2cf2c9571b91e7f940e903458eb70dfcb40b147473f294b7615743d1ff6520
+        # supabase/postgres:17.6.1.165, linux/amd64 manifest; the digest
+        # prevents a mutable tag from changing the database beneath the guards.
+        image: supabase/postgres@sha256:fc542c31f334749adbbd3c9e16b6be90f17d0fe6460d5196066d73f2723c9ecf
         env:
           POSTGRES_PASSWORD: postgres
         ports:
@@ -231,6 +250,20 @@ jobs:
           --health-retries 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Database major matches supabase/config.toml
+        env:
+          PGPASSWORD: postgres
+        run: |
+          declared=$(awk '/^\[db\]/{db=1; next} /^\[/{db=0} db && /^major_version *=/{gsub(/[^0-9]/, ""); print}' supabase/config.toml)
+          running=$(psql -h localhost -U supabase_admin -d postgres -tA -c "select current_setting('server_version_num')::int / 10000")
+          echo "supabase/config.toml declares Postgres ${declared:-?}; sql-guard runs $(psql -h localhost -U supabase_admin -d postgres -tA -c 'select version()')"
+          if [ -z "$declared" ] || [ "$declared" != "$running" ]; then
+            echo "::error::sql-guard runs Postgres $running but supabase/config.toml declares ${declared:-nothing}. Pin the services.db image to the supabase/postgres release the CLI starts for that major."
+            exit 1
+          fi
 
       - name: Apply all migrations
         env:
@@ -275,6 +308,10 @@ jobs:
   e2e:
     outputs:
       ran: ${{ steps.executed.outputs.ran }}
+      # Set only by the required step, after its first-attempt run passes.
+      # The diagnostic retry below cannot set it, so it can never satisfy
+      # release-gate.
+      first_attempt_passed: ${{ steps.executed.outputs.first_attempt_passed }}
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     env:
@@ -283,6 +320,8 @@ jobs:
       RELEASE_SUMMARY_DIR: release-results
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22.22.0
@@ -326,12 +365,17 @@ jobs:
         run: |
           echo "ran=true" >> "$GITHUB_OUTPUT"
           npm run test:e2e
+          echo "first_attempt_passed=true" >> "$GITHUB_OUTPUT"
 
+      # Diagnosis only: runs after the required suite already failed, so the
+      # job (and release-gate) stay red whatever this step finds.
       - name: Optional browser retry diagnostics
         if: failure() && github.event_name == 'workflow_dispatch' && inputs.run_diagnostic_retries
         env:
           E2E_DIAGNOSTIC_RETRIES: '2'
-        run: npm run test:e2e
+        run: |
+          echo "::notice::Diagnostic browser retries (up to 2). The release result is the failed first attempt above; this rerun never changes it."
+          npm run test:e2e
 
       - name: Retain candidate-indexed browser summary
         if: always()
@@ -374,19 +418,32 @@ jobs:
     env:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
     steps:
+      # GitHub never passes repository secrets to a pull request from a fork,
+      # so on a fork PR this lane cannot run and release-gate stays red. Say
+      # exactly that, instead of a bare "secret missing".
       - name: Require Stripe test secret
         id: gate
+        env:
+          FORK_REPO: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && github.event.pull_request.head.repo.full_name || '' }}
         run: |
           if [ -n "$STRIPE_SECRET_KEY" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "::error::STRIPE_TEST_SECRET_KEY is required for the release lane."
-            exit 1
+            exit 0
           fi
+          echo "run=false" >> "$GITHUB_OUTPUT"
+          if [ -n "$FORK_REPO" ]; then
+            message="This pull request comes from the fork $FORK_REPO. GitHub does not give fork pull requests this repository's secrets, so the Stripe test-mode lane cannot run and release-gate stays red by design. A maintainer must push the branch to $GITHUB_REPOSITORY and let CI run there."
+          else
+            message="The STRIPE_TEST_SECRET_KEY Actions secret is not set on $GITHUB_REPOSITORY. The release lane requires a Stripe test-mode key (sk_test_...)."
+          fi
+          echo "::error title=Stripe test lane did not run::$message"
+          printf '### Stripe test-mode integration did not run\n\n%s\n' "$message" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
       - if: steps.gate.outputs.run == 'true'
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - if: steps.gate.outputs.run == 'true'
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -424,14 +481,30 @@ jobs:
           E2E: ${{ needs.e2e.result }}
           STRIPE: ${{ needs.stripe-integration.result }}
           E2E_RAN: ${{ needs.e2e.outputs.ran }}
+          E2E_FIRST_ATTEMPT: ${{ needs.e2e.outputs.first_attempt_passed }}
           STRIPE_RAN: ${{ needs.stripe-integration.outputs.ran }}
+        # Every requirement is checked and named, so a red gate says which
+        # suite it is waiting on rather than failing on the first bare test.
         run: |
-          test "$VERIFY" = success
-          test "$SECRETS" = success
-          test "$SECRETS_FULL" = success
-          test "$SQL" = success
-          test "$E2E" = success && test "$E2E_RAN" = true
-          test "$STRIPE" = success && test "$STRIPE_RAN" = true
+          failed=0
+          require() {
+            if [ "$2" = "$3" ]; then
+              echo "ok: $1"
+            else
+              echo "::error title=release-gate::$1 is '${2:-unset}', needs '$3'"
+              failed=1
+            fi
+          }
+          require verify "$VERIFY" success
+          require secrets "$SECRETS" success
+          require secrets-full "$SECRETS_FULL" success
+          require sql-guard "$SQL" success
+          require e2e "$E2E" success
+          require "e2e executed" "$E2E_RAN" true
+          require "e2e first attempt passed (diagnostic retries never count)" "$E2E_FIRST_ATTEMPT" true
+          require stripe-integration "$STRIPE" success
+          require "stripe-integration executed" "$STRIPE_RAN" true
+          exit "$failed"
 
   # The honest green: says out loud what did and didn't run, so a passing
   # build can't be mistaken for full coverage.
@@ -452,7 +525,7 @@ jobs:
             echo "| Secret scan, incremental (this PR's / push's first-parent, non-merge commits) | ${{ needs.secrets.result }} |"
             echo "| Secret scan, full (all reachable commits incl. merges + tracked tree) | ${{ needs.secrets-full.result }} |"
             echo "| SQL guards (all registered suites) | ${{ needs.sql-guard.result }} |"
-            echo "| Required browser regression suite | ${{ needs.e2e.result }}; executed=${{ needs.e2e.outputs.ran }} |"
+            echo "| Required browser regression suite | ${{ needs.e2e.result }}; executed=${{ needs.e2e.outputs.ran }}; first attempt passed=${{ needs.e2e.outputs.first_attempt_passed || 'false' }} |"
             echo "| Stripe test-mode integration | ${{ needs.stripe-integration.result }}; executed=${{ needs.stripe-integration.outputs.ran }} |"
             echo "| Provider coverage | Stripe test API covers multi-seller capture and late compensation; browser checkout uses stubs. Connected payout/dispute and 3DS browser proof remain open |"
           } >> "$GITHUB_STEP_SUMMARY"
