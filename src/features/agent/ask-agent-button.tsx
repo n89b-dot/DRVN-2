@@ -1,5 +1,7 @@
 "use client";
 
+import { useId } from "react";
+
 import { Badge, Button, ButtonLink, useSidePanel } from "@/components/ui";
 
 import type { AgentAboutRef } from "./agent-panel";
@@ -23,16 +25,18 @@ export function AskAgentButton({
   disabledReason?: string | null;
 }) {
   const panel = useSidePanel();
+  // One per button: a build page renders several, each with its own reason.
+  const reasonId = useId();
   if (disabledReason) {
     return (
       <span className={["inline-grid gap-1", className].filter(Boolean).join(" ")}>
         <span className="inline-flex items-center gap-2">
-          <Button variant="ghost" disabled aria-describedby="ask-agent-disabled">
+          <Button variant="ghost" disabled aria-describedby={reasonId}>
             Ask your agent
           </Button>
           <Badge>Beta</Badge>
         </span>
-        <span id="ask-agent-disabled" className="field__hint !mt-0">
+        <span id={reasonId} className="field__hint !mt-0">
           {disabledReason}
         </span>
       </span>
