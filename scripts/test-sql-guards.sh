@@ -9,6 +9,16 @@ case "$PGHOST:$PGPORT" in
   *) echo "SQL guards require the isolated local or CI database" >&2; exit 1 ;;
 esac
 failed=0
+# Guards run in the stub payments world, as CI's browser suite does: a
+# database with no job_config.payments_mode row enforces payout readiness
+# (20261107210000), and the guards' fixture sellers never onboarded with
+# Stripe. listing_write_boundary_guard.sql removes the row inside its own
+# transaction to prove the enforced rule.
+if ! psql -h "${PGHOST:-localhost}" -p "${PGPORT:-5432}" -U "${PGUSER:-supabase_admin}" -d "${PGDATABASE:-postgres}" -v ON_ERROR_STOP=1 -q \
+  -c "insert into public.job_config (key, value) values ('payments_mode', 'stub') on conflict (key) do update set value = excluded.value"; then
+  echo "Could not record the stub payments mode for the guards" >&2
+  exit 1
+fi
 for file in supabase/tests/*_guard.sql; do
   printf '\nRunning %s\n' "$file"
   output=$(psql -h "${PGHOST:-localhost}" -p "${PGPORT:-5432}" -U "${PGUSER:-supabase_admin}" -d "${PGDATABASE:-postgres}" -v ON_ERROR_STOP=1 -f "$file" 2>&1)

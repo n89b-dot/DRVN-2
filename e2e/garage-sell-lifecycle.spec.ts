@@ -138,16 +138,31 @@ test("sell publish: respects the configured payment mode and payout readiness", 
     // Stub checkout intentionally does not require a real Connect account.
     await expect(sellCommitButton(page)).not.toHaveAttribute("aria-disabled", "true");
     await expect(page.locator("#publish-checklist")).not.toContainText(/payouts aren't set up/i);
+    await expect(page.getByText("Set up payouts to publish")).toHaveCount(0);
     return;
   }
 
-  // The blocker is named up front, and the CTA is aria-disabled — present,
-  // focusable, described by the checklist — not vanished from the tab order.
+  // R-audit-sell: the blocker is named before the first field, with its fix,
+  // on a phone as on a desktop — not only in the checklist above Publish.
+  await page.setViewportSize({ width: 375, height: 812 });
+  const notice = page.locator(".alert", { hasText: "Set up payouts to publish" });
+  await expect(notice).toBeVisible();
+  await expect(notice.getByRole("link", { name: /set up payouts/i })).toHaveAttribute("href", "/payouts");
+  const noticeTop = (await notice.boundingBox())!.y;
+  const photosTop = (await page.locator("#sell-photos").boundingBox())!.y;
+  expect(noticeTop).toBeLessThan(photosTop);
+  // The pinned bar says why its Publish is greyed out.
+  await expect(page.locator(".buybar")).toContainText(/payouts needed to publish/i);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  // The CTA is aria-disabled — present, focusable, described by the visible
+  // note beside it and the checklist — not vanished from the tab order.
   const checklist = page.locator("#publish-checklist");
   await expect(checklist).toContainText(/payouts aren't set up/i);
+  await expect(page.locator("#publish-blocked-note")).toBeVisible();
   const publish = sellCommitButton(page);
   await expect(publish).toHaveAttribute("aria-disabled", "true");
-  await expect(publish).toHaveAttribute("aria-describedby", "publish-checklist");
+  await expect(publish).toHaveAttribute("aria-describedby", "publish-blocked-note publish-checklist");
   await publish.focus();
   await expect(publish).toBeFocused();
 
@@ -164,6 +179,7 @@ test("sell publish: respects the configured payment mode and payout readiness", 
     "true"
   );
   await expect(page.locator("#publish-checklist")).not.toContainText(/payouts aren't set up/i);
+  await expect(page.getByText("Set up payouts to publish")).toHaveCount(0);
 });
 
 test("sell: a listing without a photo can't publish, but saves as a draft", async ({ page }) => {
