@@ -14,8 +14,9 @@
 -- whose leading key columns (not INCLUDE columns; a valid index) are the
 -- key's columns. A partial index counts only
 -- when its predicate is "<column> IS NOT NULL", which every lookup by a value
--- satisfies. 74 keys had none (the report's six, plus offer_rounds.buyer_id,
--- were among them). This adds 67:
+-- satisfies. 76 keys had none (the report's six, plus offer_rounds.buyer_id,
+-- were among them; two are agent_chat_requests', from 20261107100000). This
+-- adds 69:
 --   * a NOT NULL key gets a plain index;
 --   * a nullable key gets a partial index of the rows that point somewhere,
 --     so mostly-empty actor columns (resolved_by, verified_by, …) cost
@@ -53,6 +54,8 @@ create index if not exists refund_recredit_proofs_verified_by_idx on public.refu
 create index if not exists reviews_reviewer_id_idx on public.reviews (reviewer_id);
 
 -- Nullable foreign keys: only the rows that point somewhere.
+create index if not exists agent_chat_requests_member_message_id_idx on public.agent_chat_requests (member_message_id) where member_message_id is not null;
+create index if not exists agent_chat_requests_reply_message_id_idx on public.agent_chat_requests (reply_message_id) where reply_message_id is not null;
 create index if not exists account_deletion_requests_job_id_idx on public.account_deletion_requests (job_id) where job_id is not null;
 create index if not exists agent_approvals_offer_id_idx on public.agent_approvals (offer_id) where offer_id is not null;
 create index if not exists agent_controls_cleared_by_idx on public.agent_controls (cleared_by) where cleared_by is not null;
