@@ -9,16 +9,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * after Off brings it back (AG-7).
  */
 
-const mocks = vi.hoisted(() => ({ open: vi.fn(), clear: vi.fn(), save: vi.fn() }));
+const mocks = vi.hoisted(() => ({ open: vi.fn(), clear: vi.fn(), save: vi.fn(), send: vi.fn() }));
 vi.mock("next/navigation", () => ({ unstable_rethrow: () => {} }));
 vi.mock("next/link", () => ({ default: ({ href, children, className }: { href: string; children: ReactNode; className?: string }) => <a href={href} className={className}>{children}</a> }));
-vi.mock("@/features/agent/chat", () => ({ openAgentChat: mocks.open, sendAgentMessage: vi.fn() }));
+vi.mock("@/features/agent/chat", () => ({ openAgentChat: mocks.open, sendAgentMessage: mocks.send }));
 vi.mock("@/features/agent/clear-chat", () => ({ clearAgentChat: mocks.clear }));
 vi.mock("@/features/agent/build", () => ({ confirmBuildChange: vi.fn() }));
 vi.mock("@/lib/media-upload", () => ({ uploadImages: vi.fn() }));
 vi.mock("./agent-actions", () => ({ saveAgentMode: mocks.save }));
 
 const { PanelThread } = await import("@/features/agent/agent-panel");
+const { AgentChat } = await import("@/features/agent/agent-chat");
 const { AgentChatPrivacy } = await import("./agent-chat-privacy");
 const { AgentSection } = await import("./agent-section");
 
@@ -39,6 +40,23 @@ const render = async (ui: ReactNode) => {
   await flush();
 };
 const panelLog = () => container.querySelector('[data-panel] [role="log"]');
+
+/** A promise the test settles when it chooses: the server's answer, held back. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => (resolve = done));
+  return { promise, resolve };
+}
+
+async function clearUnderPrivacy() {
+  const privacy = container.querySelector("[data-privacy]")!;
+  const trigger = [...privacy.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Clear chat")!;
+  await act(async () => trigger.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  await act(async () => {
+    privacy.querySelector("dialog form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  await flush();
+}
 
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -131,5 +149,60 @@ describe("the side panel beside Settings", () => {
     );
     expect(container.textContent).not.toContain("Agent is off in Settings.");
     expect(panelLog()).not.toBeNull();
+  });
+
+  it("drops a send that answers after the chat was cleared, so nothing deleted comes back", async () => {
+    const answer = deferred<{ messages: typeof thread }>();
+    mocks.send.mockReturnValue(answer.promise);
+    mocks.clear.mockResolvedValue({ ok: "Chat cleared." });
+    await render(
+      <>
+        <div data-panel>
+          <AgentChat initial={[]} />
+        </div>
+        <div data-privacy>
+          <AgentChatPrivacy messages={2} />
+        </div>
+      </>,
+    );
+    const box = container.querySelector("[data-panel] textarea") as HTMLTextAreaElement;
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+    setter.call(box, "Will this fit my car?");
+    await act(async () => box.dispatchEvent(new Event("input", { bubbles: true })));
+    await act(async () => {
+      container.querySelector("[data-panel] form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(mocks.send).toHaveBeenCalledOnce();
+
+    // Cleared while the reply is pending; then the old answer arrives, with
+    // the member message the clear deleted.
+    await clearUnderPrivacy();
+    await act(async () => answer.resolve({ messages: thread }));
+    await flush();
+
+    expect(panelLog()!.children).toHaveLength(0);
+    expect(panelLog()!.textContent).not.toContain("Will this fit my car?");
+  });
+
+  it("drops a panel load that answers after the chat was cleared", async () => {
+    const load = deferred<ReturnType<typeof loaded>>();
+    mocks.open.mockReturnValue(load.promise);
+    mocks.clear.mockResolvedValue({ ok: "Chat cleared." });
+    await render(
+      <>
+        <div data-panel>
+          <PanelThread aboutRef={null} />
+        </div>
+        <div data-privacy>
+          <AgentChatPrivacy messages={2} />
+        </div>
+      </>,
+    );
+    await clearUnderPrivacy();
+    await act(async () => load.resolve(loaded()));
+    await flush();
+
+    expect(panelLog()).not.toBeNull();
+    expect(panelLog()!.children).toHaveLength(0);
   });
 });

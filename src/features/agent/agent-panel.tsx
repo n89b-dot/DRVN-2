@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { unstable_rethrow, usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Badge, ButtonLink, SidePanel, SkeletonRows, useSidePanel } from "@/components/ui";
 
@@ -60,12 +60,18 @@ export function PanelThread({ aboutRef }: { aboutRef: AgentAboutRef | null }) {
   // under Off works once it is back on (and says so if it went Off).
   const [loads, setLoads] = useState(0);
   useAgentEvent(AGENT_MODE_SAVED, () => setLoads((n) => n + 1));
-  // Cleared anywhere: drop the copy the panel keeps for its next open.
-  useAgentEvent(AGENT_CHAT_CLEARED, () => setMessages((current) => (current ? [] : current)));
+  // Cleared anywhere: drop the copy the panel keeps for its next open, and
+  // what a load already in flight brings back from before the clear.
+  const generation = useRef(0);
+  useAgentEvent(AGENT_CHAT_CLEARED, () => {
+    generation.current += 1;
+    setMessages((current) => (current ? [] : current));
+  });
   const key = aboutRef ? `${aboutRef.kind}:${aboutRef.id}` : "";
 
   useEffect(() => {
     let live = true;
+    const loadedIn = generation.current;
     openAgentChat(aboutRef)
       .then((result) => {
         if (!live) return;
@@ -75,7 +81,7 @@ export function PanelThread({ aboutRef }: { aboutRef: AgentAboutRef | null }) {
         setFailed(false);
         // The thread as stored now: a remount after Off, or a clear, starts
         // from it. A mounted AgentChat keeps its own copy meanwhile.
-        setMessages(result.messages);
+        setMessages(loadedIn === generation.current ? result.messages : []);
         setAbout(result.about);
         setJobs(result.jobs);
         setUserId(result.userId);
