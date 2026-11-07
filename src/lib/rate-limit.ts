@@ -60,6 +60,14 @@ export const RATE_LIMITS = {
   /** Following notifies the followed member, so it is a spam vector too. */
   follow: { action: "follow", limit: 60, windowSeconds: 60 * 10 },
   fileReport: { action: "report", limit: 5, windowSeconds: 60 * 60 },
+  /** Explore autocomplete: four searches a request, public and signed-out, so
+   *  keyed by the visitor's address. A person typing (150 ms debounce, two
+   *  characters minimum) makes a handful a query; this is a minute of
+   *  non-stop typing. */
+  searchSuggest: { action: "search-suggest", limit: 60, windowSeconds: 60 },
+  /** Where no address can be trusted every visitor shares one bucket, so it
+   *  is a ceiling on the endpoint as a whole rather than on one person. */
+  searchSuggestUnattributed: { action: "search-suggest-shared", limit: 600, windowSeconds: 60 },
 } as const satisfies Record<string, RateLimitRule>;
 
 /** True when the caller is within the limit and the attempt may proceed. */

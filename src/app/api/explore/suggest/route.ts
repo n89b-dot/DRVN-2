@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { abuseIdentity, attributedNetworkIdentity } from "@/lib/abuse-identity";
+import { allowAction, RATE_LIMITS } from "@/lib/rate-limit";
 import { searchAccounts } from "@/lib/explore/search/query";
 import { getExploreSearchProvider } from "@/lib/explore/search/provider";
 import { getSearchProvider } from "@/lib/marketplace/search/provider";
@@ -18,20 +20,35 @@ import { postHref } from "@/lib/activity/href";
  * (matching the feed taxonomy, PRD 2026-09 E-5), so the endpoint never
  * reads the session. Minimum query length lives here AND in the client so a
  * hand-crafted request can't turn one keystroke into a fan-out.
+ *
+ * Throttled (N27) before any query runs: by the visitor's address, or — where
+ * no address can be trusted — by one shared ceiling. A refused request gets a
+ * 429 with no groups and a Retry-After; the client already treats any
+ * non-OK answer as "no suggestions" and the search form still submits.
+ * A query longer than an autocomplete query is answered with no groups
+ * rather than searched: the results page takes long queries.
  */
 
 export type SuggestItem = { id: string; label: string; sub: string | null; href: string };
 export type SuggestGroup = { kind: "builds" | "updates" | "accounts" | "parts"; label: string; items: SuggestItem[] };
-export type SuggestResponse = { q: string; groups: SuggestGroup[] };
+export type SuggestResponse = { q: string; groups: SuggestGroup[]; limited?: true };
 
 const MIN_QUERY = 2;
-const MAX_QUERY = 120;
+const MAX_QUERY = 80;
 
 export async function GET(request: Request): Promise<NextResponse<SuggestResponse>> {
   const url = new URL(request.url);
-  const q = (url.searchParams.get("q") ?? "").slice(0, MAX_QUERY).trim();
-  const empty: SuggestResponse = { q, groups: [] };
-  if (q.length < MIN_QUERY) return NextResponse.json(empty);
+  const q = (url.searchParams.get("q") ?? "").trim();
+  if (q.length < MIN_QUERY || q.length > MAX_QUERY) return NextResponse.json({ q: q.slice(0, MAX_QUERY), groups: [] });
+
+  const visitor = attributedNetworkIdentity(request.headers);
+  const rule = visitor ? RATE_LIMITS.searchSuggest : RATE_LIMITS.searchSuggestUnattributed;
+  if (!(await allowAction(rule, visitor ?? abuseIdentity(request.headers)))) {
+    return NextResponse.json(
+      { q, groups: [], limited: true },
+      { status: 429, headers: { "Retry-After": String(rule.windowSeconds), "Cache-Control": "no-store" } },
+    );
+  }
 
   const supabase = await createClient();
   const provider = getExploreSearchProvider();
