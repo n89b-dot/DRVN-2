@@ -2407,11 +2407,11 @@ export type Database = {
           all_years: boolean
           car_owner_id: string | null
           car_public: boolean
-          created_at: string
           listing_id: string
           make_key: string
           model_key: string
           price_cents: number
+          published_at: string
           seller_id: string
           stated_also: boolean
           via: string
@@ -2421,11 +2421,11 @@ export type Database = {
           all_years?: boolean
           car_owner_id?: string | null
           car_public?: boolean
-          created_at: string
           listing_id: string
           make_key: string
           model_key: string
           price_cents: number
+          published_at: string
           seller_id: string
           stated_also?: boolean
           via: string
@@ -2435,11 +2435,11 @@ export type Database = {
           all_years?: boolean
           car_owner_id?: string | null
           car_public?: boolean
-          created_at?: string
           listing_id?: string
           make_key?: string
           model_key?: string
           price_cents?: number
+          published_at?: string
           seller_id?: string
           stated_also?: boolean
           via?: string
@@ -2477,6 +2477,7 @@ export type Database = {
           part_number: string | null
           part_number_compact: string | null
           price_cents: number
+          published_at: string | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -2515,6 +2516,7 @@ export type Database = {
           part_number?: string | null
           part_number_compact?: string | null
           price_cents: number
+          published_at?: string | null
           removed_at?: string | null
           removed_reason?: string | null
           reserved_until?: string | null
@@ -2553,6 +2555,7 @@ export type Database = {
           part_number?: string | null
           part_number_compact?: string | null
           price_cents?: number
+          published_at?: string | null
           removed_at?: string | null
           removed_reason?: string | null
           reserved_until?: string | null
@@ -6884,6 +6887,7 @@ export type Database = {
           part_number: string | null
           part_number_compact: string | null
           price_cents: number
+          published_at: string | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -6968,6 +6972,7 @@ export type Database = {
           part_number: string | null
           part_number_compact: string | null
           price_cents: number
+          published_at: string | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7047,6 +7052,7 @@ export type Database = {
           part_number: string | null
           part_number_compact: string | null
           price_cents: number
+          published_at: string | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7130,6 +7136,7 @@ export type Database = {
           part_number: string | null
           part_number_compact: string | null
           price_cents: number
+          published_at: string | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7192,6 +7199,7 @@ export type Database = {
           part_number: string | null
           part_number_compact: string | null
           price_cents: number
+          published_at: string | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null

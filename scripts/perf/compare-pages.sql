@@ -38,11 +38,11 @@ begin
   if f ? 'max' then sql := sql || format(' and l.price_cents <= %s', f->>'max'); end if;
   if f ? 'q' then
     sql := regexp_replace(sql, '^select coalesce\(array_agg\(id\), ''\{\}''\) from \(select l.id from ', 'select coalesce(array_agg(id), ''{}'') from (select l.id from (select l.* from ')
-           || ' order by l.created_at desc, l.id desc limit 1001) l';
+           || ' order by l.published_at desc, l.id desc limit 1001) l';
   end if;
   sql := sql || case sort when 'price_asc' then ' order by l.price_cents asc, l.id asc'
                           when 'price_desc' then ' order by l.price_cents desc, l.id desc'
-                          else ' order by l.created_at desc, l.id desc' end
+                          else ' order by l.published_at desc, l.id desc' end
              || format(' limit %s offset %s) s', lim, skip);
   execute sql into result;
   return result;
@@ -143,13 +143,13 @@ begin
           exit when cardinality(step) = 0;
           walk := walk || step;
           last_id := step[cardinality(step)];
-          select created_at, price_cents into last_created, last_price from public.listings where id = last_id;
+          select published_at, price_cents into last_created, last_price from public.listings where id = last_id;
         end loop;
         if walk <> ref then
           raise exception '% % %: walking by position gave different parts than offset paging', who, f, sort;
         end if;
         if cardinality(walk) > 50 then
-          select created_at, price_cents into last_created, last_price from public.listings where id = walk[51];
+          select published_at, price_cents into last_created, last_price from public.listings where id = walk[51];
           step := pg_temp.new_page(f, sort, 0, 25, last_created, last_price, walk[51], true);
           if array(select x from unnest(step) with ordinality u(x, o) order by o desc) <> walk[26:50] then
             raise exception '% % %: paging back by position gave different parts', who, f, sort;

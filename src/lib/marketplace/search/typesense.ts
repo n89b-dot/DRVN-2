@@ -50,6 +50,8 @@ export type ListingSearchDocument = {
   price_cents: number;
   created_at_unix: number;
   created_at_us: number;
+  /** When the part first went on sale (microseconds): Newest's order. */
+  published_at_us?: number;
   seller_id: string;
   source_car: string;
   source_car_public: boolean;
@@ -84,6 +86,7 @@ export const COLLECTION_SCHEMA = {
     { name: "brand_key", type: "string", facet: true, optional: true },
     { name: "condition", type: "string", facet: true, optional: true },
     { name: "created_at_us", type: "int64", optional: true },
+    { name: "published_at_us", type: "int64", optional: true },
     { name: "seller_id", type: "string", optional: true },
     { name: "source_car_public", type: "bool", optional: true },
     { name: "source_car_year", type: "int32", optional: true },
@@ -157,7 +160,7 @@ export async function searchListingPage(query: EngineListingQuery): Promise<Engi
   }
   const sortBy = query.sort === "price_asc" ? "price_cents:asc,sort_id:asc"
     : query.sort === "price_desc" ? "price_cents:desc,sort_id:desc"
-    : "created_at_us:desc,sort_id:desc";
+    : "published_at_us:desc,sort_id:desc";
   try {
     const params = new URLSearchParams({
       q: term,

@@ -152,6 +152,9 @@ it("counts the view itself when the page's total turned out not to be known", as
 const row = (n: number) => ({
   id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`, title: `Part ${n}`, price_cents: 1000 + n, condition: "used", location: null,
   created_at: `2026-10-05T10:00:${String(59 - (n % 60)).padStart(2, "0")}.123456+00:00`,
+  // Saved as a draft a month earlier than it went on sale: Newest is by the
+  // publication time, never the row's creation (N73).
+  published_at: `2026-11-05T10:00:${String(59 - (n % 60)).padStart(2, "0")}.654321+00:00`,
 });
 
 it("reads a page through marketplace_page, one part more than a page to know there is another", async () => {
@@ -163,7 +166,31 @@ it("reads a page through marketplace_page, one part more than a page to know the
   if (page.status !== "success") throw new Error("expected a page");
   expect(page.results).toHaveLength(24);
   // The next page starts after the 24th part shown, to the microsecond.
-  expect(decodePosition(page.nextCursor ?? undefined, "newest")).toEqual({ created: row(23).created_at, id: row(23).id });
+  expect(decodePosition(page.nextCursor ?? undefined, "newest")).toEqual({ created: row(23).published_at, id: row(23).id });
+});
+
+it("orders Newest and positions it by when a part was published, not when its row was made (N73)", async () => {
+  const supabase = client(MISSING, { page: { data: Array.from({ length: 25 }, (_, n) => row(n)), error: null }, count: { data: 40, error: null } });
+  const page = await fetchListings(supabase, {});
+  const pageQuery = vi.mocked(supabase.rpc).mock.results.find((_, i) => vi.mocked(supabase.rpc).mock.calls[i][0] === "marketplace_page")!.value;
+  expect(pageQuery.select).toHaveBeenCalledWith(expect.stringContaining("published_at"));
+  expect(pageQuery.order).toHaveBeenCalledWith("published_at", { ascending: false });
+  expect(pageQuery.order).not.toHaveBeenCalledWith("created_at", expect.anything());
+  if (page.status !== "success") throw new Error("expected a page");
+  const next = decodePosition(page.nextCursor ?? undefined, "newest");
+  expect(next?.created).toBe(row(23).published_at);
+  // The next page asks the database for parts published before that one.
+  const following = client(MISSING, { page: { data: [row(24)], error: null }, count: { data: 40, error: null } });
+  await fetchListings(following, { page: "2", after: page.nextCursor ?? undefined });
+  expect(following.rpc).toHaveBeenCalledWith("marketplace_page", expect.objectContaining({ p_after_created: row(23).published_at, p_after_id: row(23).id }));
+});
+
+it("the offset fallback orders Newest by publication too", async () => {
+  const supabase = client({ data: [], count: 0, error: null });
+  await fetchListings(supabase, {});
+  const legacy = vi.mocked(supabase.rpc).mock.results.find((_, i) => vi.mocked(supabase.rpc).mock.calls[i][0] === "marketplace_browse_rows")!.value;
+  expect(legacy.order).toHaveBeenCalledWith("published_at", { ascending: false });
+  expect(legacy.select).toHaveBeenCalledWith(expect.stringContaining("published_at"));
 });
 
 it("counts a filtered view only up to the cap, and says so", async () => {

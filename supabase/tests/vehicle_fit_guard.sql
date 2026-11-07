@@ -196,7 +196,7 @@ begin
     raise exception 'The triggers left listing_vehicle_fit different from a fresh computation';
   end if;
   if exists (select 1 from public.listing_vehicle_fit f join public.listings p on p.id = f.listing_id
-             where p.status <> 'active' or f.price_cents <> p.price_cents or f.created_at <> p.created_at or f.seller_id <> p.seller_id) then
+             where p.status <> 'active' or f.price_cents <> p.price_cents or f.published_at <> p.published_at or f.seller_id <> p.seller_id) then
     raise exception 'listing_vehicle_fit holds a part not for sale, or a stale price, date or seller';
   end if;
   if not exists (select 1 from public.listing_vehicle_fit where listing_id = l[11] and price_cents = 2500) and
@@ -218,7 +218,7 @@ begin
   end if;
   v_denied := false;
   begin
-    insert into public.listing_vehicle_fit(listing_id, make_key, model_key, via, seller_id, created_at, price_cents)
+    insert into public.listing_vehicle_fit(listing_id, make_key, model_key, via, seller_id, published_at, price_cents)
     values (l[4], 'x', 'y', 'stated', v_seller, now(), 1);
   exception when insufficient_privilege then v_denied := true;
   end;
