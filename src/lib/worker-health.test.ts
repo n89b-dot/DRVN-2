@@ -1,5 +1,7 @@
 import { expect, it } from "vitest";
 
+import { REQUIRED_CONFIG } from "../../scripts/check-worker-health.mjs";
+
 import { secretDigestHex } from "./cron-auth";
 import { JOB_NAMES } from "./job-inventory";
 import { WORKER_FAMILIES, evaluateWorkerHealth, workerUrlStatus } from "./worker-health";
@@ -99,4 +101,12 @@ it("accepts a local worker URL over http only for loopback", () => {
   expect(workerUrlStatus("http://localhost:3005/api/jobs/transfers")).toBe("ok");
   expect(workerUrlStatus("https://user:pw@drvn.example/api/jobs/transfers")).toBe("invalid");
   expect(workerUrlStatus("not a url")).toBe("invalid");
+});
+
+it("reports exactly the configuration checks the independent monitor requires", () => {
+  const result = evaluateWorkerHealth(snapshot(), config);
+  expect(Object.keys(result.config).sort()).toEqual(Object.keys(REQUIRED_CONFIG).sort());
+  const unchecked = evaluateWorkerHealth(snapshot(), { ...config, cronSecret: undefined });
+  expect(unchecked.problems).toEqual([{ area: "config", name: "workerSecret", reason: "unchecked" }]);
+  for (const [name, state] of Object.entries(unchecked.config)) expect((REQUIRED_CONFIG as Record<string, string[]>)[name]).toContain(state);
 });

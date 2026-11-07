@@ -205,6 +205,15 @@ begin
   end if;
   update public.refund_operations set created_at = now() - interval '4 days' where idempotency_key = 'health-guard-pending';
   if not (pg_temp.queue('refunds', 'awaiting_provider')->>'overdue')::boolean then raise exception 'FAIL 35: a refund pending at Stripe for days is not overdue'; end if;
+  -- An unknown outcome, retried with backoff: aged from creation, not reset by each retry.
+  update public.refund_operations set provider_status = 'unknown', created_at = now() - interval '3 hours',
+    next_attempt_at = now() + interval '30 minutes', attempts = 5 where idempotency_key = 'health-guard-pending';
+  q := pg_temp.queue('refunds', 'provider_unknown');
+  if q is null or not (q->>'overdue')::boolean or pg_temp.queue('refunds', 'awaiting_provider') is not null then
+    raise exception 'FAIL 35b: an unconfirmed refund outcome hides behind its retry backoff';
+  end if;
+  update public.refund_operations set created_at = now() - interval '10 minutes' where idempotency_key = 'health-guard-pending';
+  if (pg_temp.queue('refunds', 'provider_unknown')->>'overdue')::boolean then raise exception 'FAIL 35c: a fresh unknown outcome pages'; end if;
   update public.refund_operations set status = 'failed', provider_status = 'failed' where idempotency_key = 'health-guard-pending';
   if exists (select 1 from jsonb_array_elements(public.worker_health_snapshot()->'queues') x where x->>'kind' = 'refunds') then
     raise exception 'FAIL 36: a terminal refused refund is still a refund queue';

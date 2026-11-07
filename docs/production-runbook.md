@@ -388,7 +388,10 @@ a SHA-256; neither is returned). Queues count only work DRVN owes: an
 undelivered payout hold, a payout frozen by an unresolved chargeback and a
 seller who can't be paid yet are not overdue (blocked payouts show with
 `overdue: false`); refunds Stripe is still settling are
-`refunds/awaiting_provider`, late after 72 hours; provider events not yet
+`refunds/awaiting_provider`, late after 72 hours, while an outcome Stripe
+hasn't confirmed either way (a timeout, a failed lookup) is
+`refunds/provider_unknown`, aged from creation and late after two hours (and
+it fails the `refunds` family on every pass); provider events not yet
 applied are `webhooks/retrying` (with the highest attempt count; Admin →
 Payments lists them first, with the last failure, beside Replay), overdue
 after an hour; a chargeback loss whose lease ran out is

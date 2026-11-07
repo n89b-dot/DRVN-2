@@ -83,6 +83,11 @@ export type RefundOrderOutcome =
       /** The refund exists or may exist at the provider and is still being
        *  confirmed — not a failure, and not a reason to ask again. */
       pending?: boolean;
+      /** Narrower than `pending`: the provider itself reported the refund as
+       *  pending (Stripe `pending` / `requires_action`). Unset when the outcome
+       *  is only unknown — a timeout, a failed lookup — which the sweep keeps
+       *  counting as retrying, so worker health sees it (N391). */
+      providerPending?: boolean;
     };
 
 function initiatorLabel(initiator: RefundInitiator): string {
@@ -490,7 +495,12 @@ export async function runRefundOperation(
     return { ok: false, error: "Refund failed." };
   }
   if (op.status === "provider_pending" || op.status === "requested") {
-    return { ok: false, pending: true, error: "The refund is pending provider confirmation." };
+    return {
+      ok: false,
+      pending: true,
+      providerPending: op.provider_status === "pending" || op.provider_status === "requires_action",
+      error: "The refund is pending provider confirmation.",
+    };
   }
   return { ok: false, error: "The refund needs recovery before it can continue." };
 }
@@ -507,7 +517,7 @@ export async function runRefundOperation(
 async function ensureProviderRefund(
   admin: Admin,
   op: RefundOpRow
-): Promise<{ ok: true } | { ok: false; error: string; pending?: boolean }> {
+): Promise<{ ok: true } | { ok: false; error: string; pending?: boolean; providerPending?: boolean }> {
   let wasPending = op.status === "provider_pending";
   if (op.replaces_adjustment_id) {
     const {data: claim, error} = await admin.rpc("claim_refund_replacement_provider", {p_operation: op.id});
@@ -569,7 +579,7 @@ async function ensureProviderRefund(
         );
         if (recorded.action === "settle" || recorded.action === "committed") return { ok: true };
         if (recorded.action === "pending") {
-          return { ok: false, pending: true, error: "The refund is pending provider confirmation." };
+          return { ok: false, pending: true, providerPending: true, error: "The refund is pending provider confirmation." };
         }
         return { ok: false, error: "The provider refund needs recovery." };
       }
@@ -616,7 +626,7 @@ async function ensureProviderRefund(
     );
     if (recorded.action === "settle" || recorded.action === "committed") return { ok: true };
     if (recorded.action === "pending") {
-      return { ok: false, pending: true, error: "The refund is pending provider confirmation." };
+      return { ok: false, pending: true, providerPending: true, error: "The refund is pending provider confirmation." };
     }
     failureReason = result.reason ?? "The provider refund failed.";
   } catch (error) {
@@ -881,8 +891,9 @@ export async function resumeIncompleteRefunds(
     .limit(opts.batch ?? 20);
   if (staleError) throw new Error("Refund queue unavailable");
 
-  // `awaitingProvider`: Stripe holds the refund and hasn't settled it — not a
-  // failure, and not a reason for the money worker to report one (N391).
+  // `awaitingProvider`: Stripe reported the refund pending and hasn't settled
+  // it — not a failure, and not a reason for the money worker to report one
+  // (N391). An unknown outcome is not this; it counts as `retrying`.
   // worker_health_snapshot shows those as refunds/awaiting_provider.
   const summary = { scanned: 0, completed: 0, retrying: 0, awaitingProvider: 0 };
   const now = Date.now();
@@ -893,7 +904,10 @@ export async function resumeIncompleteRefunds(
     summary.scanned += 1;
     const outcome = await runRefundOperation(admin, row.id);
     if (outcome.ok) summary.completed += 1;
-    else if (outcome.pending) summary.awaitingProvider += 1;
+    // Only a wait the provider confirmed. An unknown outcome (timeout, failed
+    // lookup) stays `retrying`: repeated, it must fail the family rather than
+    // pass quietly while each retry moves next_attempt_at.
+    else if (outcome.providerPending) summary.awaitingProvider += 1;
     else summary.retrying += 1;
   }
   return summary;

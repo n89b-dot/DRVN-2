@@ -28,7 +28,8 @@
 --    with overdue = false. A terminal refused refund belongs to its recovery
 --    case (which pages while open), not to the refund queue forever. Refunds
 --    still pending at Stripe are their own 'awaiting_provider' row, overdue
---    only after 72 hours. A failed transfer waiting for its backoff gets the
+--    only after 72 hours; an outcome Stripe hasn't confirmed either way is
+--    'provider_unknown', aged from creation, overdue after two hours. A failed transfer waiting for its backoff gets the
 --    normal 30-minute grace instead of paging at once.
 -- 4. Chargeback recovery (N245): a provider dispute stuck in 'loss_pending'
 --    after its lease expired is a queue again (dropped by 20261006100100).
@@ -321,9 +322,15 @@ begin
     union all
     select 'refunds', status, coalesce(next_attempt_at, created_at), interval '30 minutes', false, attempts
     from public.refund_operations
-    where status in ('requested', 'provider_pending', 'provider_succeeded', 'effects_pending', 'reversal_pending')
+    where status in ('requested', 'provider_succeeded', 'effects_pending', 'reversal_pending')
       and coalesce(next_attempt_at, created_at) <= now()
-      and not (status = 'provider_pending' and coalesce(provider_status, 'unknown') in ('pending', 'requires_action'))
+    -- An outcome nobody has confirmed (a timeout, a failed lookup) is aged
+    -- from creation: each reconcile attempt moves next_attempt_at, so the
+    -- backoff would otherwise reset the grace for as long as it lasts.
+    union all
+    select 'refunds', 'provider_unknown', created_at, interval '2 hours', false, attempts
+    from public.refund_operations
+    where status = 'provider_pending' and coalesce(provider_status, 'unknown') not in ('pending', 'requires_action')
     union all
     select 'refunds', 'recovery_required', updated_at, interval '0 seconds', true, attempts
     from public.refund_operations where status = 'recovery_required' and recovery_id is null

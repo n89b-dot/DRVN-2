@@ -1184,15 +1184,27 @@ export async function adminReplayWebhookEvent(
         if (!row.payload) {
           throw new Error("Recorded before payload retention (0023) — nothing stored to replay.");
         }
-        const result = await dispatchRecordedWebhookEvent(ctx.admin, row.id, row.payload);
+        // Every failed replay of the loaded, unprocessed event is counted on it
+        // (N109): an explicit retry once as "retry", a throw from dispatch or
+        // from the completion marker once as "error".
+        const failure = { provider: row.id.startsWith("easypost:") ? "easypost" : "stripe", type: "console_replay" } as const;
+        let result: Awaited<ReturnType<typeof dispatchRecordedWebhookEvent>>;
+        try {
+          result = await dispatchRecordedWebhookEvent(ctx.admin, row.id, row.payload);
+        } catch (error) {
+          await recordWebhookFailure(ctx.admin, row.id, "error", { ...failure, error });
+          throw error;
+        }
         if (result === "retry") {
-          await recordWebhookFailure(ctx.admin, row.id, "retry", {
-            provider: row.id.startsWith("easypost:") ? "easypost" : "stripe",
-            type: "console_replay",
-          });
+          await recordWebhookFailure(ctx.admin, row.id, "retry", failure);
           throw new Error("Replay needs another attempt; the event remains unprocessed.");
         }
-        await markWebhookEventProcessed(ctx.admin, eventId);
+        try {
+          await markWebhookEventProcessed(ctx.admin, eventId);
+        } catch (error) {
+          await recordWebhookFailure(ctx.admin, row.id, "error", { ...failure, error });
+          throw error;
+        }
         return { result };
       }
     );

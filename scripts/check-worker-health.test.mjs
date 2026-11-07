@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkWorkerHealth, monitorCycle, REQUIRED_FAMILIES, REQUIRED_JOBS } from './check-worker-health.mjs';
-const healthy = { families: REQUIRED_FAMILIES.map(family => ({ family, stale: false })), jobs: REQUIRED_JOBS.map(job => ({ job, stale: false })), queues: [], config: { scheduler: 'ok', workerUrl: 'ok', workerSecret: 'ok' }, problems: [] };
+import { checkWorkerHealth, monitorCycle, REQUIRED_CONFIG, REQUIRED_FAMILIES, REQUIRED_JOBS } from './check-worker-health.mjs';
+const healthy = { families: REQUIRED_FAMILIES.map(family => ({ family, stale: false })), jobs: REQUIRED_JOBS.map(job => ({ job, stale: false })), queues: [], config: { scheduler: 'ok', runHistory: 'ok', pgNet: 'ok', workerUrl: 'ok', workerSecret: 'ok' }, problems: [] };
 const stoppedJob = () => ({ ...healthy, jobs: healthy.jobs.map(j => j.job === 'drvn-media-gc' ? { ...j, stale: true, reason: 'overdue', last_success: '2026-11-05T03:17:00.000Z' } : j) });
 test('accepts complete healthy state and keeps the bearer out of results', async () => {
  const result = await checkWorkerHealth('https://drvn.example', 'secret', async (_url, init) => { assert.equal(init.redirect, 'error'); return Response.json(healthy); });
@@ -29,7 +29,7 @@ test('a job or family missing from the snapshot is named, not just "incomplete"'
  });
 });
 test('names each problem the unhealthy body carries, and only names, reasons, counts and times', async () => {
- const body = { ...stoppedJob(), queues: [{ kind: 'webhooks', status: 'retrying', overdue: true, count: 3, oldest: '2026-11-07T08:00:00.000Z', attempts_max: 6 }], config: { workerSecret: 'mismatch' },
+ const body = { ...stoppedJob(), queues: [{ kind: 'webhooks', status: 'retrying', overdue: true, count: 3, oldest: '2026-11-07T08:00:00.000Z', attempts_max: 6 }], config: { ...healthy.config, workerSecret: 'mismatch' },
   problems: [{ area: 'queue', name: 'webhooks/retrying', reason: 'overdue', count: 3, payload: { email: 'buyer@example.test' } }, { area: 'family', name: '<script>', reason: 'stale' }] };
  await assert.rejects(checkWorkerHealth('https://drvn.example', 'secret', async () => Response.json(body, { status: 503 })), error => {
   assert.equal(error.message, 'worker_health_unhealthy');
@@ -91,4 +91,36 @@ test('uncertain notification retry retains its identity across persisted cycles'
  const transport=async (url,init)=>{if(url.hostname==='drvn.example')return new Response(null,{status:503});ids.push(JSON.parse(init.body).notificationId);throw new Error('unknown delivery');};
  for (const now of [10000,20000]) await assert.rejects(monitorCycle(config,stored,transport,now,async state=>{stored={...state};}),/delivery_failed/);
  assert.equal(ids[0],ids[1]);assert.equal(stored.notifiedHealthy,true);
+});
+test('a body without its configuration checks is never healthy, and sends no heartbeat', async () => {
+ const sent=[];
+ const transport=async (url)=>{if(url.hostname==='drvn.example'){const rest={...healthy};delete rest.config;return Response.json(rest);} sent.push(url.hostname);return new Response(null,{status:204});};
+ await assert.rejects(checkWorkerHealth('https://drvn.example','secret',transport), error => {
+  assert.equal(error.message,'worker_health_incomplete');
+  assert.deepEqual(error.problems.map(p=>`${p.name}:${p.reason}`),Object.keys(REQUIRED_CONFIG).map(name=>`${name}:missing`));
+  return true;
+ });
+ const {result}=await monitorCycle({origin:'https://drvn.example',secret:'secret',alertUrl:'https://alerts.example/hook',heartbeatUrl:'https://heartbeat.example/ping'},{notifiedHealthy:true},transport,10000);
+ assert.equal(result.healthy,false);
+ assert.deepEqual(sent,[],'no heartbeat without verified configuration');
+});
+test('each missing, malformed or failing configuration check is named', async () => {
+ const cases=[
+  [{ pgNet: undefined }, 'worker_health_incomplete', 'pgNet:missing'],
+  [{ scheduler: true }, 'worker_health_incomplete', 'scheduler:malformed'],
+  [{ workerUrl: false }, 'worker_health_incomplete', 'workerUrl:malformed'],
+  [{ runHistory: 'sometimes' }, 'worker_health_incomplete', 'runHistory:malformed'],
+  [{ workerSecret: 'unchecked' }, 'worker_health_unhealthy', 'workerSecret:unchecked'],
+  [{ workerUrl: 'invalid' }, 'worker_health_unhealthy', 'workerUrl:invalid'],
+ ];
+ for (const [change, code, problem] of cases) {
+  const config={...healthy.config,...change};
+  for (const key of Object.keys(change)) if (change[key]===undefined) delete config[key];
+  await assert.rejects(checkWorkerHealth('https://drvn.example','secret',async()=>Response.json({...healthy,config})), error => {
+   assert.equal(error.message,code,problem);
+   assert.deepEqual(error.problems.map(p=>`${p.name}:${p.reason}`),[problem]);
+   return true;
+  });
+ }
+ await assert.rejects(checkWorkerHealth('https://drvn.example','secret',async()=>Response.json({...healthy,config:['ok']})), /incomplete/);
 });

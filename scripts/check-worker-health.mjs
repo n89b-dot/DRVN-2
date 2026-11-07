@@ -7,6 +7,16 @@ import { fileURLToPath } from 'node:url';
 export const REQUIRED_FAMILIES = ['agent', 'deletions', 'deliveryAutoConfirm', 'listingImports', 'media', 'savedSearches', 'search', 'expiries', 'captures', 'transfers', 'transferReconciliation', 'refunds', 'labelVoids', 'returns', 'disputes', 'alerts', 'receipts', 'analytics'];
 export const REQUIRED_JOBS = ['drvn-agent-worker', 'drvn-cron-history-prune', 'drvn-deletion-worker', 'drvn-delivery-auto-confirm', 'drvn-dispute-sla', 'drvn-explore-builders', 'drvn-explore-trending', 'drvn-grow-products', 'drvn-grow-products-full', 'drvn-listing-edit-sweep', 'drvn-listing-import-sweep', 'drvn-marketplace-counts', 'drvn-media-gc', 'drvn-prune-rate-limits', 'drvn-release-reservations', 'drvn-saved-search-worker', 'drvn-search-words', 'drvn-search-worker', 'drvn-transfer-worker'];
 export const RUNBOOK = 'docs/production-runbook.md §9b';
+// Every configuration check the app reports (src/lib/worker-health.ts
+// HealthConfigStatus) and the values it may take. Health is only healthy when
+// each is present and 'ok'; a missing or unknown value is an incomplete body.
+export const REQUIRED_CONFIG = {
+  scheduler: ['ok', 'missing'],
+  runHistory: ['ok', 'disabled'],
+  pgNet: ['ok', 'missing'],
+  workerUrl: ['ok', 'missing', 'invalid'],
+  workerSecret: ['ok', 'missing', 'mismatch', 'unchecked'],
+};
 const MAX_PROBLEMS = 20;
 
 class MonitorError extends Error {
@@ -59,9 +69,11 @@ export async function checkWorkerHealth(url, secret, transport = fetch) {
   const { families, jobs, queues } = health ?? {};
   const rowsValid = (rows, key) => Array.isArray(rows) && rows.every(x => x && typeof x[key] === 'string' && typeof x.stale === 'boolean' && (x.disabled === undefined || typeof x.disabled === 'boolean')) && new Set(rows.map(x => x[key])).size === rows.length;
   if (!rowsValid(families, 'family') || !rowsValid(jobs, 'job') || !Array.isArray(queues) || queues.some(x => !x || typeof x.status !== 'string' || typeof x.kind !== 'string' || typeof x.overdue !== 'boolean' || (x.disabled !== undefined && typeof x.disabled !== 'boolean'))) throw new MonitorError('worker_health_incomplete');
+  const config = health.config !== null && typeof health.config === 'object' && !Array.isArray(health.config) ? health.config : {};
   const missing = [
     ...REQUIRED_FAMILIES.filter(name => !families.some(x => x.family === name)).map(name => ({ area: 'family', name, reason: 'missing' })),
     ...REQUIRED_JOBS.filter(name => !jobs.some(x => x.job === name)).map(name => ({ area: 'job', name, reason: 'missing' })),
+    ...Object.entries(REQUIRED_CONFIG).filter(([name, allowed]) => !allowed.includes(config[name])).map(([name]) => ({ area: 'config', name, reason: name in config ? 'malformed' : 'missing' })),
   ];
   if (missing.length) throw new MonitorError('worker_health_incomplete', missing);
 
@@ -70,7 +82,8 @@ export async function checkWorkerHealth(url, secret, transport = fetch) {
   for (const x of families) if (x.stale && !x.disabled) add({ area: 'family', name: x.family, reason: x.reason ?? 'stale', since: x.last_success });
   for (const x of jobs) if (x.stale && !x.disabled) add({ area: 'job', name: x.job, reason: x.reason ?? 'stale', since: x.last_success });
   for (const x of queues) if (!x.disabled && (x.overdue || x.kind === 'capture_recovery' || x.kind === 'financial_recovery')) add({ area: 'queue', name: `${x.kind}/${x.status}`, reason: 'overdue', since: x.oldest, count: x.count, attempts: x.attempts_max });
-  for (const [name, state] of Object.entries(health.config ?? {})) if (typeof state === 'string' && state !== 'ok' && state !== 'unchecked') add({ area: 'config', name, reason: state });
+  // An unverified secret is not a verified one: only 'ok' passes.
+  for (const name of Object.keys(REQUIRED_CONFIG)) if (config[name] !== 'ok') add({ area: 'config', name, reason: config[name] });
   for (const p of Array.isArray(health.problems) ? health.problems : []) add(p);
   if (found.size) throw new MonitorError('worker_health_unhealthy', [...found.values()]);
   // Healthy-looking data under a 503 is still a 503.

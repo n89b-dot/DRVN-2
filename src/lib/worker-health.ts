@@ -101,7 +101,8 @@ export function evaluateWorkerHealth(
 
   const problems: HealthProblem[] = [];
   for (const [name, state] of Object.entries(status)) {
-    if (state !== "ok" && state !== "unchecked") problems.push({ area: "config", name, reason: state });
+    // An unverified secret is not a verified one: only "ok" passes.
+    if (state !== "ok") problems.push({ area: "config", name, reason: state });
   }
   for (const job of jobs) {
     if (job.stale) problems.push({ area: "job", name: job.job, reason: job.reason ?? "stale", since: job.last_success ?? null });
