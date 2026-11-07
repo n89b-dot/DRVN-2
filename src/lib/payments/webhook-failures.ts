@@ -11,7 +11,7 @@ function failureDetail(error: unknown): string | null {
 
 /**
  * Records one failed delivery of a provider event that is still unprocessed
- * (webhook_events.failed_attempts, 20261107170000), so an event the provider
+ * (webhook_events.failed_attempts, 20261107191000), so an event the provider
  * keeps redelivering has an age, an attempt count and the last reason where
  * health and the payments console can see them (N109). `retry` = a handler
  * asked for redelivery; `error` = a handler threw.

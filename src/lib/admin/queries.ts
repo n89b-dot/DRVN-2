@@ -1261,7 +1261,7 @@ export type PaymentsOps = {
     processedAt: string | null;
     /** Pretty-printed payload for the drill-in; null for pre-0023 events. */
     payload: string | null;
-    /** Failed deliveries of a still-unprocessed event (20261107170000). */
+    /** Failed deliveries of a still-unprocessed event (20261107191000). */
     failedAttempts: number;
     lastFailedAt: string | null;
     /** "retry" or "error", with the handler's reason when it threw. */

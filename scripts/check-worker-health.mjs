@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 // Kept equal to src/lib/job-inventory.ts and private.scheduled_job_inventory()
-// (20261107170000) by src/lib/job-inventory.test.ts. The monitor holds its own
+// (20261107191000) by src/lib/job-inventory.test.ts. The monitor holds its own
 // copy so a deployment that silently drops a family or job still fails here.
 export const REQUIRED_FAMILIES = ['agent', 'deletions', 'deliveryAutoConfirm', 'listingImports', 'media', 'savedSearches', 'search', 'expiries', 'captures', 'transfers', 'transferReconciliation', 'refunds', 'labelVoids', 'returns', 'disputes', 'alerts', 'receipts', 'analytics'];
 export const REQUIRED_JOBS = ['drvn-agent-worker', 'drvn-cron-history-prune', 'drvn-deletion-worker', 'drvn-delivery-auto-confirm', 'drvn-dispute-sla', 'drvn-explore-builders', 'drvn-explore-trending', 'drvn-grow-products', 'drvn-grow-products-full', 'drvn-listing-edit-sweep', 'drvn-listing-import-sweep', 'drvn-marketplace-counts', 'drvn-media-gc', 'drvn-prune-rate-limits', 'drvn-release-reservations', 'drvn-saved-search-worker', 'drvn-search-words', 'drvn-search-worker', 'drvn-transfer-worker'];

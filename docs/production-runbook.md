@@ -365,7 +365,7 @@ separately administered host, not in this workflow — see
 `docs/remediation-release-and-monitoring.md`. Before relying on either, stop a
 job in staging (below) and confirm an alert and a recovery actually arrive.
 
-**What health judges (20261107170000).** `private.scheduled_job_inventory()`
+**What health judges (20261107191000).** `private.scheduled_job_inventory()`
 is the one list of what pg_cron must run: every `drvn-*` job, its schedule,
 its command, the worker families it drives and how long it may go without a
 success. Check the scheduler against it by name and by running, never by

@@ -8,7 +8,7 @@ const noStore = { "Cache-Control": "no-store" };
  * Worker health for the independent monitor (scripts/check-worker-health.mjs)
  * and any uptime check: every pg_cron job in the inventory, every worker
  * family, every overdue queue and the scheduler's configuration, judged by
- * whether the work actually ran (20261107170000). 200 when there is nothing
+ * whether the work actually ran (20261107191000). 200 when there is nothing
  * to act on, 503 with the same body and a `problems` list when there is.
  * Bearer CRON_SECRET; 404 to anyone else.
  */

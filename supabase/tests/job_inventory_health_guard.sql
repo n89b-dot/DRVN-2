@@ -1,4 +1,4 @@
--- 20261107170000: one job inventory, health judged by running, webhook retries.
+-- 20261107191000: one job inventory, health judged by running, webhook retries.
 --   A. The inventory and cron.job agree both ways: name, schedule, command (N226, N245).
 --   B. The snapshot reports every inventory job; no fixed row count anywhere.
 --   C. A job is judged by its runs: never succeeded, fresh, failing, overdue,

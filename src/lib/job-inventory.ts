@@ -1,6 +1,6 @@
 /**
  * Every job pg_cron must run, as `private.scheduled_job_inventory()`
- * (20261107170000) lists them: name, exact schedule, the worker families it
+ * (20261107191000) lists them: name, exact schedule, the worker families it
  * drives (recorded in worker_runs by the route or function it calls) and how
  * long it may go without a successful run. The database's copy is the one
  * health judges against; this copy lets the app and the independent monitor

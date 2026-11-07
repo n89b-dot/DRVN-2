@@ -1,4 +1,4 @@
--- 20261107170000 — one job inventory, health judged by running, webhook retries.
+-- 20261107191000 — one job inventory, health judged by running, webhook retries.
 --
 -- Production-readiness review, 3 Nov 2026 (OS-W09): N226, N245, N391, N109,
 -- and the health half of N4.
