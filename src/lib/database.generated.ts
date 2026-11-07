@@ -6177,11 +6177,41 @@ export type Database = {
       activity_post_search_text: { Args: { body: Json }; Returns: string }
       activity_post_visible: { Args: { p_post_id: string }; Returns: boolean }
       actor_name: { Args: { p_id: string }; Returns: string }
-      admin_audit_actor_ids: { Args: { p_query: string }; Returns: string[] }
+      admin_audit_page: {
+        Args: {
+          p_action?: string
+          p_actor?: string
+          p_before_at?: string
+          p_before_id?: number
+          p_from?: string
+          p_limit?: number
+          p_offset?: number
+          p_subject_type?: string
+          p_to?: string
+        }
+        Returns: {
+          action: string
+          actor_id: string
+          created_at: string
+          id: number
+          metadata: Json
+          order_id: string | null
+          reason: string
+          subject_id: string
+          subject_type: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "admin_audit_log"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       admin_cancel_seller_carry_payout: {
         Args: { p_id: string }
         Returns: Json
       }
+      admin_confirmed_factor: { Args: never; Returns: string }
       admin_enrolment_state: { Args: never; Returns: string }
       admin_export_orders: {
         Args: {

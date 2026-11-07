@@ -15,29 +15,10 @@ const state = vi.hoisted(() => ({
   audit: [] as { id: number; actor_id: string; created_at: string; action: string; subject_type: string; subject_id: string; order_id: string | null; reason: string; metadata: unknown }[],
   rpcCalls: [] as Record<string, unknown>[],
   auditPages: 0,
+  auditCalls: [] as Record<string, unknown>[],
   profileLookups: [] as number[],
   failOnOrdersPage: 0,
 }));
-
-function auditBuilder() {
-  const filters: { lt?: number; limit?: number } = {};
-  const builder: Record<string, unknown> = {};
-  for (const m of ["select", "order", "ilike", "eq", "gte", "in"]) builder[m] = () => builder;
-  builder.lt = (column: string, value: number) => {
-    if (column === "id") filters.lt = value;
-    return builder;
-  };
-  builder.limit = (n: number) => {
-    filters.limit = n;
-    return builder;
-  };
-  builder.then = (resolve: (value: unknown) => unknown) => {
-    state.auditPages += 1;
-    const rows = state.audit.filter((r) => filters.lt == null || r.id < filters.lt).slice(0, filters.limit ?? 1000);
-    return resolve({ data: rows.slice(0, 1000), error: null });
-  };
-  return builder;
-}
 
 function profilesBuilder() {
   const builder: Record<string, unknown> = {};
@@ -62,10 +43,18 @@ const client = {
       // Like PostgREST: never more than 1,000 rows, whatever was asked.
       return { data: state.orders.slice(after, after + Math.min(Number(args.p_limit), 1000)), error: null };
     }
-    if (name === "admin_audit_actor_ids") return { data: [], error: null };
+    if (name === "admin_audit_page") {
+      state.auditPages += 1;
+      state.auditCalls.push(args);
+      // The database filters by actor name itself; this fixture's actors are
+      // all named "Admin actor-N", so "nobody" matches none.
+      const named = args.p_actor === "nobody" ? [] : state.audit;
+      const rows = named.filter((r) => args.p_before_id == null || r.id < Number(args.p_before_id));
+      return { data: rows.slice(Number(args.p_offset ?? 0)).slice(0, Math.min(Number(args.p_limit), 1000)), error: null };
+    }
     return { data: null, error: { message: `unexpected rpc ${name}` } };
   },
-  from: (table: string) => (table === "admin_audit_log" ? auditBuilder() : profilesBuilder()),
+  from: () => profilesBuilder(),
 };
 
 vi.mock("@/lib/admin/guard", () => ({
@@ -106,6 +95,7 @@ function seedOrders(count: number) {
 beforeEach(() => {
   state.rpcCalls = [];
   state.auditPages = 0;
+  state.auditCalls = [];
   state.profileLookups = [];
   state.failOnOrdersPage = 0;
   seedOrders(2500);
@@ -179,9 +169,21 @@ describe("audit export (N133)", () => {
     expect(lines[1]).toContain("Admin actor-0");
   });
 
+  it("filters by actor name in the database: 1,000 matching actors never become an id list", async () => {
+    state.audit = state.audit.map((r, i) => ({ ...r, actor_id: `actor-${i % 1000}` }));
+    const response = await GET(new Request("https://drvn.test/admin/export?view=audit&actor=Admin"));
+    expect(response.headers.get("x-drvn-export-rows")).toBe("1700");
+    expect(state.auditCalls[0]).toMatchObject({ p_actor: "Admin", p_limit: 500 });
+    expect(state.auditCalls[1]).toMatchObject({ p_before_id: 1201, p_before_at: "2026-10-01T00:00:00Z" });
+    for (const call of state.auditCalls) expect(JSON.stringify(call).length).toBeLessThan(500);
+    // Names for the file are looked up in chunks of 100 or fewer.
+    expect(Math.max(...state.profileLookups)).toBeLessThanOrEqual(100);
+    expect(state.profileLookups.reduce((a, b) => a + b, 0)).toBe(1000);
+  });
+
   it("an actor search that matches no one exports an empty file, not everyone", async () => {
     const response = await GET(new Request("https://drvn.test/admin/export?view=audit&actor=nobody"));
     expect(response.headers.get("x-drvn-export-rows")).toBe("0");
-    expect(state.auditPages).toBe(0);
+    expect(state.auditCalls[0]).toMatchObject({ p_actor: "nobody" });
   });
 });
