@@ -18,9 +18,10 @@ import { sendAdminAlert } from "@/lib/admin/alerts";
  * `payment_intent.succeeded` each order gets a transfer_intents row — the
  * money does NOT move yet. It moves when delivery plus the clearing window
  * have passed, via pg_cron + the transfer worker (0020,
- * lib/payments/transfer-worker.ts). That makes the seven-day hold the ledger
- * displays real, and it means most refunds happen before any transfer exists
- * to reverse.
+ * lib/payments/transfer-worker.ts). That makes the clearing hold the ledger
+ * displays real (2 days after delivery by default, an owner setting:
+ * lib/payments/payout-hold.ts), and it means refunds before then happen
+ * before any transfer exists to reverse.
  *
  * Refund and dispute events resolve to orders via our refund metadata first
  * (refunds.ts stamps order_id), payments.provider_reference second. External
