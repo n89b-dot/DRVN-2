@@ -1,6 +1,6 @@
 /**
  * Every job pg_cron must run, as `private.scheduled_job_inventory()`
- * (20261107191000) lists them: name, exact schedule, the worker families it
+ * (latest 20261107200300) lists them: name, exact schedule, the worker families it
  * drives (recorded in worker_runs by the route or function it calls) and how
  * long it may go without a successful run. The database's copy is the one
  * health judges against; this copy lets the app and the independent monitor
@@ -32,6 +32,7 @@ export const JOB_INVENTORY: readonly ScheduledJob[] = [
   { job: "drvn-media-gc", schedule: "17 3 * * *", families: ["media"], budgetMinutes: 26 * 60 },
   { job: "drvn-prune-rate-limits", schedule: "15 3 * * *", families: [], budgetMinutes: 26 * 60 },
   { job: "drvn-release-reservations", schedule: "*/5 * * * *", families: [], budgetMinutes: 30 },
+  { job: "drvn-saved-search-digests", schedule: "41 * * * *", families: ["savedSearchDigests"], budgetMinutes: 180 },
   { job: "drvn-saved-search-worker", schedule: "*/30 * * * *", families: ["savedSearches"], budgetMinutes: 90 },
   { job: "drvn-search-words", schedule: "23 * * * *", families: [], budgetMinutes: 180 },
   { job: "drvn-search-worker", schedule: "*/2 * * * *", families: ["search"], budgetMinutes: 30 },

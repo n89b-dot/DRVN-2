@@ -24,6 +24,9 @@ export const dynamic = "force-dynamic";
  * "Published", not "created" (N73): a part saved as a draft and put on sale
  * later goes on the market when it is published, so that is when it enters
  * a window (listings.published_at, first publication, set by the database).
+ *
+ * Email is separate (N78): /api/jobs/saved-search-digests sends at most one
+ * digest a day per search, from its own window, so nothing here changes it.
  */
 async function run(request: Request) {
   if (!cronAuthorized(request)) {

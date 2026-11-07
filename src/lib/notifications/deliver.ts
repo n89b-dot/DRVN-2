@@ -12,9 +12,11 @@ import type { NotificationSection } from "./kinds";
  * table — and it checks the governing preference AT WRITE TIME for
  * app-sourced kinds (trigger-sourced kinds keep their read-time filtering).
  *
- * Future channels (email, push, or a provider like Novu) slot in HERE: this
+ * Future channels (push, or a provider like Novu) slot in HERE: this
  * function fans out to whatever channels the kind and the user's preferences
- * allow. Novu was evaluated (2026-08) and not adopted now — one in-app
+ * allow. Saved-search email is not a per-notification channel: it is a daily
+ * digest with its own outbox (src/lib/saved-search-digests.ts, N78), sent
+ * through src/lib/email/send.ts. Novu was evaluated (2026-08) and not adopted now — one in-app
  * channel doesn't need workflow orchestration, and DRVN must not depend on a
  * hosted notification service to function. The seam is this file.
  */

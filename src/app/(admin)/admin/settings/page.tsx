@@ -41,6 +41,7 @@ const JOB_LABEL: Record<string, string> = {
   search: "Search index",
   deletions: "Account deletions and exports",
   savedSearches: "Saved-search alerts",
+  savedSearchDigests: "Saved-search email digests",
   media: "Clean up unused uploads",
   deliveryAutoConfirm: "Auto-confirm untracked deliveries",
 };

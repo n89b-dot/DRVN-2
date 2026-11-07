@@ -203,6 +203,7 @@ Confirm the nine pg_cron jobs (times are the database's UTC):
 | `drvn-deletion-worker` | `*/5 * * * *` | `invoke_remediation_worker('account-deletions')` → `/api/jobs/account-deletions` (deletions and exports) |
 | `drvn-media-gc` | `17 3 * * *` | `invoke_remediation_worker('media-gc')` → `/api/jobs/media-gc` |
 | `drvn-saved-search-worker` | `*/30 * * * *` | `invoke_remediation_worker('saved-searches')` → `/api/jobs/saved-searches` |
+| `drvn-saved-search-digests` | `41 * * * *` | `invoke_remediation_worker('saved-search-digests')` → `/api/jobs/saved-search-digests` (20261107200300) |
 | `drvn-listing-import-sweep` | `37 3 * * *` | `invoke_remediation_worker('listing-imports')` → `/api/jobs/listing-imports` (20261004150000) |
 
 `select jobname, schedule from cron.job order by 1;` must return exactly
@@ -381,8 +382,24 @@ nothing to set up beyond `job_config`. One pass checks every alert-enabled
 saved search for listings created since its last check and raises at most one
 in-app notification per search per pass. A search's first pass after opt-in
 only stamps the baseline — nobody is alerted about inventory that predates
-their opt-in. `/api/jobs/media-gc` and `/api/jobs/listing-imports` are
-scheduled the same way. To run any of them by hand:
+their opt-in.
+
+Email digests (N78, `drvn-saved-search-digests`, hourly): at most one email
+per saved search per day. Each alerting search has its own email window
+(`saved_search_email_cursors`), started when its alert is turned on and
+separate from the in-app cursor, so a digest carries every part published
+since the last one. From 08:00 London the first run of the day admits each
+search's window into `saved_search_email_digests` (unique per search per
+day); the later runs retry sends. A member with "Saved-search matches" or
+"Saved-search emails" off is not mailed, and neither is an unconfirmed
+address, a suspended or closing account, or a search whose alert went off. A
+digest not sent on its day expires; records are kept 90 days. Sending goes
+through `src/lib/email/send.ts`, selected by `EMAIL_PROVIDER` and sent from
+`EMAIL_FROM`. No provider is chosen yet (R-email): until one is, digests are
+recorded and nothing is sent, and the route logs and returns `provider: null`.
+
+`/api/jobs/media-gc` and `/api/jobs/listing-imports` are scheduled the same
+way. To run any of them by hand:
 `curl -X POST https://<domain>/api/jobs/<name> -H "Authorization: Bearer $CRON_SECRET"`.
 
 ## 9b. Independent worker monitor (GitHub Actions)
@@ -539,8 +556,8 @@ can't deliver webhooks, so a test purchase stays "pending" until the
 
 - **`scripts/dev-jobs.sh`** — calls `/api/jobs/*` with the `CRON_SECRET`
   from `.env.local` on the database's own intervals (search 2 min, account
-  deletions 5 min, transfers 10 min, saved searches 30 min, media GC and
-  listing imports daily). Each job runs once its interval has passed, so a
+  deletions 5 min, transfers 10 min, saved searches 30 min, saved-search
+  digests hourly, media GC and listing imports daily). Each job runs once its interval has passed, so a
   missed tick catches up once rather than piling up; a dead server retries
   next tick. Run it by hand for one pass.
 - **`scripts/dev-stripe-listen.sh`** — `stripe listen` forwarding to
