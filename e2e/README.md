@@ -179,10 +179,15 @@ HMAC door EasyPost uses, so the webhook path is exercised too.
 `/admin` and `/docs` need an `admin_users` member at AAL2 with a TOTP check in
 the last 15 minutes (`src/lib/admin/guard.ts`); anything less is sent to
 `/admin-verify`. The specs that go in (`remediation-security`,
-`admin-mutation-recovery`, `beta-invitations`) make a throwaway admin, press
-**Set up authenticator** on `/admin-verify`, and work out the code from the
-secret shown on the page with their own `totp()` helper. A new admin or docs
-spec must do the same step, or it will stop at `/admin-verify`.
+`admin-mutation-recovery`, `beta-invitations`, `admin-agent`,
+`admin-operation-reconcile`, `admin-product-identity`) make a throwaway
+admin, press **Set up authenticator** on `/admin-verify`, and work out the
+code from the secret shown on the page with their own `totp()` helper. A new
+member's authenticator then needs the operator's confirmation
+(20261107200500, N136): the spec plays the operator with
+`confirmAdminAuthenticator()` from `fixtures.ts`, which checks the reference
+the page shows and calls `confirm_admin_mfa`. A new admin or docs spec must
+do both steps, or it will stop at `/admin-verify`.
 
 This has applied on the shared dev project since the remediation chain went
 in on 2026-09-24. Its standing console-admin account has an enrolled factor

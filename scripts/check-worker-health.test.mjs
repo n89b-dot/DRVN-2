@@ -5,7 +5,7 @@ const healthy = { families: REQUIRED_FAMILIES.map(family => ({ family, stale: fa
 const stoppedJob = () => ({ ...healthy, jobs: healthy.jobs.map(j => j.job === 'drvn-media-gc' ? { ...j, stale: true, reason: 'overdue', last_success: '2026-11-05T03:17:00.000Z' } : j) });
 test('accepts complete healthy state and keeps the bearer out of results', async () => {
  const result = await checkWorkerHealth('https://drvn.example', 'secret', async (_url, init) => { assert.equal(init.redirect, 'error'); return Response.json(healthy); });
- assert.deepEqual(result, { healthy: true, families: 19, jobs: 20 });
+ assert.deepEqual(result, { healthy: true, families: 20, jobs: 21 });
 });
 test('fails on unavailable, malformed, stale and exhausted health', async () => {
  for (const response of [new Response(null, { status: 503 }), new Response(null, { status: 500 }), Response.json({}), Response.json({ ...healthy, families: [{ stale: true }] }), Response.json({ ...healthy, queues: [{ status: 'failed' }] }), Response.json({ ...healthy, jobs: undefined }), Response.json({ error: 'Health data incomplete' }, { status: 503 })]) {
@@ -17,7 +17,7 @@ test('never sends a bearer over remote HTTP', async () => {
 });
 
 test('rejects duplicated inventory and transport errors without leaking request secrets', async () => {
- await assert.rejects(checkWorkerHealth('https://drvn.example', 'secret', async () => Response.json({...healthy,families:Array.from({length:19},()=>({family:'alerts',stale:false}))})), /incomplete/);
+ await assert.rejects(checkWorkerHealth('https://drvn.example', 'secret', async () => Response.json({...healthy,families:Array.from({length:20},()=>({family:'alerts',stale:false}))})), /incomplete/);
  await assert.rejects(checkWorkerHealth('https://drvn.example', 'secret', async () => {throw new Error('secret in upstream error');}), error => !error.message.includes('secret'));
 });
 test('a job or family missing from the snapshot is named, not just "incomplete"', async () => {

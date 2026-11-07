@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 
 import { revalidatePath } from "@/lib/revalidate";
 
-import { auditedAction } from "./audit";
+import { auditedAction, RefusedOperationError } from "./audit";
 import { sendAdminAlert } from "./alerts";
 import { markWebhookEventProcessed } from "@/lib/payments/settlement";
 import { recordWebhookFailure } from "@/lib/payments/webhook-failures";
@@ -207,7 +207,10 @@ export async function adminForceRefund(
           resolveDispute: true,
           requestKey,
         });
-        if (!result.ok) throw new Error(result.error);
+        // A proven refusal (nothing reserved, or Stripe declined it) closes
+        // the request so a corrected retry isn't locked out (N134); anything
+        // uncertain keeps it for reconciliation.
+        if (!result.ok) throw result.refused ? new RefusedOperationError(result.error) : new Error(result.error);
         return result;
       }
     );
@@ -990,6 +993,70 @@ export async function adminRetryCarryPayout(_prev: AdminActionState, formData: F
 
 export async function adminCancelCarryPayout(_prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
   return controlCarryPayout("cancel", formData);
+}
+
+// ---------- Exhausted seller payouts (20261107210100, N8) ----------
+
+/**
+ * Puts a seller payout the worker gave up on (eight failed attempts, a
+ * transfer_unresolved case open) back in the queue. Nothing about whether it
+ * may go changes: admission, readiness, the chargeback freeze and dispatch
+ * all still decide, and a payout Stripe may already hold is looked up before
+ * anything is sent, with the same idempotency key. The recovery case stays
+ * open until the operator closes it.
+ */
+export async function adminRetryTransfer(_prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const orderId = field(formData, "order_id");
+  const reason = field(formData, "reason");
+  if (!/^[0-9a-f-]{36}$/i.test(orderId)) return { error: "Missing payout." };
+  if (!reason) return { error: "A reason is required — it goes in the audit log." };
+
+  const { data: intent, error: readError } = await ctx.admin
+    .from("transfer_intents")
+    .select("order_id, status, attempts, amount_cents, provider_call_may_have_occurred")
+    .eq("order_id", orderId)
+    .maybeSingle();
+  if (readError) return { error: "Couldn't read that payout. Try again." };
+  if (!intent) return { error: "That payout no longer exists." };
+  if (intent.status !== "failed" || intent.attempts < 8) {
+    return { error: "This payout is still being retried automatically; there is nothing to queue again." };
+  }
+
+  try {
+    await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: "payments.transfer_retry",
+        subjectType: "payment",
+        subjectId: orderId,
+        orderId,
+        reason,
+        metadata: {
+          amountCents: intent.amount_cents,
+          previousAttempts: intent.attempts,
+          providerCallMayHaveOccurred: intent.provider_call_may_have_occurred,
+        },
+      },
+      async () => {
+        const { data, error } = await ctx.admin.rpc("admin_retry_transfer_intent", { p_order: orderId });
+        if (error) throw new Error(error.message);
+        return data;
+      }
+    );
+    revalidateOrder(orderId);
+    return {
+      ok: intent.provider_call_may_have_occurred
+        ? "Payout queued again. Stripe may already hold it, so the next worker pass looks it up first and records it rather than sending again."
+        : "Payout queued again. The next worker pass tries it; it comes back here if the cause remains.",
+    };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not queue the payout again." };
+  }
 }
 
 // ---------- Internal notes / party messaging (console audit follow-ups) ----------

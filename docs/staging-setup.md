@@ -302,7 +302,10 @@ insert into public.admin_users (user_id, note)
 values ('<auth.users id>', 'staging operator') on conflict do nothing;
 ```
 
-Enrol TOTP at `/admin-verify`. Now do step 2.5 (turn the gate on), then
+Enrol TOTP at `/admin-verify`, then confirm that factor as the operator
+(`docs/production-runbook.md` §5, steps 3–4: check the reference shown on
+the page against `auth.mfa_factors`, then `select public.confirm_admin_mfa(…)`).
+Until then the membership is pending and the console stays closed. Now do step 2.5 (turn the gate on), then
 create invitations for testers from Admin → Invitations.
 
 ## 13. Release-candidate evidence — the 15 gates [ENGINEER, OWNER reviews]

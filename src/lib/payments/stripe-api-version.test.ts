@@ -1,54 +1,65 @@
-import { readFileSync } from "node:fs";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
+
 import Stripe from "stripe";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-// N539: the Stripe API version is pinned where the client is created, not
-// left to whatever the installed SDK defaults to.
+import { STRIPE_API_VERSION as SCRIPT_API_VERSION } from "../../../scripts/owner/stripe-webhooks.mjs";
 
-const constructed = vi.hoisted(() => ({ configs: [] as unknown[] }));
+import { STRIPE_API_VERSION } from "./stripe-api-version";
 
-vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
+/**
+ * N144: the Stripe API version is pinned explicitly, not inherited from the
+ * SDK. The shared client sends it, the webhook setup script creates endpoints
+ * on it, and the webhook fixtures in the money tests describe it.
+ */
+
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
-vi.mock("stripe", async (importOriginal) => {
-  const actual = await importOriginal<{ default: typeof Stripe }>();
-  class FakeStripe {
-    static API_VERSION = actual.default.API_VERSION;
-    static errors = actual.default.errors;
-    constructor(_key: string, config: unknown) {
-      constructed.configs.push(config);
-    }
-  }
-  return { default: FakeStripe };
-});
-
-import { STRIPE_API_VERSION, stripeClient } from "./stripe";
+vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 
 afterEach(() => {
-  delete process.env.STRIPE_SECRET_KEY;
+  vi.unstubAllEnvs();
+  vi.resetModules();
 });
 
-describe("Stripe API version (N539)", () => {
-  it("creates the client with the pinned apiVersion", () => {
-    process.env.STRIPE_SECRET_KEY = "sk_test_unit";
-    stripeClient();
-    expect(constructed.configs).toHaveLength(1);
-    expect(constructed.configs[0]).toMatchObject({ apiVersion: "2026-07-29.dahlia" });
-    expect(STRIPE_API_VERSION).toBe("2026-07-29.dahlia");
+describe("the pinned Stripe API version", () => {
+  it("is what the shared client sends on every request", async () => {
+    vi.stubEnv("STRIPE_SECRET_KEY", "fixture-key-not-a-secret");
+    const { stripeClient } = await import("./stripe");
+    const client = stripeClient() as unknown as { getApiField(key: string): unknown };
+    expect(client.getApiField("version")).toBe(STRIPE_API_VERSION);
   });
 
-  it("pins the version the installed SDK defaults to, so pinning changed nothing", () => {
-    // If this fails after a `stripe` upgrade, the pin is doing its job: the
-    // new SDK defaults to a different API version. Moving the pin is a
-    // deliberate change — see the comment on STRIPE_API_VERSION.
-    expect(STRIPE_API_VERSION).toBe(Stripe.API_VERSION);
+  it("is the version the installed SDK was generated for, so upgrading the SDK is a deliberate change", () => {
+    // tsc already refuses a pin the SDK's types don't know; this says why at
+    // runtime too. When it fails after an upgrade, read Stripe's changelog
+    // between the two versions before moving the pin.
+    expect(Stripe.API_VERSION).toBe(STRIPE_API_VERSION);
   });
 
-  it("the owner scripts pin the same version", () => {
-    const webhooks = readFileSync("scripts/owner/stripe-webhooks.mjs", "utf8");
-    expect(webhooks).toContain(`export const STRIPE_API_VERSION = "${STRIPE_API_VERSION}";`);
-    expect(webhooks).toContain("new Stripe(key, { apiVersion: STRIPE_API_VERSION,");
-    expect(webhooks).not.toContain("Stripe.API_VERSION");
-    const balances = readFileSync("scripts/owner/stripe-negative-balances.mjs", "utf8");
-    expect(balances).toContain("new Stripe(key, { apiVersion: STRIPE_API_VERSION,");
+  it("is the version the webhook setup script creates endpoints on", () => {
+    expect(SCRIPT_API_VERSION).toBe(STRIPE_API_VERSION);
+    const script = readFileSync(resolve(__dirname, "../../../scripts/owner/stripe-webhooks.mjs"), "utf8");
+    expect(script).not.toContain("Stripe.API_VERSION");
+  });
+
+  it("is the only version the payments tests' event fixtures name", () => {
+    const dir = __dirname;
+    const named = new Set<string>();
+    for (const file of readdirSync(dir).filter((name) => name.endsWith(".test.ts"))) {
+      for (const match of readFileSync(join(dir, file), "utf8").matchAll(/api_version:\s*"([^"]+)"/g)) named.add(match[1]);
+    }
+    for (const version of named) expect(version).toBe(STRIPE_API_VERSION);
+  });
+
+  it("is what the negative-balances owner script sends (N539)", () => {
+    const script = readFileSync(resolve(__dirname, "../../../scripts/owner/stripe-negative-balances.mjs"), "utf8");
+    expect(script).toContain('import { STRIPE_API_VERSION, checkKey } from "./stripe-webhooks.mjs";');
+    expect(script).toContain("new Stripe(key, { apiVersion: STRIPE_API_VERSION,");
+  });
+
+  it("is written in the runbook's webhook instructions", () => {
+    const runbook = readFileSync(resolve(__dirname, "../../../docs/production-runbook.md"), "utf8");
+    expect(runbook).toContain(STRIPE_API_VERSION);
   });
 });

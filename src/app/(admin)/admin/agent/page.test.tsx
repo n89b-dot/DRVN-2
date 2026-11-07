@@ -19,7 +19,14 @@ function query(table: string) {
   return builder;
 }
 
-vi.mock("@/lib/admin/guard", () => ({ getAdminContext: async () => ({ role: "admin" }) }));
+vi.mock("@/lib/admin/guard", async () => {
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  return {
+    getAdminContext: async () => ({ role: "admin" }),
+    requireAdminRead: async () => ({ role: "admin" }),
+    adminReadClient: async () => createAdminClient(),
+  };
+});
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (table: string) => query(table),

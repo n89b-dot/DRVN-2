@@ -44,7 +44,9 @@ declare
   denied boolean;
 begin
   insert into auth.users(id, email) values (v_seller, 'products-seller@example.test'), (v_admin, 'products-admin@example.test');
-  insert into public.admin_users(user_id, note) values (v_admin, 'products guard');
+  -- A confirmed authenticator (20261107200500): without one no admin privilege.
+  insert into auth.mfa_factors(id, user_id, friendly_name, factor_type, status, created_at, updated_at) values (gen_random_uuid(), v_admin, 'guard', 'totp', 'verified', now(), now());
+  insert into public.admin_users(user_id, note, mfa_factor_id) select v_admin, 'products guard', id from auth.mfa_factors where user_id = v_admin;
   insert into public.cars(id, owner_id, name, slug, is_public, make, model, year)
   values (v_car, v_seller, 'Project', 'products-guard-car', true, 'Volkswagen', 'Golf', 2016);
 

@@ -1,7 +1,7 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
-import { cleanupFixtureUser, fixtureAdmin } from "./fixtures";
+import { cleanupFixtureUser, confirmAdminAuthenticator, fixtureAdmin } from "./fixtures";
 
 function totp(secret: string) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -60,6 +60,7 @@ test("admin runs the agent's controls, each change audited", async ({ page }) =>
     await expect(secret).toBeVisible();
     await page.getByLabel("Authenticator code").fill(totp((await secret.textContent())!));
     await page.getByRole("button", { name: /verify/i }).click();
+    await confirmAdminAuthenticator(page, admin, actorId, "/admin/agent");
     await expect(page).toHaveURL(/\/admin\/agent$/);
 
     // A beta step: "jobs" is one no member surface reads yet.

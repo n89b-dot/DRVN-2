@@ -144,7 +144,9 @@ begin
   insert into auth.users(id, email) values
     (seller, 'w18-seller@example.test'), (buyer, 'w18-buyer@example.test'),
     (actor, 'w18-admin@example.test');
-  insert into public.admin_users(user_id) values (actor);
+  -- A confirmed authenticator (20261107200500): without one no admin privilege.
+  insert into auth.mfa_factors(id, user_id, friendly_name, factor_type, status, created_at, updated_at) values (gen_random_uuid(), actor, 'guard', 'totp', 'verified', now(), now());
+  insert into public.admin_users(user_id, mfa_factor_id) select actor, id from auth.mfa_factors where user_id = actor;
 
   -- 1. In-app dispute first, then the chargeback. The chargeback can't own the
   --    order's dispute fields, so it is only in the journal ('recovery') and

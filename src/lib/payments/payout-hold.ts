@@ -30,8 +30,8 @@ export type PayoutHoldPolicy = {
  * the owner's rule (Neil, 4 October 2026, docs/decisions/payout-hold.md) is
  * that sellers are paid 2 days after delivery, set on the row by
  * 20261009100000. This fallback (and the SQL coalesce in
- * payout_available_at()) still says 7: what a missing row should mean is a
- * money rule the owner hasn't ruled on, so it is left unchanged until he does.
+ * payout_available_at()) still says 7 here; Neil ruled on 7 November 2026
+ * that it becomes 2 as well, which the R-hold follow-up does.
  */
 export const DEFAULT_PAYOUT_HOLD: PayoutHoldPolicy = { mode: "fixed", holdDays: 7 };
 

@@ -34,9 +34,14 @@
 import { fileURLToPath } from "node:url";
 
 export const WEBHOOK_PATH = "/api/stripe/webhook";
-/** The API version the app pins (STRIPE_API_VERSION in
- *  src/lib/payments/stripe.ts, N539); kept equal by
- *  src/lib/payments/stripe-api-version.test.ts. */
+
+/**
+ * The API version the app pins (src/lib/payments/stripe-api-version.ts). An
+ * endpoint's version decides the shape of the events it sends, so endpoints
+ * are created on this one and any other is reported. Not imported from the
+ * TypeScript file (this script runs under plain node);
+ * src/lib/payments/stripe-api-version.test.ts fails if the two drift.
+ */
 export const STRIPE_API_VERSION = "2026-07-29.dahlia";
 export const LABEL_KEY = "drvn_endpoint";
 

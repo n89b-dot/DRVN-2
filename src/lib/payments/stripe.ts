@@ -7,6 +7,7 @@ import type { PaymentProvider, PaymentRequest, PaymentResult, RefundOptions, Ref
 import { reportError } from "@/lib/monitoring";
 import { chargeWithinBounds } from "./charge-bounds";
 import { readSettlementRisk } from "./payout-hold";
+import { STRIPE_API_VERSION } from "./stripe-api-version";
 
 /**
  * Stripe, via PaymentIntents.
@@ -26,17 +27,6 @@ import { readSettlementRisk } from "./payout-hold";
  * seller's connected account — see lib/payments/settlement.ts and connect.ts.
  */
 
-/**
- * The Stripe API version every request is made with (N539). Set here rather
- * than left to the SDK's default, so upgrading the `stripe` package can't
- * change what the API accepts or returns without a deliberate edit. It is the
- * version stripe@22.4.0 defaults to, so pinning it changed nothing. The owner
- * scripts (scripts/owner/stripe-webhooks.mjs) pin the same version, and new
- * webhook endpoints are created with it. To move it: read Stripe's changelog
- * for every version in between, change both, and run `npm run test:stripe`.
- */
-export const STRIPE_API_VERSION = "2026-07-29.dahlia" as const;
-
 let client: Stripe | null = null;
 
 export function stripeSecretKey(): string | null {
@@ -47,6 +37,7 @@ function stripe(): Stripe {
   if (!client) {
     const key = stripeSecretKey();
     if (!key) throw new Error("STRIPE_SECRET_KEY is not configured");
+    // Pinned explicitly (N144): the SDK's default would follow the SDK.
     client = new Stripe(key, { apiVersion: STRIPE_API_VERSION, timeout: 10_000, maxNetworkRetries: 0 });
   }
   return client;
