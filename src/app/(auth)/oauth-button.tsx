@@ -3,27 +3,18 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui";
-import { createClient } from "@/lib/supabase/client";
+import { startGoogleSignIn } from "@/lib/google-sign-in";
 
 /**
- * `next` rides in the callback URL rather than being dropped at the provider:
- * OAuth used to always come back to /callback with no destination, so signing
- * in with Google from a listing lost the listing. The callback re-validates it
- * as an internal path before redirecting — the provider is not a trusted
- * source for where to send someone next.
+ * "Continue with Google". The destination travels through the provider and
+ * is re-validated by /callback (see lib/google-sign-in); a failure to start
+ * shows our own copy, never the provider's message.
  */
 export function OAuthButton({ next }: { next?: string }) {
   const [error, setError] = useState<string | null>(null);
 
   async function signInWithGoogle() {
-    const supabase = createClient();
-    const callback = new URL("/callback", window.location.origin);
-    if (next) callback.searchParams.set("next", next);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: callback.toString() },
-    });
-    if (error) setError(error.message);
+    setError(await startGoogleSignIn(next));
   }
 
   return (

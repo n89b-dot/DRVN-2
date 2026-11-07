@@ -6,19 +6,21 @@ import { Button, TextField, UnconfirmedOutcome } from "@/components/ui";
 import { useRecoverableAction } from "@/features/commerce/use-recoverable-action";
 
 import { deleteAccount, type ActionState } from "../garage/actions";
+import { ReconfirmIdentity, type IdentityProof } from "./reconfirm-identity";
 
 const UNCONFIRMED =
   "Couldn't confirm whether your deletion request went through. Reload to check — if it did, you'll be signed out.";
 
 /**
- * Deliberately awkward: two steps, a typed confirmation, and cancel as the
- * prominent choice. The action refuses while orders are in flight so a
+ * Deliberately awkward: two steps, a typed confirmation, fresh proof it's the
+ * owner (the password, or Google again for Google-only members: N41), and
+ * cancel as the prominent choice. The action refuses while orders are in flight so a
  * counterparty is never left stranded mid-trade.
  *
  * A lost response never puts "Delete permanently" back: the request may
  * already be in, so the member reloads to see where it stands.
  */
-export function DeleteAccount() {
+export function DeleteAccount({ proof }: { proof: IdentityProof }) {
   const [state, action, pending] = useRecoverableAction<ActionState>(deleteAccount, UNCONFIRMED);
   const [open, setOpen] = useState(false);
 
@@ -46,6 +48,13 @@ export function DeleteAccount() {
         autoComplete="off"
         placeholder="DELETE"
         className="!max-w-none"
+      />
+      <ReconfirmIdentity
+        id="delete-account-password"
+        proof={proof}
+        returnTo="/settings#danger"
+        disabled={pending}
+        needsGoogle={state.reauth === "oauth"}
       />
       <div className="flex flex-wrap gap-2">
         <Button variant="ghost" onClick={() => setOpen(false)}>

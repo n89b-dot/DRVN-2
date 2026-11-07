@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { capture } from "@/lib/analytics";
 import { reportError } from "@/lib/monitoring";
+import { confirmIdentity } from "@/lib/confirm-identity";
 
 import { decodeVin, decodeVinResult } from "@/lib/vehicles/vpic";
 import { matchCatalogByName, resolveCatalogSelection } from "@/lib/vehicles/catalog";
@@ -23,7 +24,13 @@ import { isKnownPlace } from "@/lib/geo/regions";
 import { postHref } from "@/lib/activity/href";
 import { SUSPENDED_MESSAGE, isSuspended } from "@/lib/suspension";
 
-export type ActionState = { error?: string; ok?: string; href?: string };
+export type ActionState = {
+  error?: string;
+  ok?: string;
+  href?: string;
+  /** Deletion needs fresh proof it's the owner (N41): which kind to offer. */
+  reauth?: "password" | "oauth";
+};
 
 async function requireUser() {
   const supabase = await createClient();
@@ -1277,15 +1284,27 @@ export async function updateProfile(_prev: ActionState, formData: FormData): Pro
  * failed on a foreign-key violation for anyone who had ever traded.
  */
 export async function deleteAccount(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
 
   const confirmation = String(formData.get("confirm") ?? "").trim();
   if (confirmation !== "DELETE") {
     return { error: 'Type DELETE to confirm.' };
   }
+  // N41: typing DELETE proves nothing about who is at the session. The
+  // password typed now, or a Google sign-in moments ago, is checked
+  // server-side before the request is made.
+  const identity = await confirmIdentity(supabase, user, String(formData.get("current_password") ?? ""));
+  if (!identity.ok) return { error: identity.error, reauth: identity.reauth };
 
   const { data, error } = await supabase.rpc("request_account_deletion");
-  if (error) return { error: error.message };
+  if (error) {
+    // N49: the database's wording stays in telemetry.
+    if (error.code === "42501" && /suspended/i.test(error.message ?? "")) {
+      return { error: "Your account is suspended, so deletion can't be requested here yet. Email hello@drvn.app and we'll handle it." };
+    }
+    reportError("[settings] account deletion request failed", { userId: user.id, error });
+    return { error: "Couldn't request deletion. Nothing was changed — try again." };
+  }
   const result = data as unknown as { outcome?: string; job_id?: string; message?: string };
   if (result.outcome !== "cleanup_pending" || !result.job_id) {
     return { error: result.message ?? "Deletion needs review before cleanup can begin." };

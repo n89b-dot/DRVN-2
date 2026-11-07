@@ -14,6 +14,8 @@ import { getPaymentProvider, paymentsAreLive } from "@/lib/payments/provider";
 import { integratedShippingEnabled } from "@/lib/shipping/provider";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { Alert } from "@/components/ui";
+import { googleSignInEnabled } from "@/lib/auth-providers";
+import { authenticatedRecently, signsInWithPassword } from "@/lib/reauthentication";
 
 import { logout } from "@/app/(auth)/actions";
 
@@ -47,6 +49,8 @@ export default async function SettingsPage({
     analyticsEnabled,
     agentOpen,
     { count: agentChatMessages },
+    claims,
+    google,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -77,6 +81,10 @@ export default async function SettingsPage({
     // N125: the stored agent chat, read as the member, for Clear chat under
     // Privacy — whatever the agent's mode or beta steps say.
     supabase.from("agent_messages").select("id", { count: "exact", head: true }).eq("owner_id", user.id),
+    // N41/N45: how this member can confirm it's them — read from the
+    // session's verified claims (no extra round trip; getViewer did the same).
+    supabase.auth.getClaims().then(({ data }) => data?.claims ?? null, () => null),
+    googleSignInEnabled(),
   ]);
   // AG-7: the agent's mode and how many mandates are live, for the Agent
   // section — only while the Agent tab exists for members at all.
@@ -136,6 +144,11 @@ export default async function SettingsPage({
           notification_prefs: profile?.notification_prefs ?? {},
         }}
         logout={logout}
+        identityProof={{
+          usesPassword: signsInWithPassword(claims?.app_metadata),
+          google,
+          confirmedRecently: authenticatedRecently(claims),
+        }}
         privacySection={
           <div className="grid gap-6">
             <AnalyticsConsentForm initialEnabled={analyticsEnabled} />

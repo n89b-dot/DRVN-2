@@ -7,23 +7,32 @@ const mocks = vi.hoisted(() => ({
   signInWithPassword: vi.fn(),
   updateUser: vi.fn(),
   deliverNotification: vi.fn(),
+  confirmIdentity: vi.fn(),
+  allowAction: vi.fn(),
+  resetPasswordForEmail: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
 vi.mock("@/lib/notifications/deliver", () => ({ deliverNotification: mocks.deliverNotification }));
+vi.mock("@/lib/confirm-identity", () => ({ confirmIdentity: mocks.confirmIdentity }));
+vi.mock("@/lib/rate-limit", () => ({
+  allowAction: mocks.allowAction,
+  RATE_LIMITS: { passwordSetupLink: { action: "password-setup-link", limit: 3, windowSeconds: 1800 } },
+}));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: {
       getUser: mocks.getUser,
       signInWithPassword: mocks.signInWithPassword,
       updateUser: mocks.updateUser,
+      resetPasswordForEmail: mocks.resetPasswordForEmail,
     },
   }),
 }));
 
-import { changeEmail, changePassword } from "./account-actions";
+import { changeEmail, changePassword, sendPasswordSetupLink } from "./account-actions";
 
 function emailForm(email: string) {
   const form = new FormData();
@@ -48,6 +57,9 @@ beforeEach(() => {
   mocks.signInWithPassword.mockResolvedValue({ error: null });
   mocks.updateUser.mockResolvedValue({ error: null });
   mocks.deliverNotification.mockResolvedValue("delivered");
+  mocks.confirmIdentity.mockResolvedValue({ ok: true });
+  mocks.allowAction.mockResolvedValue(true);
+  mocks.resetPasswordForEmail.mockResolvedValue({ error: null });
   process.env.NEXT_PUBLIC_SITE_URL = "https://drvn.example";
 });
 
@@ -192,5 +204,76 @@ describe("account setting recovery", () => {
     expect(mocks.signInWithPassword).toHaveBeenCalledOnce();
     expect(mocks.updateUser).not.toHaveBeenCalled();
     expect(mocks.reportError).toHaveBeenCalledOnce();
+  });
+});
+
+// Readiness N41: moving the sign-in email needs fresh proof it's the owner.
+describe("email change re-authentication", () => {
+  it("checks the typed password before asking Supabase to move the email", async () => {
+    const form = emailForm("new@drvn.test");
+    form.set("current_password", "typed-now");
+    await expect(changeEmail({}, form)).resolves.toHaveProperty("ok");
+    expect(mocks.confirmIdentity).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: "user-1" }), "typed-now");
+    expect(mocks.confirmIdentity.mock.invocationCallOrder[0]).toBeLessThan(mocks.updateUser.mock.invocationCallOrder[0]);
+  });
+
+  it("changes nothing without it, and says which proof to offer", async () => {
+    mocks.confirmIdentity.mockResolvedValue({ ok: false, reauth: "oauth", error: "Confirm it's you with Google first, then try again." });
+    await expect(changeEmail({}, emailForm("new@drvn.test"))).resolves.toEqual({
+      error: "Confirm it's you with Google first, then try again.",
+      reauth: "oauth",
+    });
+    expect(mocks.updateUser).not.toHaveBeenCalled();
+  });
+
+  it("answers no-change requests without asking for proof", async () => {
+    await expect(changeEmail({}, emailForm("member@drvn.test"))).resolves.toEqual({ ok: "That address is already your sign-in email." });
+    expect(mocks.confirmIdentity).not.toHaveBeenCalled();
+  });
+});
+
+// Readiness N49: Supabase's wording stays in telemetry.
+describe("account errors", () => {
+  it("shows public copy for a refused email change", async () => {
+    mocks.updateUser.mockResolvedValue({ error: { code: "email_exists", message: "A user with this email address has already been registered" } });
+    await expect(changeEmail({}, emailForm("taken@drvn.test"))).resolves.toEqual({
+      error: "There's already an account with that email. Sign in instead.",
+    });
+    mocks.updateUser.mockResolvedValue({ error: { code: "unexpected_failure", message: "pq: deadlock detected" } });
+    const result = await changeEmail({}, emailForm("other@drvn.test"));
+    expect(result.error).toBe("That didn't go through. Try again in a moment.");
+    expect(mocks.reportError).toHaveBeenCalledWith("[auth] settings email change failed", expect.objectContaining({ userId: "user-1" }));
+  });
+
+  it("shows public copy for a refused password change", async () => {
+    mocks.signInWithPassword
+      .mockResolvedValueOnce({ error: null })
+      .mockResolvedValue({ error: { code: "invalid_credentials" } });
+    mocks.updateUser.mockResolvedValue({ error: { code: "weak_password", message: "Password should contain at least one character of each: abc" } });
+    await expect(changePassword({}, passwordForm("current-pass", "brand-new-pass"))).resolves.toEqual({
+      error: "Pick a stronger password — longer is better.",
+    });
+  });
+});
+
+// Readiness N45: a Google-only member has a way to set a password.
+describe("set-password link", () => {
+  it("emails the account's own address a link that lands on the reset form", async () => {
+    await expect(sendPasswordSetupLink()).resolves.toEqual({ ok: "We've emailed a link to member@drvn.test. Open it to set a password." });
+    expect(mocks.resetPasswordForEmail).toHaveBeenCalledWith("member@drvn.test", {
+      redirectTo: `https://drvn.example/callback?next=${encodeURIComponent("/login/reset")}`,
+    });
+    expect(mocks.allowAction).toHaveBeenCalledWith(expect.objectContaining({ action: "password-setup-link" }), "user:user-1");
+  });
+
+  it("is throttled per member and never leaks provider wording", async () => {
+    mocks.allowAction.mockResolvedValue(false);
+    await expect(sendPasswordSetupLink()).resolves.toEqual({ error: "Too many attempts. Wait a minute and try again." });
+    expect(mocks.resetPasswordForEmail).not.toHaveBeenCalled();
+
+    mocks.allowAction.mockResolvedValue(true);
+    mocks.resetPasswordForEmail.mockResolvedValue({ error: { code: "unexpected_failure", message: "smtp: 550 relay denied" } });
+    const result = await sendPasswordSetupLink();
+    expect(result.error).not.toContain("smtp");
   });
 });

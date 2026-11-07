@@ -6,7 +6,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 /**
  * Fixed-window rate limiting, backed by `consume_rate_limit` in Postgres
  * (migration 0006). Signup, offers, questions, comments and reactions were all
- * unthrottled; this keeps the limiter dependency-free rather than introducing
+ * unthrottled (sign-up's own rule arrived with readiness N42: `signUp` below,
+ * applied in src/app/(auth)/actions.ts); this keeps the limiter dependency-free rather than introducing
  * Redis for it.
  *
  * Checkout and monitoring intake fail closed on infrastructure errors. Other
@@ -61,6 +62,20 @@ export const RATE_LIMITS = {
   /** Also the most reset emails one address can be sent in the window. */
   passwordResetEmailCeiling: { action: "password-reset-email", limit: 10, windowSeconds: 60 * 30 },
   passwordResetNetwork: { action: "password-reset-network", limit: 15, windowSeconds: 60 * 30 },
+  /** Sign-up (N42), keyed the same three ways, and counted before Supabase
+   *  is asked — so before any confirmation email can go out. Every allowed
+   *  attempt can mail a stranger's inbox, so these are tighter than sign-in:
+   *  a few tries for one address from one place, a ceiling on how often one
+   *  address can be mailed at all, and a cap on one network creating many
+   *  accounts (generous enough for a shared office or campus address). */
+  signUp: { action: "sign-up", limit: 3, windowSeconds: 60 * 60 },
+  signUpEmailCeiling: { action: "sign-up-email", limit: 5, windowSeconds: 60 * 60 },
+  signUpNetwork: { action: "sign-up-network", limit: 20, windowSeconds: 60 * 60 },
+  /** Typing the password to confirm a deletion or email change (N41), per
+   *  member: a borrowed session can't be used to guess the password. */
+  reauthenticate: { action: "reauthenticate", limit: 10, windowSeconds: 60 * 15 },
+  /** "Email me a link to set a password" from Settings (N45), per member. */
+  passwordSetupLink: { action: "password-setup-link", limit: 3, windowSeconds: 60 * 30 },
   /** Following notifies the followed member, so it is a spam vector too. */
   follow: { action: "follow", limit: 60, windowSeconds: 60 * 10 },
   fileReport: { action: "report", limit: 5, windowSeconds: 60 * 60 },

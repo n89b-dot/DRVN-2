@@ -120,7 +120,13 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           </Link>
           <AuthClose />
         </div>
-        <div className="authcard">{children}</div>
+        {/* N50: the page's one main landmark. The backdrop is inert and
+            hidden from assistive tech, and the plate row above is the
+            page's navigation, so the card is the content. Pages under this
+            layout must not add a <main> of their own. */}
+        <main id="main" className="authcard">
+          {children}
+        </main>
       </div>
     </div>
   );

@@ -14,8 +14,8 @@ export default async function AdminVerifyPage({ searchParams }: { searchParams: 
   if (role !== "admin" && role !== "viewer") notFound();
   const { data, error } = await client.auth.mfa.listFactors();
   if (error) throw new Error("Could not load authentication factors");
-  return <main className="mx-auto max-w-md p-6"><h1 className="mb-4 text-xl">Verify admin access</h1>
+  return <div className="mx-auto max-w-md p-6"><h1 className="mb-4 text-xl">Verify admin access</h1>
     <p className="mb-4">Use your authenticator app to unlock the admin console. Verification lasts 15 minutes.</p>
     <AdminVerifyForm factorId={data.totp.find((factor) => factor.status === "verified")?.id} next={next} />
-  </main>;
+  </div>;
 }

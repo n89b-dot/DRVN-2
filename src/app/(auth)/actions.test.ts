@@ -5,6 +5,16 @@ const mocks = vi.hoisted(() => ({
   network: vi.fn(),
   signInWithPassword: vi.fn(),
   resetPasswordForEmail: vi.fn(),
+  signUp: vi.fn(),
+  signOut: vi.fn(),
+  getClaims: vi.fn(),
+  getUser: vi.fn(),
+  updateUser: vi.fn(),
+  profileUpdate: vi.fn(),
+  adminInsert: vi.fn(),
+  getBetaAccess: vi.fn(),
+  prepareBetaSignup: vi.fn(),
+  reportError: vi.fn(),
   redirect: vi.fn((path: string) => {
     throw new Error(`redirect:${path}`);
   }),
@@ -13,7 +23,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock("next/headers", () => ({ headers: async () => new Headers({ origin: "https://drvn.example" }) }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/lib/beta-access", () => ({ betaCommerceError: vi.fn(), getBetaAccess: vi.fn(), prepareBetaSignup: vi.fn() }));
+vi.mock("@/lib/beta-access", () => ({ getBetaAccess: mocks.getBetaAccess, prepareBetaSignup: mocks.prepareBetaSignup }));
+vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
+vi.mock("@/lib/revalidate", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/site", () => ({ siteUrl: () => "https://drvn.example" }));
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => ({ from: () => ({ insert: mocks.adminInsert }) }),
+}));
 vi.mock("@/lib/abuse-identity", () => ({ attributedNetworkIdentity: mocks.network }));
 vi.mock("@/lib/rate-limit", () => ({
   allowAction: mocks.allowAction,
@@ -24,16 +40,30 @@ vi.mock("@/lib/rate-limit", () => ({
     passwordReset: { action: "password-reset", limit: 5, windowSeconds: 1800 },
     passwordResetEmailCeiling: { action: "password-reset-email", limit: 10, windowSeconds: 1800 },
     passwordResetNetwork: { action: "password-reset-network", limit: 15, windowSeconds: 1800 },
+    signUp: { action: "sign-up", limit: 3, windowSeconds: 3600 },
+    signUpEmailCeiling: { action: "sign-up-email", limit: 5, windowSeconds: 3600 },
+    signUpNetwork: { action: "sign-up-network", limit: 20, windowSeconds: 3600 },
   },
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
-    auth: { signInWithPassword: mocks.signInWithPassword, resetPasswordForEmail: mocks.resetPasswordForEmail },
-    from: () => ({ select: () => ({ eq: () => ({ single: async () => ({ data: { username: "kaito" } }) }) }) }),
+    auth: {
+      signInWithPassword: mocks.signInWithPassword,
+      resetPasswordForEmail: mocks.resetPasswordForEmail,
+      signUp: mocks.signUp,
+      signOut: mocks.signOut,
+      getClaims: mocks.getClaims,
+      getUser: mocks.getUser,
+      updateUser: mocks.updateUser,
+    },
+    from: () => ({
+      select: () => ({ eq: () => ({ single: async () => ({ data: { username: "kaito" } }) }) }),
+      update: (values: unknown) => ({ eq: () => ({ select: async () => mocks.profileUpdate(values) }) }),
+    }),
   }),
 }));
 
-const { login, requestPasswordReset } = await import("./actions");
+const { completeOnboarding, login, requestPasswordReset, signup, updatePassword } = await import("./actions");
 
 function form(fields: Record<string, string>) {
   const data = new FormData();
@@ -49,7 +79,16 @@ beforeEach(() => {
   mocks.network.mockReturnValue("network:abc");
   mocks.signInWithPassword.mockResolvedValue({ data: { user: { id: "u1" } }, error: null });
   mocks.resetPasswordForEmail.mockResolvedValue({ error: null });
+  mocks.signUp.mockResolvedValue({ data: { user: { id: "new" }, session: null }, error: null });
+  mocks.prepareBetaSignup.mockResolvedValue({ enforced: false });
+  mocks.getBetaAccess.mockResolvedValue({ enforced: false, eligible: true });
+  mocks.updateUser.mockResolvedValue({ error: null });
+  mocks.getUser.mockResolvedValue({ data: { user: { id: "u1", user_metadata: { avatar_url: "https://img.example/a.png" } } } });
+  mocks.profileUpdate.mockReturnValue({ data: [{ id: "u1" }], error: null });
+  mocks.adminInsert.mockResolvedValue({ error: null });
 });
+
+const nowSeconds = () => Math.floor(Date.now() / 1000);
 
 describe("sign-in throttling", () => {
   it("counts the normalized email and the visitor's network before asking Supabase", async () => {
@@ -136,5 +175,129 @@ describe("password reset throttling", () => {
     mocks.allowAction.mockResolvedValue(false);
     await expect(requestPasswordReset({}, form({ email: "a@drvn.test" }))).resolves.toEqual(sent);
     expect(mocks.resetPasswordForEmail).not.toHaveBeenCalled();
+  });
+});
+
+// Readiness N42: sign-up is throttled before anything can email a stranger.
+describe("sign-up throttling", () => {
+  const attempt = () => signup({}, form({ email: " New@DRVN.test ", password: "long-enough-pass" }));
+
+  it("counts the hashed email and the network before the invitation check or Supabase", async () => {
+    await expect(attempt()).rejects.toThrow("redirect:/login?message=check-email");
+    expect(subjects().map(([action]) => action)).toEqual(["sign-up", "sign-up-email", "sign-up-network"]);
+    expect(subjects()[0][1]).toMatch(/^email:[0-9a-f]{64}:network:abc$/);
+    expect(JSON.stringify(subjects())).not.toContain("new@drvn");
+    expect(mocks.allowAction.mock.invocationCallOrder[0]).toBeLessThan(mocks.prepareBetaSignup.mock.invocationCallOrder[0]);
+    expect(mocks.signUp).toHaveBeenCalledOnce();
+  });
+
+  it("sends no confirmation email once any key is exhausted", async () => {
+    for (const exhausted of ["sign-up", "sign-up-email", "sign-up-network"]) {
+      mocks.signUp.mockClear();
+      mocks.prepareBetaSignup.mockClear();
+      mocks.allowAction.mockImplementation(async (rule: { action: string }) => rule.action !== exhausted);
+      await expect(attempt()).resolves.toMatchObject({ error: "Too many sign-up attempts. Wait a while and try again." });
+      expect(mocks.signUp).not.toHaveBeenCalled();
+      expect(mocks.prepareBetaSignup).not.toHaveBeenCalled();
+    }
+  });
+
+  it("keeps the typed email and says nothing about whether it is registered", async () => {
+    mocks.allowAction.mockResolvedValue(false);
+    await expect(attempt()).resolves.toEqual({
+      error: "Too many sign-up attempts. Wait a while and try again.",
+      field: undefined,
+      email: "New@DRVN.test",
+    });
+  });
+
+  it("shows public copy, not Supabase's wording, when sign-up fails", async () => {
+    mocks.signUp.mockResolvedValue({ data: { user: null, session: null }, error: { code: "unexpected_failure", message: "Database error saving new user" } });
+    const result = await attempt();
+    expect(result.error).toBe("That didn't go through. Try again in a moment.");
+    expect(mocks.reportError).toHaveBeenCalledWith("[auth] sign-up failed", expect.anything());
+  });
+});
+
+// Readiness N43: a banned account is told plainly, never to retry.
+describe("sign-in errors", () => {
+  it("gives a banned account the durable access message", async () => {
+    mocks.signInWithPassword.mockResolvedValue({ data: { user: null }, error: { code: "user_banned", message: "User is banned" } });
+    const result = await login({}, form({ email: "gone@drvn.test", password: "pw" }));
+    expect(result.error).toMatch(/can't sign in/);
+    expect(result.error).not.toMatch(/try again|banned/i);
+  });
+});
+
+// Readiness N20: the reset form needs a session opened from an emailed link.
+describe("password reset completion", () => {
+  const reset = () => updatePassword({}, form({ password: "brand-new-pass", confirm: "brand-new-pass" }));
+
+  it("sets the password for a session opened from a reset link just now", async () => {
+    mocks.getClaims.mockResolvedValue({ data: { claims: { sub: "u1", amr: [{ method: "otp", timestamp: nowSeconds() - 60 }] } }, error: null });
+    await expect(reset()).rejects.toThrow("redirect:/home");
+    expect(mocks.updateUser).toHaveBeenCalledWith({ password: "brand-new-pass" });
+  });
+
+  it("refuses an ordinary signed-in session and changes nothing", async () => {
+    mocks.getClaims.mockResolvedValue({ data: { claims: { sub: "u1", amr: [{ method: "password", timestamp: nowSeconds() - 5 }] } }, error: null });
+    await expect(reset()).resolves.toEqual({ error: expect.stringMatching(/fresh reset link/) });
+    expect(mocks.updateUser).not.toHaveBeenCalled();
+  });
+
+  it("refuses a reset session that is over an hour old, and a missing session", async () => {
+    mocks.getClaims.mockResolvedValue({ data: { claims: { sub: "u1", amr: [{ method: "otp", timestamp: nowSeconds() - 2 * 3600 }] } }, error: null });
+    await expect(reset()).resolves.toHaveProperty("error");
+    mocks.getClaims.mockResolvedValue({ data: null, error: { message: "Auth session missing!" } });
+    await expect(reset()).resolves.toEqual({ error: "This reset link has expired. Request a new one." });
+    expect(mocks.updateUser).not.toHaveBeenCalled();
+  });
+
+  it("never shows Supabase's wording when the update fails", async () => {
+    mocks.getClaims.mockResolvedValue({ data: { claims: { sub: "u1", amr: [{ method: "otp", timestamp: nowSeconds() - 60 }] } }, error: null });
+    mocks.updateUser.mockResolvedValue({ error: { code: "unexpected_failure", message: "AuthApiError: internal" } });
+    await expect(reset()).resolves.toEqual({ error: "That didn't go through. Try again in a moment." });
+    mocks.updateUser.mockResolvedValue({ error: { code: "same_password", message: "New password should be different from the old password." } });
+    await expect(reset()).resolves.toEqual({ error: "That's the password you already have." });
+  });
+});
+
+// Readiness N40: an account with no profile row can finish onboarding, or
+// leave, instead of looping.
+describe("onboarding an account with no profile", () => {
+  const finish = () => completeOnboarding({}, form({ username: "Kaito_R", display_name: "Kaito", next: "/garage" }));
+
+  it("updates the existing profile as before", async () => {
+    await expect(finish()).rejects.toThrow("redirect:/garage");
+    expect(mocks.profileUpdate).toHaveBeenCalledWith({ username: "kaito_r", display_name: "Kaito" });
+    expect(mocks.adminInsert).not.toHaveBeenCalled();
+  });
+
+  it("creates the missing profile row instead of pretending an empty update worked", async () => {
+    mocks.profileUpdate.mockReturnValue({ data: [], error: null });
+    await expect(finish()).rejects.toThrow("redirect:/garage");
+    expect(mocks.adminInsert).toHaveBeenCalledWith({
+      id: "u1",
+      username: "kaito_r",
+      display_name: "Kaito",
+      avatar_url: "https://img.example/a.png",
+    });
+  });
+
+  it("reports a taken handle when the created row collides", async () => {
+    mocks.profileUpdate.mockReturnValue({ data: [], error: null });
+    mocks.adminInsert.mockResolvedValue({ error: { code: "23505", message: 'duplicate key value violates unique constraint "profiles_username_key"' } });
+    await expect(finish()).resolves.toEqual({ error: "That username is taken." });
+  });
+
+  it("refuses without creating anything when the existing access check says no, and says how to leave", async () => {
+    mocks.getBetaAccess.mockResolvedValue({ enforced: true, eligible: false });
+    const result = await finish();
+    expect(result.error).toMatch(/Sign out below/);
+    expect(mocks.profileUpdate).not.toHaveBeenCalled();
+    expect(mocks.adminInsert).not.toHaveBeenCalled();
+
+    mocks.getBetaAccess.mockResolvedValue({ enforced: true, eligible: false, unavailable: true });
+    await expect(finish()).resolves.toEqual({ error: "That didn't go through. Try again in a moment." });
   });
 });

@@ -24,6 +24,7 @@ import { DeleteAccount } from "./delete-account";
 import { ExportAccount } from "./export-account";
 import { PaymentMethods } from "./payment-methods";
 import { PasswordSection } from "./password-section";
+import type { IdentityProof } from "./reconfirm-identity";
 import { COUNTRIES, countryByCode } from "@/lib/geo/regions";
 
 type ProfileLink = { label: string; url: string };
@@ -171,8 +172,11 @@ export function SettingsPanel({
   agentSection,
   shippingSection,
   shopSection,
+  identityProof,
 }: {
   profile: SettingsProfile;
+  /** How this member confirms it's them for email change and deletion (N41/N45). */
+  identityProof: IdentityProof;
   logout: () => Promise<void>;
   savedCards: SavedCard[];
   connect: ConnectSummary;
@@ -298,7 +302,7 @@ export function SettingsPanel({
           />
           <DataRow label="Display name" value={profile.display_name || "Not set"} />
           <div className="mt-4 border-t border-[color:var(--rule-soft)] pt-4">
-            <PasswordSection currentEmail={profile.email} />
+            <PasswordSection currentEmail={profile.email} proof={identityProof} />
           </div>
         </section>
         )}
@@ -552,7 +556,7 @@ export function SettingsPanel({
             without your name where the law requires it.
           </p>
           <div className="mt-4">
-            <DeleteAccount />
+            <DeleteAccount proof={identityProof} />
           </div>
         </section>
         )}
