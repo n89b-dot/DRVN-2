@@ -31,6 +31,7 @@ export type AdminAlert = {
     | "recovery_case_opened"
     | "transfer_stuck"
     | "media_cleanup_stuck"
+    | "copyright_notice"
     | "test";
   title: string;
   detail?: string;

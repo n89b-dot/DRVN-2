@@ -56,6 +56,8 @@ export const NOTIFICATION_KINDS: NotificationKind[] = [
   { kind: "account_restored", section: "marketplace", pref: null, source: "app", description: "Your suspension was lifted." },
   { kind: "password_changed", section: "marketplace", pref: null, source: "app", description: "Your password was changed from Settings (readiness 53). Always sent: Supabase Auth's own password-changed email is off unless the project turns it on. Never muted." },
   { kind: "saved_search", section: "marketplace", pref: "saved_searches", source: "app", description: "New inventory matching a saved search with alerts on." },
+  { kind: "copyright_takedown", section: "marketplace", pref: null, source: "app", description: "Your listing or photos were removed after a copyright notice, with the admin's note and how to dispute it (R69-dmca, 20261107231002). Never muted." },
+  { kind: "policy_updated", section: "marketplace", pref: null, source: "trigger", description: "DRVN's Terms or Privacy Policy changed materially: the in-app announcement both pages promise, linking to what changed (announce_policy_update, 20261107231003). Never muted." },
 ];
 
 /** Sanity: the registry's pref mapping and prefKeyForKind must agree. */

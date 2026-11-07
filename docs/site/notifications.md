@@ -104,6 +104,8 @@ Source of truth: `src/lib/notifications/kinds.ts`.
 | `account_restored` | marketplace | always shown | app (deliver.ts) | Your suspension was lifted. |
 | `password_changed` | marketplace | always shown | app (deliver.ts) | Your password was changed from Settings (readiness 53). Always sent: Supabase Auth's own password-changed email is off unless the project turns it on. Never muted. |
 | `saved_search` | marketplace | `saved_searches` | app (deliver.ts) | New inventory matching a saved search with alerts on. |
+| `copyright_takedown` | marketplace | always shown | app (deliver.ts) | Your listing or photos were removed after a copyright notice, with the admin's note and how to dispute it (R69-dmca, 20261107231002). Never muted. |
+| `policy_updated` | marketplace | always shown | DB trigger | DRVN's Terms or Privacy Policy changed materially: the in-app announcement both pages promise, linking to what changed (announce_policy_update, 20261107231003). Never muted. |
 
 <!-- END GENERATED: notification-kinds -->
 

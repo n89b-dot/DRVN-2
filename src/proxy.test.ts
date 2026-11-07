@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/supabase/proxy", () => ({ updateSession: vi.fn(async () => NextResponse.next()) }));
+const session = vi.hoisted(() => ({ update: vi.fn() }));
+const blocked = vi.hoisted(() => ({ keys: vi.fn() }));
+vi.mock("@/lib/supabase/proxy", () => ({ updateSession: session.update }));
+vi.mock("@/lib/copyright/blocked-media", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/copyright/blocked-media")>()),
+  blockedMediaKeys: blocked.keys,
+}));
+session.update.mockImplementation(async () => NextResponse.next());
 
 import { buildContentSecurityPolicy } from "@/lib/csp";
 
-import { proxy } from "./proxy";
+import { config, proxy } from "./proxy";
 
 /** The generated policy as directive → sources. */
 function directives(policy: string): Map<string, string[]> {
@@ -64,5 +71,41 @@ describe("Content Security Policy header (N25)", () => {
     const a = await proxy(new NextRequest("https://drvn.example/"));
     const b = await proxy(new NextRequest("https://drvn.example/"));
     expect(a.headers.get("Content-Security-Policy")).not.toBe(b.headers.get("Content-Security-Policy"));
+  });
+});
+
+// R69-dmca: Next.js keeps resized images for a month and can't evict one, so
+// a photo a copyright takedown removed is refused before the cache answers.
+describe("copyright image gate", () => {
+  const OWNER = "8f6c2a52-3d1e-4b8a-9c3f-2b1d4e5f6a7b";
+  const source = (file: string) => `https://project.supabase.co/storage/v1/object/public/listing-images/${OWNER}/${file}`;
+  const imageRequest = (file: string) =>
+    new NextRequest(`https://drvn.example/_next/image?url=${encodeURIComponent(source(file))}&w=640&q=75`);
+
+  it("runs on optimised images", () => {
+    expect(config.matcher).toContain("/_next/image");
+  });
+
+  it("refuses a taken-down photo with 451 and nothing cacheable", async () => {
+    blocked.keys.mockResolvedValue(new Set([`listing-images/${OWNER}/rehosted.webp`]));
+    session.update.mockClear();
+    const response = await proxy(imageRequest("rehosted.webp"));
+    expect(response.status).toBe(451);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(session.update).not.toHaveBeenCalled();
+  });
+
+  it("passes every other image straight through, with no session work", async () => {
+    blocked.keys.mockResolvedValue(new Set([`listing-images/${OWNER}/rehosted.webp`]));
+    session.update.mockClear();
+    const response = await proxy(imageRequest("own-photo.webp"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("Content-Security-Policy")).toBeNull();
+    expect(session.update).not.toHaveBeenCalled();
+
+    blocked.keys.mockClear();
+    await proxy(new NextRequest("https://drvn.example/_next/image?url=%2Fhero.png&w=640&q=75"));
+    expect(blocked.keys).not.toHaveBeenCalled();
   });
 });

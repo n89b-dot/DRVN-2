@@ -8,7 +8,7 @@ export const metadata = {
   alternates: { canonical: "/privacy" },
 };
 
-const UPDATED = "18 October 2026";
+const UPDATED = "7 November 2026";
 
 /**
  * NOT LEGAL ADVICE — an honest working draft describing what the app actually
@@ -47,7 +47,8 @@ export default function PrivacyPage() {
           <li>
             <strong>Account</strong> — your email address, username and display name, and how you
             sign in (a password, or Google — if you use Google we receive your name and email
-            address from it).
+            address from it). When you confirm you&apos;re 18 or over, we keep when and where you
+            confirmed it — never your date of birth.
           </li>
           <li>
             <strong>Profile</strong> — anything you choose to add: headline, bio, a free-text
@@ -81,6 +82,11 @@ export default function PrivacyPage() {
             your chat with it, with any photos you add. Card numbers are removed from chat messages
             before they&apos;re stored. Photos have their location data removed when you upload
             them.
+          </li>
+          <li>
+            <strong>Copyright notices</strong> — if you send one, your name, contact details,
+            the work and the links you name. We may share the notice with the member whose
+            content it concerns, so they can respond.
           </li>
           <li>
             <strong>Listing imports</strong> — if you import a listing from another site, the link
@@ -315,10 +321,14 @@ export default function PrivacyPage() {
         <h2>Children</h2>
         <p>DRVN is not for under-18s and we don&apos;t knowingly collect their data.</p>
 
-        <h2>Changes</h2>
+        <h2 id="changes">Changes</h2>
         <p>
           We&apos;ll update the date at the top when this changes, and announce anything material in
-          the app.
+          the app: every member gets a notification linking to what changed.
+        </p>
+        <p>
+          <strong>7 November 2026:</strong> we now keep when you confirmed you&apos;re 18 or over,
+          and the details in any copyright notice you send.
         </p>
       </div>
     </>
