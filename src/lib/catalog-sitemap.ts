@@ -31,12 +31,11 @@ export async function catalogSitemap(id: string): Promise<MetadataRoute.Sitemap>
  * Published updates, at their one canonical address (postHref): under the
  * car when there is one, /posts/{id} when there isn't.
  *
- * The anonymous read already leaves out drafts and updates on a private or
- * suspended member's car (the "published activity readable" rule asks the
- * car's own row security). Two things it can't see are dropped here: an
- * update whose car the visitor can't read (no slug to link, and the page
- * would 404), and a carless update by a suspended member, which the post
- * rule doesn't hide but the sitemap shouldn't advertise.
+ * One page is filtered in SQL by sitemap_post_page (20261107150000), under
+ * the visitor's row security: no drafts, no update on a car a visitor can't
+ * read, and nothing by a suspended member, car or no car. The suspension
+ * check runs inside the query because the suspended set, read over the Data
+ * API, is capped at 1,000 rows and would let the rest through.
  */
 async function postsSitemap(
   client: ReturnType<typeof createPublicClient>,
@@ -44,22 +43,10 @@ async function postsSitemap(
   start: number,
   end: number,
 ): Promise<MetadataRoute.Sitemap> {
-  const [posts, suspended] = await Promise.all([
-    client
-      .from("activity_posts")
-      .select("id,car_id,author_id,updated_at,cars(slug)")
-      .not("published_at", "is", null)
-      .order("id")
-      .range(start, end),
-    client.rpc("suspended_profile_ids"),
-  ]);
-  if (posts.error) throw posts.error;
-  if (suspended.error) throw suspended.error;
-  const hidden = new Set<string>(suspended.data ?? []);
-  return (posts.data || []).flatMap((post) => {
-    const car = post.cars as unknown as { slug: string | null } | null;
-    if (hidden.has(post.author_id)) return [];
-    if (post.car_id && !car?.slug) return [];
-    return [{ url: `${base}${postHref({ id: post.id, car })}`, lastModified: post.updated_at }];
-  });
+  const { data, error } = await client.rpc("sitemap_post_page", { p_start: start, p_count: end - start + 1 });
+  if (error) throw error;
+  return (data || []).map((post) => ({
+    url: `${base}${postHref({ id: post.id, carSlug: post.car_slug })}`,
+    lastModified: post.updated_at,
+  }));
 }

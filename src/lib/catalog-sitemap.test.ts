@@ -37,22 +37,30 @@ beforeEach(() => {
   fake = fakeClient({});
 });
 
-it("pages published posts at their canonical address and drops what a visitor can't see", async () => {
+it("filters suspension in SQL, so a 1,001st suspended member's post can't slip through", async () => {
+  // The Data API caps a setof answer at max_rows (1,000). Set up the trap the
+  // app-side filter fell into: 1,001 suspended members, the list capped at
+  // the first 1,000, and a carless post by the one left off. Reading posts
+  // from the table and filtering against that list would publish it.
+  const suspended = Array.from({ length: 1001 }, (_, i) => `suspended-${i}`);
   fake = fakeClient(
     {
       activity_posts: {
         error: null,
+        data: [{ id: "p-leak", car_id: null, author_id: suspended[1000], updated_at: "2026-11-05", cars: null }],
+      },
+    },
+    {
+      suspended_profile_ids: { data: suspended.slice(0, 1000), error: null },
+      // What the SQL page returns: already filtered, under the visitor's row security.
+      sitemap_post_page: {
+        error: null,
         data: [
-          { id: "p-car", car_id: "c1", author_id: "a1", updated_at: "2026-11-01", cars: { slug: "rx7" } },
-          { id: "p-carless", car_id: null, author_id: "a1", updated_at: "2026-11-02", cars: null },
-          // Carless, by a suspended member: the post rule shows it; the sitemap must not.
-          { id: "p-suspended", car_id: null, author_id: "a-suspended", updated_at: "2026-11-03", cars: null },
-          // Its car isn't readable: no slug to link, and the page would 404.
-          { id: "p-hidden-car", car_id: "c-private", author_id: "a2", updated_at: "2026-11-04", cars: null },
+          { id: "p-car", car_slug: "rx7", updated_at: "2026-11-01" },
+          { id: "p-carless", car_slug: null, updated_at: "2026-11-02" },
         ],
       },
     },
-    { suspended_profile_ids: { data: ["a-suspended"], error: null } },
   );
 
   const entries = await catalogSitemap("posts-2");
@@ -61,25 +69,17 @@ it("pages published posts at their canonical address and drops what a visitor ca
     { url: "https://drvn.example/cars/rx7/activity/p-car", lastModified: "2026-11-01" },
     { url: "https://drvn.example/posts/p-carless", lastModified: "2026-11-02" },
   ]);
-  const posts = fake.calls.find((call) => call.table === "activity_posts")!;
-  // Drafts never leave the database: only published updates are asked for.
-  expect(posts.ops).toContainEqual(["not", "published_at", "is", null]);
-  // Page 2 is rows 2000–2999, in a stable order so pages never overlap.
-  expect(posts.ops).toContainEqual(["order", "id"]);
-  expect(posts.ops).toContainEqual(["range", 2 * SITEMAP_PAGE_SIZE, 3 * SITEMAP_PAGE_SIZE - 1]);
-  expect(fake.client.rpc).toHaveBeenCalledWith("suspended_profile_ids");
+  expect(entries.map((entry) => entry.url).join()).not.toContain("p-leak");
+  // Page 2 is rows 2000–2999: one page, never more than the row cap.
+  expect(fake.client.rpc).toHaveBeenCalledWith("sitemap_post_page", { p_start: 2 * SITEMAP_PAGE_SIZE, p_count: SITEMAP_PAGE_SIZE });
+  expect(SITEMAP_PAGE_SIZE).toBeLessThanOrEqual(1000);
+  // Nothing filtered app-side against a capped list.
+  expect(fake.client.rpc).not.toHaveBeenCalledWith("suspended_profile_ids");
+  expect(fake.calls.filter((call) => call.table === "activity_posts")).toEqual([]);
 });
 
-it("throws instead of publishing a post page without the suspension check", async () => {
-  fake = fakeClient(
-    { activity_posts: { data: [{ id: "p1", car_id: null, author_id: "a1", updated_at: "2026-11-01", cars: null }], error: null } },
-    { suspended_profile_ids: { data: null, error: { message: "unavailable" } } },
-  );
-  await expect(catalogSitemap("posts-0")).rejects.toBeTruthy();
-});
-
-it("throws when the post read fails", async () => {
-  fake = fakeClient({ activity_posts: { data: null, error: { message: "unavailable" } } });
+it("throws when the post page read fails", async () => {
+  fake = fakeClient({}, { sitemap_post_page: { data: null, error: { message: "unavailable" } } });
   await expect(catalogSitemap("posts-0")).rejects.toBeTruthy();
 });
 

@@ -7671,6 +7671,14 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      sitemap_post_page: {
+        Args: { p_count: number; p_start: number }
+        Returns: {
+          car_slug: string
+          id: string
+          updated_at: string
+        }[]
+      }
       suggested_builders: {
         Args: { p_limit?: number; p_viewer?: string }
         Returns: {
