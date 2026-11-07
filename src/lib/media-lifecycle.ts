@@ -40,7 +40,9 @@ type AdminClient = ReturnType<typeof createAdminClient>;
  *  error (retry later). */
 export type MediaRemovalOutcome = "removed" | "referenced" | "invalid" | "busy" | "failed";
 
-type ClaimAnswer = { status: "claimed"; token: string } | { status: "referenced" | "busy" | "gone" | "invalid" };
+type ClaimAnswer =
+  | { status: "claimed"; token: string; maybeDeleted: boolean }
+  | { status: "referenced" | "busy" | "gone" | "invalid" };
 
 /**
  * A Storage refusal that guarantees nothing was deleted: the request was
@@ -50,16 +52,24 @@ type ClaimAnswer = { status: "claimed"; token: string } | { status: "referenced"
  * lost the answer, so it must never reopen the object to new references.
  */
 export function isDefinitiveStorageRefusal(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
+  const code = storageStatus(error);
+  return code === 400 || code === 401 || code === 403 || code === 404;
+}
+
+function storageStatus(error: unknown): number | null {
+  if (!error || typeof error !== "object") return null;
   const { status, statusCode } = error as { status?: unknown; statusCode?: unknown };
   const code = typeof status === "number" ? status : Number(statusCode);
-  return code === 400 || code === 401 || code === 403 || code === 404;
+  return Number.isFinite(code) ? code : null;
 }
 
 function readClaim(data: unknown): ClaimAnswer | null {
   if (!data || typeof data !== "object") return null;
-  const { status, token } = data as { status?: unknown; token?: unknown };
-  if (status === "claimed") return typeof token === "string" && token ? { status, token } : null;
+  const { status, token, maybe_deleted } = data as { status?: unknown; token?: unknown; maybe_deleted?: unknown };
+  if (status === "claimed") {
+    // Anything but an explicit false is uncertain: never release on a guess.
+    return typeof token === "string" && token ? { status, token, maybeDeleted: maybe_deleted !== false } : null;
+  }
   return status === "referenced" || status === "busy" || status === "gone" || status === "invalid" ? { status } : null;
 }
 
@@ -115,29 +125,46 @@ export async function removeMediaObject(
 
     if (claim.status === "claimed") {
       const bucket = admin.storage.from(ref.bucket);
-      let { error: removeError } = await bucket.remove([ref.path]);
-      if (removeError && !isDefinitiveStorageRefusal(removeError)) {
-        // Ambiguous: Storage may have deleted it and lost the response. The
-        // delete is idempotent (removing a missing object succeeds), so try
-        // once more; success means the object is gone either way.
+      const hold = { p_bucket: ref.bucket, p_path: ref.path, p_token: claim.token };
+      // Uncertainty is sticky. If this claim was taken over from a holder
+      // that never finished, or any attempt here has an unknown outcome, the
+      // object may already be gone: from then on the claim is never
+      // released, only completed once a delete is confirmed. It is recorded
+      // on the claim row, so it outlives this run and any lease takeover.
+      let maybeDeleted = claim.maybeDeleted;
+      let removeError: unknown = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
         ({ error: removeError } = await bucket.remove([ref.path]));
+        if (!removeError || isDefinitiveStorageRefusal(removeError)) break;
+        // Unknown outcome (lost response, timeout, 5xx): record it before
+        // anything else, then repeat the idempotent delete once.
+        if (!maybeDeleted) {
+          maybeDeleted = true;
+          const marked = await admin.rpc("mark_media_deletion_uncertain", hold);
+          if (marked.error) reportError("[media-gc] uncertain mark failed", { bucket: ref.bucket, error: marked.error });
+        }
       }
-      if (removeError) {
-        if (isDefinitiveStorageRefusal(removeError)) {
-          // Nothing was deleted: release OUR claim so it can be used again.
-          const released = await admin.rpc("release_media_claim", { p_bucket: ref.bucket, p_path: ref.path, p_token: claim.token });
+      // A bucket that doesn't exist holds no object: when the object may have
+      // gone already, "not found" confirms it.
+      const confirmedGone =
+        !removeError || (maybeDeleted && isDefinitiveStorageRefusal(removeError) && storageStatus(removeError) === 404);
+      if (!confirmedGone) {
+        if (!maybeDeleted) {
+          // A definitive refusal and no attempt that might have deleted it:
+          // the object is still there, so release OUR claim.
+          const released = await admin.rpc("release_media_claim", hold);
           if (released.error) reportError("[media-gc] claim release failed", { bucket: ref.bucket, error: released.error });
         } else {
-          // Still ambiguous: KEEP the claim. The object may already be gone,
-          // so nothing may attach to it; a later run takes the claim over
-          // when its lease ends, repeats the idempotent delete and completes.
-          reportError("[media-gc] storage delete outcome unknown; claim kept", { bucket: ref.bucket, removeError });
+          // The object may be gone: KEEP the claim, so nothing attaches to
+          // it. A later run takes it over after the lease, repeats the
+          // delete and completes.
+          reportError("[media-gc] storage delete unconfirmed; claim kept", { bucket: ref.bucket, removeError });
         }
         if (options.strict) throw new Error("Storage remove failed");
         reportError("[media-gc] storage remove failed", { bucket: ref.bucket, removeError });
         return "failed";
       }
-      const completed = await admin.rpc("complete_media_deletion", { p_bucket: ref.bucket, p_path: ref.path, p_token: claim.token });
+      const completed = await admin.rpc("complete_media_deletion", hold);
       if (completed.error || completed.data !== true) {
         reportError("[media-gc] claim completion failed", { bucket: ref.bucket, error: completed.error });
       }
@@ -215,6 +242,8 @@ export type CleanupRun = {
   failed: number;
   /** Rows that just used their last attempt; an operator alert went out. */
   exhausted: number;
+  /** The deadline came before the batch was done; the rest wait. */
+  outOfTime?: boolean;
 };
 
 /**
@@ -226,7 +255,15 @@ export type CleanupRun = {
  * alert goes out.
  */
 export async function processMediaCleanupQueue(
-  options: { ownerId?: string; limit?: number; admin?: AdminClient; seen?: Set<string>; now?: () => number } = {}
+  options: {
+    ownerId?: string;
+    limit?: number;
+    admin?: AdminClient;
+    seen?: Set<string>;
+    now?: () => number;
+    /** Epoch ms after which no new object is started. */
+    deadline?: number;
+  } = {}
 ): Promise<CleanupRun> {
   const admin = options.admin ?? createAdminClient();
   const now = options.now ?? Date.now;
@@ -243,6 +280,12 @@ export async function processMediaCleanupQueue(
   if (error) throw new Error("Media cleanup queue unavailable");
 
   for (const row of data ?? []) {
+    // Checked before each object, not each batch: in a Storage outage one
+    // object can take tens of seconds, and a batch is hundreds.
+    if (options.deadline !== undefined && now() >= options.deadline) {
+      run.outOfTime = true;
+      break;
+    }
     // At most once per invocation: a caller draining several batches passes
     // one `seen` set, and every processed row is either dequeued or deferred.
     const key = `${row.bucket}/${row.path}`;

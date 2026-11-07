@@ -29,8 +29,13 @@ import { cronAuthorized } from "@/lib/cron-auth";
 
 const STALE_AFTER_MS = 48 * 60 * 60 * 1000;
 const BATCH = 200;
-// Leaves the staged sweep most of maxDuration (300 s).
-const CLEANUP_BUDGET_MS = 150_000;
+// The run has maxDuration (300 s). One object can take ~45 s in a Storage
+// outage (the claim, two 10 s delete timeouts, bookkeeping), and deadlines are
+// checked before each object, so a new object starts only while there is
+// still room for it: the cleanup queue until 120 s, the staged sweep until
+// 230 s, leaving the rest for calls in flight and the response.
+const CLEANUP_DEADLINE_MS = 120_000;
+const SWEEP_DEADLINE_MS = 230_000;
 
 async function run(request: Request) {
   if (!process.env.CRON_SECRET) {
@@ -41,23 +46,25 @@ async function run(request: Request) {
     return new Response(null, { status: 404 });
   }
 
+  const started = Date.now();
   try {
     const admin = createAdminClient();
     const cutoff = new Date(Date.now() - STALE_AFTER_MS).toISOString();
 
     await ensureMediaStorageOrigin(admin);
-    // Drain the deleted-content queue in batches within a time budget, so a
+    // Drain the deleted-content queue in batches until its deadline, so a
     // backlog still clears within the day the privacy page promises. Stop
     // early when a batch makes no progress (only busy or failing rows left).
-    const started = Date.now();
     const cleanup = { scanned: 0, removed: 0, retained: 0, rejected: 0, busy: 0, failed: 0, exhausted: 0 };
+    let outOfTime = false;
     // Each queued object at most once per run (failures are deferred anyway).
     const seen = new Set<string>();
     for (;;) {
-      const batch = await processMediaCleanupQueue({ admin, limit: BATCH, seen });
+      const batch = await processMediaCleanupQueue({ admin, limit: BATCH, seen, deadline: started + CLEANUP_DEADLINE_MS });
       for (const key of Object.keys(cleanup) as (keyof typeof cleanup)[]) cleanup[key] += batch[key];
+      if (batch.outOfTime) outOfTime = true;
       const progressed = batch.removed + batch.retained + batch.rejected;
-      if (batch.scanned < BATCH || progressed === 0 || Date.now() - started > CLEANUP_BUDGET_MS) break;
+      if (batch.outOfTime || batch.scanned < BATCH || progressed === 0) break;
     }
 
     const { data: stale, error } = await admin
@@ -74,6 +81,11 @@ async function run(request: Request) {
     let skipped = 0;
     let rejected = 0;
     for (const row of stale ?? []) {
+      // Checked before each object: the rest wait for the next run.
+      if (Date.now() >= started + SWEEP_DEADLINE_MS) {
+        outOfTime = true;
+        break;
+      }
       const outcome = await removeMediaObject({ bucket: row.bucket, path: row.path }, row.owner_id, { admin });
       if (outcome === "removed") {
         // removeMediaObject already deleted the staged row.
@@ -93,15 +105,16 @@ async function run(request: Request) {
         if (dropped.error) throw dropped.error;
         rejected += 1;
       } else {
-        // Busy (another remover holds it), or a transient storage or lookup error — logged inside the helper; left
-        // for the next pass rather than dropped on the floor.
+        // Busy (another remover holds it), or a transient storage or lookup
+        // error — logged inside the helper; left for the next pass rather
+        // than dropped on the floor.
         skipped += 1;
       }
     }
 
     const failing = skipped + cleanup.failed;
     return Response.json(
-      { scanned: stale?.length ?? 0, removed, healed, skipped, rejected, cleanup },
+      { scanned: stale?.length ?? 0, removed, healed, skipped, rejected, cleanup, outOfTime },
       { status: failing ? 503 : 200 }
     );
   } catch (error) {

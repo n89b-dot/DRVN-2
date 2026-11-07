@@ -509,9 +509,36 @@ begin
   if public.release_media_claim('car-images', photo, token_a) or public.complete_media_deletion('car-images', photo, token_a) then
     raise exception 'FAIL 7: an expired token still controlled the claim';
   end if;
+  -- Fourth review: the old holder may have deleted it, so the takeover is
+  -- uncertain, and an uncertain claim is never released, even by its holder.
+  if not (claim ->> 'maybe_deleted')::boolean
+     or not exists (select 1 from private.media_deletion_claims where bucket = 'car-images' and path = photo and maybe_deleted) then
+    raise exception 'FAIL 7: a lease takeover did not record that the object may be gone';
+  end if;
+  if public.release_media_claim('car-images', photo, token_b) then
+    raise exception 'FAIL 7: an uncertain claim was released after a takeover';
+  end if;
+  if not public.complete_media_deletion('car-images', photo, token_b) then
+    raise exception 'FAIL 7: the new holder could not complete a confirmed delete';
+  end if;
+  -- An unknown outcome recorded by the holder sticks the same way.
+  photo := seller || '/unknown.webp';
+  claim := public.claim_media_deletion('car-images', photo);
+  token_a := (claim ->> 'token')::uuid;
+  if (claim ->> 'maybe_deleted')::boolean then
+    raise exception 'FAIL 7: a fresh claim started out uncertain';
+  end if;
+  if not public.mark_media_deletion_uncertain('car-images', photo, token_a)
+     or public.mark_media_deletion_uncertain('car-images', photo, gen_random_uuid()) then
+    raise exception 'FAIL 7: only the holder may record an unknown outcome';
+  end if;
+  if public.release_media_claim('car-images', photo, token_a) then
+    raise exception 'FAIL 7: a claim with an unknown outcome was released';
+  end if;
   if has_function_privilege('authenticated', 'public.claim_media_deletion(text,text)', 'execute')
      or has_function_privilege('anon', 'public.release_media_claim(text,text,uuid)', 'execute')
-     or has_function_privilege('authenticated', 'public.complete_media_deletion(text,text,uuid)', 'execute') then
+     or has_function_privilege('authenticated', 'public.complete_media_deletion(text,text,uuid)', 'execute')
+     or has_function_privilege('authenticated', 'public.mark_media_deletion_uncertain(text,text,uuid)', 'execute') then
     raise exception 'FAIL 7: claims are callable by a client role';
   end if;
   raise notice 'PASS 7: one remover holds an object''s claim by token; reference writes refuse a claimed object (N12 race)';

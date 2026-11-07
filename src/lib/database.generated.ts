@@ -6928,6 +6928,10 @@ export type Database = {
         }[]
       }
       mark_due_transfer_intents: { Args: never; Returns: number }
+      mark_media_deletion_uncertain: {
+        Args: { p_bucket: string; p_path: string; p_token: string }
+        Returns: boolean
+      }
       mark_order_dispatched: {
         Args: {
           p_actor: string

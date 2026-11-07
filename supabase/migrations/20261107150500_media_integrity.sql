@@ -589,13 +589,18 @@ create table if not exists private.media_deletion_claims (
   path         text not null,
   token        uuid not null,
   state        text not null check (state in ('active', 'done')),
+  -- Sticky: once any attempt on this claim may have deleted the object (an
+  -- unknown Storage outcome, or a holder whose lease ran out), the claim can
+  -- never be released, only completed once a delete is confirmed.
+  maybe_deleted boolean not null default false,
   claimed_at   timestamptz not null default now(),
   completed_at timestamptz,
   primary key (bucket, path)
 );
 revoke all on private.media_deletion_claims from public, anon, authenticated;
 
--- {"status": "claimed", "token": <uuid>} — delete it, then complete;
+-- {"status": "claimed", "token": <uuid>, "maybe_deleted": bool} — delete it,
+-- then complete;
 -- "referenced" — keep it; "busy" — another remover holds it, try later;
 -- "gone" — already deleted (a completed claim); "invalid" — not nameable.
 create or replace function public.claim_media_deletion(p_bucket text, p_path text)
@@ -620,17 +625,23 @@ begin
   if found and v_claim.claimed_at > now() - interval '10 minutes' then
     return jsonb_build_object('status', 'busy');
   end if;
+  if found then
+    -- Lease takeover. The previous holder neither completed nor released, so
+    -- its delete may have happened: the claim stays and becomes uncertain
+    -- (no reference could have been added while it was held).
+    update private.media_deletion_claims
+       set token = v_token, claimed_at = now(), maybe_deleted = true
+     where bucket = p_bucket and path = p_path;
+    return jsonb_build_object('status', 'claimed', 'token', v_token, 'maybe_deleted', true);
+  end if;
   -- A fresh statement after the lock: it sees any reference committed by a
   -- writer that held the lock before us.
   if public.media_object_referenced(p_bucket, p_path) then
-    delete from private.media_deletion_claims where bucket = p_bucket and path = p_path and state = 'active';
     return jsonb_build_object('status', 'referenced');
   end if;
   insert into private.media_deletion_claims (bucket, path, token, state, claimed_at)
-    values (p_bucket, p_path, v_token, 'active', now())
-    on conflict (bucket, path) do update
-      set token = excluded.token, state = 'active', claimed_at = excluded.claimed_at, completed_at = null;
-  return jsonb_build_object('status', 'claimed', 'token', v_token);
+    values (p_bucket, p_path, v_token, 'active', now());
+  return jsonb_build_object('status', 'claimed', 'token', v_token, 'maybe_deleted', false);
 end;
 $$;
 revoke all on function public.claim_media_deletion(text, text) from public, anon, authenticated;
@@ -655,8 +666,29 @@ $$;
 revoke all on function public.complete_media_deletion(text, text, uuid) from public, anon, authenticated;
 grant execute on function public.complete_media_deletion(text, text, uuid) to service_role;
 
--- The Storage delete failed: the object is still there, so let it be used
--- again. Only the holder's token releases; returns whether it did.
+-- The holder saw a Storage outcome it can't be sure of: record that the
+-- object may be gone, durably, before anything else. Returns whether it did.
+create or replace function public.mark_media_deletion_uncertain(p_bucket text, p_path text, p_token uuid)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  update private.media_deletion_claims
+     set maybe_deleted = true
+   where bucket = p_bucket and path = p_path and token = p_token and state = 'active';
+  return found;
+end;
+$$;
+revoke all on function public.mark_media_deletion_uncertain(text, text, uuid) from public, anon, authenticated;
+grant execute on function public.mark_media_deletion_uncertain(text, text, uuid) to service_role;
+
+-- Storage refused the delete outright and no attempt on this claim had an
+-- unknown outcome: the object is still there, so let it be used again. Only
+-- the holder's token releases, never an uncertain claim; returns whether it
+-- did.
 create or replace function public.release_media_claim(p_bucket text, p_path text, p_token uuid)
 returns boolean
 language plpgsql
@@ -666,7 +698,7 @@ set search_path = public, pg_temp
 as $$
 begin
   delete from private.media_deletion_claims
-   where bucket = p_bucket and path = p_path and token = p_token and state = 'active';
+   where bucket = p_bucket and path = p_path and token = p_token and state = 'active' and not maybe_deleted;
   return found;
 end;
 $$;

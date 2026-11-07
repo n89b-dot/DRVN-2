@@ -14,7 +14,7 @@ const remove = vi.fn<(paths: string[]) => Promise<{ error: unknown }>>(async () 
 // claim_media_deletion answers {status: "claimed", token} when nothing
 // references the object, {status: "referenced"} when something does.
 type RpcResult = { data: unknown; error: unknown };
-const claimed = (referenced: boolean) => (referenced ? { status: "referenced" } : { status: "claimed", token: "token-1" });
+const claimed = (referenced: boolean) => (referenced ? { status: "referenced" } : { status: "claimed", token: "token-1", maybe_deleted: false });
 const defaultRpc = async (name: string): Promise<RpcResult> => {
   if (name === "claim_media_deletion") return { data: state.rpcError ? null : claimed(Boolean(state.referenced)), error: state.rpcError };
   if (name === "complete_media_deletion" || name === "release_media_claim") return { data: true, error: null };
@@ -170,7 +170,8 @@ describe("removeMediaObject — claim before delete (N12 race)", () => {
  * the interleaving is fixed, not timed.
  */
 describe("two removers of one object (claim tokens)", () => {
-  type Claim = { token: string; state: "active" | "done" };
+  /** Mirrors private.media_deletion_claims: one row per object. */
+  type Claim = { token: string; state: "active" | "done"; maybeDeleted?: boolean; expired?: boolean };
   let claims: Map<string, Claim>;
   let references: Set<string>;
   let next: number;
@@ -185,16 +186,27 @@ describe("two removers of one object (claim tokens)", () => {
       const existing = claims.get(k);
       if (name === "claim_media_deletion") {
         if (existing?.state === "done") return { data: { status: "gone" }, error: null };
-        if (existing) return { data: { status: "busy" }, error: null };
+        if (existing && !existing.expired) return { data: { status: "busy" }, error: null };
+        if (existing) {
+          // Lease takeover: the old holder may have deleted it — uncertain.
+          const token = `t${++next}`;
+          claims.set(k, { token, state: "active", maybeDeleted: true });
+          return { data: { status: "claimed", token, maybe_deleted: true }, error: null };
+        }
         if (references.has(k)) return { data: { status: "referenced" }, error: null };
         const token = `t${++next}`;
-        claims.set(k, { token, state: "active" });
-        return { data: { status: "claimed", token }, error: null };
+        claims.set(k, { token, state: "active", maybeDeleted: false });
+        return { data: { status: "claimed", token, maybe_deleted: false }, error: null };
       }
       const held = existing?.state === "active" && existing.token === args.p_token;
-      if (name === "release_media_claim") {
-        if (held) claims.delete(k);
+      if (name === "mark_media_deletion_uncertain") {
+        if (held) existing!.maybeDeleted = true;
         return { data: held, error: null };
+      }
+      if (name === "release_media_claim") {
+        const released = held && !existing!.maybeDeleted;
+        if (released) claims.delete(k);
+        return { data: released, error: null };
       }
       if (name === "complete_media_deletion") {
         if (held) existing!.state = "done";
@@ -240,7 +252,7 @@ describe("two removers of one object (claim tokens)", () => {
     expect((await rpc("release_media_claim", { ...{ p_bucket: photo.bucket, p_path: photo.path }, p_token: "t-stale" })).data).toBe(false);
     finishA({ error: null });
     expect(await a).toBe("removed");
-    expect(claims.get(`${photo.bucket}/${photo.path}`)).toEqual({ token: "t1", state: "done" });
+    expect(claims.get(`${photo.bucket}/${photo.path}`)).toMatchObject({ token: "t1", state: "done" });
     expect(await removeMediaObject(photo, ME)).toBe("removed");
     expect(remove).toHaveBeenCalledTimes(1);
   });
@@ -276,7 +288,7 @@ describe("two removers of one object (claim tokens)", () => {
     expect(await removeMediaObject(evidence, ME)).toBe("removed");
     expect(remove).toHaveBeenCalledTimes(2);
     expect(rpc.mock.calls.map(([name]) => name)).not.toContain("release_media_claim");
-    expect(claims.get(k)).toEqual({ token: "t1", state: "done" });
+    expect(claims.get(k)).toMatchObject({ token: "t1", state: "done" });
     expect(() => attach(k)).toThrow(/removed from storage/);
   });
 
@@ -286,16 +298,71 @@ describe("two removers of one object (claim tokens)", () => {
     remove.mockResolvedValueOnce(lostResponse()).mockResolvedValueOnce(lostResponse());
     expect(await removeMediaObject(evidence, ME)).toBe("failed");
     expect(rpc.mock.calls.map(([name]) => name)).not.toContain("release_media_claim");
-    expect(claims.get(k)).toEqual({ token: "t1", state: "active" });
+    expect(claims.get(k)).toEqual({ token: "t1", state: "active", maybeDeleted: true });
     // addDisputeEvidence now: refused, the object may already be gone.
     expect(() => attach(k)).toThrow(/removed from storage/);
     // Within the lease a second remover is busy; once the lease ends (the
     // database's takeover), a run repeats the delete and completes.
     expect(await removeMediaObject(evidence, ME)).toBe("busy");
-    claims.delete(k);
+    claims.get(k)!.expired = true;
     expect(await removeMediaObject(evidence, ME)).toBe("removed");
-    expect(claims.get(k)).toEqual({ token: "t2", state: "done" });
+    expect(claims.get(k)).toMatchObject({ token: "t2", state: "done" });
     expect(references.has(k)).toBe(false);
+  });
+
+  /**
+   * Codex P1 (fourth review): an unknown outcome followed by a 403 or 404
+   * used to release the claim, as if the refusal proved nothing was
+   * deleted. Uncertainty is sticky now, on the claim row: it survives the
+   * retry and a lease takeover, and an uncertain claim is never released.
+   */
+  const forbidden = () => ({ error: { message: "Forbidden", status: 403, statusCode: "403" } });
+  const notFound = () => ({ error: { message: "Bucket not found", status: 404, statusCode: "404" } });
+
+  it("unknown, then 403, in the same run: the claim is kept and marked uncertain, never released", async () => {
+    const evidence = { bucket: "dispute-evidence", path: `${ME}/order/u403.jpg` };
+    const k = `${evidence.bucket}/${evidence.path}`;
+    remove.mockResolvedValueOnce(lostResponse()).mockResolvedValueOnce(forbidden());
+    expect(await removeMediaObject(evidence, ME)).toBe("failed");
+    const calls = rpc.mock.calls.map(([name]) => name);
+    expect(calls).toContain("mark_media_deletion_uncertain");
+    expect(calls).not.toContain("release_media_claim");
+    expect(claims.get(k)).toEqual({ token: "t1", state: "active", maybeDeleted: true });
+    expect(() => attach(k)).toThrow(/removed from storage/);
+  });
+
+  it("unknown in run 1, a refusal after the takeover in run 2: still kept, and the database would refuse a release", async () => {
+    const evidence = { bucket: "dispute-evidence", path: `${ME}/order/takeover.jpg` };
+    const k = `${evidence.bucket}/${evidence.path}`;
+    // Run 1: both attempts lose their response.
+    remove.mockResolvedValueOnce(lostResponse()).mockResolvedValueOnce(lostResponse());
+    expect(await removeMediaObject(evidence, ME)).toBe("failed");
+    // Run 2, after the lease: takeover hands a new token, still uncertain;
+    // Storage now refuses outright.
+    claims.get(k)!.expired = true;
+    rpc.mockClear();
+    remove.mockResolvedValueOnce(forbidden());
+    expect(await removeMediaObject(evidence, ME)).toBe("failed");
+    expect(rpc.mock.calls.map(([name]) => name)).not.toContain("release_media_claim");
+    expect(claims.get(k)).toEqual({ token: "t2", state: "active", maybeDeleted: true });
+    expect((await rpc("release_media_claim", { p_bucket: evidence.bucket, p_path: evidence.path, p_token: "t2" })).data).toBe(false);
+    expect(() => attach(k)).toThrow(/removed from storage/);
+  });
+
+  it("an uncertain claim completes once the delete is confirmed, including a not-found", async () => {
+    const evidence = { bucket: "dispute-evidence", path: `${ME}/order/u404.jpg` };
+    const k = `${evidence.bucket}/${evidence.path}`;
+    remove.mockResolvedValueOnce(lostResponse()).mockResolvedValueOnce(notFound());
+    expect(await removeMediaObject(evidence, ME)).toBe("removed");
+    expect(claims.get(k)).toMatchObject({ state: "done", maybeDeleted: true });
+  });
+
+  it("a refusal with no uncertainty still releases: the object is untouched", async () => {
+    const photo = { bucket: "car-images", path: `${ME}/car/refused.webp` };
+    remove.mockResolvedValueOnce(forbidden());
+    expect(await removeMediaObject(photo, ME)).toBe("failed");
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(claims.has(`${photo.bucket}/${photo.path}`)).toBe(false);
   });
 
   it("treats only explicit 4xx refusals as 'nothing was deleted'", () => {
@@ -399,6 +466,26 @@ describe("processMediaCleanupQueue (N51)", () => {
     expect(cleanupBackoffMs(1)).toBeGreaterThan(10 * 60_000);
     expect(cleanupBackoffMs(2)).toBe(2 * cleanupBackoffMs(1));
     expect(cleanupBackoffMs(20)).toBe(24 * 60 * 60_000);
+  });
+
+  /**
+   * Codex P2 (fourth review): the time budget was checked only between
+   * batches of 200, so in a Storage outage one batch outran the job's 300 s
+   * and the staged sweep never ran. The deadline is checked before each
+   * object now.
+   */
+  it("stops starting objects at the deadline, leaving the rest queued and untouched", async () => {
+    let clock = 0;
+    state.queue = Array.from({ length: 10 }, (_, i) => ({ bucket: "car-images", path: `${ME}/car/${i}.webp`, owner_id: ME, attempts: 0 }));
+    // Every delete takes 20 s (an outage's timeout) and then succeeds.
+    remove.mockImplementation(async () => {
+      clock += 20_000;
+      return { error: null };
+    });
+    const run = await processMediaCleanupQueue({ now: () => clock, deadline: 50_000 });
+    // Started at 0 s, 20 s and 40 s; at 60 s the deadline has passed.
+    expect(run).toMatchObject({ scanned: 3, removed: 3, outOfTime: true });
+    expect(rpc.mock.calls.filter(([name]) => name === "claim_media_deletion")).toHaveLength(3);
   });
 
   it("alerts operators, once per object, when the last attempt fails", async () => {
