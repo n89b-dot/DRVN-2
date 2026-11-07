@@ -12,10 +12,14 @@ on:
         default: false
         type: boolean
 
-# A newer push supersedes an in-flight run on the same ref.
+# On a pull request, a newer push supersedes the run in flight. On main, a run
+# always finishes: cancelling it on every merge left main with almost no finished
+# run on a busy day (7 Nov: 15 cancelled, 3 finished), so no merge got proof.
+# GitHub keeps one run going and one waiting per ref, and a newer push replaces
+# the waiting one, so a burst of merges is checked together by the next run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Least privilege (the repository is public): every job's GITHUB_TOKEN can
 # only read the code. A job that needs more declares it on the job itself
