@@ -50,7 +50,11 @@ async function serviceClient() {
 
 /** Fills the checkout's shipping step (plus the guest email when present). */
 async function fillCheckout(page: Page, email: string | null) {
-  if (email) await page.locator('input[name="email"]').fill(email);
+  if (email) {
+    await page.locator('input[name="email"]').fill(email);
+    // R69-age: a guest confirms 18+ before the order (and its email) exists.
+    await page.getByLabel(/18 or over/i).check();
+  }
   await page.locator('input[name="ship_name"]').fill("Guest Buyer");
   await page.locator('input[name="ship_line1"]').fill("1 Test Street");
   await page.locator('input[name="ship_city"]').fill("Reno");

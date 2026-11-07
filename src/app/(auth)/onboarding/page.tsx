@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { hasAgeConfirmation } from "@/lib/age-confirmation-record";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 import { createClient } from "@/lib/supabase/server";
 
@@ -36,7 +37,10 @@ export default async function OnboardingPage({
 
   // Validated here as well as in the action — the hidden field is user input
   // by the time it comes back.
+  // R69-age: an account that confirmed at sign-up or a guest checkout isn't
+  // asked twice; a first Google sign-in is asked here.
+  const askAge = !(await hasAgeConfirmation(user.id));
   return (
-    <OnboardingForm email={user.email ?? ""} next={safeRedirectPath(next, "") || undefined} />
+    <OnboardingForm email={user.email ?? ""} next={safeRedirectPath(next, "") || undefined} askAge={askAge} />
   );
 }

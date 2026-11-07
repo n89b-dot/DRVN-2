@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   paymentMapWrite: vi.fn(),
   paymentMapRead: vi.fn(),
   bindPayment: vi.fn(),
+  recordAge: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -34,6 +35,7 @@ vi.mock("@/lib/abuse-identity", () => ({ abuseIdentity: vi.fn() }));
 vi.mock("@/lib/cart", () => ({ getCartIds: mocks.cartIds, removeCartIds: mocks.cartRemove }));
 vi.mock("@/lib/guest-checkout", () => ({ guestCheckoutIdentity: vi.fn(), isPlausibleEmail: vi.fn(), setGuestOrders: vi.fn() }));
 vi.mock("./guest-buyer", () => ({ resolveGuestBuyer: vi.fn(), sendOrderAccessLink: vi.fn() }));
+vi.mock("@/lib/age-confirmation-record", () => ({ recordAgeConfirmation: mocks.recordAge }));
 vi.mock("./checkout-shipping", () => ({
   freezeOrderShipping: vi.fn(),
   hashDestination: vi.fn().mockReturnValue("destination-hash"),
@@ -102,6 +104,8 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 import { checkoutCart, completeReservedOrder } from "./checkout-actions";
 import { getStripeCustomerId } from "@/lib/payments/customers";
+import { isPlausibleEmail } from "@/lib/guest-checkout";
+import { resolveGuestBuyer } from "./guest-buyer";
 
 const pendingOfferOrder = {
   id: "order-1",
@@ -475,4 +479,35 @@ it("reserves nothing when the saved Stripe customer can't be read", async () => 
   expect(result.error).toContain("Nothing was charged");
   expect(mocks.purchaseBegin).not.toHaveBeenCalled();
   expect(mocks.createPayment).not.toHaveBeenCalled();
+});
+
+// R69-age: a guest confirms 18+ before any account is made or emailed.
+it("guest checkout refuses a post without the 18+ box and creates no account", async () => {
+  mocks.auth.mockResolvedValue({ data: { user: null } });
+  mocks.beta.mockResolvedValue({ enforced: false, eligible: true });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  vi.mocked(isPlausibleEmail).mockReturnValue(true);
+  const form = cartCheckoutForm();
+  form.set("email", "guest@drvn.test");
+
+  await expect(checkoutCart({}, form)).resolves.toEqual({ error: "Confirm you're 18 or over to continue." });
+  expect(resolveGuestBuyer).not.toHaveBeenCalled();
+  expect(mocks.recordAge).not.toHaveBeenCalled();
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
+});
+
+it("guest checkout records the 18+ confirmation against the guest account before the order", async () => {
+  mocks.auth.mockResolvedValue({ data: { user: null } });
+  mocks.beta.mockResolvedValue({ enforced: false, eligible: true });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  vi.mocked(isPlausibleEmail).mockReturnValue(true);
+  vi.mocked(resolveGuestBuyer).mockResolvedValue({ buyer: { id: "guest-1", created: false } });
+  mocks.recordAge.mockResolvedValue(false);
+  const form = cartCheckoutForm();
+  form.set("email", "guest@drvn.test");
+  form.set("age_confirmed", "yes");
+
+  await expect(checkoutCart({}, form)).resolves.toEqual({ error: "We couldn't start that purchase. Nothing was charged." });
+  expect(mocks.recordAge).toHaveBeenCalledWith("guest-1", "guest_checkout");
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
 });
