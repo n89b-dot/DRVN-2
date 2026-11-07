@@ -8,10 +8,11 @@ import { cx } from "@/lib/format";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import { saveShowcase, type ShowcasePinInput } from "../../actions";
+import { nudgePin, pinFromActivation, pinPositionLabel } from "./showcase-position";
 
 /**
  * Showcase editor (brief §U) — an OPTIONAL advanced section: pick one photo,
- * click to pin parts on it, each pin naming a build entry. Deliberately
+ * click (or Enter, then arrow keys — N67) to pin parts on it, each pin naming a build entry. Deliberately
  * bounded (one image, 8 pins) so the public gallery stays clean; the pins
  * appear on the build page behind an "Explore this build" toggle.
  */
@@ -43,6 +44,8 @@ export function ShowcaseEditor({
     })),
   );
   const [status, setStatus] = useState<string | null>(null);
+  // The pin a keyboard drop just made, focused once it renders (N67).
+  const [focusKey, setFocusKey] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const modLabel = (mod: ModItem) =>
     [mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw_text || "Build entry";
@@ -100,38 +103,63 @@ export function ShowcaseEditor({
       </div>
 
       {imageUrl && (
-        <button
-          type="button"
-          className="relative mt-3 block w-full cursor-crosshair overflow-hidden rounded-ctl p-0"
-          aria-label="Click the photo to add a pin"
-          onClick={(event) => {
-            if (pins.length >= 8) return;
-            const rect = event.currentTarget.getBoundingClientRect();
-            setPins((current) => [
-              ...current,
-              {
-                key: crypto.randomUUID(),
-                x: (event.clientX - rect.left) / rect.width,
-                y: (event.clientY - rect.top) / rect.height,
-                modItemId: mods[0]?.id ?? null,
-                label: mods[0] ? modLabel(mods[0]) : "",
-              },
-            ]);
-          }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imageUrl} alt="Showcase" className="block w-full" draggable={false} />
-          {pins.map((pin, index) => (
-            <span
-              key={pin.key}
-              aria-hidden="true"
-              className="pointer-events-none absolute grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[var(--scrim)] font-mono text-[11px] text-[var(--on-ink)]"
-              style={{ left: `${pin.x * 100}%`, top: `${pin.y * 100}%` }}
+        <>
+          <p id="showcase-keys" className="field__hint mt-3 max-w-[62ch]">
+            Click the photo to drop a pin, or focus it and press Enter to drop one in the middle. Then
+            focus a pin and move it with the arrow keys (hold Shift for bigger steps).
+          </p>
+          <div className="relative mt-2">
+            <button
+              type="button"
+              className="block w-full cursor-crosshair overflow-hidden rounded-ctl p-0"
+              aria-label={pins.length >= 8 ? "Showcase photo — 8 pins, the most it takes" : "Add a pin to the showcase photo"}
+              aria-describedby="showcase-keys"
+              aria-disabled={pins.length >= 8}
+              onClick={(event) => {
+                if (pins.length >= 8) return;
+                const at = pinFromActivation(event, event.currentTarget.getBoundingClientRect());
+                const key = crypto.randomUUID();
+                setPins((current) => [
+                  ...current,
+                  {
+                    key,
+                    ...at,
+                    modItemId: mods[0]?.id ?? null,
+                    label: mods[0] ? modLabel(mods[0]) : "",
+                  },
+                ]);
+                // A keyboard drop hands focus to the new pin so it can be moved at once.
+                if (event.detail === 0) setFocusKey(key);
+              }}
             >
-              {index + 1}
-            </span>
-          ))}
-        </button>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imageUrl} alt="Showcase" className="block w-full" draggable={false} />
+            </button>
+            {pins.map((pin, index) => (
+              <button
+                key={pin.key}
+                type="button"
+                ref={(node) => {
+                  if (node && focusKey === pin.key) {
+                    node.focus();
+                    setFocusKey(null);
+                  }
+                }}
+                aria-label={pinPositionLabel(index, pin)}
+                className="absolute grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[var(--scrim)] font-mono text-[11px] text-[var(--on-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--live)]"
+                style={{ left: `${pin.x * 100}%`, top: `${pin.y * 100}%` }}
+                onKeyDown={(event) => {
+                  const next = nudgePin(pin, event.key, event.shiftKey);
+                  if (!next) return;
+                  event.preventDefault();
+                  setPins((current) => current.map((p) => (p.key === pin.key ? { ...p, ...next } : p)));
+                }}
+              >
+                {index + 1}
+              </button>
+            ))}
+          </div>
+        </>
       )}
 
       {pins.length > 0 && (
