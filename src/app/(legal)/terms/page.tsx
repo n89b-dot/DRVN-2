@@ -12,10 +12,9 @@ import {
   payoutHoldPhrase,
   readAutoConfirmDays,
   readPayoutHoldPolicy,
-  readSettlementRisk,
+  readPublicRiskControls,
 } from "@/lib/payments/payout-hold";
 import { deliveryLabel } from "@/lib/marketplace/delivery";
-import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { paymentsAreLive } from "@/lib/payments/provider";
 import { createPublicClient } from "@/lib/supabase/public";
 
@@ -52,7 +51,7 @@ export default async function TermsPage() {
   const [hold, autoConfirmDays, risk] = await Promise.all([
     readPayoutHoldPolicy(settings),
     readAutoConfirmDays(settings),
-    readSettlementRisk(settings),
+    readPublicRiskControls(settings),
   ]);
   const holdText = hold ? payoutHoldPhrase(hold) : "a clearing period";
   // Off (null) says nothing; unreadable still states the rule, without a number.
@@ -62,7 +61,9 @@ export default async function TermsPage() {
   // (payout_release_at, 20261009100000).
   const releasesOnReceipt = hold?.mode === "fixed";
   const receiptDays = risk ? `${risk.receiptReleaseAfterDays} days` : "a few days";
-  const verifyFrom = risk?.cardVerificationFromCents ?? null;
+  // Whether card verification is on, never the amount it starts at: that
+  // would tell a fraudster what to price under (N26, 20261107210000).
+  const verifiesCards = risk?.cardVerificationOn === true;
 
   return (
     <>
@@ -86,11 +87,10 @@ export default async function TermsPage() {
           Payments go through DRVN&apos;s payment processor, Stripe: the buyer pays at checkout,
           and the seller&apos;s share is paid out to the seller&apos;s own Stripe account, as
           described in section 6.
-          {verifyFrom !== null && (
+          {verifiesCards && (
             <>
               {" "}
-              A card payment of {formatPrice(verifyFrom)} or more asks the buyer to verify it with
-              their card&apos;s bank.
+              Larger card payments ask the buyer to verify the payment with their card&apos;s bank.
             </>
           )}
         </p>

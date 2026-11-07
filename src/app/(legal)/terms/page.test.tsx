@@ -11,12 +11,16 @@ const row = vi.hoisted(() => ({
     payout_hold_mode: "fixed",
     auto_confirm_after_days: 21,
     receipt_release_after_days: 3,
-    card_verification_from_cents: 50000,
+    auto_confirm_notice_days: 3,
+    card_verification_on: true,
   } as Record<string, unknown>,
 }));
 
+// The terms read the public part of the row through settlement_hold_policy()
+// (20261107210000).
 vi.mock("@/lib/supabase/public", () => ({
   createPublicClient: () => ({
+    rpc: async () => ({ data: [row.current], error: null }),
     from: () => ({ select: () => ({ limit: async () => ({ data: [row.current], error: null }) }) }),
   }),
 }));

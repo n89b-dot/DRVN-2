@@ -8243,6 +8243,17 @@ export type Database = {
         Args: { p_actor: string; p_order: string; p_reason?: string }
         Returns: Json
       }
+      settlement_hold_policy: {
+        Args: never
+        Returns: {
+          auto_confirm_after_days: number
+          auto_confirm_notice_days: number
+          card_verification_on: boolean
+          payout_hold_days: number
+          payout_hold_mode: string
+          receipt_release_after_days: number
+        }[]
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       sitemap_post_page: {
