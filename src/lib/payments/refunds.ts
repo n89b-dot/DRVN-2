@@ -862,7 +862,7 @@ export async function recordExternalRefund(
 export async function resumeIncompleteRefunds(
   admin: Admin,
   opts: { batch?: number; olderThanMs?: number } = {}
-): Promise<{ scanned: number; completed: number; retrying: number }> {
+): Promise<{ scanned: number; completed: number; retrying: number; awaitingProvider: number }> {
   const olderThan = new Date(Date.now() - (opts.olderThanMs ?? 5 * 60_000)).toISOString();
   const dueBy = new Date().toISOString();
   const { data: stale, error: staleError } = await admin
@@ -881,7 +881,10 @@ export async function resumeIncompleteRefunds(
     .limit(opts.batch ?? 20);
   if (staleError) throw new Error("Refund queue unavailable");
 
-  const summary = { scanned: 0, completed: 0, retrying: 0 };
+  // `awaitingProvider`: Stripe holds the refund and hasn't settled it — not a
+  // failure, and not a reason for the money worker to report one (N391).
+  // worker_health_snapshot shows those as refunds/awaiting_provider.
+  const summary = { scanned: 0, completed: 0, retrying: 0, awaitingProvider: 0 };
   const now = Date.now();
   for (const row of stale ?? []) {
     // The query already filters on this; the check stays so a row read just
@@ -890,6 +893,7 @@ export async function resumeIncompleteRefunds(
     summary.scanned += 1;
     const outcome = await runRefundOperation(admin, row.id);
     if (outcome.ok) summary.completed += 1;
+    else if (outcome.pending) summary.awaitingProvider += 1;
     else summary.retrying += 1;
   }
   return summary;

@@ -9,6 +9,7 @@ import { revalidatePath } from "@/lib/revalidate";
 import { auditedAction } from "./audit";
 import { sendAdminAlert } from "./alerts";
 import { markWebhookEventProcessed } from "@/lib/payments/settlement";
+import { recordWebhookFailure } from "@/lib/payments/webhook-failures";
 import { dispatchRecordedWebhookEvent } from "./replay-webhook";
 import { runMoneyWorkerPass } from "@/lib/money-worker";
 import { ACCOUNT_DELETION_REASON } from "./presentation";
@@ -1184,7 +1185,13 @@ export async function adminReplayWebhookEvent(
           throw new Error("Recorded before payload retention (0023) — nothing stored to replay.");
         }
         const result = await dispatchRecordedWebhookEvent(ctx.admin, row.id, row.payload);
-        if (result === "retry") throw new Error("Replay needs another attempt; the event remains unprocessed.");
+        if (result === "retry") {
+          await recordWebhookFailure(ctx.admin, row.id, "retry", {
+            provider: row.id.startsWith("easypost:") ? "easypost" : "stripe",
+            type: "console_replay",
+          });
+          throw new Error("Replay needs another attempt; the event remains unprocessed.");
+        }
         await markWebhookEventProcessed(ctx.admin, eventId);
         return { result };
       }

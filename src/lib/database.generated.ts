@@ -5908,21 +5908,33 @@ export type Database = {
       }
       webhook_events: {
         Row: {
+          failed_attempts: number
           id: string
+          last_failed_at: string | null
+          last_failure_detail: string | null
+          last_failure_kind: string | null
           payload: Json | null
           processed_at: string | null
           received_at: string
           type: string
         }
         Insert: {
+          failed_attempts?: number
           id: string
+          last_failed_at?: string | null
+          last_failure_detail?: string | null
+          last_failure_kind?: string | null
           payload?: Json | null
           processed_at?: string | null
           received_at?: string
           type: string
         }
         Update: {
+          failed_attempts?: number
           id?: string
+          last_failed_at?: string | null
+          last_failure_detail?: string | null
+          last_failure_kind?: string | null
           payload?: Json | null
           processed_at?: string | null
           received_at?: string
@@ -7538,6 +7550,10 @@ export type Database = {
           p_worker: string
         }
         Returns: string
+      }
+      record_webhook_failure: {
+        Args: { p_detail?: string; p_id: string; p_kind: string }
+        Returns: number
       }
       record_worker_run: {
         Args: {

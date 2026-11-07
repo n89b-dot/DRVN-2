@@ -11,7 +11,10 @@ const monitoringMocks = vi.hoisted(() => ({
   reportError: vi.fn(),
 }));
 
+const failureMocks = vi.hoisted(() => ({ recordWebhookFailure: vi.fn() }));
+
 vi.mock("@/lib/payments/settlement", () => settlementMocks);
+vi.mock("@/lib/payments/webhook-failures", () => failureMocks);
 vi.mock("@/lib/payments/stripe", () => ({
   stripeClient: () => ({ webhooks: { constructEvent: stripeMocks.constructEvent } }),
 }));
@@ -36,6 +39,7 @@ beforeEach(() => {
   settlementMocks.dispatchStripeEvent.mockResolvedValue("committed");
   settlementMocks.markWebhookEventProcessed.mockResolvedValue(undefined);
   monitoringMocks.flushMonitoring.mockResolvedValue(undefined);
+  failureMocks.recordWebhookFailure.mockResolvedValue(1);
 });
 
 describe("Stripe webhook acknowledgement", () => {
@@ -91,5 +95,30 @@ describe("Stripe webhook signing secrets", () => {
     stripeMocks.constructEvent.mockImplementation(signedWith("whsec_test"));
     const response = await POST(request());
     expect(response.status).toBe(200);
+  });
+});
+
+describe("Stripe webhook retries are recorded (N109)", () => {
+  it("counts a retry outcome against the claimed event", async () => {
+    settlementMocks.dispatchStripeEvent.mockResolvedValue("retry");
+    const response = await POST(request());
+    expect(response.status).toBe(500);
+    expect(failureMocks.recordWebhookFailure).toHaveBeenCalledWith({}, "evt_1", "retry", { provider: "stripe", type: "charge.refunded" });
+  });
+
+  it("counts a thrown handler with its error", async () => {
+    const error = new Error("database unavailable");
+    settlementMocks.dispatchStripeEvent.mockRejectedValue(error);
+    const response = await POST(request());
+    expect(response.status).toBe(500);
+    expect(failureMocks.recordWebhookFailure).toHaveBeenCalledWith({}, "evt_1", "error", { provider: "stripe", type: "charge.refunded", error });
+  });
+
+  it("records nothing when the event was never claimed, or was applied", async () => {
+    settlementMocks.claimWebhookEvent.mockRejectedValue(new Error("Webhook persistence unavailable; retry delivery"));
+    expect((await POST(request())).status).toBe(500);
+    settlementMocks.claimWebhookEvent.mockResolvedValue(true);
+    expect((await POST(request())).status).toBe(200);
+    expect(failureMocks.recordWebhookFailure).not.toHaveBeenCalled();
   });
 });

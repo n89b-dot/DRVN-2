@@ -1,3 +1,4 @@
+import { cronAuthorized } from "@/lib/cron-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { flushMonitoring, reportError } from "@/lib/monitoring";
 import { runMoneyWorkerPass } from "@/lib/money-worker";
@@ -13,13 +14,11 @@ import { runMoneyWorkerPass } from "@/lib/money-worker";
 export const maxDuration = 300;
 
 export async function POST(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
+  if (!process.env.CRON_SECRET) {
     reportError("[transfers] CRON_SECRET is not configured");
     return new Response(null, { status: 404 });
   }
-  const auth = request.headers.get("authorization");
-  if (auth !== `Bearer ${secret}`) {
+  if (!cronAuthorized(request)) {
     return new Response(null, { status: 404 });
   }
 

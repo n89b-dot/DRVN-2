@@ -63,7 +63,11 @@ export function buildOrderTimeline({
     push(event.received_at, {
       source: "stripe",
       label: `Stripe ${event.type}`,
-      detail: event.processed_at ? undefined : "received but not fully processed",
+      detail: event.processed_at
+        ? undefined
+        : event.failed_attempts > 0
+          ? `not applied yet — ${event.failed_attempts} failed ${event.failed_attempts === 1 ? "delivery" : "deliveries"}, last ${event.last_failure_kind ?? "failure"}`
+          : "received but not fully processed",
     });
   }
   push(order.shipped_at, {

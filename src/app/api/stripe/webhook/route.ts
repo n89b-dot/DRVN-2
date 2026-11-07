@@ -6,6 +6,7 @@ import {
   markWebhookEventProcessed,
 } from "@/lib/payments/settlement";
 import { stripeClient } from "@/lib/payments/stripe";
+import { recordWebhookFailure } from "@/lib/payments/webhook-failures";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { clearPublicData } from "@/lib/supabase/clear-public-data";
 import { flushMonitoring, reportError } from "@/lib/monitoring";
@@ -55,9 +56,11 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  let claimed = false;
 
   try {
     if (!(await claimWebhookEvent(admin, event))) return new Response("duplicate", { status: 200 });
+    claimed = true;
     // All handler mapping lives in dispatchStripeEvent (shared with the
     // console's replay action). A "retry" produces a 500 so Stripe redelivers;
     // committed effects, checked recovery, and intentionally irrelevant event
@@ -66,7 +69,12 @@ export async function POST(request: Request) {
     // A payment, refund or dispute moves a part between for sale, reserved
     // and sold; signed-out visitors' shared copy must not keep the old state.
     clearPublicData("listings");
-    if (outcome === "retry") return new Response(outcome, { status: 500 });
+    if (outcome === "retry") {
+      // Counted on the claimed row (N109): an event Stripe keeps redelivering
+      // shows its age and attempts in worker health and Admin → Payments.
+      await recordWebhookFailure(admin, event.id, "retry", { provider: "stripe", type: event.type });
+      return new Response(outcome, { status: 500 });
+    }
 
     // The 2xx is withheld until the processed marker itself is confirmed to
     // have affected the claimed row. If this write fails, Stripe redelivers;
@@ -76,6 +84,7 @@ export async function POST(request: Request) {
   } catch (error) {
     // Unexpected failure: let Stripe redeliver rather than losing the event.
     reportError("[stripe:webhook] handler failed", { type: event.type, error });
+    if (claimed) await recordWebhookFailure(admin, event.id, "error", { provider: "stripe", type: event.type, error });
     return new Response("handler failed", { status: 500 });
   } finally {
     // Serverless: the runtime may freeze the instant the response returns —

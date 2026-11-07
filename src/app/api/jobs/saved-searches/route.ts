@@ -1,4 +1,5 @@
 import { trackedWorker } from "@/lib/tracked-worker";
+import { cronAuthorized } from "@/lib/cron-auth";
 import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -21,9 +22,7 @@ export const dynamic = "force-dynamic";
  * alerted about inventory that predates their opt-in.
  */
 async function run(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  const auth = request.headers.get("authorization");
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!cronAuthorized(request)) {
     return new NextResponse(null, { status: 404 });
   }
 

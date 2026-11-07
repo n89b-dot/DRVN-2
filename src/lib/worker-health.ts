@@ -1,11 +1,120 @@
-export const WORKER_FAMILIES = ['expiries','captures','transfers','transferReconciliation','refunds','labelVoids','returns','disputes','alerts','receipts','analytics','search','deletions','savedSearches','media','listingImports','deliveryAutoConfirm'];
-type Family={family:string;stale:boolean;disabled?:boolean};
-type Queue={kind:string;status:string;overdue?:boolean;disabled?:boolean};
-export function evaluateWorkerHealth(value:unknown,config:{searchEnabled:boolean;analyticsEnabled:boolean}) {
-  const health=value as {families?:Family[];queues?:Queue[]}|null;
-  if(!health||!Array.isArray(health.families)||!Array.isArray(health.queues)||new Set(health.families.map(f=>f?.family)).size!==health.families.length||WORKER_FAMILIES.some(name=>!health.families?.some(f=>f?.family===name))||health.families.some(f=>!f||typeof f.stale!=='boolean')||health.queues.some(q=>!q||typeof q.kind!=='string'||typeof q.status!=='string'||typeof q.overdue!=='boolean'))throw new Error('Incomplete worker health contract');
-  const disabled=new Set<string>();if(!config.searchEnabled)disabled.add('search');if(!config.analyticsEnabled)disabled.add('analytics');
-  const families=health.families.map(f=>disabled.has(f.family)?{...f,stale:false,disabled:true}:f);
-  const queues=health.queues.map(q=>disabled.has(q.kind)?{...q,disabled:true}:q);
-  return {families,queues,unhealthy:families.some(f=>f.stale)||queues.some(q=>!q.disabled&&(q.overdue||q.status==='failed'||q.kind==='financial_recovery'))};
+import { secretDigestHex, secretsEqual } from "./cron-auth";
+import { JOB_NAMES, WORKER_FAMILIES } from "./job-inventory";
+
+export { WORKER_FAMILIES } from "./job-inventory";
+
+type Family = { family: string; stale: boolean; reason?: string | null; last_success?: string | null; disabled?: boolean };
+type Job = { job: string; stale: boolean; reason?: string | null; last_success?: string | null; families?: string[] };
+type Queue = { kind: string; status: string; overdue: boolean; count?: number; oldest?: string | null; attempts_max?: number | null; disabled?: boolean };
+type RawConfig = {
+  scheduler?: boolean;
+  run_history?: boolean;
+  pg_net?: boolean;
+  worker_url?: string | null;
+  worker_secret_sha256?: string | null;
+};
+
+/**
+ * One thing an operator must act on. `area` and `name` say where (a worker
+ * family, a pg_cron job, a queue as kind/status, or a piece of configuration);
+ * `reason` says what, in the snapshot's own words. Never carries a secret,
+ * URL or member data — it is what the paging destination receives.
+ */
+export type HealthProblem = {
+  area: "family" | "job" | "queue" | "config";
+  name: string;
+  reason: string;
+  since?: string | null;
+  count?: number;
+  attempts?: number | null;
+};
+
+export type HealthConfigStatus = {
+  scheduler: "ok" | "missing";
+  runHistory: "ok" | "disabled";
+  pgNet: "ok" | "missing";
+  workerUrl: "ok" | "missing" | "invalid";
+  workerSecret: "ok" | "missing" | "mismatch" | "unchecked";
+};
+
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "host.docker.internal"]);
+
+/** The scheduler's one worker URL (invoke_*_worker derive every route from it). */
+export function workerUrlStatus(value: string | null | undefined): HealthConfigStatus["workerUrl"] {
+  if (!value) return "missing";
+  let url: URL;
+  try { url = new URL(value); } catch { return "invalid"; }
+  const secure = url.protocol === "https:" || (url.protocol === "http:" && LOCAL_HOSTS.has(url.hostname));
+  return secure && !url.username && !url.password && !url.search && !url.hash && url.pathname.endsWith("/api/jobs/transfers") ? "ok" : "invalid";
+}
+
+const isText = (value: unknown): value is string => typeof value === "string" && value.length > 0;
+
+/**
+ * Validates worker_health_snapshot() against the inventory this deployment
+ * expects and turns it into problems. Throws when the snapshot is incomplete,
+ * so a partial read can never look healthy. `cronSecret` is the deployment's
+ * CRON_SECRET: the scheduler's copy (job_config) is compared with it as a
+ * digest, so a scheduler sending the wrong bearer shows up as configuration,
+ * not as every HTTP worker going quiet at once.
+ */
+export function evaluateWorkerHealth(
+  value: unknown,
+  config: { searchEnabled: boolean; analyticsEnabled: boolean; cronSecret?: string },
+) {
+  const health = value as { families?: Family[]; jobs?: Job[]; queues?: Queue[]; config?: RawConfig } | null;
+  const complete = <T, K extends keyof T>(rows: T[] | undefined, key: K, required: readonly string[]) =>
+    Array.isArray(rows) &&
+    rows.every((row) => row && isText(row[key]) && typeof (row as { stale?: unknown }).stale === "boolean") &&
+    new Set(rows.map((row) => row[key])).size === rows.length &&
+    required.every((name) => rows.some((row) => row[key] === name));
+  if (
+    !health ||
+    !complete(health.families, "family", WORKER_FAMILIES) ||
+    !complete(health.jobs, "job", JOB_NAMES) ||
+    !Array.isArray(health.queues) ||
+    health.queues.some((q) => !q || !isText(q.kind) || !isText(q.status) || typeof q.overdue !== "boolean") ||
+    !health.config ||
+    typeof health.config !== "object"
+  ) throw new Error("Incomplete worker health contract");
+
+  const disabled = new Set<string>();
+  if (!config.searchEnabled) disabled.add("search");
+  if (!config.analyticsEnabled) disabled.add("analytics");
+  const families = health.families!.map((f) => (disabled.has(f.family) ? { ...f, stale: false, disabled: true } : f));
+  const jobs = health.jobs!;
+  const queues = health.queues.map((q) => (disabled.has(q.kind) ? { ...q, disabled: true } : q));
+
+  const raw = health.config;
+  const secretDigest = raw.worker_secret_sha256;
+  const status: HealthConfigStatus = {
+    scheduler: raw.scheduler === true ? "ok" : "missing",
+    runHistory: raw.run_history === true ? "ok" : "disabled",
+    pgNet: raw.pg_net === true ? "ok" : "missing",
+    workerUrl: workerUrlStatus(raw.worker_url),
+    workerSecret: !secretDigest
+      ? "missing"
+      : !config.cronSecret
+        ? "unchecked"
+        : secretsEqual(secretDigest, secretDigestHex(config.cronSecret)) ? "ok" : "mismatch",
+  };
+
+  const problems: HealthProblem[] = [];
+  for (const [name, state] of Object.entries(status)) {
+    if (state !== "ok" && state !== "unchecked") problems.push({ area: "config", name, reason: state });
+  }
+  for (const job of jobs) {
+    if (job.stale) problems.push({ area: "job", name: job.job, reason: job.reason ?? "stale", since: job.last_success ?? null });
+  }
+  for (const family of families) {
+    if (family.stale) problems.push({ area: "family", name: family.family, reason: family.reason ?? "stale", since: family.last_success ?? null });
+  }
+  for (const queue of queues) {
+    if (!queue.disabled && queue.overdue) {
+      problems.push({ area: "queue", name: `${queue.kind}/${queue.status}`, reason: "overdue", since: queue.oldest ?? null, count: queue.count, attempts: queue.attempts_max ?? null });
+    }
+  }
+
+  // The scheduler's secret and URL never leave this function.
+  return { families, jobs, queues, config: status, problems, unhealthy: problems.length > 0 };
 }

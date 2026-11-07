@@ -321,7 +321,7 @@ export default async function AdminPaymentsPage({
       </section>
 
       <section aria-label="Webhook events">
-        <span className="microlabel">Recent webhook events</span>
+        <span className="microlabel">Webhook events — not yet applied first, then recent</span>
         {ops.recentEvents.length ? (
           <div className="rowlist">
             {ops.recentEvents.map((e) => (
@@ -331,7 +331,11 @@ export default async function AdminPaymentsPage({
                   <span className="flex items-baseline gap-2">
                     <span className="order__meta">
                       {new Date(e.receivedAt).toLocaleString()} ·{" "}
-                      {e.processedAt ? "processed" : "received"}
+                      {e.processedAt
+                        ? "processed"
+                        : e.failedAttempts > 0
+                          ? `not applied · ${e.failedAttempts} failed ${e.failedAttempts === 1 ? "delivery" : "deliveries"}`
+                          : "received"}
                     </span>
                     <ActionDialog
                       action={adminReplayWebhookEvent}
@@ -349,7 +353,12 @@ export default async function AdminPaymentsPage({
                     />
                   </span>
                 </div>
-                <p className="order__meta mt-0.5">{e.id}</p>
+                <p className="order__meta mt-0.5">
+                  {e.id}
+                  {e.lastFailure && e.lastFailedAt
+                    ? ` · last failed ${new Date(e.lastFailedAt).toLocaleString()}: ${e.lastFailure}`
+                    : ""}
+                </p>
                 {e.payload && (
                   <details className="mt-1">
                     <summary className="jumplink cursor-pointer">payload</summary>

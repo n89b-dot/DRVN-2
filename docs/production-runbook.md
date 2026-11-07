@@ -356,13 +356,60 @@ configured. In **Settings → Secrets and variables → Actions**:
 | Repository **variable** | `DRVN_MONITOR_ORIGIN` | the canonical `https://` origin, no path (e.g. `https://drvn.app`) |
 | Repository **secret** | `DRVN_MONITOR_SECRET` | the deployment's `CRON_SECRET` — `/api/health/workers` accepts only that bearer |
 
-This mode alerts only through GitHub's failed-workflow notifications. The
-`--watch` mode (transition alerts to `DRVN_MONITOR_ALERT_URL`, dead-man
-heartbeats to `DRVN_MONITOR_HEARTBEAT_URL`, state in
-`DRVN_MONITOR_STATE_FILE`) runs on a separately administered host, not in
-this workflow — see `docs/remediation-release-and-monitoring.md`. Before
-relying on either, pause a worker in staging and confirm an alert and a
-recovery actually arrive.
+This mode alerts only through GitHub's failed-workflow notifications; each
+problem is written to the run as an annotation (`job drvn-media-gc: overdue
+since …`), so the failure says what to fix. The `--watch` mode (transition
+alerts to `DRVN_MONITOR_ALERT_URL`, dead-man heartbeats to
+`DRVN_MONITOR_HEARTBEAT_URL`, state in `DRVN_MONITOR_STATE_FILE`) runs on a
+separately administered host, not in this workflow — see
+`docs/remediation-release-and-monitoring.md`. Before relying on either, stop a
+job in staging (below) and confirm an alert and a recovery actually arrive.
+
+**What health judges (20261107170000).** `private.scheduled_job_inventory()`
+is the one list of what pg_cron must run: every `drvn-*` job, its schedule,
+its command, the worker families it drives and how long it may go without a
+success. Check the scheduler against it by name and by running, never by
+counting rows:
+
+```sql
+select x->>'job' job, x->>'reason' reason, x->>'last_success' last_success
+from jsonb_array_elements(public.worker_health_snapshot()->'jobs') x order by 1;
+```
+
+`reason` is null when the job is fine; otherwise `not_scheduled`, `inactive`,
+`schedule_changed`, `command_changed`, `failing`, `stuck_running`,
+`never_succeeded` or `overdue` (`history_disabled` if `cron.log_run` is off).
+A job that has never run is not reported until the scheduler's own history is
+older than that job's budget, so a fresh project is not red overnight; a
+worker family that has never run is (run its route once by hand). The `config`
+block checks pg_cron, pg_net, run history, the `job_config` worker URL and
+that the scheduler's secret equals the deployment's `CRON_SECRET` (compared as
+a SHA-256; neither is returned). Queues count only work DRVN owes: an
+undelivered payout hold, a payout frozen by an unresolved chargeback and a
+seller who can't be paid yet are not overdue (blocked payouts show with
+`overdue: false`); refunds Stripe is still settling are
+`refunds/awaiting_provider`, late after 72 hours; provider events not yet
+applied are `webhooks/retrying` (with the highest attempt count; Admin →
+Payments lists them first, with the last failure, beside Replay), overdue
+after an hour; a chargeback loss whose lease ran out is
+`provider_disputes/loss_pending`. `drvn-cron-history-prune` keeps
+`cron.job_run_details` to 14 days.
+
+**Paging without noise (`--watch`).** An incident pages after
+`DRVN_MONITOR_CONFIRM_CHECKS` consecutive failing checks (default 2), again
+only when a problem not already paged appears (`worsened`) or every 30 minutes
+while it lasts (`still_unhealthy`), and once on `recovered`. Each alert carries
+`summary`, `problems` (area, name, reason, since, count; never a secret, URL
+or member data) and `runbook`. Set `DRVN_MONITOR_SILENCE_UNTIL` to an ISO
+time for planned work: nothing is sent until then, and an incident still open
+when it ends pages at once.
+
+**Stop a job deliberately (staging).** `select cron.alter_job((select jobid
+from cron.job where jobname = 'drvn-explore-trending'), active := false);`
+— within one check the endpoint returns 503 naming
+`job drvn-explore-trending: inactive`, and after the confirmation checks the
+destination receives `unhealthy`. Re-activate it (`active := true`); once it
+runs again the destination receives `recovered`.
 
 ## 10. DRVN Shipping — EasyPost setup (migrations 0051-0056)
 
