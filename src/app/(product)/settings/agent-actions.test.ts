@@ -2,8 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
-  update: vi.fn(),
-  liveMandates: vi.fn(),
   rpc: vi.fn(),
   revalidatePath: vi.fn(),
   reportError: vi.fn(),
@@ -17,9 +15,8 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser: mocks.getUser },
     rpc: mocks.rpc,
+    // The mode is written only through agent_mode_set: no table write here.
     from: (table: string) => {
-      if (table === "profiles") return { update: (values: unknown) => ({ eq: () => mocks.update(values) }) };
-      if (table === "agent_mandates") return { select: () => ({ eq: () => ({ in: () => mocks.liveMandates() }) }) };
       throw new Error(`unexpected table ${table}`);
     },
   }),
@@ -36,60 +33,42 @@ function form(mode: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getUser.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });
-  mocks.update.mockResolvedValue({ error: null });
-  mocks.liveMandates.mockResolvedValue({ data: [], error: null });
-  mocks.rpc.mockResolvedValue({ data: "revoked", error: null });
+  mocks.rpc.mockImplementation(async (_name: string, args: { p_mode: string }) => ({ data: { mode: args.p_mode, revoked: 0 }, error: null }));
 });
 
-describe("saveAgentMode (AG-7)", () => {
-  it("stores Act without touching any mandate", async () => {
+describe("saveAgentMode (AG-7, R-agentmode)", () => {
+  it("stores Act through agent_mode_set", async () => {
     await expect(saveAgentMode({}, form("act"))).resolves.toEqual({ ok: "Agent set to Act within my limits." });
-    expect(mocks.update).toHaveBeenCalledWith({ agent_mode: "act" });
-    expect(mocks.liveMandates).not.toHaveBeenCalled();
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.rpc).toHaveBeenCalledWith("agent_mode_set", { p_mode: "act" });
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/settings");
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/agent");
   });
 
-  it("ends every live mandate when the member drops below Act, and says how many", async () => {
-    mocks.liveMandates.mockResolvedValue({ data: [{ id: "m-1" }, { id: "m-2" }], error: null });
-
+  it("says how many listings the database stopped the agent on, in the same call", async () => {
+    mocks.rpc.mockResolvedValue({ data: { mode: "off", revoked: 2 }, error: null });
     await expect(saveAgentMode({}, form("off"))).resolves.toEqual({ ok: "Agent set to Off. Your agent stopped on 2 listings." });
-    expect(mocks.rpc.mock.calls).toEqual([
-      ["agent_mandate_set_status", { p_mandate: "m-1", p_status: "revoked" }],
-      ["agent_mandate_set_status", { p_mandate: "m-2", p_status: "revoked" }],
-    ]);
+    expect(mocks.rpc).toHaveBeenCalledOnce();
     expect(mocks.capture).toHaveBeenCalledWith("user-1", { event: "agent_mode_set", props: { mode: "off", ended: 2 } });
   });
 
-  it("never claims a mandate stopped when the database refused", async () => {
-    mocks.liveMandates.mockResolvedValue({ data: [{ id: "m-1" }], error: null });
-    mocks.rpc.mockResolvedValue({ data: null, error: { code: "22023" } });
-
-    const result = await saveAgentMode({}, form("suggest"));
-    expect(result.ok).toBeUndefined();
-    expect(result.error).toContain("Saved as Suggest");
-    expect(result.error).toContain("couldn't be stopped");
-    expect(mocks.reportError).toHaveBeenCalledOnce();
+  it("never claims a save the database refused or didn't confirm", async () => {
+    mocks.rpc.mockResolvedValue({ data: null, error: { code: "40P01" } });
+    await expect(saveAgentMode({}, form("suggest"))).resolves.toEqual({ error: "Your agent setting could not be saved. Nothing changed; try again." });
+    mocks.rpc.mockResolvedValue({ data: { mode: "act", revoked: 0 }, error: null });
+    expect((await saveAgentMode({}, form("off"))).error).toContain("could not be saved");
+    expect(mocks.reportError).toHaveBeenCalledTimes(2);
     expect(mocks.capture).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 
   it("refuses an unknown mode before writing", async () => {
     await expect(saveAgentMode({}, form("loud"))).resolves.toEqual({ error: "Pick Off, Suggest or Act within my limits." });
-    expect(mocks.update).not.toHaveBeenCalled();
-  });
-
-  it("does not claim success after a failed write", async () => {
-    mocks.update.mockResolvedValue({ error: { code: "42501" } });
-
-    await expect(saveAgentMode({}, form("off"))).resolves.toEqual({ error: "Your agent setting could not be saved. Try again." });
     expect(mocks.rpc).not.toHaveBeenCalled();
-    expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 
   it("requires a session", async () => {
     mocks.getUser.mockResolvedValue({ data: { user: null }, error: null });
     expect((await saveAgentMode({}, form("off"))).error).toContain("Sign in again");
-    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
   });
 });

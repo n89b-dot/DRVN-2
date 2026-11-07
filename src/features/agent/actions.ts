@@ -41,6 +41,9 @@ function agentError(code: string | undefined, fallback: string): string {
       return "The offer has moved on since your agent asked. Open the offer to see where it stands.";
     case "OF005":
       return "This offer has expired.";
+    case "AG009":
+      // The database's own check on the member's agent setting (R-agentmode).
+      return "Your agent is set to Off or Suggest in Settings, so it can't negotiate for you.";
     default:
       return fallback;
   }

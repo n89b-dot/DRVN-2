@@ -1,5 +1,6 @@
--- AG-7's member-level agent mode (20261107170000): the column's shape, who
--- may read and write it, and that a member can only set their own.
+-- AG-7's member-level agent mode (20261107170000, written through
+-- agent_mode_set from 20261107190000): the column's shape, who may read and
+-- write it, and that a member can only set their own.
 -- Transactional; disposable local database only.
 begin;
 
@@ -47,26 +48,28 @@ begin
     raise exception 'FAIL 3: agent_mode is readable by clients';
   end if;
 
-  -- 4. A member sets their own.
-  if not has_column_privilege('authenticated', 'public.profiles', 'agent_mode', 'update') then
-    raise exception 'FAIL 4: a member cannot set their own agent_mode';
+  -- 4. A member sets their own, through agent_mode_set only (20261107190000):
+  --    a direct column update would skip ending what was running.
+  if has_column_privilege('authenticated', 'public.profiles', 'agent_mode', 'update') then
+    raise exception 'FAIL 4: members can still update agent_mode directly';
   end if;
   perform pg_temp.act(me);
-  update public.profiles set agent_mode = 'suggest' where id = me;
-  get diagnostics n = row_count;
+  v := pg_temp.code(format('update public.profiles set agent_mode = %L where id = %L', 'off', me));
+  if v <> '42501' then raise exception 'FAIL 4a: a direct update of agent_mode was not refused (%)', v; end if;
+  perform public.agent_mode_set('suggest');
   perform pg_temp.reset();
-  if n <> 1 or (select agent_mode from public.profiles where id = me) <> 'suggest' then
-    raise exception 'FAIL 4b: the owner''s update did not land';
+  if (select agent_mode from public.profiles where id = me) <> 'suggest' then
+    raise exception 'FAIL 4b: agent_mode_set did not store the owner''s mode';
   end if;
 
-  -- 5. ...and nobody else's: the row isn't theirs, so the update touches nothing.
-  perform pg_temp.act(me);
-  update public.profiles set agent_mode = 'off' where id = other;
-  get diagnostics n = row_count;
-  perform pg_temp.reset();
-  if n <> 0 or (select agent_mode from public.profiles where id = other) <> 'act' then
-    raise exception 'FAIL 5: a member changed another member''s agent_mode';
+  -- 5. ...and only theirs: agent_mode_set has no member argument.
+  if (select agent_mode from public.profiles where id = other) <> 'act' then
+    raise exception 'FAIL 5: setting one member''s mode changed another''s';
   end if;
+  perform pg_temp.act(me);
+  v := pg_temp.code('select public.agent_mode_set(''loud'')');
+  perform pg_temp.reset();
+  if v <> '22023' then raise exception 'FAIL 5b: an unknown mode reached agent_mode_set (%)', v; end if;
 
   -- 6. Signed out, nothing: anon has no update grant on the column at all.
   perform set_config('role', 'anon', true), set_config('request.jwt.claims', '', true);

@@ -6153,6 +6153,8 @@ export type Database = {
         Args: { p_mandate: string; p_status: string }
         Returns: string
       }
+      agent_member_lock_key: { Args: { p_owner: string }; Returns: number }
+      agent_mode_set: { Args: { p_mode: string }; Returns: Json }
       agent_offer_move: {
         Args: {
           p_amount: number

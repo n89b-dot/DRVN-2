@@ -10,8 +10,11 @@
  *   started, so the agent never negotiates or moves money.
  * - act: today's behaviour.
  *
- * The worker needs no change: it acts only on a live mandate, which can't be
- * started outside 'act', and saving a lower mode ends the live ones.
+ * The database holds it too (R-agentmode, 20261107190000): agent_mode_set
+ * is the only write and ends the live mandates in the same transaction;
+ * agent_mandate_set and a resume refuse below Act (AG009), and the worker
+ * refuses to claim or write for an owner below Act, all under the member's
+ * lock. The app's checks are the friendly refusal, not the only one.
  */
 
 export type AgentMode = "off" | "suggest" | "act";
