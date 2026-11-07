@@ -14,6 +14,8 @@ import { PAYOUTS_NOT_READY_CODE } from "@/lib/payments/payout-readiness";
 import { revalidatePath } from "@/lib/revalidate";
 import { createClient } from "@/lib/supabase/server";
 
+import { approvalOutcomeNote, readApprovalOutcome } from "./approval-outcome";
+
 export type AgentState = {
   error?: string;
   ok?: string;
@@ -57,7 +59,9 @@ function agentError(code: string | undefined, fallback: string): string {
 /**
  * Needs you: accept what the agent recommended, or dismiss it. Accepting is
  * the owner's own move (agent_approval_decide runs it as them), so it makes
- * a sale exactly as tapping Accept on the offer would.
+ * a sale exactly as tapping Accept on the offer would. Only an `accepted`
+ * outcome is a sale: an offer that expired, moved on or can't be accepted
+ * any more says so (N128).
  */
 export async function decideAgentApproval(_prev: AgentState, formData: FormData): Promise<AgentState> {
   const { supabase, user } = await requireUser();
@@ -66,14 +70,15 @@ export async function decideAgentApproval(_prev: AgentState, formData: FormData)
   const choice = String(formData.get("choice") ?? "");
   if (!approvalId || (choice !== "accept" && choice !== "dismiss")) return { error: "Missing choice." };
 
-  const { error } = await supabase.rpc("agent_approval_decide", { p_approval: approvalId, p_choice: choice });
-  if (!error) capture(user.id, { event: "agent_approval_answered", props: { choice } });
+  const { data, error } = await supabase.rpc("agent_approval_decide", { p_approval: approvalId, p_choice: choice });
   if (error) {
     reportError("[agent] approval decision failed", { approvalId, choice, code: error.code });
     return { error: agentError(error.code, "Couldn't record that. Try again.") };
   }
+  const outcome = readApprovalOutcome(data);
+  capture(user.id, { event: "agent_approval_answered", props: { choice, outcome: outcome ?? "unknown" } });
   revalidatePath("/agent");
-  if (choice === "accept") {
+  if (outcome === "accepted") {
     // The row leaves Needs you once it's decided, so the answer is the offer
     // itself: accepted, the order, and Cancel before checkout.
     const { data: approval } = await supabase.from("agent_approvals").select("offer_id").eq("id", approvalId).maybeSingle();
@@ -81,11 +86,10 @@ export async function decideAgentApproval(_prev: AgentState, formData: FormData)
       revalidatePath(`/offers/${approval.offer_id}`);
       redirect(`/offers/${approval.offer_id}`);
     }
-    return { ok: "Accepted. The buyer has 24 hours to pay." };
   }
   // agent_approval_decide('dismiss') puts the task back to waiting_for_event
   // and queues nothing: the agent moves again only when the other side does.
-  return { ok: "Dismissed. Your agent waits for the next move on this offer." };
+  return approvalOutcomeNote(outcome);
 }
 
 /**
