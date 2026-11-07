@@ -169,6 +169,22 @@ as $$
 $$;
 revoke all on function private.json_media_keys(jsonb) from public, anon, authenticated;
 
+-- The strings in a JSON document that name a storage object, as written.
+create or replace function private.json_media_urls(p jsonb)
+returns text[]
+language sql
+immutable
+parallel safe
+set search_path = pg_catalog, pg_temp
+as $$
+  select coalesce(array_agg(distinct u) filter (where private.media_object_key(u) is not null), '{}')
+    from (
+      select s #>> '{}' as u
+        from jsonb_path_query(coalesce(p, 'null'::jsonb), 'lax $.** ? (@.type() == "string")') s
+    ) x;
+$$;
+revoke all on function private.json_media_urls(jsonb) from public, anon, authenticated;
+
 -- ============================================================
 -- 2. The one reference check
 -- ============================================================
@@ -477,11 +493,22 @@ set search_path = public, pg_temp
 as $$
 declare
   v_urls text[];
-  v_keys text[] := '{}';
   v_reason text;
+  v_owner uuid;
+  v_origin text;
+  v_prefix text;
 begin
+  -- Cleanup authority comes from the deleted row's real owner, never from a
+  -- URL: a post's text could name anyone's upload. Only objects in that
+  -- owner's own folder, on our own storage origin, are queued; with no
+  -- recorded origin nothing is (fail closed, like member writes).
+  select value into v_origin from public.job_config where key = 'media_storage_origin';
+  if v_origin is null or v_origin !~ '^https?://[^/?#@]+/?$' then return old; end if;
+  v_prefix := rtrim(v_origin, '/') || '/storage/v1/';
+
   if tg_table_name = 'cars' then
     v_reason := 'car_deleted';
+    v_owner := old.owner_id;
     select array_agg(u) into v_urls from (
       select old.cover_image_url as u
       union all select url from public.car_images where car_id = old.id
@@ -492,29 +519,33 @@ begin
     ) s;
   elsif tg_table_name = 'activity_posts' then
     v_reason := 'post_deleted';
+    v_owner := old.author_id;
+    -- The post's photos, and every media URL its body names in any shape
+    -- or spelling.
     select array_agg(u) into v_urls from (
       select url as u from public.activity_images where post_id = old.id
-      union all select unnest(private.activity_body_media(old.body))
+      union all select unnest(private.json_media_urls(old.body))
     ) s;
-    -- Body media in any shape or spelling, already canonical keys.
-    v_keys := private.json_media_keys(old.body);
   elsif tg_table_name = 'listings' then
     v_reason := 'listing_deleted';
+    v_owner := old.seller_id;
     select array_agg(url) into v_urls from public.listing_images where listing_id = old.id;
   end if;
+  if v_owner is null then return old; end if;
 
   insert into public.media_cleanup_queue (bucket, path, owner_id, reason)
-  select split_part(k, '/', 1), substr(k, length(split_part(k, '/', 1)) + 2), split_part(k, '/', 2)::uuid, v_reason
+  select split_part(k, '/', 1), substr(k, length(split_part(k, '/', 1)) + 2), v_owner, v_reason
     from (
-      select private.media_object_key(u) as k from unnest(coalesce(v_urls, '{}')) u
-      union
-      select k from unnest(v_keys) k
+      select distinct private.media_object_key(u) as k
+        from unnest(coalesce(v_urls, '{}')) u
+       where left(u, length(v_prefix)) = v_prefix
     ) keys
    where k is not null
      and split_part(k, '/', 1) in ('avatars', 'car-images', 'activity-images', 'listing-images')
-     and split_part(k, '/', 2) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+     and split_part(k, '/', 2) = v_owner::text
   on conflict (bucket, path) do update
-    set enqueued_at = now(), attempts = 0, last_error = null, reason = excluded.reason;
+    set enqueued_at = now(), attempts = 0, last_error = null, reason = excluded.reason
+    where media_cleanup_queue.owner_id = excluded.owner_id;
   return old;
 end;
 $$;
@@ -535,22 +566,75 @@ create trigger enqueue_deleted_media before delete on public.listings
 -- ============================================================
 -- Removing an object is two steps: the reference check here, then the
 -- Storage delete over HTTP. Without a claim, evidence attached between the
--- two was deleted anyway. Now the worker claims the object first: under a
--- per-object transaction lock it re-checks every reference and records a
--- claim, and every write that would add a reference takes the same lock and
--- refuses a claimed object. Whichever commits first wins, and the loser
--- sees it. A claim stays as a tombstone once the object is gone, so a later
--- write can't adopt a deleted path either; a failed Storage delete releases
--- it.
+-- two was deleted anyway. Now the remover claims the object first: under a
+-- per-object transaction lock it re-checks every reference and takes an
+-- exclusive claim with its own token, and every write that would add a
+-- reference takes the same lock and refuses a claimed object. Whichever
+-- commits first wins, and the loser sees it.
+--
+-- One active claim per object, held by one remover. A second remover (the
+-- daily job overlapping the after-delete run, say) gets 'busy' and touches
+-- nothing; only the token holder may complete or release the claim. A
+-- completed claim stays as a tombstone, so a later write can't adopt a
+-- deleted path; a failed Storage delete releases it. An active claim older
+-- than its 10-minute lease (a remover that died mid-delete; Storage calls
+-- time out in seconds) may be taken over with a new token, after which the
+-- old token can neither complete nor release it.
 create table if not exists private.media_deletion_claims (
-  bucket     text not null,
-  path       text not null,
-  claimed_at timestamptz not null default now(),
+  bucket       text not null,
+  path         text not null,
+  token        uuid not null,
+  state        text not null check (state in ('active', 'done')),
+  claimed_at   timestamptz not null default now(),
+  completed_at timestamptz,
   primary key (bucket, path)
 );
 revoke all on private.media_deletion_claims from public, anon, authenticated;
 
+-- {"status": "claimed", "token": <uuid>} — delete it, then complete;
+-- "referenced" — keep it; "busy" — another remover holds it, try later;
+-- "gone" — already deleted (a completed claim); "invalid" — not nameable.
 create or replace function public.claim_media_deletion(p_bucket text, p_path text)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_claim private.media_deletion_claims%rowtype;
+  v_token uuid := gen_random_uuid();
+begin
+  if p_bucket is null or p_bucket !~ '^[a-z0-9_-]{1,63}$' or not coalesce(private.media_path_ok(p_path), false) then
+    return jsonb_build_object('status', 'invalid');
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended('drvn-media:' || p_bucket || '/' || p_path, 0));
+  select * into v_claim from private.media_deletion_claims where bucket = p_bucket and path = p_path;
+  if found and v_claim.state = 'done' then
+    return jsonb_build_object('status', 'gone');
+  end if;
+  if found and v_claim.claimed_at > now() - interval '10 minutes' then
+    return jsonb_build_object('status', 'busy');
+  end if;
+  -- A fresh statement after the lock: it sees any reference committed by a
+  -- writer that held the lock before us.
+  if public.media_object_referenced(p_bucket, p_path) then
+    delete from private.media_deletion_claims where bucket = p_bucket and path = p_path and state = 'active';
+    return jsonb_build_object('status', 'referenced');
+  end if;
+  insert into private.media_deletion_claims (bucket, path, token, state, claimed_at)
+    values (p_bucket, p_path, v_token, 'active', now())
+    on conflict (bucket, path) do update
+      set token = excluded.token, state = 'active', claimed_at = excluded.claimed_at, completed_at = null;
+  return jsonb_build_object('status', 'claimed', 'token', v_token);
+end;
+$$;
+revoke all on function public.claim_media_deletion(text, text) from public, anon, authenticated;
+grant execute on function public.claim_media_deletion(text, text) to service_role;
+
+-- The Storage delete succeeded: the claim becomes a tombstone. Only the
+-- holder's token does anything; returns whether it did.
+create or replace function public.complete_media_deletion(p_bucket text, p_path text, p_token uuid)
 returns boolean
 language plpgsql
 volatile
@@ -558,32 +642,32 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
-  if p_bucket is null or p_bucket !~ '^[a-z0-9_-]{1,63}$' or not coalesce(private.media_path_ok(p_path), false) then
-    return false;
-  end if;
-  perform pg_advisory_xact_lock(hashtextextended('drvn-media:' || p_bucket || '/' || p_path, 0));
-  -- A fresh statement after the lock: it sees any reference committed by a
-  -- writer that held the lock before us.
-  if public.media_object_referenced(p_bucket, p_path) then return false; end if;
-  insert into private.media_deletion_claims (bucket, path) values (p_bucket, p_path)
-    on conflict (bucket, path) do nothing;
-  return true;
+  update private.media_deletion_claims
+     set state = 'done', completed_at = now()
+   where bucket = p_bucket and path = p_path and token = p_token and state = 'active';
+  return found;
 end;
 $$;
-revoke all on function public.claim_media_deletion(text, text) from public, anon, authenticated;
-grant execute on function public.claim_media_deletion(text, text) to service_role;
+revoke all on function public.complete_media_deletion(text, text, uuid) from public, anon, authenticated;
+grant execute on function public.complete_media_deletion(text, text, uuid) to service_role;
 
-create or replace function public.release_media_claim(p_bucket text, p_path text)
-returns void
-language sql
+-- The Storage delete failed: the object is still there, so let it be used
+-- again. Only the holder's token releases; returns whether it did.
+create or replace function public.release_media_claim(p_bucket text, p_path text, p_token uuid)
+returns boolean
+language plpgsql
 volatile
 security definer
 set search_path = public, pg_temp
 as $$
-  delete from private.media_deletion_claims where bucket = p_bucket and path = p_path;
+begin
+  delete from private.media_deletion_claims
+   where bucket = p_bucket and path = p_path and token = p_token and state = 'active';
+  return found;
+end;
 $$;
-revoke all on function public.release_media_claim(text, text) from public, anon, authenticated;
-grant execute on function public.release_media_claim(text, text) to service_role;
+revoke all on function public.release_media_claim(text, text, uuid) from public, anon, authenticated;
+grant execute on function public.release_media_claim(text, text, uuid) to service_role;
 
 -- The keys a row's reference column names. TG_ARGV[0] is the column;
 -- TG_ARGV[1] how to read it: 'url', 'json', 'evidence' (storage_path and

@@ -34,9 +34,19 @@ type ServerClient = Awaited<ReturnType<typeof createClient>>;
 type AdminClient = ReturnType<typeof createAdminClient>;
 
 /** removed: gone. referenced: kept, something still uses it. invalid: not an
- *  object this owner may have removed (never retried). failed: a lookup or
- *  storage error (retry later). */
-export type MediaRemovalOutcome = "removed" | "referenced" | "invalid" | "failed";
+ *  object this owner may have removed (never retried). busy: another remover
+ *  holds the claim (retry later, untouched). failed: a lookup or storage
+ *  error (retry later). */
+export type MediaRemovalOutcome = "removed" | "referenced" | "invalid" | "busy" | "failed";
+
+type ClaimAnswer = { status: "claimed"; token: string } | { status: "referenced" | "busy" | "gone" | "invalid" };
+
+function readClaim(data: unknown): ClaimAnswer | null {
+  if (!data || typeof data !== "object") return null;
+  const { status, token } = data as { status?: unknown; token?: unknown };
+  if (status === "claimed") return typeof token === "string" && token ? { status, token } : null;
+  return status === "referenced" || status === "busy" || status === "gone" || status === "invalid" ? { status } : null;
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -70,28 +80,40 @@ export async function removeMediaObject(
   try {
     const admin = options.admin ?? createAdminClient();
     // Claim, don't just check: under a per-object lock the database re-checks
-    // every reference and records a claim that every reference write then
-    // refuses (20261107150500 §7). A check followed by a delete let evidence
-    // attached in between be deleted anyway.
+    // every reference and hands this remover an exclusive claim token that
+    // every reference write then respects (20261107150500 §7). A check
+    // followed by a delete let evidence attached in between be deleted
+    // anyway, and a shared claim let one remover release another's.
     const claimed = await admin.rpc("claim_media_deletion", { p_bucket: ref.bucket, p_path: ref.path });
+    const claim = claimed.error ? null : readClaim(claimed.data);
     // An unanswerable check is never "unreferenced" — deleting storage on
     // partial information is the one mistake this module exists to prevent.
-    if (claimed.error || typeof claimed.data !== "boolean") {
+    if (!claim) {
       if (options.strict) throw new Error("Media reference lookup failed");
       reportError("[media-gc] reference check failed", { bucket: ref.bucket, error: claimed.error });
       return "failed";
     }
-    if (!claimed.data) return "referenced";
+    if (claim.status === "referenced") return "referenced";
+    if (claim.status === "invalid") return "invalid";
+    // Someone else is removing it right now; never a second delete.
+    if (claim.status === "busy") return "busy";
 
-    const { error: removeError } = await admin.storage.from(ref.bucket).remove([ref.path]);
-    if (removeError) {
-      // The object is still there: let it be referenced again.
-      const released = await admin.rpc("release_media_claim", { p_bucket: ref.bucket, p_path: ref.path });
-      if (released.error) reportError("[media-gc] claim release failed", { bucket: ref.bucket, error: released.error });
-      if (options.strict) throw new Error("Storage remove failed");
-      reportError("[media-gc] storage remove failed", { bucket: ref.bucket, removeError });
-      return "failed";
+    if (claim.status === "claimed") {
+      const { error: removeError } = await admin.storage.from(ref.bucket).remove([ref.path]);
+      if (removeError) {
+        // The object is still there: release OUR claim so it can be used again.
+        const released = await admin.rpc("release_media_claim", { p_bucket: ref.bucket, p_path: ref.path, p_token: claim.token });
+        if (released.error) reportError("[media-gc] claim release failed", { bucket: ref.bucket, error: released.error });
+        if (options.strict) throw new Error("Storage remove failed");
+        reportError("[media-gc] storage remove failed", { bucket: ref.bucket, removeError });
+        return "failed";
+      }
+      const completed = await admin.rpc("complete_media_deletion", { p_bucket: ref.bucket, p_path: ref.path, p_token: claim.token });
+      if (completed.error || completed.data !== true) {
+        reportError("[media-gc] claim completion failed", { bucket: ref.bucket, error: completed.error });
+      }
     }
+    // "gone": an earlier remover already deleted it.
     // The object is gone; its staging ledger entry has nothing left to track.
     await admin.from("staged_uploads").delete().eq("bucket", ref.bucket).eq("path", ref.path);
     return "removed";
@@ -148,7 +170,7 @@ export async function deleteMediaIfUnreferenced(
 
 const CLEANUP_MAX_ATTEMPTS = 10;
 
-export type CleanupRun = { scanned: number; removed: number; retained: number; rejected: number; failed: number };
+export type CleanupRun = { scanned: number; removed: number; retained: number; rejected: number; busy: number; failed: number };
 
 /**
  * Works the durable cleanup queue (N51): photos of deleted cars, posts and
@@ -161,7 +183,7 @@ export async function processMediaCleanupQueue(
   options: { ownerId?: string; limit?: number; admin?: AdminClient } = {}
 ): Promise<CleanupRun> {
   const admin = options.admin ?? createAdminClient();
-  const run: CleanupRun = { scanned: 0, removed: 0, retained: 0, rejected: 0, failed: 0 };
+  const run: CleanupRun = { scanned: 0, removed: 0, retained: 0, rejected: 0, busy: 0, failed: 0 };
   let query = admin
     .from("media_cleanup_queue")
     .select("bucket, path, owner_id, attempts")
@@ -175,6 +197,11 @@ export async function processMediaCleanupQueue(
   for (const row of data ?? []) {
     run.scanned += 1;
     const outcome = await removeMediaObject({ bucket: row.bucket, path: row.path }, row.owner_id, { admin });
+    if (outcome === "busy") {
+      // Another run holds it; it stays queued, attempts untouched.
+      run.busy += 1;
+      continue;
+    }
     if (outcome === "failed") {
       run.failed += 1;
       const retry = await admin

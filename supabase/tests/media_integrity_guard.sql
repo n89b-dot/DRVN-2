@@ -1,7 +1,8 @@
 -- 20261107150500 (OS-W15): media integrity and lifecycle, attacked with
 -- member credentials the way a client holding its own JWT can.
---   N12  removal claims its object under a lock and reference writes refuse a
---        claimed one (no check-then-delete race); staged-upload
+--   N12  removal claims its object under a lock with an exclusive token
+--        (a second remover gets nothing, only the holder completes or
+--        releases) and reference writes refuse a claimed one; staged-upload
 --        registration is server-only and owner-bound; members
 --        can't delete or overwrite evidence or media in Storage; dispute
 --        evidence counts as "in use" by its storage path.
@@ -11,7 +12,8 @@
 --   N55  a member's photo columns only take their own canonical uploads, on
 --        the recorded storage origin, and none while it's unrecorded.
 --   N51  deleting a car, post or listing queues its photos for cleanup,
---        including a pin's photo no longer in the gallery.
+--        including a pin's photo no longer in the gallery, as the row's real
+--        owner: never another member's upload named in its text.
 -- Transactional; disposable local or CI database only.
 begin;
 -- Hosted Supabase grants these; the CI image's storage stand-in doesn't.
@@ -35,6 +37,9 @@ declare
   blocked boolean;
   n int;
   i int;
+  claim jsonb;
+  token_a uuid;
+  token_b uuid;
 begin
   update public.beta_access_config set enforced = false where singleton;
   insert into auth.users(id, email) values
@@ -351,6 +356,15 @@ begin
   insert into public.listings(seller_id, title, category, price_cents, shipping_cents, status, currency)
     values (seller, 'Media guard part', 'engine', 5000, 500, 'draft', 'USD') returning id into listing;
   insert into public.listing_images(listing_id, url, position) values (listing, base || 'listing-images/' || seller || '/part.webp', 0);
+  -- Second review: a member puts someone else's upload URL, and an
+  -- off-origin URL shaped like their own, in a post's ordinary text block.
+  -- Deleting the post must not queue either: cleanup acts only as the
+  -- deleted row's real owner, on our own storage origin.
+  insert into public.activity_posts(id, car_id, author_id, title, body, published_at)
+    values (gen_random_uuid(), car, seller, 'Bait', jsonb_build_array(
+      jsonb_build_object('type', 'text', 'text', base || 'car-images/' || buyer || '/victim.webp'),
+      jsonb_build_object('type', 'text', 'text', 'https://evil.example/storage/v1/object/public/car-images/' || seller || '/offsite.webp')), now());
+  insert into public.listing_images(listing_id, url, position) values (listing, base || 'listing-images/' || buyer || '/theirs.webp', 1);
   -- A pin whose photo has since left the gallery: only the hotspot names it.
   insert into public.car_hotspots(car_id, image_url, x, y, label)
     values (car, base || 'car-images/' || seller || '/' || car || '/pin.webp', 0.5, 0.5, 'Turbo');
@@ -385,6 +399,9 @@ begin
   select count(*) into n from public.media_cleanup_queue where owner_id = seller;
   -- 6 named above plus the legacy body-only photo from check 4.
   if n <> 7 then raise exception 'FAIL 6: expected 7 queued photos, found %', n; end if;
+  if exists (select 1 from public.media_cleanup_queue where owner_id = buyer or path like buyer || '/%' or path like seller || '/offsite%') then
+    raise exception 'FAIL 6: deleting content queued another member''s upload, or one off our storage';
+  end if;
   raise notice 'PASS 6: deleted content queues its photos for reference-checked removal (N51)';
 
   -- ------------------------------------------------------------------
@@ -392,13 +409,28 @@ begin
   -- ------------------------------------------------------------------
   perform set_config('request.jwt.claims', '', true);
   evidence := buyer || '/' || dispute || '/' || gen_random_uuid() || '.jpg';
-  if not public.claim_media_deletion('dispute-evidence', evidence) then
-    raise exception 'FAIL 7: an unattached evidence upload could not be claimed';
+  claim := public.claim_media_deletion('dispute-evidence', evidence);
+  if claim ->> 'status' <> 'claimed' or claim ->> 'token' is null then
+    raise exception 'FAIL 7: an unattached evidence upload could not be claimed (got %)', claim;
   end if;
+  token_a := (claim ->> 'token')::uuid;
   if not exists (select 1 from pg_locks where locktype = 'advisory' and pid = pg_backend_pid() and granted) then
     raise exception 'FAIL 7: the claim took no per-object lock';
   end if;
-  -- The race: GC claimed it, then addDisputeEvidence (service role) attaches it.
+  -- Second review: a second remover (the after-delete run overlapping the
+  -- daily job) gets no claim, so it can neither delete nor release.
+  claim := public.claim_media_deletion('dispute-evidence', evidence);
+  if claim ->> 'status' <> 'busy' or claim ? 'token' then
+    raise exception 'FAIL 7: a second remover was handed the same object (got %)', claim;
+  end if;
+  if public.release_media_claim('dispute-evidence', evidence, gen_random_uuid())
+     or public.complete_media_deletion('dispute-evidence', evidence, gen_random_uuid()) then
+    raise exception 'FAIL 7: a token that does not hold the claim released or completed it';
+  end if;
+  if not exists (select 1 from private.media_deletion_claims where bucket = 'dispute-evidence' and path = evidence and token = token_a and state = 'active') then
+    raise exception 'FAIL 7: the holder lost its claim to another remover';
+  end if;
+  -- The race: GC holds the claim, then addDisputeEvidence (service role) attaches it.
   perform set_config('role', 'service_role', true);
   perform set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
   blocked := false;
@@ -411,7 +443,8 @@ begin
   perform set_config('role', 'none', true);
   perform set_config('request.jwt.claims', '', true);
   -- A member adopting a claimed upload into a photo column is refused too.
-  if not public.claim_media_deletion('avatars', seller || '/claimed.webp') then
+  claim := public.claim_media_deletion('avatars', seller || '/claimed.webp');
+  if claim ->> 'status' <> 'claimed' then
     raise exception 'FAIL 7: an unreferenced avatar could not be claimed';
   end if;
   perform set_config('role', 'authenticated', true);
@@ -435,20 +468,50 @@ begin
   -- The other order: attached first, then the claim sees it and refuses.
   photo := buyer || '/' || dispute || '/' || gen_random_uuid() || '.jpg';
   insert into public.dispute_evidence(order_id, uploader_id, url, storage_path) values (dispute, buyer, photo, photo);
-  if public.claim_media_deletion('dispute-evidence', photo) then
+  if public.claim_media_deletion('dispute-evidence', photo) ->> 'status' <> 'referenced' then
     raise exception 'FAIL 7: attached evidence was claimed for deletion';
   end if;
   if exists (select 1 from private.media_deletion_claims where bucket = 'dispute-evidence' and path = photo) then
     raise exception 'FAIL 7: a refused claim left a claim behind';
   end if;
-  -- A failed Storage delete releases the claim; the object can be used again.
-  perform public.release_media_claim('dispute-evidence', evidence);
+  -- The holder's failed Storage delete releases its claim; the object can be
+  -- used again, and a later remover then sees the reference.
+  if not public.release_media_claim('dispute-evidence', evidence, token_a) then
+    raise exception 'FAIL 7: the holder could not release its own claim';
+  end if;
   insert into public.dispute_evidence(order_id, uploader_id, url, storage_path) values (dispute, buyer, evidence, evidence);
+  if public.claim_media_deletion('dispute-evidence', evidence) ->> 'status' <> 'referenced' then
+    raise exception 'FAIL 7: a late remover was handed attached evidence';
+  end if;
+  -- A completed claim is a tombstone: no second delete, no later adoption.
+  photo := seller || '/done.webp';
+  token_a := (public.claim_media_deletion('car-images', photo) ->> 'token')::uuid;
+  if not public.complete_media_deletion('car-images', photo, token_a) then
+    raise exception 'FAIL 7: the holder could not complete its claim';
+  end if;
+  if public.claim_media_deletion('car-images', photo) ->> 'status' <> 'gone'
+     or public.release_media_claim('car-images', photo, token_a) then
+    raise exception 'FAIL 7: a completed deletion could be claimed again or released';
+  end if;
+  -- A holder that died mid-delete: past the 10-minute lease another remover
+  -- takes over with a new token, and the old token can do nothing.
+  photo := seller || '/stale.webp';
+  token_a := (public.claim_media_deletion('car-images', photo) ->> 'token')::uuid;
+  update private.media_deletion_claims set claimed_at = now() - interval '11 minutes' where bucket = 'car-images' and path = photo;
+  claim := public.claim_media_deletion('car-images', photo);
+  token_b := (claim ->> 'token')::uuid;
+  if claim ->> 'status' <> 'claimed' or token_b = token_a then
+    raise exception 'FAIL 7: an expired claim was not taken over with a new token (got %)', claim;
+  end if;
+  if public.release_media_claim('car-images', photo, token_a) or public.complete_media_deletion('car-images', photo, token_a) then
+    raise exception 'FAIL 7: an expired token still controlled the claim';
+  end if;
   if has_function_privilege('authenticated', 'public.claim_media_deletion(text,text)', 'execute')
-     or has_function_privilege('anon', 'public.release_media_claim(text,text)', 'execute') then
+     or has_function_privilege('anon', 'public.release_media_claim(text,text,uuid)', 'execute')
+     or has_function_privilege('authenticated', 'public.complete_media_deletion(text,text,uuid)', 'execute') then
     raise exception 'FAIL 7: claims are callable by a client role';
   end if;
-  raise notice 'PASS 7: a removal claims its object, and reference writes refuse a claimed one (N12 race)';
+  raise notice 'PASS 7: one remover holds an object''s claim by token; reference writes refuse a claimed object (N12 race)';
 
   raise notice 'all media integrity checks passed';
 end $$;

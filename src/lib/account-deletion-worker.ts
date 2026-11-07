@@ -36,7 +36,8 @@ async function drainStorage(admin: ReturnType<typeof createAdminClient>, job: Jo
     // object no reference could ever name canonically is kept, not retried
     // forever.
     const outcome = await removeMediaObject({ bucket: object.bucket, path: object.path }, job.payload.user_id, { strict: true, admin });
-    if (outcome === "failed") throw new Error("Storage cleanup needs retry");
+    // Busy: another remover holds the object's claim right now; come back.
+    if (outcome === "failed" || outcome === "busy") throw new Error("Storage cleanup needs retry");
     await heartbeat();
     await admin.from("deletion_storage_tasks").update({ status: outcome === "removed" ? "deleted" : "retained" }).eq("job_id", job.id).eq("bucket", object.bucket).eq("path", object.path).throwOnError();
   }

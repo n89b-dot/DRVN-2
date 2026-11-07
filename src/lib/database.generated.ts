@@ -6399,7 +6399,7 @@ export type Database = {
       }
       claim_media_deletion: {
         Args: { p_bucket: string; p_path: string }
-        Returns: boolean
+        Returns: Json
       }
       claim_outbound_label_void: {
         Args: { p_shipment: string; p_worker: string }
@@ -6503,6 +6503,10 @@ export type Database = {
       claim_unmapped_payment_requests: { Args: never; Returns: Json }
       complete_listing_creation: {
         Args: { p_listing: string; p_payload_hash: string; p_request: string }
+        Returns: boolean
+      }
+      complete_media_deletion: {
+        Args: { p_bucket: string; p_path: string; p_token: string }
         Returns: boolean
       }
       complete_outbound_label: {
@@ -7696,8 +7700,8 @@ export type Database = {
       refresh_search_words: { Args: never; Returns: undefined }
       release_expired_reservations: { Args: never; Returns: Json }
       release_media_claim: {
-        Args: { p_bucket: string; p_path: string }
-        Returns: undefined
+        Args: { p_bucket: string; p_path: string; p_token: string }
+        Returns: boolean
       }
       release_seller_carry_payout: {
         Args: {

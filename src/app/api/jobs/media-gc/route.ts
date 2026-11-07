@@ -29,6 +29,8 @@ import { cronAuthorized } from "@/lib/cron-auth";
 
 const STALE_AFTER_MS = 48 * 60 * 60 * 1000;
 const BATCH = 200;
+// Leaves the staged sweep most of maxDuration (300 s).
+const CLEANUP_BUDGET_MS = 150_000;
 
 async function run(request: Request) {
   if (!process.env.CRON_SECRET) {
@@ -44,7 +46,17 @@ async function run(request: Request) {
     const cutoff = new Date(Date.now() - STALE_AFTER_MS).toISOString();
 
     await ensureMediaStorageOrigin(admin);
-    const cleanup = await processMediaCleanupQueue({ admin, limit: BATCH });
+    // Drain the deleted-content queue in batches within a time budget, so a
+    // backlog still clears within the day the privacy page promises. Stop
+    // early when a batch makes no progress (only busy or failing rows left).
+    const started = Date.now();
+    const cleanup = { scanned: 0, removed: 0, retained: 0, rejected: 0, busy: 0, failed: 0 };
+    for (;;) {
+      const batch = await processMediaCleanupQueue({ admin, limit: BATCH });
+      for (const key of Object.keys(cleanup) as (keyof typeof cleanup)[]) cleanup[key] += batch[key];
+      const progressed = batch.removed + batch.retained + batch.rejected;
+      if (batch.scanned < BATCH || progressed === 0 || Date.now() - started > CLEANUP_BUDGET_MS) break;
+    }
 
     const { data: stale, error } = await admin
       .from("staged_uploads")
@@ -79,7 +91,7 @@ async function run(request: Request) {
         if (dropped.error) throw dropped.error;
         rejected += 1;
       } else {
-        // Transient storage or lookup error — logged inside the helper; left
+        // Busy (another remover holds it), or a transient storage or lookup error — logged inside the helper; left
         // for the next pass rather than dropped on the floor.
         skipped += 1;
       }

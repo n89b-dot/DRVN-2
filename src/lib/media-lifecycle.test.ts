@@ -9,11 +9,16 @@ const state = vi.hoisted(() => ({
   queue: [] as { bucket: string; path: string; owner_id: string; attempts: number }[],
 }));
 const remove = vi.fn<(paths: string[]) => Promise<{ error: unknown }>>(async () => ({ error: null }));
-// claim_media_deletion answers true when it claimed the object (nothing
-// references it), false when something does.
-const defaultRpc = async (name: string) =>
-  name === "claim_media_deletion" ? { data: state.rpcError ? null : !state.referenced, error: state.rpcError } : { data: null, error: null };
-const rpc = vi.fn<(name: string, args: Record<string, unknown>) => Promise<{ data: boolean | null; error: unknown }>>(defaultRpc);
+// claim_media_deletion answers {status: "claimed", token} when nothing
+// references the object, {status: "referenced"} when something does.
+type RpcResult = { data: unknown; error: unknown };
+const claimed = (referenced: boolean) => (referenced ? { status: "referenced" } : { status: "claimed", token: "token-1" });
+const defaultRpc = async (name: string): Promise<RpcResult> => {
+  if (name === "claim_media_deletion") return { data: state.rpcError ? null : claimed(Boolean(state.referenced)), error: state.rpcError };
+  if (name === "complete_media_deletion" || name === "release_media_claim") return { data: true, error: null };
+  return { data: null, error: null };
+};
+const rpc = vi.fn<(name: string, args: Record<string, unknown>) => Promise<RpcResult>>(defaultRpc);
 const writes: { table: string; op: string; filters: [string, unknown][]; values?: unknown }[] = [];
 
 function builder(table: string) {
@@ -41,8 +46,10 @@ const url = (owner: string, bucket = "listing-images", file = "photo.webp") =>
   `https://example.supabase.co/storage/v1/object/public/${bucket}/${owner}/${file}`;
 
 beforeEach(() => {
-  remove.mockClear();
-  rpc.mockClear();
+  remove.mockReset();
+  remove.mockImplementation(async () => ({ error: null }));
+  rpc.mockReset();
+  rpc.mockImplementation(defaultRpc);
   writes.length = 0;
   state.referenced = false;
   state.rpcError = null;
@@ -127,10 +134,108 @@ describe("removeMediaObject — claim before delete (N12 race)", () => {
     expect(remove).not.toHaveBeenCalled();
   });
 
-  it("releases the claim when the storage delete fails, so the object can be used again", async () => {
+  it("releases only its own claim when the storage delete fails, and completes it when it succeeds", async () => {
     remove.mockResolvedValueOnce({ error: { message: "storage down" } });
     expect(await removeMediaObject(url(ME), ME)).toBe("failed");
-    expect(rpc).toHaveBeenCalledWith("release_media_claim", { p_bucket: "listing-images", p_path: `${ME}/photo.webp` });
+    expect(rpc).toHaveBeenCalledWith("release_media_claim", { p_bucket: "listing-images", p_path: `${ME}/photo.webp`, p_token: "token-1" });
+    rpc.mockClear();
+    expect(await removeMediaObject(url(ME), ME)).toBe("removed");
+    expect(rpc).toHaveBeenCalledWith("complete_media_deletion", { p_bucket: "listing-images", p_path: `${ME}/photo.webp`, p_token: "token-1" });
+  });
+});
+
+/**
+ * Codex P1 (second review): two removers of one object — the after-delete
+ * run and the daily job — used to share one claim, so one's failed delete
+ * released the claim while the other's delete was still in flight, evidence
+ * then attached, and the late delete took it. Here the database half is a
+ * faithful in-memory model of claim_media_deletion / complete / release
+ * (one active claim, token-gated), and the Storage deletes are held open so
+ * the interleaving is fixed, not timed.
+ */
+describe("two removers of one object (claim tokens)", () => {
+  type Claim = { token: string; state: "active" | "done" };
+  let claims: Map<string, Claim>;
+  let references: Set<string>;
+  let next: number;
+  const key = (args: Record<string, unknown>) => `${args.p_bucket}/${args.p_path}`;
+
+  beforeEach(() => {
+    claims = new Map();
+    references = new Set();
+    next = 0;
+    rpc.mockImplementation(async (name, args) => {
+      const k = key(args);
+      const existing = claims.get(k);
+      if (name === "claim_media_deletion") {
+        if (existing?.state === "done") return { data: { status: "gone" }, error: null };
+        if (existing) return { data: { status: "busy" }, error: null };
+        if (references.has(k)) return { data: { status: "referenced" }, error: null };
+        const token = `t${++next}`;
+        claims.set(k, { token, state: "active" });
+        return { data: { status: "claimed", token }, error: null };
+      }
+      const held = existing?.state === "active" && existing.token === args.p_token;
+      if (name === "release_media_claim") {
+        if (held) claims.delete(k);
+        return { data: held, error: null };
+      }
+      if (name === "complete_media_deletion") {
+        if (held) existing!.state = "done";
+        return { data: held, error: null };
+      }
+      return { data: null, error: null };
+    });
+  });
+
+  /** A held-open Storage delete the test settles when it chooses. */
+  function deferredRemove() {
+    let settle!: (result: { error: unknown }) => void;
+    const pending = new Promise<{ error: unknown }>((resolve) => (settle = resolve));
+    remove.mockImplementationOnce(() => pending);
+    return settle;
+  }
+
+  it("a second remover never deletes while the first holds the claim; the first's failure frees it for a reference", async () => {
+    const evidence = { bucket: "dispute-evidence", path: `${ME}/order/e.jpg` };
+    const failA = deferredRemove();
+    const a = removeMediaObject(evidence, ME); // claims (t1), delete in flight
+    await vi.waitFor(() => expect(remove).toHaveBeenCalledTimes(1));
+    // B arrives mid-delete: busy, and it calls no Storage delete at all.
+    expect(await removeMediaObject(evidence, ME)).toBe("busy");
+    expect(remove).toHaveBeenCalledTimes(1);
+    // A's delete fails; it releases its own claim (t1) and only that.
+    failA({ error: { message: "storage down" } });
+    expect(await a).toBe("failed");
+    expect(claims.has(`${evidence.bucket}/${evidence.path}`)).toBe(false);
+    // The evidence is attached, then B retries late: it finds the reference.
+    references.add(`${evidence.bucket}/${evidence.path}`);
+    expect(await removeMediaObject(evidence, ME)).toBe("referenced");
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
+
+  it("a late success by the holder completes its claim; a second remover then finds the object gone", async () => {
+    const photo = { bucket: "car-images", path: `${ME}/car/x.webp` };
+    const finishA = deferredRemove();
+    const a = removeMediaObject(photo, ME);
+    await vi.waitFor(() => expect(remove).toHaveBeenCalledTimes(1));
+    expect(await removeMediaObject(photo, ME)).toBe("busy");
+    // A stale token can neither complete nor release the live claim.
+    expect((await rpc("release_media_claim", { ...{ p_bucket: photo.bucket, p_path: photo.path }, p_token: "t-stale" })).data).toBe(false);
+    finishA({ error: null });
+    expect(await a).toBe("removed");
+    expect(claims.get(`${photo.bucket}/${photo.path}`)).toEqual({ token: "t1", state: "done" });
+    expect(await removeMediaObject(photo, ME)).toBe("removed");
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
+
+  it("a busy object stays queued without spending an attempt", async () => {
+    claims.set(`car-images/${ME}/car/q.webp`, { token: "other", state: "active" });
+    state.queue = [{ bucket: "car-images", path: `${ME}/car/q.webp`, owner_id: ME, attempts: 0 }];
+    const run = await processMediaCleanupQueue();
+    expect(run).toMatchObject({ busy: 1, failed: 0 });
+    expect(remove).not.toHaveBeenCalled();
+    expect(writes.some((w) => w.table === "media_cleanup_queue")).toBe(false);
   });
 });
 
@@ -170,9 +275,11 @@ describe("processMediaCleanupQueue (N51)", () => {
       { bucket: "car-images", path: `${ME}/car/gone.webp`, owner_id: ME, attempts: 0 },
       { bucket: "listing-images", path: `${ME}/sold.webp`, owner_id: ME, attempts: 0 },
     ];
-    rpc.mockImplementation(async (_name, args) => ({ data: args.p_path !== `${ME}/sold.webp`, error: null }));
+    rpc.mockImplementation(async (name, args) =>
+      name === "claim_media_deletion" ? { data: claimed(args.p_path === `${ME}/sold.webp`), error: null } : defaultRpc(name)
+    );
     const run = await processMediaCleanupQueue();
-    expect(run).toEqual({ scanned: 2, removed: 1, retained: 1, rejected: 0, failed: 0 });
+    expect(run).toEqual({ scanned: 2, removed: 1, retained: 1, rejected: 0, busy: 0, failed: 0 });
     expect(remove).toHaveBeenCalledTimes(1);
     expect(remove).toHaveBeenCalledWith([`${ME}/car/gone.webp`]);
     expect(writes.filter((w) => w.table === "media_cleanup_queue" && w.op === "delete")).toHaveLength(2);
