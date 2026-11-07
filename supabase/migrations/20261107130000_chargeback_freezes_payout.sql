@@ -123,10 +123,13 @@ $$;
 --    first pass after the chargeback resolves. Uncertain rows and expired
 --    leases are admitted exactly as before, and an uncertain row shelved
 --    with a reconciliation time is admitted when that time is due, whatever
---    the chargeback: the worker reconciles it against Stripe (recording any
---    transfer it finds) and never creates a new one while the chargeback is
---    unresolved. Rows shelved for any other reason have no next_attempt_at
---    and keep waiting for readiness, as before.
+--    the chargeback or the order's status: the worker shelves every absent
+--    uncertain payout that isn't payable now (chargeback unresolved, order
+--    disputed or undelivered, clearing time ahead) that way, reconciles it
+--    against Stripe on each due pass (recording any transfer it finds), never
+--    creates a new one until it is payable, and asks an operator when its
+--    attempt budget is spent. Fresh rows are shelved without a
+--    next_attempt_at and keep waiting for readiness, as before.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.claim_transfer_intents(

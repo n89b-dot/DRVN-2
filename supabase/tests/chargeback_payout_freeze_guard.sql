@@ -334,6 +334,75 @@ begin
   end if;
   raise notice 'PASS 8: uncertain payouts stay reachable for reconciliation through a chargeback, with backoff, keep their request, record a late transfer and are never sent twice';
 
+  -- 8b. The same, but the chargeback holds the order `disputed` for the whole
+  --     bank case (no in-app close). A previous worker's Stripe request was
+  --     in flight when its lease expired. Readiness never promotes a disputed
+  --     order, so only the reconciliation time keeps the payout reachable;
+  --     every step below is a real claim or the worker's own release.
+  o := pg_temp.w18_order(buyer, seller, 'pi_w18_disputed');
+  perform public.apply_stripe_dispute_event('dp_w18_disputed', 'pi_w18_disputed', 10000, 'usd',
+    'needs_response', false, 'evt_w18_disputed_open', 900, lease);
+  if (select status from public.orders where id = o) <> 'disputed' then
+    raise exception 'Fixture 8b: the chargeback did not dispute the order';
+  end if;
+  update public.transfer_intents
+  set status = 'processing', locked_by = 'w18-crashed', locked_at = now() - interval '10 minutes',
+      lease_expires_at = now() - interval '1 second', updated_at = now() - interval '1 year',
+      operation_key = 'transfer:' || o::text, dispatch_amount_cents = 9000, dispatch_currency = 'usd',
+      dispatch_destination = 'acct_w18_seller', dispatch_source_transaction = 'ch_pi_w18_disputed',
+      dispatch_transfer_group = 'pi_w18_disputed', provider_call_may_have_occurred = true
+  where order_id = o;
+  if not exists (
+    select 1 from public.claim_transfer_intents('w18-d1', 200, 300, 8) c
+    where c.order_id = o and c.provider_call_may_have_occurred
+  ) then
+    raise exception 'FAIL 8b: the in-flight payout was not reclaimed for reconciliation';
+  end if;
+  -- Stripe shows nothing yet: the worker shelves it with backoff.
+  if not public.release_transfer_intent(o, 'w18-d1', 'holding',
+       'Payout frozen: a bank chargeback on this order is unresolved', 1, now() + interval '2 minutes') then
+    raise exception 'Fixture 8b: the worker could not shelve the reconciled row';
+  end if;
+  if pg_temp.w18_after_mark(o) <> 'holding' then
+    raise exception 'FAIL 8b: readiness promoted a disputed order''s payout';
+  end if;
+  if exists (select 1 from public.claim_transfer_intents('w18-early', 200, 300, 8) c where c.order_id = o) then
+    raise exception 'FAIL 8b: the backoff was not respected';
+  end if;
+  -- Two minutes pass; still disputed, still nothing at Stripe; shelved again.
+  update public.transfer_intents set next_attempt_at = now() - interval '1 second' where order_id = o;
+  if not exists (select 1 from public.claim_transfer_intents('w18-d2', 200, 300, 8) c where c.order_id = o) then
+    raise exception 'FAIL 8b: a disputed order''s uncertain payout became unreachable for reconciliation';
+  end if;
+  if not public.release_transfer_intent(o, 'w18-d2', 'holding',
+       'Payout frozen: a bank chargeback on this order is unresolved', 2, now() + interval '4 minutes') then
+    raise exception 'Fixture 8b: the second shelve failed';
+  end if;
+  -- The in-flight request completes at Stripe; the next due pass records it.
+  update public.transfer_intents set next_attempt_at = now() - interval '1 second' where order_id = o;
+  if not exists (select 1 from public.claim_transfer_intents('w18-d3', 200, 300, 8) c where c.order_id = o) then
+    raise exception 'FAIL 8b: the backed-off reconciliation was not admitted';
+  end if;
+  if (select status from public.orders where id = o) <> 'disputed' then
+    raise exception 'Fixture 8b: the order left disputed';
+  end if;
+  v_result := public.complete_transfer_intent(o, 'w18-d3', 'transfer:' || o::text, 'tr_w18_late');
+  if v_result <> 'recovery' or not exists (
+    select 1 from public.orders ord join public.transfer_intents ti on ti.order_id = ord.id
+    where ord.id = o and ord.transfer_reference = 'tr_w18_late'
+      and ti.status = 'transferred' and ti.transfer_reference = 'tr_w18_late'
+  ) or not exists (
+    select 1 from public.payment_recoveries
+    where recovery_key = 'transfer-unresolved:' || o::text and status = 'open'
+      and detail like '%completed while the order was disputed%bank chargeback%'
+  ) then
+    raise exception 'FAIL 8b: the late transfer on a disputed order was not recorded with an open operator case (%)', v_result;
+  end if;
+  if exists (select 1 from public.claim_transfer_intents('w18-again', 200, 300, 8) c where c.order_id = o) then
+    raise exception 'FAIL 8b: a recorded transfer was admitted again';
+  end if;
+  raise notice 'PASS 8b: a disputed order''s in-flight payout stays reachable through real claims and its late transfer is recorded once';
+
   -- 9. The predicate stays private.
   if has_function_privilege('authenticated', 'private.order_has_unresolved_chargeback(uuid)', 'execute')
      or has_function_privilege('anon', 'private.order_has_unresolved_chargeback(uuid)', 'execute')

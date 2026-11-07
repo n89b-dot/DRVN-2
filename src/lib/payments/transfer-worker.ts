@@ -602,32 +602,33 @@ async function processOne(
       });
       return "cancelled";
     }
-    if (
-      !["delivered", "completed"].includes(currentOrder.status) ||
-      (intent.available_at != null && new Date(intent.available_at).getTime() > Date.now())
-    ) {
-      await setIntent(admin, intent.order_id, workerId, {
-        status: "holding",
-        last_error: null,
-      });
-      return "requeued";
-    }
-    // No transfer found, and a chargeback is unresolved: never create one
-    // now. But the earlier request may still be in flight at Stripe, so the
-    // row stays reachable: shelved with its frozen payload, its uncertainty
-    // flag and a backed-off reconciliation time that claim_transfer_intents
-    // honours during the chargeback (20261107130000). A transfer that turns
-    // up is recorded with an operator case (complete_transfer_intent); after
-    // the attempt budget an operator is asked instead. Once the chargeback
-    // resolves, the same idempotency key is used before anything is sent.
-    if (currentChargebackUnresolved) {
+    // No transfer found, and it isn't payable now: an unresolved chargeback,
+    // a disputed or undelivered order, or a clearing time still ahead. Never
+    // create one now. But the earlier request may still be in flight at
+    // Stripe, so the row must stay reachable whatever the reason: it is
+    // shelved with its frozen payload, its uncertainty flag and a backed-off
+    // reconciliation time that claim_transfer_intents honours even while
+    // readiness refuses (20261107130000) — a plain shelf would wait on
+    // readiness, which never comes while a chargeback holds the order
+    // disputed. A transfer that turns up later is recorded, with an operator
+    // case when the order wasn't payable (complete_transfer_intent); once the
+    // attempt budget is spent an operator is asked instead. When it is
+    // payable again, the same idempotency key is used before anything is sent.
+    const notPayable = currentChargebackUnresolved
+      ? "a bank chargeback on the order is unresolved"
+      : !["delivered", "completed"].includes(currentOrder.status)
+        ? `the order is ${currentOrder.status}`
+        : intent.available_at != null && new Date(intent.available_at).getTime() > Date.now()
+          ? "its clearing time is still ahead"
+          : null;
+    if (notPayable) {
       const attempts = intent.attempts + 1;
       if (attempts >= MAX_ATTEMPTS) {
         await recordOperatorRecovery(
           admin,
           intent,
           workerId,
-          `Stripe may have been called for this payout, but no transfer was found after ${attempts} checks while a bank chargeback on the order is unresolved`,
+          `Stripe may have been called for this payout, but no transfer was found after ${attempts} checks while ${notPayable}`,
           dispatch.amountCents
         );
         return "failed";
@@ -636,7 +637,7 @@ async function processOne(
         status: "holding",
         attempts,
         next_attempt_at: retryAt(attempts),
-        last_error: CHARGEBACK_HOLD_REASON,
+        last_error: currentChargebackUnresolved ? CHARGEBACK_HOLD_REASON : null,
       });
       return "requeued";
     }
