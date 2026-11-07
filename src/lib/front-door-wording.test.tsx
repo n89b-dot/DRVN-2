@@ -6,8 +6,8 @@ vi.mock("next/navigation", () => ({ usePathname: () => "/marketplace", useRouter
 import { LivesheetBar } from "@/components/ui";
 import { categoryMetadata } from "@/lib/marketplace/metadata";
 
-import { metadata as marketplaceMetadata } from "./(discover)/marketplace/page";
-import { metadata as landingMetadata } from "./page";
+import { metadata as marketplaceMetadata } from "@/app/(discover)/marketplace/page";
+import { metadata as landingMetadata } from "@/app/page";
 
 const PHRASE = /parts marketplace for modified cars/i;
 
