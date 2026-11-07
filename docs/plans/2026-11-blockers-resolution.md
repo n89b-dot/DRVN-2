@@ -113,7 +113,7 @@ Neil ruled in chat. GPT (Codex) then checked every build against the code and co
 - **R69-age:** Neil is looking into it. For reference, eBay requires 18+ in its User Agreement, with no checkbox at sign-up.
 - **R69-dmca:** a later feature.
 - **N28:** deferred.
-- **R-hold:** Neil ruled on 7 Nov: "Keep it at 7". The missing-setting fallback (`DEFAULT_PAYOUT_HOLD` and the SQL fallback) stays at 7 days, the configured hold stays at 2 days, and only the docs and copy are aligned (Cloud B).
+- **R-hold:** Neil ruled on 7 Nov, then revised the same day: "You can change it to 2 days to align with my rule if that makes sense". Every fallback becomes 2 days: `DEFAULT_PAYOUT_HOLD`, the column default and the SQL coalesce, matching the configured 2-day hold. Built by Cloud B, migration in the 2209xx slot.
 
 ## Owner or hosted, not code
 
