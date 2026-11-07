@@ -352,22 +352,24 @@ export default async function OfferThreadPage({
         </ol>
       </Rv>
 
-      {live && (
-        <Rv className="mb-4" stagger={2}>
-          <OfferDecision
-            offerId={offer.id}
-            status={offer.status}
-            amountCents={offer.amount_cents}
-            counterAmountCents={offer.counter_amount_cents}
-            incoming={incoming}
-            counterpartyName={counterpartyName}
-            expiresAt={offer.expires_at}
-            round={offer.round_count}
-            buyerOffersLeft={buyerOffersUsed == null ? undefined : Math.max(0, 3 - buyerOffersUsed)}
-            block
-          />
-        </Rv>
-      )}
+      {/* Mounted whatever the status, so the move that settles the offer
+          keeps its result note when this page comes back settled
+          (OfferDecision renders nothing for a settled offer it didn't
+          settle; empty:hidden drops the slot's margin then). */}
+      <Rv className="mb-4 empty:hidden" stagger={2}>
+        <OfferDecision
+          offerId={offer.id}
+          status={offer.status}
+          amountCents={offer.amount_cents}
+          counterAmountCents={offer.counter_amount_cents}
+          incoming={incoming}
+          counterpartyName={counterpartyName}
+          expiresAt={offer.expires_at}
+          round={offer.round_count}
+          buyerOffersLeft={buyerOffersUsed == null ? undefined : Math.max(0, 3 - buyerOffersUsed)}
+          block
+        />
+      </Rv>
 
       <Rv className="tile" stagger={3}>
         <TileHead

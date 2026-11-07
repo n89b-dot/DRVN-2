@@ -84,6 +84,9 @@ test.describe("offer decision interruption recovery", () => {
     await page.getByRole("button", { name: /pass/i }).click();
     await expect(page.getByRole("main").getByRole("alert").filter({ hasText: "Retry to check the saved result" })).toBeVisible();
     await page.getByRole("button", { name: /pass/i }).click();
+    // The settled page and the move's note, together: the note outlives the
+    // buttons it came from rather than flashing before the page settles.
+    await expect(page.getByRole("main").getByText("declined", { exact: true })).toBeVisible();
     await expect(page.getByRole("main").getByRole("alert").filter({ hasText: "Offer declined" })).toBeVisible();
   });
 
@@ -107,6 +110,7 @@ test.describe("offer decision interruption recovery", () => {
     await page.getByRole("button", { name: /accept \$80/i }).click();
     await expect(page.getByRole("main").getByRole("alert").filter({ hasText: "Retry to check the saved result" })).toBeVisible();
     await page.getByRole("button", { name: /accept \$80/i }).click();
+    await expect(page.getByRole("main").getByRole("link", { name: /^Order [0-9A-F]{8} →$/ })).toBeVisible();
     await expect(page.getByRole("main").getByRole("alert").filter({ hasText: "Offer accepted" })).toBeVisible();
     const orders = await fixtureAdmin().from("orders").select("id").eq("origin_offer_id", row.id);
     expect(orders.data).toHaveLength(1);
