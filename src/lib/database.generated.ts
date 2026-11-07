@@ -2812,6 +2812,7 @@ export type Database = {
           kind: string
           read_at: string | null
           section: string
+          target_id: string | null
           title: string
           user_id: string
         }
@@ -2824,6 +2825,7 @@ export type Database = {
           kind: string
           read_at?: string | null
           section: string
+          target_id?: string | null
           title: string
           user_id: string
         }
@@ -2836,6 +2838,7 @@ export type Database = {
           kind?: string
           read_at?: string | null
           section?: string
+          target_id?: string | null
           title?: string
           user_id?: string
         }
@@ -6322,6 +6325,21 @@ export type Database = {
         }
         Returns: string
       }
+      car_update_page: {
+        Args: {
+          p_before_at?: string
+          p_before_id?: string
+          p_car: string
+          p_limit?: number
+        }
+        Returns: {
+          body: Json
+          id: string
+          intro: string
+          published_at: string
+          title: string
+        }[]
+      }
       charge_cents_in_bounds: { Args: { p_cents: number }; Returns: boolean }
       claim_listing_creation: {
         Args: { p_payload_hash: string; p_request: string }
@@ -6702,6 +6720,20 @@ export type Database = {
         Args: { p_job: string; p_lease: string; p_reference?: string }
         Returns: Json
       }
+      followed_feed_rows: {
+        Args: {
+          p_before_at?: string
+          p_before_id?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          happened_at: string
+          id: string
+          kind: string
+          seller_id: string
+        }[]
+      }
       freeze_accepted_offer_checkout: {
         Args: { p_actor: string; p_order: string; p_shipping: Json }
         Returns: Json
@@ -6790,6 +6822,14 @@ export type Database = {
       listing_edit_status: {
         Args: { p_listing: string; p_request: string }
         Returns: Json
+      }
+      listing_engagement_counts: {
+        Args: { p_listings: string[] }
+        Returns: {
+          likes: number
+          listing_id: string
+          questions: number
+        }[]
       }
       listing_public_offer_floor: {
         Args: { p_listing: string }
@@ -7242,6 +7282,7 @@ export type Database = {
       my_car_vin: { Args: { p_car: string }; Returns: string }
       my_default_offer_floor: { Args: never; Returns: number }
       my_listing_offer_floor: { Args: { p_listing: string }; Returns: number }
+      notification_href_target: { Args: { p_href: string }; Returns: string }
       notify: {
         Args: {
           p_actor_id?: string
@@ -7326,7 +7367,31 @@ export type Database = {
         Args: { p_hash: string; p_order_id: string; p_seller_id: string }
         Returns: Json
       }
+      post_comment_page: {
+        Args: {
+          p_before_at?: string
+          p_before_id?: string
+          p_limit?: number
+          p_post: string
+        }
+        Returns: {
+          author_display_name: string
+          author_id: string
+          author_username: string
+          body: string
+          created_at: string
+          id: string
+        }[]
+      }
       post_href: { Args: { p_post_id: string }; Returns: string }
+      post_reaction_counts: {
+        Args: { p_post: string }
+        Returns: {
+          emoji: string
+          reacted: boolean
+          total: number
+        }[]
+      }
       post_search_doc: {
         Args: { p_intro: string; p_search_text: string; p_title: string }
         Returns: string
@@ -7670,6 +7735,41 @@ export type Database = {
         Args: { p_car_id: string; p_items: Json }
         Returns: Json
       }
+      saved_counts: {
+        Args: never
+        Returns: {
+          builds: number
+          followed_builds: number
+          followed_sellers: number
+          parts: number
+          posts: number
+          unavailable_parts: number
+        }[]
+      }
+      saved_listing_page: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_query?: string
+          p_sort?: string
+        }
+        Returns: {
+          listing_id: string
+          total: number
+        }[]
+      }
+      saved_page: {
+        Args: {
+          p_before_at?: string
+          p_before_id?: string
+          p_collection: string
+          p_limit?: number
+        }
+        Returns: {
+          saved_at: string
+          target_id: string
+        }[]
+      }
       search_car_ids: { Args: { p_query: string }; Returns: string[] }
       search_listing_documents: {
         Args: { p_ids: string[] }
@@ -7754,6 +7854,14 @@ export type Database = {
           paused_count: number
           reserved_count: number
           sold_count: number
+        }[]
+      }
+      seller_review_summaries: {
+        Args: { p_sellers: string[] }
+        Returns: {
+          rating_avg: number
+          review_count: number
+          seller_id: string
         }[]
       }
       set_analytics_consent: {

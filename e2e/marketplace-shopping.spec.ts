@@ -222,7 +222,12 @@ test("guest Save search resumes the complete search after authentication", async
 
 test("sold and unavailable saved parts stay understandable and can be removed", async ({ page }) => {
   const sold = await admin.from("listings").select("id").eq("seller_id", seller).eq("status", "sold").single().throwOnError();
-  const unavailable = crypto.randomUUID();
+  // A save of a part the buyer can no longer see (back to draft). A save of
+  // a part that no longer exists can't be made at all (N61).
+  const hidden = await admin.from("listings")
+    .insert({ seller_id: seller, title: `${prefix} withdrawn part`, category: "performance", price_cents: 1000, status: "draft" })
+    .select("id").single().throwOnError();
+  const unavailable = hidden.data.id;
   await admin.from("saves").insert([
     { user_id: buyer, target_type: "listing", target_id: sold.data.id },
     { user_id: buyer, target_type: "listing", target_id: unavailable },

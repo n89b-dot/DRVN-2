@@ -65,6 +65,13 @@ describe("social relationship actions", () => {
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 
+  it("N61: a save of something deleted says so instead of asking to try again", async () => {
+    mocks.rpc.mockResolvedValue({ data: null, error: { code: "23503", message: "That is no longer there" } });
+
+    await expect(toggleSave("listing", "target-1", "/marketplace", true)).resolves.toEqual({ error: "That's no longer on DRVN." });
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
   it("uses the same idempotent write for saved-page removals", async () => {
     mocks.rpc.mockResolvedValue({ data: false, error: null });
     const save = new FormData();

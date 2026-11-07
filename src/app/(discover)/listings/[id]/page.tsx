@@ -178,7 +178,7 @@ export default async function ListingPage({
     moreFromSellerCards,
     { data: sourceModLine },
     watchCounts,
-    { data: reviews },
+    { data: sellerRating },
     { data: fitments },
     { data: questions },
     { data: save },
@@ -238,7 +238,8 @@ export default async function ListingPage({
       : Promise.resolve({ data: null }),
     fetchWatchCounts(supabase, [id]),
     // Seller rating + Q&A
-    supabase.from("reviews").select("rating").eq("reviewee_id", listing.seller_id),
+    // Every review, averaged by the database (N30: the rows stopped at 1,000).
+    supabase.rpc("seller_review_summaries", { p_sellers: [listing.seller_id] }).maybeSingle(),
     supabase
       .from("listing_fitments")
       .select("make, model, year_start, year_end")
@@ -292,9 +293,7 @@ export default async function ListingPage({
   // R2-09: a public count from listing_watch_counts. null = couldn't read it.
   const watchCount = watchCounts?.get(id) ?? null;
 
-  const avgRating = (reviews ?? []).length
-    ? (reviews!.reduce((s, r) => s + r.rating, 0) / reviews!.length).toFixed(1)
-    : null;
+  const avgRating = sellerRating?.review_count ? Number(sellerRating.rating_avg).toFixed(1) : null;
 
   // Count the look, but never the seller's own — a seller refreshing their
   // listing must not inflate the number they price against. Fire-and-forget:
@@ -342,7 +341,7 @@ export default async function ListingPage({
     .toUpperCase();
   const sold = soldCount ?? 0;
   const sellerRecord = [
-    avgRating ? ratingLine(avgRating, (reviews ?? []).length) : null,
+    avgRating ? ratingLine(avgRating, sellerRating?.review_count ?? 0) : null,
     sold > 0 ? `${sold} sold on DRVN` : null,
   ]
     .filter(Boolean)

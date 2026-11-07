@@ -17,8 +17,14 @@ import { vehicleSubline } from "@/lib/vehicles/label";
 import { fetchModProvenance } from "@/lib/mods/provenance";
 import { postHeadline } from "@/lib/activity/headline";
 import { CAR_COLUMNS } from "@/lib/cars/columns";
+import { cursorArgs, cursorPage, decodePageCursor, encodePageCursor } from "@/lib/page-cursor";
 
 const TAB_KEYS = ["build", "forsale", "activity", "gallery"];
+
+/** Updates on the Activity tab per page (N60), and the parameter that holds
+ *  a page's position. */
+const UPDATES_PAGE_SIZE = 50;
+const UPDATES_PARAM = "updates";
 
 /** The build panel absorbed the old About and The-build sections. */
 const TAB_ALIASES: Record<string, string> = { about: "build", mods: "build", parts: "forsale" };
@@ -88,10 +94,13 @@ export default async function CarPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ view?: string; fromListing?: string; from?: string }>;
+  searchParams: Promise<{ view?: string; fromListing?: string; from?: string; updates?: string }>;
 }) {
   const { slug } = await params;
-  const { view, fromListing, from } = await searchParams;
+  const { view, fromListing, from, updates: updatesParam } = await searchParams;
+  // N60: the Activity tab reads a page of updates from a position, so a long
+  // build's older updates are a link away instead of cut off at 50.
+  const updatesBefore = decodePageCursor(updatesParam);
   const returnTo = shoppingReturn(from);
   const returnListing = typeof fromListing === "string" && /^[\da-f-]{36}$/i.test(fromListing) ? listingHref(fromListing, returnTo ?? undefined) : null;
   const supabase = await createClient();
@@ -109,7 +118,7 @@ export default async function CarPage({
   if (!car) notFound();
 
   const user = await getViewer();
-  const [{ data: owner }, { data: images }, { data: mods }, { data: posts }, { data: released }] =
+  const [{ data: owner }, { data: images }, { data: mods }, updatePage, { count: updateTotal }, { data: released }] =
     await Promise.all([
       supabase
         .from("profiles")
@@ -122,15 +131,16 @@ export default async function CarPage({
         .eq("car_id", car.id)
         .order("position"),
       supabase.from("mod_items").select("*").eq("car_id", car.id).order("position"),
+      // Published only — RLS lets the author read their own drafts, which
+      // then counted and listed here with no date (the garage filters too).
+      // One row past the page says whether there are older ones.
+      supabase.rpc("car_update_page", { p_car: car.id, p_limit: UPDATES_PAGE_SIZE + 1, ...cursorArgs(updatesBefore) }),
+      // Every published update, for the tab and the at-a-glance line.
       supabase
         .from("activity_posts")
-        .select("id, title, body, intro, published_at")
+        .select("id", { count: "exact", head: true })
         .eq("car_id", car.id)
-        // Published only — RLS lets the author read their own drafts, which
-        // then counted and listed here with no date (the garage filters too).
-        .not("published_at", "is", null)
-        .order("published_at", { ascending: false })
-        .limit(50),
+        .not("published_at", "is", null),
       // The marketplace payload of this page. The build page never queried
       // listings at all, so "what came off this car" — the product's own thesis
       // — was missing from the one page that should carry it.
@@ -145,8 +155,20 @@ export default async function CarPage({
         .limit(50),
     ]);
 
+  if (updatePage.error) reportError("[cars] failed to load updates", { slug, error: updatePage.error });
+  const { rows: posts, next: olderUpdates } = cursorPage(updatePage.data, UPDATES_PAGE_SIZE, (p) => ({
+    at: p.published_at,
+    id: p.id,
+  }));
+  const activityPaging = {
+    total: updateTotal ?? posts.length,
+    olderHref: olderUpdates
+      ? `/cars/${car.slug}?view=activity&${UPDATES_PARAM}=${encodePageCursor(olderUpdates)}`
+      : null,
+    newestHref: updatesBefore ? `/cars/${car.slug}?view=activity` : null,
+  };
 
-  const postIds = (posts ?? []).map(p => p.id);
+  const postIds = posts.map(p => p.id);
   const linkedListingIds = (mods ?? []).map(m => m.linked_listing_id).filter((id): id is string => Boolean(id));
   const releasedIds = (released ?? []).map(l => l.id);
   const [{ data: save }, { data: follow }, { data: postImages }, { data: linkedListings }, { data: listingImages }, { data: hotspots }, provenance] = await Promise.all([
@@ -277,7 +299,7 @@ export default async function CarPage({
   const gallery = (images ?? []).map((i) => ({ url: i.url, alt: i.alt }));
   // Build Evolution (§V): a milestone is any dated published update with a
   // photo — derived, never entered.
-  const evolution = (posts ?? [])
+  const evolution = posts
     .filter((p) => p.published_at && (galleryByPost.get(p.id) ?? []).length > 0)
     .map((p) => ({
       id: p.id,
@@ -287,7 +309,7 @@ export default async function CarPage({
       href: `/cars/${car.slug}/activity/${p.id}`,
     }));
 
-  const activity = (posts ?? []).map((p) => ({
+  const activity = posts.map((p) => ({
     id: p.id,
     date: formatDate(p.published_at),
     title: postHeadline(p),
@@ -306,7 +328,7 @@ export default async function CarPage({
   // what you could buy off it. Zeroes are left out rather than shouted.
   const glance = [
     fittedMods.length ? `${fittedMods.length} mod${fittedMods.length === 1 ? "" : "s"}` : null,
-    activity.length ? `${activity.length} update${activity.length === 1 ? "" : "s"}` : null,
+    activityPaging.total ? `${activityPaging.total} update${activityPaging.total === 1 ? "" : "s"}` : null,
     liveCount ? `${liveCount} part${liveCount === 1 ? "" : "s"} for sale` : null,
     gallery.length ? `${gallery.length} photo${gallery.length === 1 ? "" : "s"}` : null,
   ].filter(Boolean);
@@ -400,13 +422,14 @@ export default async function CarPage({
         modGroups={modGroups}
         cameOff={cameOff}
         activity={activity}
+        activityPaging={activityPaging}
         forSale={forSale}
         soldFrom={soldFrom}
         carName={car.name}
         carId={car.id}
         slug={car.slug}
         isOwner={isOwner}
-        initialTab={resolveView(view)}
+        initialTab={resolveView(view) ?? (updatesBefore ? "activity" : undefined)}
         showcase={showcase}
         evolution={evolution}
       />

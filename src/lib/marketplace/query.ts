@@ -141,8 +141,10 @@ export async function hydrateListingCards(
             .select("id, display_name, username, avatar_url")
             .in("id", sellerIds)
         : Promise.resolve({ data: [] }),
+      // Every review, counted and averaged by the database: fetching the
+      // rows stopped at 1,000 across the page's sellers (N30).
       sellerIds.length
-        ? supabase.from("reviews").select("reviewee_id, rating").in("reviewee_id", sellerIds)
+        ? supabase.rpc("seller_review_summaries", { p_sellers: sellerIds })
         : Promise.resolve({ data: [] }),
       // The source car is always loaded: every card names the car the part
       // came off, which is the marketplace's whole premise — and links to
@@ -162,13 +164,12 @@ export async function hydrateListingCards(
     if (!coverByListing.has(image.listing_id)) coverByListing.set(image.listing_id, image.url);
   }
 
-  const ratingBySeller = new Map<string, { sum: number; n: number }>();
-  for (const r of sellerReviews ?? []) {
-    const agg = ratingBySeller.get(r.reviewee_id) ?? { sum: 0, n: 0 };
-    agg.sum += r.rating;
-    agg.n += 1;
-    ratingBySeller.set(r.reviewee_id, agg);
-  }
+  const ratingBySeller = new Map(
+    ((sellerReviews ?? []) as { seller_id: string; review_count: number; rating_avg: number }[]).map((row) => [
+      row.seller_id,
+      { avg: Number(row.rating_avg), n: Number(row.review_count) },
+    ])
+  );
   const activeBySeller = new Map(
     ((activeCounts ?? []) as { seller_id: string; total: number }[]).map((row) => [
       row.seller_id,
@@ -186,7 +187,7 @@ export async function hydrateListingCards(
           username: p.username,
           avatar_url: p.avatar_url,
           active_count: activeBySeller.get(p.id) ?? 0,
-          rating: agg ? (agg.sum / agg.n).toFixed(1) : null,
+          rating: agg ? agg.avg.toFixed(1) : null,
           review_count: agg?.n ?? 0,
         },
       ] as const;
@@ -568,7 +569,7 @@ async function decorateListings(
   const cardsPromise = hydrateListingCards(supabase, listings);
   // The viewer's saves and likes over this page plus public like/question
   // counts, so each card's engagement strip renders pre-fired. All bounded
-  // by the page's ids.
+  // by the page's ids (a page is at most PAGE_SIZE parts).
   const viewerSavesPromise = Promise.resolve(viewerId
     ? supabase
         .from("saves")
@@ -577,11 +578,11 @@ async function decorateListings(
         .eq("target_type", "listing")
         .in("target_id", ids)
     : { data: [] as { target_id: string }[] });
-  const likesPromise = Promise.resolve(supabase
-    .from("likes")
-    .select("target_id")
-    .eq("target_type", "listing")
-    .in("target_id", ids));
+  // Like and question totals counted by the database: fetching the rows
+  // stopped at 1,000 across the page (N30).
+  const countsPromise = Promise.resolve(ids.length
+    ? supabase.rpc("listing_engagement_counts", { p_listings: ids })
+    : { data: [] as { listing_id: string; likes: number; questions: number }[], error: null });
   const viewerLikesPromise = Promise.resolve(viewerId
     ? supabase
         .from("likes")
@@ -590,10 +591,6 @@ async function decorateListings(
         .eq("target_type", "listing")
         .in("target_id", ids)
     : { data: [] as { target_id: string }[] });
-  const questionsPromise = Promise.resolve(supabase
-    .from("listing_questions")
-    .select("listing_id")
-    .in("listing_id", ids));
 
   // Fitment hint for the rows on this page — declared rows (0025) first,
   // source-car match as the fallback, mirroring the listing page's order.
@@ -637,18 +634,12 @@ async function decorateListings(
     }
   }
 
-  const [cards, { data: viewerSaves }, { data: likeRows }, { data: viewerLikes }, { data: questionRows }] =
-    await Promise.all([cardsPromise, viewerSavesPromise, likesPromise, viewerLikesPromise, questionsPromise]);
+  const [cards, { data: viewerSaves }, counts, { data: viewerLikes }] =
+    await Promise.all([cardsPromise, viewerSavesPromise, countsPromise, viewerLikesPromise]);
+  if (counts.error) reportError("[marketplace] engagement counts failed", counts.error);
   const savedIds = new Set((viewerSaves ?? []).map((s) => s.target_id));
   const likedIds = new Set((viewerLikes ?? []).map((l) => l.target_id));
-  const likeCounts = new Map<string, number>();
-  for (const row of likeRows ?? []) {
-    likeCounts.set(row.target_id, (likeCounts.get(row.target_id) ?? 0) + 1);
-  }
-  const questionCounts = new Map<string, number>();
-  for (const row of questionRows ?? []) {
-    questionCounts.set(row.listing_id, (questionCounts.get(row.listing_id) ?? 0) + 1);
-  }
+  const countsBy = new Map((counts.data ?? []).map((row) => [row.listing_id, row]));
 
   return cards.map((card) => ({
     ...card,
@@ -656,7 +647,7 @@ async function decorateListings(
     match_evidence: evidenceByListing.get(card.id) ?? null,
     viewer_saved: savedIds.has(card.id),
     viewer_liked: likedIds.has(card.id),
-    like_count: likeCounts.get(card.id) ?? 0,
-    question_count: questionCounts.get(card.id) ?? 0,
+    like_count: countsBy.get(card.id)?.likes ?? 0,
+    question_count: countsBy.get(card.id)?.questions ?? 0,
   }));
 }

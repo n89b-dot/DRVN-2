@@ -556,6 +556,18 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     a11y: "nav[aria-label], rel prev/next.",
   },
   {
+    name: "CursorPagination",
+    importPath: UI,
+    file: "src/components/ui/pagination.tsx",
+    layer: "primitive",
+    category: "navigation",
+    status: "active",
+    description: "Ghost \"← Newest\" / \"Older →\" links for a list read from a position; renders nothing when the list fits one page.",
+    use: "Lists that can grow without bound and page from where the last page ended (src/lib/page-cursor.ts): a build's updates, a post's replies, each Saved section.",
+    avoid: "A list with page numbers and a total — that is Pagination.",
+    a11y: "nav[aria-label], rel first/next.",
+  },
+  {
     name: "Finder",
     importPath: UI,
     file: "src/components/ui/finder.tsx",

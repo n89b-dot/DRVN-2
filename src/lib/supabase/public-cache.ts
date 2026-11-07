@@ -84,11 +84,13 @@ export const PUBLIC_MAX_AGE = { commerce: 60, content: 300 } as const;
  * cached.
  */
 export const PUBLIC_READ_FUNCTIONS: ReadonlySet<string> = new Set([
+  "car_update_page",
   "explore_build_rows",
   "explore_update_rows",
   "explore_update_search_rows",
   "feed_event_page",
   "feed_hydration",
+  "listing_engagement_counts",
   "listing_public_offer_floor",
   "listing_watch_counts",
   "local_feed_rows",
@@ -99,10 +101,13 @@ export const PUBLIC_READ_FUNCTIONS: ReadonlySet<string> = new Set([
   "marketplace_page",
   "marketplace_search_browse_rows",
   "mod_purchase_sources",
+  "post_comment_page",
+  "post_reaction_counts",
   "profile_follow_counts",
   "profile_sales_count",
   "search_listing_ids",
   "seller_active_counts",
+  "seller_review_summaries",
   "suggested_builders",
   "trending_models",
 ]);

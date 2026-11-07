@@ -57,6 +57,8 @@ async function setRelationship(
     p_target_id: targetId,
     p_active: active,
   });
+  // The thing was deleted (a tab left open on it): trying again can't help.
+  if (result.error?.code === "23503") return { error: "That's no longer on DRVN." } as const;
   if (result.error || result.data !== active) {
     reportError("[social] relationship update failed", { kind, targetType, error: result.error });
     return { error: "Couldn't update that. Try again." } as const;
