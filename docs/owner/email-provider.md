@@ -127,7 +127,7 @@ not use it up.
 |---|---|---|---|
 | Confirm signup (member) | `signUp` in `src/app/(auth)/actions.ts` | `{{ .SiteURL }}/confirm?token_hash=…&type=email&flow=signup&redirect_to={{ .RedirectTo }}` | `/confirm` → signed in → onboarding for a new account, then the page they were on (taken from `redirect_to`'s `next`, same-origin paths only) |
 | Reset password | `resetPasswordForEmail`, same file | `{{ .SiteURL }}/confirm?token_hash=…&type=recovery` | `/confirm` → `/login/reset` with a recovery session |
-| Change email | `updateUser({ email }, { emailRedirectTo })` in `src/app/(product)/settings/account-actions.ts` | `{{ .SiteURL }}/confirm?token_hash=…&type=email_change&redirect_to={{ .RedirectTo }}`, sent to both old and new address | `/confirm` → `/settings?changed=email` (only a Settings path is accepted), with a notice: "One link confirmed" until both links are opened, then "Sign-in email updated" |
+| Change email | `updateUser({ email }, { emailRedirectTo })` in `src/app/(product)/settings/account-actions.ts` | `{{ .SiteURL }}/confirm?token_hash=…&type=email_change&redirect_to={{ .RedirectTo }}`, sent to both old and new address | First link: `/confirm` → `/email-change` (public), "One link confirmed", with Settings for a signed-in visitor or Sign in otherwise. Second link: `/confirm` → signed in → `/settings?changed=email` (only `/settings` or a page under it is accepted), "Sign-in email updated" |
 | Guest order access | `signInWithOtp` in `deliverOrderAccessLink` | `{{ .SiteURL }}/confirm?token_hash=…&type=…&next=%2Forders` | `/confirm` → `/orders` |
 | Guest auto-confirm warning | the transfers job (`src/lib/auto-confirm-email.ts`) | the guest order access email, with a paragraph giving the date | `/confirm` → `/orders` |
 
@@ -184,10 +184,10 @@ subject, that the link's host is the site origin, and that it works once.
       template is reached only for accounts that were confirmed some other
       way. If you can't reach it, note "not reachable" in the evidence.
 - [ ] **[OWNER]** Email change: Settings → change email. Both the old and new
-      inbox get "Confirm your new DRVN email". Open the first → "Confirm the
-      change" → Settings with "One link confirmed". Open the second →
-      Settings with "Sign-in email updated" and the new address; signing in
-      with the new address works.
+      inbox get "Confirm your new DRVN email". Open the first in a private
+      window → "Confirm the change" → "One link confirmed" (not the sign-in
+      page). Open the second → signed in → Settings with "Sign-in email
+      updated" and the new address; signing in with the new address works.
 - [ ] **[OWNER]** Password change: Settings → change password → the bell
       shows "Your password was changed". (Supabase's own password-changed
       email is a separate project setting, off by default; DRVN's notice
