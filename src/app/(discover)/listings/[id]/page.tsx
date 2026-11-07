@@ -755,7 +755,7 @@ export default async function ListingPage({
               </p>
               <p className="spec-note mt-2">
                 Report a problem within {DISPUTE_WINDOW_DAYS} days of delivery and the seller has{" "}
-                {SELLER_RESPONSE_DAYS} days to respond before DRVN can step in.
+                {SELLER_RESPONSE_DAYS} business days to respond before DRVN can step in.
               </p>
               <Link href="/protection" className="jumplink mt-2 inline-flex">
                 How protection &amp; disputes work

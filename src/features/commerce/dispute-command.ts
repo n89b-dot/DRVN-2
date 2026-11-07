@@ -3,11 +3,23 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { capture } from "@/lib/analytics";
-import { DISPUTE_CATEGORIES, DISPUTE_WINDOW_DAYS } from "./disputes";
+import { reportError } from "@/lib/monitoring";
+import { DISPUTE_CATEGORIES, disputeRefusalMessage } from "./disputes";
 import type { DisputeCategory } from "@/lib/database.types";
 import type { CommerceState } from "./action-types";
 import { postOrderEvent } from "./order-thread";
 const DISPUTE_CATEGORY_LABEL = new Map(DISPUTE_CATEGORIES.map(c => [c.value, c.label]));
+
+type OpenResult = { ok: boolean; reason?: string; opens_at?: string; closed_at?: string };
+
+/**
+ * The buyer opens a case. open_order_dispute (20261107210300) decides
+ * everything in one locked transaction: the buyer, the stage, the window
+ * ("item never arrived" from the latest delivery date frozen at purchase up
+ * to 30 days after it, undispatched orders included; anything else within 30
+ * days of delivery), finality (a resolved case is final, N91) and the
+ * seller's frozen 3- and 21-business-day clocks.
+ */
 export async function openDisputeCommand(
   formData: FormData
 ): Promise<CommerceState> {
@@ -26,48 +38,18 @@ export async function openDisputeCommand(
   if (!orderId) return { error: "Missing order." };
   if (!DISPUTE_CATEGORY_LABEL.has(category)) return { error: "Pick what went wrong." };
 
-  const { data: order } = await admin
-    .from("orders")
-    .select("id, buyer_id, seller_id, status, delivered_at")
-    .eq("id", orderId)
-    .maybeSingle();
-  if (!order) return { error: "Order not found." };
-  if (order.buyer_id !== user.id) return { error: "That isn't your order." };
-  // A dispute only makes sense once the seller has actually sent something —
-  // requestCancellation covers everything before dispatch.
-  if (!["shipped", "delivered", "completed"].includes(order.status)) {
-    return { error: "You can report a problem once the order has shipped." };
+  const { data, error } = await admin.rpc("open_order_dispute", {
+    p_order: orderId,
+    p_buyer: user.id,
+    p_category: category,
+    p_reason: reason,
+  });
+  if (error || !data) {
+    reportError("[disputes] open failed", { orderId, error });
+    return { error: "The dispute could not be opened. Nothing changed — try again." };
   }
-  // The claim window (0024): 30 days from confirmed delivery. Sellers need
-  // finality too — an order can't stay disputable forever. Undelivered
-  // orders have no delivery date to count from, so they stay open.
-  if (
-    order.delivered_at &&
-    Date.now() - new Date(order.delivered_at).getTime() > DISPUTE_WINDOW_DAYS * 86_400_000
-  ) {
-    return {
-      error: `Problems must be reported within ${DISPUTE_WINDOW_DAYS} days of delivery — this order is past that window.`,
-    };
-  }
-  if (!order.seller_id) return { error: "The seller's account is no longer active." };
-
-  const now = new Date().toISOString();
-  const { data: opened, error } = await admin
-    .from("orders")
-    .update({
-      status: "disputed",
-      dispute_category: category,
-      dispute_reason: reason || null,
-      disputed_at: now,
-      disputed_by: user.id,
-      pre_dispute_status: order.status,
-    })
-    .eq("id", orderId)
-    .eq("status", order.status)
-    .select("id");
-  if (error) return { error: error.message };
-  // Zero rows: the order moved on between our read and this write.
-  if (!opened?.length) return { error: "This order changed state — reload and try again." };
+  const result = data as OpenResult;
+  if (!result.ok) return { error: disputeRefusalMessage(result.reason, result) };
 
   await postOrderEvent(
     admin,

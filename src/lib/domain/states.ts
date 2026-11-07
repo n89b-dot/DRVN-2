@@ -27,7 +27,10 @@ import type {
 export type TransitionMap<S extends string> = Record<S, S[]>;
 
 /** Orders (0007 lifecycle + 0014 disputes). `pre_dispute_status` restores the
- *  paused state on resolution, which is why disputed fans back out wide. */
+ *  paused state on resolution, which is why disputed fans back out wide.
+ *  disputed → paid (20261107210300, N6): a not-received case on an order
+ *  that was never dispatched resolves back to paid. Dispatch during a case
+ *  keeps it disputed and moves pre_dispute_status to shipped instead. */
 export const ORDER_TRANSITIONS: TransitionMap<OrderStatus> = {
   pending: ["requires_action", "paid", "payment_failed", "cancelled"],
   requires_action: ["paid", "payment_failed", "cancelled"],
@@ -36,7 +39,7 @@ export const ORDER_TRANSITIONS: TransitionMap<OrderStatus> = {
   shipped: ["delivered", "disputed", "refunded"],
   delivered: ["completed", "disputed", "refunded"],
   completed: ["disputed", "refunded"],
-  disputed: ["shipped", "delivered", "completed", "refunded"],
+  disputed: ["paid", "shipped", "delivered", "completed", "refunded"],
   cancelled: [],
   refunded: [],
 };
@@ -241,7 +244,8 @@ export const DOMAIN_STATES: {
   {
     domain: "order",
     title: "Orders",
-    authority: "CHECK constraint (0007) + purchase RPCs + dispute paths (0014/0021)",
+    authority:
+      "CHECK constraint (0007) + purchase RPCs + dispute paths (0014/0021) + open_order_dispute and the orders_guard_dispute finality trigger (20261107210300)",
     transitions: ORDER_TRANSITIONS,
   },
   {
