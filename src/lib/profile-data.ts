@@ -5,6 +5,7 @@ import type { GalleryImage } from "@/components/ui";
 import { platformLabel } from "@/lib/vehicles/label";
 import { orderCars } from "@/lib/cars/order";
 import { postHeadline } from "@/lib/activity/headline";
+import { boundedPage, MAX_PAGE } from "@/lib/page-param";
 
 export type ProfileVehicle = {
   id: string;
@@ -80,6 +81,9 @@ export type ProfileView = {
 export const PROFILE_LISTINGS_PAGE_SIZE = 24;
 export const PROFILE_REVIEWS_PAGE_SIZE = 20;
 export const PROFILE_UPDATES_PAGE_SIZE = 12;
+/** "Show more updates" reads every page so far in one query (page × size),
+ *  so its pages stop sooner than the offset-paged lists: 600 updates. */
+export const PROFILE_UPDATES_MAX_PAGE = 50;
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -108,13 +112,17 @@ export async function loadProfileView(
   profileId: string,
   {
     publicOnly,
-    listingsPage = 1,
-    reviewsPage = 1,
-    updatesPage = 1,
+    listingsPage: listingsPageAsked = 1,
+    reviewsPage: reviewsPageAsked = 1,
+    updatesPage: updatesPageAsked = 1,
   }: { publicOnly: boolean; listingsPage?: number; reviewsPage?: number; updatesPage?: number }
 ): Promise<ProfileView> {
-  const listingsFrom = (Math.max(1, listingsPage) - 1) * PROFILE_LISTINGS_PAGE_SIZE;
-  const reviewsFrom = (Math.max(1, reviewsPage) - 1) * PROFILE_REVIEWS_PAGE_SIZE;
+  // Whole pages within bounds before any offset or limit is computed (N79).
+  const listingsPage = boundedPage(listingsPageAsked);
+  const reviewsPage = boundedPage(reviewsPageAsked);
+  const updatesPage = boundedPage(updatesPageAsked, PROFILE_UPDATES_MAX_PAGE);
+  const listingsFrom = (listingsPage - 1) * PROFILE_LISTINGS_PAGE_SIZE;
+  const reviewsFrom = (reviewsPage - 1) * PROFILE_REVIEWS_PAGE_SIZE;
 
   // Everything below depends only on the profile id, so it goes out as one
   // parallel round, with photos and reviewer names embedded in the rows that
@@ -137,7 +145,7 @@ export async function loadProfileView(
   // stays off: the car is embedded only when it is public, and a post keeps
   // its place only if it has no car or its car came through. The Updates tab
   // shows them a page at a time; the count is every published post.
-  const updatesLimit = Math.max(1, updatesPage) * PROFILE_UPDATES_PAGE_SIZE;
+  const updatesLimit = updatesPage * PROFILE_UPDATES_PAGE_SIZE;
   let postsQuery = supabase
     .from("activity_posts")
     .select("id, car_id, title, body, intro, published_at, cars(is_public), activity_images(url, alt, position)", {
@@ -274,13 +282,13 @@ export async function loadProfileView(
     followerCount: Number(followCounts?.followers ?? 0),
     followingCount: Number(followCounts?.following ?? 0),
     activityTotal: postsTotal ?? activity.length,
-    activityPage: Math.max(1, updatesPage),
-    activityHasMore: (postsTotal ?? 0) > activity.length,
-    listingsPage: Math.max(1, listingsPage),
+    activityPage: updatesPage,
+    activityHasMore: updatesPage < PROFILE_UPDATES_MAX_PAGE && (postsTotal ?? 0) > activity.length,
+    listingsPage,
     listingsPageSize: PROFILE_LISTINGS_PAGE_SIZE,
-    listingsHasMore: (listingsTotal ?? 0) > listingsFrom + PROFILE_LISTINGS_PAGE_SIZE,
-    reviewsPage: Math.max(1, reviewsPage),
+    listingsHasMore: listingsPage < MAX_PAGE && (listingsTotal ?? 0) > listingsFrom + PROFILE_LISTINGS_PAGE_SIZE,
+    reviewsPage,
     reviewsPageSize: PROFILE_REVIEWS_PAGE_SIZE,
-    reviewsHasMore: (reviewsTotal ?? 0) > reviewsFrom + PROFILE_REVIEWS_PAGE_SIZE,
+    reviewsHasMore: reviewsPage < MAX_PAGE && (reviewsTotal ?? 0) > reviewsFrom + PROFILE_REVIEWS_PAGE_SIZE,
   };
 }

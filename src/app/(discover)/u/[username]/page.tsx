@@ -13,7 +13,8 @@ import { ProfileBody } from "@/components/profile/profile-body";
 import { initialsFrom, splitLinks } from "@/components/profile/helpers";
 import { FollowButton } from "@/features/social/buttons";
 import { ReportButton } from "@/features/moderation/report-button";
-import { loadProfileView } from "@/lib/profile-data";
+import { loadProfileView, PROFILE_UPDATES_MAX_PAGE } from "@/lib/profile-data";
+import { parsePageParam } from "@/lib/page-param";
 import { getPublicPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 import { reportError } from "@/lib/monitoring";
 import { StorePanel, forSaleCount } from "@/features/store/store-panel";
@@ -78,9 +79,9 @@ export default async function PublicProfilePage({
     updatesPage: updatesPageParam,
     status: storeTab,
   } = await searchParams;
-  const listingsPage = Math.max(1, Number(listingsPageParam) || 1);
-  const reviewsPage = Math.max(1, Number(reviewsPageParam) || 1);
-  const updatesPage = Math.max(1, Number(updatesPageParam) || 1);
+  const listingsPage = parsePageParam(listingsPageParam);
+  const reviewsPage = parsePageParam(reviewsPageParam);
+  const updatesPage = parsePageParam(updatesPageParam, PROFILE_UPDATES_MAX_PAGE);
   // `view` is the key; `?tab=` is a legacy alias read only without it — the
   // listing page's seller link used it, and those links are out there.
   // Old tab names (?view=forsale) still resolve too — see profile-href.
