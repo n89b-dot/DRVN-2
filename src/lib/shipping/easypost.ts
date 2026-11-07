@@ -83,6 +83,7 @@ async function request(method: "GET" | "POST", path: string, body?: Json): Promi
       `EasyPost ${res.status}${text ? `: ${text.slice(0, 300)}` : ""}`;
     throw new ShippingProviderError(message, {
       retryable: res.status === 429 || res.status >= 500,
+      status: res.status,
     });
   }
   return json;

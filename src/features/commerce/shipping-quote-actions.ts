@@ -1,13 +1,18 @@
 "use server";
 
+import { headers } from "next/headers";
+
+import { abuseIdentity } from "@/lib/abuse-identity";
 import { getCartIds } from "@/lib/cart";
 import { reportError } from "@/lib/monitoring";
+import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { getShippingProvider, integratedShippingEnabled } from "@/lib/shipping/provider";
 import { ShippingProviderError } from "@/lib/shipping/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 import { hashDestination } from "./checkout-shipping";
+import { MAX_RATES_PER_LINE, reusableQuoteSet, type Parcel, type StoredQuote } from "./shipping-quote-cache";
 import { loadFulfillmentProfile, shipFromAddress } from "./fulfillment";
 
 /**
@@ -20,10 +25,15 @@ import { loadFulfillmentProfile, shipFromAddress } from "./fulfillment";
  * quote by id, checks it against the same destination fingerprint, and uses
  * the SERVER-STORED amount — a tampered form can pick a different quote, but
  * never invent a price.
+ *
+ * Rating costs provider quota and rows (N96), so a quote needs the caller's
+ * own cart, a still-valid stored quote is handed back instead of re-rating,
+ * and live rating is counted against a fail-closed quota.
  */
 
 const QUOTE_TTL_MS = 30 * 60_000;
-const MAX_RATES_PER_LINE = 4;
+/** A stored quote is reused only while it leaves the buyer this long to pay. */
+const QUOTE_REUSE_MIN_REMAINING_MS = 10 * 60_000;
 
 export type QuoteOption = {
   quoteId: string;
@@ -54,6 +64,8 @@ export async function quoteCartShipping(
     return { groups: [], error: "Add the delivery address first — rates depend on it." };
   }
 
+  // A quote needs a checkout to belong to (N96): the visitor's own cart, and
+  // only its live DRVN-Shipping lines. No cart, no provider call.
   const ids = await getCartIds();
   if (!ids.length) return { groups: [] };
 
@@ -85,9 +97,19 @@ export async function quoteCartShipping(
     phone: String(formData.get("ship_phone") ?? "").trim() || null,
   };
   const destHash = hashDestination({ line1, city, postcode, country });
-  const expiresAt = new Date(Date.now() + QUOTE_TTL_MS).toISOString();
+  const now = Date.now();
+  const expiresAt = new Date(now + QUOTE_TTL_MS).toISOString();
+  const reusableAfter = new Date(now + QUOTE_REUSE_MIN_REMAINING_MS).toISOString();
 
-  const groups: CartShippingQuotes["groups"] = [];
+  // Pass 1, no provider calls: check every line can be rated and answer what
+  // a stored quote still covers.
+  type Line = {
+    listing: (typeof listings)[number];
+    parcel: Parcel;
+    profile: NonNullable<Awaited<ReturnType<typeof loadFulfillmentProfile>>>;
+    cached: QuoteOption[] | null;
+  };
+  const planned: Line[] = [];
   for (const listing of listings) {
     if (!listing.weight_oz || !listing.length_in || !listing.width_in || !listing.height_in) {
       return {
@@ -102,13 +124,55 @@ export async function quoteCartShipping(
         error: `"${listing.title}" can't be rated right now — the seller's ship-from address isn't set up.`,
       };
     }
-
     const parcel = {
       weightOz: Number(listing.weight_oz),
       lengthIn: Number(listing.length_in),
       widthIn: Number(listing.width_in),
       heightIn: Number(listing.height_in),
     };
+
+    let stored = admin
+      .from("shipping_rate_quotes")
+      .select("id, service_label, amount_cents, est_delivery_days, provider_shipment_id, parcel, created_at")
+      .eq("listing_id", listing.id)
+      .eq("destination_hash", destHash)
+      .eq("provider", provider.name)
+      .is("consumed_order_id", null)
+      .gt("expires_at", reusableAfter);
+    stored = user ? stored.eq("buyer_id", user.id) : stored.is("buyer_id", null);
+    const { data: storedRows, error: storedError } = await stored
+      .order("created_at", { ascending: false })
+      .limit(MAX_RATES_PER_LINE * 3);
+    if (storedError) {
+      // Unreadable cache: rate live (the quota below still applies).
+      reportError("[shipping] stored quote read failed", { listingId: listing.id, storedError });
+    }
+    planned.push({
+      listing,
+      parcel,
+      profile,
+      cached: storedError ? null : reusableQuoteSet((storedRows ?? []) as StoredQuote[], parcel),
+    });
+  }
+
+  // The quota, before any provider call: one unit per line rated live. It
+  // fails closed — if the limiter can't answer, nothing is rated.
+  const fresh = planned.filter((line) => !line.cached).length;
+  if (fresh > 0) {
+    const subject = abuseIdentity(await headers(), user?.id);
+    for (let unit = 0; unit < fresh; unit++) {
+      if (!(await allowAction(RATE_LIMITS.shippingQuote, subject))) {
+        return { groups: [], error: rateLimitMessage(RATE_LIMITS.shippingQuote) };
+      }
+    }
+  }
+
+  const groups: CartShippingQuotes["groups"] = [];
+  for (const { listing, parcel, profile, cached } of planned) {
+    if (cached) {
+      groups.push({ listingId: listing.id, title: listing.title, options: cached });
+      continue;
+    }
 
     let rated;
     try {

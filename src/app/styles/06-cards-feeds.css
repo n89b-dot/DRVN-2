@@ -1710,6 +1710,11 @@ a.cartbtn:hover {
   .nextaction .spec-note {
     margin-right: 16px;
   }
+  /* A block the "next" module links down to (the seller's Dispatch tile):
+     the jump lands it clear of the sticky bar. */
+  .jumptarget {
+    scroll-margin-top: 88px;
+  }
 
   /* The one thing an order row is waiting on. */
   .ordernext {

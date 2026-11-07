@@ -17,6 +17,7 @@ import { processDueTransfers, reconcileTransferRecords } from "@/lib/payments/tr
 import { processPurchaseAnalytics } from "@/lib/purchase-analytics";
 import { processReceiptJobs } from "@/lib/receipt-worker";
 import { reconcileOutboundLabelVoids } from "@/lib/shipping/outbound-label-void";
+import { processTrackerRegistrations } from "@/lib/shipping/tracker-registration";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -31,7 +32,7 @@ export type MoneyWorkerPass = {
  * One pass of the money worker: every durable queue the money paths write
  * gets its retry heartbeat here — reservation expiries, capture
  * reconciliation, due transfers, transfer-record reconciliation, carry-forward credit payouts, abandoned
- * refunds, label voids, return timers, the dispute-SLA sweep, the alert
+ * refunds, label voids and carrier trackers, return timers, the dispute-SLA sweep, the alert
  * outbox, purchase analytics and receipts. Each family is recorded in
  * worker_runs, which is what /api/health/workers and the console read.
  *
@@ -52,7 +53,14 @@ export async function runMoneyWorkerPass(admin: Admin): Promise<MoneyWorkerPass>
     },
     transferReconciliation: () => reconcileTransferRecords(admin),
     refunds: () => resumeIncompleteRefunds(admin, { batch: 3 }),
-    labelVoids: () => reconcileOutboundLabelVoids(admin, { batch: 5 }),
+    // The shipping provider's queues: unused-label refunds, then carrier
+    // trackers for seller-entered tracking (N110). One family, one health
+    // check; either side's failures fail it.
+    labelVoids: async () => {
+      const voids = await reconcileOutboundLabelVoids(admin, { batch: 5 });
+      const trackers = await processTrackerRegistrations(admin, { batch: 10 });
+      return { ...voids, failed: voids.failed + trackers.failed, trackers };
+    },
     returns: () => processReturnTimers(admin),
     disputes: () => processDisputeSla(admin),
     alerts: () => processAlertOutbox(admin, { batch: 5 }),

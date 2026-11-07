@@ -7441,6 +7441,16 @@ export type Database = {
         Args: { p_delivered_at: string; p_now: boolean; p_order: string }
         Returns: string
       }
+      pickup_mint_pass: {
+        Args: {
+          p_buyer_id: string
+          p_code_hash: string
+          p_expires_at: string
+          p_order_id: string
+          p_token_hash: string
+        }
+        Returns: Json
+      }
       pickup_redeem: {
         Args: { p_hash: string; p_order_id: string; p_seller_id: string }
         Returns: Json

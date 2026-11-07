@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { fixtureAdmin } from "./fixtures";
+import { VIEWPORTS } from "./viewports";
 import { attachSellPhoto, enableSellerPayouts, sellCommitButton, signIn, signUp, watchEscapedRedirects } from "./helpers";
 
 /**
@@ -159,6 +160,17 @@ test.describe.serial("golden path", () => {
 
     await page.getByText(partTitle).first().click();
     await expect(page).toHaveURL(/\/orders\/[\w-]+/);
+
+    // R-audit-dispatch: on a phone the time-limited move is one tap from the
+    // top — the Next block links straight to the Dispatch tile and its form.
+    const desktop = page.viewportSize();
+    await page.setViewportSize(VIEWPORTS.phone);
+    const jumpToDispatch = page.locator(".nextaction").getByRole("link", { name: /mark dispatched/i });
+    await expect(jumpToDispatch).toBeInViewport();
+    await jumpToDispatch.click();
+    await expect(page).toHaveURL(/#dispatch$/);
+    await expect(page.locator("#dispatch").getByRole("button", { name: /mark dispatched/i })).toBeInViewport();
+    if (desktop) await page.setViewportSize(desktop);
 
     // Dispatch now runs through the consequence-confirmation dialog: the
     // trigger opens it, carrier/tracking live inside, confirm submits.

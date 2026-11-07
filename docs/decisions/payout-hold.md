@@ -60,13 +60,16 @@ All in `public.settlement_settings`; null switches a control off.
   bank or Radar requires. To also verify payments Radar scores as risky
   whatever the amount, add a Radar rule in the Stripe Dashboard (Radar →
   Rules): *Request 3D Secure if `:risk_level: = 'elevated'`*.
-- **Tracking required** at `tracking_required_from_cents` ($1,000): such an
-  order can only be dispatched with tracking DRVN follows — a DRVN label, or
-  a carrier tracking number the app registers with its tracker before
-  dispatch (`mark_order_dispatched`). This depends on DRVN Shipping being on:
-  with it off, the app can't register a tracker and these orders can't be
-  dispatched, so switch the control off (`set tracking_required_from_cents =
-  null`) if DRVN Shipping isn't live.
+- **No amount limit on dispatch** (Neil, 7 November 2026, N110: "similar to
+  eBay", no limits on $1,000+ orders). The October rule that refused an
+  untracked dispatch at `tracking_required_from_cents` ($1,000) is gone
+  (`20261107200100`); the column stays, null and unused. Instead, a
+  seller-entered tracking number is registered with the EasyPost carrier
+  tracker whenever an EasyPost key is configured, DRVN Shipping (labels) on
+  or off: off the request path, after the seller check, retried through the
+  `tracker_registration` queue (`src/lib/shipping/tracker-registration.ts`).
+  With no key, dispatch works exactly the same and simply isn't tracked.
+  Payouts keep the release rules above; there is no high-value hold.
 
 Not built, by decision: a trial period for new sellers, and recovering claim
 losses from a seller's future sales beyond what already exists for label
@@ -83,10 +86,10 @@ update public.settlement_settings set payout_hold_days = 3 where id;
 -- Days in transit before "received" releases at once (0–30):
 update public.settlement_settings set receipt_release_after_days = 2 where id;
 
--- Thresholds in cents, or null to switch a control off:
+-- Card verification threshold in cents, or null to switch it off
+-- (tracking_required_from_cents is unused since 20261107200100):
 update public.settlement_settings
-   set tracking_required_from_cents = 100000,
-       card_verification_from_cents = 50000
+   set card_verification_from_cents = 50000
  where id;
 
 -- Back to holding until the claim windows close:

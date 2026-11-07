@@ -61,7 +61,6 @@ export default async function TermsPage() {
   // (payout_release_at, 20261009100000).
   const releasesOnReceipt = hold?.mode === "fixed";
   const receiptDays = risk ? `${risk.receiptReleaseAfterDays} days` : "a few days";
-  const trackingFrom = risk?.trackingRequiredFromCents ?? null;
   const verifyFrom = risk?.cardVerificationFromCents ?? null;
 
   return (
@@ -239,13 +238,6 @@ export default async function TermsPage() {
           Sellers should dispatch within a reasonable time of an order and must add tracking for
           posted items. Where DRVN Shipping is available, sellers can buy a tracked label through
           DRVN. Buyers confirm the order arrived in the app.
-          {trackingFrom !== null && (
-            <>
-              {" "}
-              An order of {formatPrice(trackingFrom)} or more can only be dispatched with tracking
-              DRVN can follow: a DRVN label, or a carrier tracking number DRVN can register.
-            </>
-          )}
         </p>
         <p>
           For collection, the buyer shows a single-use Pickup Pass at handover and the seller

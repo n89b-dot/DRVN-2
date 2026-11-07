@@ -166,10 +166,13 @@ export interface ShippingProvider {
 /** Thrown for provider failures the caller can present or retry on. */
 export class ShippingProviderError extends Error {
   readonly retryable: boolean;
-  constructor(message: string, opts?: { retryable?: boolean; cause?: unknown }) {
+  /** The provider's HTTP status, when it answered. */
+  readonly status: number | null;
+  constructor(message: string, opts?: { retryable?: boolean; cause?: unknown; status?: number }) {
     super(message);
     this.name = "ShippingProviderError";
     this.retryable = opts?.retryable ?? false;
+    this.status = opts?.status ?? null;
     if (opts?.cause) (this as { cause?: unknown }).cause = opts.cause;
   }
 }

@@ -32,7 +32,7 @@ const JOB_LABEL: Record<string, string> = {
   transfers: "Pay out sellers",
   transferReconciliation: "Reconcile payouts",
   refunds: "Finish interrupted refunds",
-  labelVoids: "Void unused shipping labels",
+  labelVoids: "Void unused shipping labels, register carrier tracking",
   returns: "Advance return timers",
   disputes: "Dispute deadlines and auto-refunds",
   alerts: "Deliver admin alerts",

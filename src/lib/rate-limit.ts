@@ -9,7 +9,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * unthrottled; this keeps the limiter dependency-free rather than introducing
  * Redis for it.
  *
- * Checkout and monitoring intake fail closed on infrastructure errors. Other
+ * Checkout, shipping quotes and monitoring intake fail closed on
+ * infrastructure errors. Other
  * rules retain their explicit availability tradeoff; database guards still apply.
  */
 export type RateLimitRule = {
@@ -24,6 +25,10 @@ export type RateLimitRule = {
 
 export const RATE_LIMITS = {
   checkout: { action: "checkout", limit: 10, windowSeconds: 600, failClosed: true },
+  /** Each unit is one checkout line rated live by the shipping provider
+   *  (N96): quotes cost provider quota and rows, so they fail closed. Lines
+   *  answered from a still-valid stored quote don't count. */
+  shippingQuote: { action: "shipping-quote", limit: 30, windowSeconds: 600, failClosed: true },
   clientError: { action: "client-error", limit: 20, windowSeconds: 60, failClosed: true },
   /** CSP violation reports (src/app/api/monitoring/csp): per visitor, plus
    *  one ceiling across everyone so a broken policy can't flood monitoring. */

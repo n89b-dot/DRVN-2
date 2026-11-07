@@ -1,7 +1,8 @@
 -- Payout release and dispatch risk controls (20261009100000): a plausible
 -- receipt releases the payout at once, an early one waits like a carrier
--- scan, claim_window mode ignores early releases, and an order of $1,000 or
--- more can only be dispatched with tracking DRVN follows.
+-- scan, and claim_window mode ignores early releases. Dispatch has no amount
+-- rule since 20261107200100 (N110): an order of $1,000 or more dispatches
+-- with seller-entered tracking like any other.
 begin;
 
 do $$
@@ -26,8 +27,8 @@ begin
   if (select (payout_hold_mode, payout_hold_days, receipt_release_after_days,
               tracking_required_from_cents, card_verification_from_cents)
         from public.settlement_settings where id)
-     is distinct from ('fixed'::text, 2, 3, 100000::bigint, 50000::bigint) then
-    raise exception 'FAIL 1: the deployed release settings are not fixed 2 days, 3-day receipt, $1,000 tracking, $500 verification';
+     is distinct from ('fixed'::text, 2, 3, null::bigint, 50000::bigint) then
+    raise exception 'FAIL 1: the deployed release settings are not fixed 2 days, 3-day receipt, no tracking threshold, $500 verification';
   end if;
   foreach result in array array['{"receipt":31}', '{"receipt":-1}', '{"tracking":0}', '{"card":0}']::jsonb[] loop
     rejected := false;
@@ -109,7 +110,8 @@ begin
   update public.settlement_settings set payout_hold_mode = 'fixed' where id;
   raise notice 'PASS 5: claim_window mode still waits for its windows';
 
-  -- 6. Dispatch: $1,000 or more needs tracking DRVN follows.
+  -- 6. Dispatch: no amount rule (N110). $1,000 or more dispatches with
+  --    seller-entered tracking, with a tracker, or on a DRVN label alike.
   insert into public.orders(buyer_id, seller_id, status, subtotal_cents, platform_fee_cents, total_cents, currency)
   values (buyer, seller, 'paid', 120000, 12000, 120000, 'USD') returning id into big_bare;
   insert into public.orders(buyer_id, seller_id, status, subtotal_cents, platform_fee_cents, total_cents, currency)
@@ -125,11 +127,10 @@ begin
   returning id into label_shipment;
 
   result := public.mark_order_dispatched(big_bare, seller, 'UPS', '1ZBARE');
-  if (result->>'ok')::boolean is not false
-     or result->>'reason' not like 'Orders of $1,000 or more need tracking DRVN can follow%'
-     or (select status from public.orders where id = big_bare) <> 'paid'
-     or exists (select 1 from public.shipments where order_id = big_bare) then
-    raise exception 'FAIL 6: a $1,200 order was dispatched without tracking DRVN follows: %', result;
+  if (result->>'ok')::boolean is not true
+     or (select status from public.orders where id = big_bare) <> 'shipped'
+     or (select provider_tracker_id from public.shipments where order_id = big_bare) is not null then
+    raise exception 'FAIL 6: a $1,200 order with seller-entered tracking was refused: %', result;
   end if;
 
   result := public.mark_order_dispatched(big_tracked, seller, 'UPS', '1ZTRACK', 'easypost', 'trk_seller');
@@ -148,22 +149,16 @@ begin
 
   result := public.mark_order_dispatched(small, seller, 'UPS', '1ZSMALL');
   if (result->>'ok')::boolean is not true then
-    raise exception 'FAIL 6: an order under $1,000 needed a tracker: %', result;
+    raise exception 'FAIL 6: an order under $1,000 was refused: %', result;
   end if;
 
   rejected := false;
   begin
-    perform public.mark_order_dispatched(big_bare, seller, 'UPS', '1ZBARE', 'easypost', null);
+    perform public.mark_order_dispatched(small, seller, 'UPS', '1ZSMALL', 'easypost', null);
   exception when others then rejected := true;
   end;
   if not rejected then raise exception 'FAIL 6: a tracker provider without an id was accepted'; end if;
-
-  update public.settlement_settings set tracking_required_from_cents = null where id;
-  result := public.mark_order_dispatched(big_bare, seller, 'UPS', '1ZBARE');
-  if (result->>'ok')::boolean is not true then
-    raise exception 'FAIL 6: switching the rule off still refused dispatch: %', result;
-  end if;
-  raise notice 'PASS 6: $1,000+ dispatch needs a DRVN label or a registered tracker; under it, and off, it does not';
+  raise notice 'PASS 6: dispatch has no amount rule; trackers and DRVN labels still carry through';
 
   raise notice 'all payout release checks passed';
 end $$;
