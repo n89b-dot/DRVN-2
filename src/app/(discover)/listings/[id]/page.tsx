@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { Suspense, cache } from "react";
 
@@ -29,6 +30,7 @@ import { conditionLabel, formatPrice, getCategory } from "@/lib/marketplace/taxo
 import { paymentsAreLive } from "@/lib/payments/provider";
 import { getPublicPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 import { deliveryLabel } from "@/lib/marketplace/delivery";
+import { classifyArrival } from "@/lib/marketplace/arrival";
 import { listingHref, normalizeMarketplaceState, shoppingReturn } from "@/lib/marketplace/state";
 import { listingShareDescription } from "@/lib/share-copy";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
@@ -308,10 +310,14 @@ export default async function ListingPage({
   // a failed counter bump must never break the page.
   // Members only: the function counts one look per member per hour and is
   // closed to signed-out callers, so asking for a visitor is a wasted request.
+  // OS-R-arrival: the counted look also records the surface it came from
+  // (a build, a profile, a post, the marketplace…), read from the Referer.
+  const requestHeaders = await headers();
+  const arrival = classifyArrival(requestHeaders.get("referer"), requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host"));
   if (user && user.id !== listing.seller_id) {
     // `.then` is what sends it: a Supabase query does nothing until it is
     // awaited, so the bare `void supabase.rpc(…)` here never counted a look.
-    void supabase.rpc("bump_listing_view", { p_listing: id }).then(() => undefined, () => undefined);
+    void supabase.rpc("record_listing_view", { p_listing: id, p_arrival: arrival }).then(() => undefined, () => undefined);
   }
 
   const isSaved = Boolean(save);
@@ -384,7 +390,7 @@ export default async function ListingPage({
 
   return (
     <div className="wrap">
-      <MarketplaceViewEvent viewKey={`listing:${listing.id}`} entry={{ kind: "listing" }} />
+      <MarketplaceViewEvent viewKey={`listing:${listing.id}`} entry={{ kind: "listing", arrival }} />
       {returnTo && <nav aria-label="Return to results" className="marketplace-breadcrumb"><Link href={returnTo}>← Back to results</Link></nav>}
       {/* An item title, not a display head: ~28–32px, so the gallery starts
           right under it instead of under two lines of 52px type. */}
