@@ -34,6 +34,9 @@ declare
   v_at timestamptz;
   last_id uuid;
   tie timestamptz := '2026-06-01 12:00:00.123456+00';
+  gone uuid := gen_random_uuid();
+  note uuid;
+  refused boolean;
   avg_expected numeric;
 begin
   update public.beta_access_config set enforced = false where singleton = true;
@@ -321,6 +324,82 @@ begin
      or exists (select 1 from public.notifications where target_id = car) then
     raise exception 'N61: a deleted build left saves, follows, likes or notifications behind';
   end if;
+  -- A member's own deletion: what pointed at them goes too.
+  insert into auth.users(id, email, raw_user_meta_data) values (gone, 'swr-gone@drvn.test', '{}');
+  update public.profiles set username = 'swr_gone' where id = gone;
+  insert into public.follows(follower_id, target_type, target_id) values (gone, 'profile', v_owner), (viewer, 'profile', gone);
+  insert into public.saves(user_id, target_type, target_id) values (viewer, 'profile', gone);
+  if not exists (select 1 from public.notifications where user_id = v_owner and target_id = gone) then
+    raise exception 'N61: the follow notification did not name the follower';
+  end if;
+  delete from auth.users where id = gone;
+  if exists (select 1 from public.profiles where id = gone) then raise exception 'fixture: profile not deleted'; end if;
+  if exists (select 1 from public.follows where target_type = 'profile' and target_id = gone)
+     or exists (select 1 from public.saves where target_type = 'profile' and target_id = gone)
+     or exists (select 1 from public.notifications where target_id = gone) then
+    raise exception 'N61: a deleted member left follows, saves or notifications behind';
+  end if;
+
+  -- A stale tab can't put them back: Save, Follow and Like of a deleted
+  -- thing are refused, through the action and straight into the table.
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims', jsonb_build_object('sub', viewer, 'role', 'authenticated')::text, true);
+  for r in select * from (values ('save', 'listing', part), ('save', 'post', busy_post), ('save', 'car', car),
+                                 ('save', 'profile', gone), ('follow', 'car', car), ('follow', 'profile', gone),
+                                 ('like', 'listing', part), ('like', 'car', car)) v(kind, target_type, target_id)
+  loop
+    refused := false;
+    begin
+      perform public.set_social_relationship(r.kind, r.target_type, r.target_id, true);
+    exception when foreign_key_violation then refused := true;
+    end;
+    if not refused then raise exception 'N61: a stale % of a deleted % was accepted', r.kind, r.target_type; end if;
+  end loop;
+  begin
+    insert into public.saves(user_id, target_type, target_id) values (viewer, 'listing', part);
+    raise exception 'N61: a save of a deleted part went straight into the table';
+  exception when foreign_key_violation then null;
+  end;
+  begin
+    insert into public.likes(user_id, target_type, target_id) values (viewer, 'car', car);
+    raise exception 'N61: a like of a deleted build went straight into the table';
+  exception when foreign_key_violation then null;
+  end;
+  begin
+    insert into public.follows(follower_id, target_type, target_id) values (viewer, 'car', car);
+    raise exception 'N61: a follow of a deleted build went straight into the table';
+  exception when foreign_key_violation then null;
+  end;
+  -- Things that exist are still saved as before.
+  perform public.set_social_relationship('save', 'car', saved_cars[1], false);
+  perform public.set_social_relationship('save', 'car', saved_cars[1], true);
+  perform set_config('role', 'supabase_admin', true);
+
+  -- A member can mark a notification read, and nothing else: the link and
+  -- its subject are the server's, so a private build can't be probed by
+  -- pointing a notification at a guessed slug.
+  insert into public.notifications(user_id, kind, section, title, href)
+    values (v_owner, 'guard', 'engagement', 'Guard', '/orders/' || gen_random_uuid()) returning id into note;
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims', jsonb_build_object('sub', v_owner, 'role', 'authenticated')::text, true);
+  update public.notifications set read_at = now() where id = note;
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'N61: a member could not mark their notification read'; end if;
+  begin
+    update public.notifications set href = '/cars/swr-hidden' where id = note;
+    raise exception 'N61: a member rewrote a notification''s link';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.notifications set target_id = hidden_car where id = note;
+    raise exception 'N61: a member rewrote a notification''s subject';
+  exception when insufficient_privilege then null;
+  end;
+  perform set_config('role', 'supabase_admin', true);
+  if (select target_id from public.notifications where id = note) is not null then
+    raise exception 'N61: the notification''s subject changed';
+  end if;
+
   -- What is left for the viewer is what still exists.
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims', jsonb_build_object('sub', viewer, 'role', 'authenticated')::text, true);

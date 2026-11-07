@@ -11,6 +11,10 @@ begin
   insert into auth.users(id,email,raw_user_meta_data) values
     (member_id,'social-guard-member@drvn.test','{}'),
     (other_id,'social-guard-other@drvn.test','{}');
+  -- A real build: a save, like or follow must name something that exists
+  -- (20261107180100).
+  insert into public.cars(id, owner_id, slug, name, is_public)
+    values (target_uuid, other_id, 'social-guard-target', 'Social guard target', true);
 
   perform set_config('role','authenticated',true);
   perform set_config('request.jwt.claims',json_build_object('sub',member_id,'role','authenticated')::text,true);

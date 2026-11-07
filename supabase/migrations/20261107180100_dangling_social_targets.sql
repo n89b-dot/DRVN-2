@@ -13,6 +13,10 @@
 --    for every existing row. It is never a foreign key: the thing may go.
 -- 2. When a post, part, car or member is deleted, the saves, follows and
 --    likes of it and the notifications about it go in the same transaction.
+--    A new save, follow or like must name something that exists, and holds
+--    it until it commits, so a stale tab or a concurrent write can't leave
+--    one behind. Members may only mark notifications read: the link and
+--    its subject are the server's.
 -- 3. What was already left behind is removed now. A car's slug never
 --    changes once made, so a car link that no longer resolves is a deleted
 --    car; a username can change, so a member link that no longer resolves is
@@ -99,6 +103,13 @@ update public.notifications n
 set target_id = public.notification_href_target(n.href)
 where n.target_id is null and n.href is not null;
 
+-- A member may only mark their notifications read. The link and its subject
+-- are written by the server: were `href` writable, a member could point
+-- their own notification at /cars/<a guessed slug> and read back from
+-- target_id that a private build exists, and its id.
+revoke update on table public.notifications from public, anon, authenticated;
+grant update (read_at) on table public.notifications to authenticated;
+
 -- ── 2. Deleting a thing forgets what pointed at it ────────────────────────
 
 -- Owner's rights: the saves, follows and likes of a deleted post belong to
@@ -136,6 +147,48 @@ create trigger cars_forget_social after delete on public.cars
 drop trigger if exists profiles_forget_social on public.profiles;
 create trigger profiles_forget_social after delete on public.profiles
   for each row execute function public.forget_deleted_social_target('profile');
+
+-- A save, follow or like can only name something that exists, and holds it
+-- (FOR KEY SHARE) until the write commits: a stale tab's Save after the
+-- delete is refused, and a delete running at the same moment waits for the
+-- write and then clears it — so nothing points at a deleted thing again.
+-- Owner's rights so a target the member can't see still counts as there;
+-- visibility is the read side's question, as it always was.
+create or replace function public.social_target_must_exist()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $function$
+begin
+  if new.target_type = 'listing' then
+    perform 1 from public.listings l where l.id = new.target_id for key share;
+  elsif new.target_type = 'car' then
+    perform 1 from public.cars c where c.id = new.target_id for key share;
+  elsif new.target_type = 'post' then
+    perform 1 from public.activity_posts p where p.id = new.target_id for key share;
+  elsif new.target_type = 'profile' then
+    perform 1 from public.profiles pr where pr.id = new.target_id for key share;
+  else
+    -- Each table's own check says which kinds it takes.
+    return new;
+  end if;
+  if not found then
+    raise exception 'That is no longer there' using errcode = '23503';
+  end if;
+  return new;
+end;
+$function$;
+
+drop trigger if exists saves_target_must_exist on public.saves;
+create trigger saves_target_must_exist before insert or update of target_type, target_id on public.saves
+  for each row execute function public.social_target_must_exist();
+drop trigger if exists follows_target_must_exist on public.follows;
+create trigger follows_target_must_exist before insert or update of target_type, target_id on public.follows
+  for each row execute function public.social_target_must_exist();
+drop trigger if exists likes_target_must_exist on public.likes;
+create trigger likes_target_must_exist before insert or update of target_type, target_id on public.likes
+  for each row execute function public.social_target_must_exist();
 
 -- ── 3. What was already left behind ───────────────────────────────────────
 
