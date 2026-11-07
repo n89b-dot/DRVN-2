@@ -132,7 +132,7 @@ export const BAR_ROUTES: NavRoute[] = PRIMARY_NAV.filter(
  */
 export const PUBLIC_ROUTES: NavRoute[] = [
   { href: "/explore", label: "Explore", note: "Builds from the community", icon: "compass" },
-  { href: "/marketplace", label: "Marketplace", note: "Parts off real builds", icon: "market" },
+  { href: "/marketplace", label: "Marketplace", note: "Parts for modified cars", icon: "market" },
 ];
 
 /**

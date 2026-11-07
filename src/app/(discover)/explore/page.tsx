@@ -21,6 +21,7 @@ import {
 import { FEED_TABS, fetchFeed, resolveFeedTab, type FeedTab } from "@/lib/feed";
 import { getPageClient, getPublicPageClient, getViewer } from "@/lib/supabase/page-context";
 import { createPublicClient } from "@/lib/supabase/public";
+import { EXPLORE_METADATA } from "@/lib/share-copy";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
 
 import { ActiveSearchFilters } from "./active-search-filters";
@@ -30,7 +31,7 @@ import { SearchWall } from "./search-wall";
 import { ExploreWall } from "./explore-wall";
 import { BuildersBreaker, JoinBreaker, TrendingBreaker } from "./breakers";
 
-export const metadata = { title: "Explore - DRVN" };
+export const metadata = EXPLORE_METADATA;
 
 /**
  * Explore: browse mode is the mixed community feed exactly as before; a text

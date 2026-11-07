@@ -136,7 +136,7 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
           </ol>
         </nav>
       )}
-      <PageHead className="pagehead--task marketplace-head" title={title} sub={!category ? "Find parts from real builds. See where they came from." : undefined} reveal={false}>
+      <PageHead className="pagehead--task marketplace-head" title={title} sub={!category ? "Find parts for modified cars. See the car a part came off, when the seller links one." : undefined} reveal={false}>
         {/* Signed out, the loudest thing in the header is "Join DRVN" — say
             plainly that shopping doesn't need it. The invite-only beta closes
             guest checkout, so the promise follows the gate. */}

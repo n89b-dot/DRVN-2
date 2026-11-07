@@ -196,7 +196,7 @@ export default async function GaragePage({
       )}
 
       <Foot
-        left="DRVN — every part you list carries its car with it"
+        left="DRVN — link a car to a part and buyers see where it came off"
         right={<Link href="/home">← Home</Link>}
       />
     </div>

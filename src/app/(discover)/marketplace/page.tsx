@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { MarketplacePageContent } from "@/features/marketplace/page-content";
+import { MARKETPLACE_DESCRIPTION, MARKETPLACE_SHARE_DESCRIPTION, MARKETPLACE_SHARE_TITLE } from "@/lib/share-copy";
 import type { RawMarketplaceParams } from "@/lib/marketplace/state";
 
 /**
@@ -10,13 +11,11 @@ import type { RawMarketplaceParams } from "@/lib/marketplace/state";
  */
 export const metadata: Metadata = {
   title: "Marketplace - DRVN",
-  description:
-    "Buy used and take-off parts from modified cars. Filter by category, brand, condition and what fits your garage — and see the build each part came off.",
+  description: MARKETPLACE_DESCRIPTION,
   alternates: { canonical: "/marketplace" },
   openGraph: {
-    title: "DRVN Marketplace — used parts off real builds",
-    description:
-      "Used and take-off parts from modified cars, with the build behind every part.",
+    title: MARKETPLACE_SHARE_TITLE,
+    description: MARKETPLACE_SHARE_DESCRIPTION,
     url: "/marketplace",
     type: "website",
   },

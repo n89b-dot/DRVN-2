@@ -1,15 +1,17 @@
-import { sitemapPages } from "@/lib/sitemap-pages";
 import type { MetadataRoute } from "next";
 
 import { siteUrl } from "@/lib/site";
 
-export const dynamic = "force-dynamic";
-
 /**
  * Authed product surfaces are excluded — they redirect to /login for a
  * crawler anyway, so indexing them only wastes crawl budget.
+ *
+ * Nothing here reads the database. Crawlers treat a failing robots.txt as
+ * "don't crawl", so it names two fixed sitemaps and stops: the static one,
+ * and the catalog index, which counts the catalog itself and answers a
+ * retryable 503 when it can't (src/app/catalog/sitemap/[id]/route.ts).
  */
-export default async function robots(): Promise<MetadataRoute.Robots> {
+export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
       {
@@ -33,7 +35,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
         ],
       },
     ],
-    sitemap: [`${siteUrl()}/sitemap.xml`, ...(await sitemapPages()).map(({ id }) => `${siteUrl()}/catalog/sitemap/${id}.xml`)],
+    sitemap: [`${siteUrl()}/sitemap.xml`, `${siteUrl()}/catalog/sitemap/index.xml`],
     host: siteUrl(),
   };
 }
