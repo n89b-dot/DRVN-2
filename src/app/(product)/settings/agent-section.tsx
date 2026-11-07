@@ -6,6 +6,8 @@ import { useState, useTransition } from "react";
 import { ActionFooter, Badge, Button, Radio, TileHead } from "@/components/ui";
 import { AGENT_MODE_HINT, AGENT_MODE_LABEL, AGENT_MODES, type AgentMode } from "@/lib/agent/mode";
 
+import { AGENT_MODE_SAVED, announceAgentEvent } from "@/features/agent/chat-events";
+
 import { saveAgentMode, type AgentModeState } from "./agent-actions";
 
 /**
@@ -30,7 +32,9 @@ export function AgentSection({ initialMode, running }: { initialMode: AgentMode;
           startTransition(async () => {
             setResult({});
             try {
-              setResult(await saveAgentMode({}, formData));
+              const saved = await saveAgentMode({}, formData);
+              setResult(saved);
+              if (saved.ok) announceAgentEvent(AGENT_MODE_SAVED);
             } catch {
               setResult({ error: "The response was interrupted. Check Agent, then try saving again." });
             }

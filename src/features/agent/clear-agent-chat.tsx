@@ -3,17 +3,22 @@
 import { buttonClass, ConfirmDialog } from "@/components/ui";
 import { useRecoverableAction } from "@/features/commerce/use-recoverable-action";
 
+import { announceAgentEvent, AGENT_CHAT_CLEARED } from "./chat-events";
 import { clearAgentChat, type ClearChatState } from "./clear-chat";
 
 /**
  * "Clear chat" (N125), under the agent thread on /agent and in the side
  * panel. Behind the shared confirm, because the thread can't be brought
- * back. The thread empties only once the server says it was cleared.
+ * back. The thread empties only once the server says it was cleared, and
+ * then every other mounted chat (the side panel, /agent, Privacy) hears it.
  */
 export function ClearAgentChat({ onCleared }: { onCleared: (message: string) => void }) {
   const [state, submit, pending] = useRecoverableAction<ClearChatState>(async (previous, data) => {
     const result = await clearAgentChat(previous, data);
-    if (result.ok) onCleared(result.ok);
+    if (result.ok) {
+      onCleared(result.ok);
+      announceAgentEvent(AGENT_CHAT_CLEARED);
+    }
     return result;
   }, "Couldn't confirm your chat was cleared. Reload to see where it stands.");
   return (

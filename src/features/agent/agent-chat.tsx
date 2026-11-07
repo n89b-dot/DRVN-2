@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { AgentResultCard } from "@/components/commerce";
 import { Button, ButtonLink, ChatComposer, FilterButton, MessageBubble, MessageRun, MessageThread, ResultNote } from "@/components/ui";
 import { confirmBuildChange } from "./build";
+import { AGENT_CHAT_CLEARED, useAgentEvent } from "./chat-events";
 import { ClearAgentChat } from "./clear-agent-chat";
 import type { ResolvedCard } from "./cards";
 import { sendAgentMessage, type ChatMessage } from "./chat";
@@ -60,6 +61,8 @@ export function AgentChat({
   const [error, setError] = useState<string | null>(null);
   // "Chat cleared." (N125), until the next message.
   const [cleared, setCleared] = useState<string | null>(null);
+  // Cleared somewhere else (Settings → Privacy, the other copy of this thread).
+  useAgentEvent(AGENT_CHAT_CLEARED, () => setMessages([]));
   const [pending, startTransition] = useTransition();
   const sent = useRef(false);
   const section = useRef<HTMLElement>(null);
