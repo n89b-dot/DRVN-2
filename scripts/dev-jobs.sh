@@ -43,6 +43,7 @@ jobs=(
   "account-deletions 300"
   "transfers 600"
   "saved-searches 1800"
+  "saved-search-digests 3600"
   "media-gc 86400"
   "listing-imports 86400"
 )

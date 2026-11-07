@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { NOTIFICATION_PREFS, kindIsShown, mutedKindFilter } from "./notification-prefs";
+import { NOTIFICATION_PREFS, kindIsShown, mutedKindFilter, prefEnabled, prefKeyForKind } from "./notification-prefs";
 import { NOTIFICATION_KINDS } from "./notifications/kinds";
 
 /** Splits a PostgREST logic list on its top-level commas. */
@@ -36,6 +36,9 @@ function holds(kind: string, term: string): boolean {
   throw new Error(`unexpected term ${term}`);
 }
 
+/** Preferences for a channel other than in-app, governing no in-app kind. */
+const EMAIL_ONLY = new Set(["saved_search_emails"]);
+
 const KINDS = [...NOTIFICATION_KINDS.map((k) => k.kind), "order_refunded", "offer_expired", "brand_new_kind"];
 
 describe("mutedKindFilter", () => {
@@ -55,11 +58,34 @@ describe("mutedKindFilter", () => {
   for (const prefs of combos) {
     it(`agrees with kindIsShown for ${JSON.stringify(prefs)}`, () => {
       const filter = mutedKindFilter(prefs);
-      expect(filter).not.toBeNull();
+      // Only a channel preference that governs no in-app kind filters nothing.
+      expect(filter === null).toBe(Object.keys(prefs).every((key) => EMAIL_ONLY.has(key)));
       for (const kind of KINDS) {
         // `.or(filter)` sends `or=(filter)`.
-        expect([kind, holds(kind, `or(${filter})`)]).toEqual([kind, kindIsShown(prefs, kind)]);
+        const shown = filter === null ? true : holds(kind, `or(${filter})`);
+        expect([kind, shown]).toEqual([kind, kindIsShown(prefs, kind)]);
       }
     });
   }
+});
+
+describe("saved-search emails (N78)", () => {
+  it("is on unless exactly false, like every preference and like the digest admission's SQL", () => {
+    expect(prefEnabled(null, "saved_search_emails")).toBe(true);
+    expect(prefEnabled({}, "saved_search_emails")).toBe(true);
+    expect(prefEnabled({ saved_search_emails: true }, "saved_search_emails")).toBe(true);
+    expect(prefEnabled({ saved_search_emails: "false" }, "saved_search_emails")).toBe(true);
+    expect(prefEnabled({ saved_search_emails: false }, "saved_search_emails")).toBe(false);
+  });
+
+  it("turning the emails off leaves every in-app notification shown", () => {
+    expect(mutedKindFilter({ saved_search_emails: false })).toBeNull();
+    for (const kind of KINDS) expect([kind, kindIsShown({ saved_search_emails: false }, kind)]).toEqual([kind, true]);
+  });
+
+  it("is a toggle on the settings page, beside the in-app saved-search one", () => {
+    const keys = NOTIFICATION_PREFS.filter((p) => p.group === "Marketplace").map((p) => p.key);
+    expect(keys.indexOf("saved_search_emails")).toBe(keys.indexOf("saved_searches") + 1);
+    expect(prefKeyForKind("saved_search")).toBe("saved_searches");
+  });
 });

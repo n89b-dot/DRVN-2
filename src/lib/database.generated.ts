@@ -4973,6 +4973,103 @@ export type Database = {
           },
         ]
       }
+      saved_search_email_cursors: {
+        Row: {
+          checked_through: string
+          saved_search_id: string
+          updated_at: string
+        }
+        Insert: {
+          checked_through: string
+          saved_search_id: string
+          updated_at?: string
+        }
+        Update: {
+          checked_through?: string
+          saved_search_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_search_email_cursors_saved_search_id_fkey"
+            columns: ["saved_search_id"]
+            isOneToOne: true
+            referencedRelation: "saved_searches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_search_email_digests: {
+        Row: {
+          attempts: number
+          created_at: string
+          digest_day: string
+          href: string
+          id: string
+          items: Json
+          last_error: string | null
+          match_count: number
+          next_attempt_at: string
+          provider_message_id: string | null
+          saved_search_id: string
+          search_name: string
+          sent_at: string | null
+          skip_reason: string | null
+          status: string
+          updated_at: string
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          digest_day: string
+          href: string
+          id?: string
+          items?: Json
+          last_error?: string | null
+          match_count: number
+          next_attempt_at?: string
+          provider_message_id?: string | null
+          saved_search_id: string
+          search_name: string
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          updated_at?: string
+          window_end: string
+          window_start: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          digest_day?: string
+          href?: string
+          id?: string
+          items?: Json
+          last_error?: string | null
+          match_count?: number
+          next_attempt_at?: string
+          provider_message_id?: string | null
+          saved_search_id?: string
+          search_name?: string
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          updated_at?: string
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_search_email_digests_saved_search_id_fkey"
+            columns: ["saved_search_id"]
+            isOneToOne: false
+            referencedRelation: "saved_searches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saved_searches: {
         Row: {
           alert: boolean
@@ -6073,6 +6170,17 @@ export type Database = {
         Args: { p_global_usd: number; p_member_usd: number; p_reason: string }
         Returns: undefined
       }
+      admit_saved_search_digest: {
+        Args: {
+          p_expected_through?: string
+          p_href: string
+          p_items: Json
+          p_match_count: number
+          p_saved_search_id: string
+          p_window_end: string
+        }
+        Returns: string
+      }
       advance_search_rebuild: { Args: { p_run: string }; Returns: Json }
       agent_approval_decide: {
         Args: { p_approval: string; p_choice: string }
@@ -6435,6 +6543,19 @@ export type Database = {
         Args: { p_kind: string; p_limit?: number }
         Returns: Json
       }
+      claim_saved_search_digests: {
+        Args: { p_lease_seconds?: number; p_limit?: number }
+        Returns: {
+          attempt: number
+          digest_day: string
+          digest_id: string
+          href: string
+          items: Json
+          match_count: number
+          recipient: string
+          search_name: string
+        }[]
+      }
       claim_search_job_batch: { Args: { p_limit: number }; Returns: Json }
       claim_search_jobs: { Args: never; Returns: Json }
       claim_seller_carry_payouts: {
@@ -6538,6 +6659,16 @@ export type Database = {
       complete_return_label: {
         Args: { p_label: Json; p_return: string }
         Returns: Json
+      }
+      complete_saved_search_digest: {
+        Args: {
+          p_attempt: number
+          p_error?: string
+          p_id: string
+          p_outcome: string
+          p_provider_message_id?: string
+        }
+        Returns: string
       }
       complete_seller_carry_payout: {
         Args: { p_id: string; p_transfer_reference: string; p_worker: string }
@@ -7854,6 +7985,17 @@ export type Database = {
         Returns: {
           saved_at: string
           target_id: string
+        }[]
+      }
+      saved_search_digest_sweep: { Args: never; Returns: Json }
+      saved_search_digests_due: {
+        Args: { p_limit?: number }
+        Returns: {
+          checked_through: string
+          params: Json
+          saved_search_id: string
+          user_id: string
+          window_end: string
         }[]
       }
       search_car_ids: { Args: { p_query: string }; Returns: string[] }
