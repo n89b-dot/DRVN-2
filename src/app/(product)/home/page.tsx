@@ -25,6 +25,7 @@ import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-co
 import { requiredRead } from "@/lib/supabase/required-read";
 
 import { HomeFeedMore } from "./feed-more";
+import { splitHomeFeed } from "./fold";
 import { Greeting } from "./greeting";
 import { HOME_FEED_PAGE_SIZE, type HomeTab } from "./tabs";
 import { PostUpdatePrompt } from "./post-update-prompt";
@@ -41,10 +42,6 @@ export const metadata = { title: "Home - DRVN" };
  *  "All N cars" link — a two-car garage reads whole, a twenty-car garage
  *  never pushes the rail off the page. */
 const HOME_GARAGE_MAX = 3;
-/** H-5: how many posts run before the rail's first tile folds into the feed
- *  on a phone. With fewer posts than this it follows the last one. */
-const LEAD_POSTS = 3;
-
 
 const TAB_EMPTY: Record<HomeTab, { title: string; body: string }> = {
   following: {
@@ -228,8 +225,9 @@ export default async function HomePage({
     .slice(0, 2)
     .toUpperCase();
   const firstName = profile?.display_name?.split(" ")[0];
-  const leadItems = feed.items.slice(0, LEAD_POSTS);
-  const restItems = feed.items.slice(LEAD_POSTS);
+  // H-5: the feed in three runs, so the rail's tiles can fold in between
+  // them on a phone (./fold.ts).
+  const { lead: leadItems, middle: middleItems, rest: restItems } = splitHomeFeed(feed.items);
 
   return (
     <div className="wrap">
@@ -255,9 +253,9 @@ export default async function HomePage({
 
       {/* H-4/H-5. Two columns from 1024px: the feed, and a rail beside it.
           Below that the two wrappers dissolve (`display: contents`) and
-          `order` folds the rail's tiles INTO the feed — after the third post,
-          and again at the end — rather than stranding them beneath it. A
-          tile with nothing in it doesn't render at all. */}
+          `order` folds the rail's tiles INTO the feed — after the third post
+          and after the eighth (./fold.ts) — rather than stranding them
+          beneath it. A tile with nothing in it doesn't render at all. */}
       <div className="deck deck--main">
         <div className="deck--main__feeds">
           {/* H-3 / W-1: the quick box, on top of the feed. The bar's Post
@@ -307,6 +305,13 @@ export default async function HomePage({
             )}
           </div>
 
+          {/* Posts four to eight: on a phone they sit between the two folds. */}
+          {middleItems.length > 0 && (
+            <div className="deck--main__feed deck--main__feed--middle">
+              <FeedList items={middleItems} variant="cards" engagement={{ path: "/home", isLoggedIn: true }} />
+            </div>
+          )}
+
           {/* H-4: the feed carries on as you reach its end, keyed by tab so a
               tab change starts a new column rather than appending to the old. */}
           {leadItems.length > 0 && (
@@ -314,7 +319,7 @@ export default async function HomePage({
               key={tab}
               tab={tab}
               initialItems={restItems}
-              seen={leadItems.map((i) => `${i.kind}-${i.id}`)}
+              seen={[...leadItems, ...middleItems].map((i) => `${i.kind}-${i.id}`)}
               initialHasMore={feed.hasMore}
               initialCursor={feed.nextCursor ?? null}
             />

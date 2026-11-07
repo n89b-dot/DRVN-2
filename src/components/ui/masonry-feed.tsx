@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import type { FeedItem } from "@/lib/feed";
+import { photoWallItems } from "@/lib/photo-wall";
 
 import { EmptyState } from "./empty-state";
 import { FeedMosaicCell, Mosaic } from "./mosaic";
@@ -33,8 +34,9 @@ export function MasonryFeed({
   // rule keep their pages and their places in every list — but a photo wall
   // is a wall of photos, and a text-only cell on it is a hole. They are
   // left off here rather than given a borrowed car cover, which would show
-  // a reader a picture of something the post is not about.
-  const shown = uniform ? items.filter((item) => item.kind !== "update" || item.cover_url) : items;
+  // a reader a picture of something the post is not about. E-1: the same
+  // goes for a build with no cover and a part with no photo.
+  const shown = uniform ? photoWallItems(items) : items;
 
   if (!shown.length) {
     return (

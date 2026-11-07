@@ -61,13 +61,37 @@
 .mosaic--uniform > .mcell {
   grid-column: span 1;
   grid-row: span 1;
-  /* Content height: the grid row stretches every card to the row's
-     tallest, so rows still align, and the spare space is a few px under
-     the shorter caption instead of a photo that changes height per card. */
+  /* Content height — and every part of the content is a fixed size (the
+     eyebrow row, the 4:3 plate, the caption block below, the strip), so
+     every card comes out the same height without the grid stretching it. */
   height: auto;
 }
+/* THE FIXED CAPTION BLOCK (E-1). The caption used to be as deep as its
+   content, and the grid row stretched each card to its tallest neighbour,
+   so a one-line build and a two-line update made rows of different heights
+   down the wall. Now it is one height on every card, sized for the deepest
+   caption a cell can carry — a part whose condition line wraps under its
+   price: title ×2, price, detail, byline, car — with the foot pinned to its
+   floor (`.mcell__foot`). A shallower caption leaves air above the foot,
+   never a shorter card. 144px on a narrow cell (phone and tablet walls); the
+   wider desktop cell is below, with the 232px caption rules. */
 .mosaic--uniform .mcell__cap {
   min-height: 0;
+  height: 144px;
+  overflow: hidden;
+}
+/* …and the engagement strip is one height too. A part's strip carries the
+   cart square, taller than the like and comment plates on a narrow cell
+   (24px), so its card ran 8px taller — 16px on a touch screen — than the
+   build beside it. Every control on a uniform wall gets the cart's height:
+   32px, and the 40px touch floor on a touch screen. */
+.mosaic--uniform .mcell .cardeng__act {
+  min-height: 32px;
+}
+@media (pointer: coarse) {
+  .mosaic--uniform .mcell .cardeng__act {
+    min-height: var(--touch);
+  }
 }
 .mosaic--breaker {
   grid-column: 1 / -1;
@@ -431,6 +455,11 @@
     padding: 16px 0 4px;
     --cap-tight: 8px;
     --cap-group: 16px;
+  }
+  /* E-1's fixed caption block on a desktop cell: the same deepest caption
+     at this size's type and steps (see `.mosaic--uniform .mcell__cap`). */
+  .mosaic--uniform .mcell__cap {
+    height: 184px;
   }
   .mcell__title {
     font-size: 16px;

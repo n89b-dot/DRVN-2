@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { expect, it } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
+
+const cache = vi.hoisted(() => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
+vi.mock("next/cache", () => cache);
 
 import { ALL_PUBLIC_KINDS, publicKindsForPath } from "@/lib/supabase/public-cache";
 
@@ -36,4 +39,41 @@ it("maps the page a write revalidates to the public data it may have changed", (
   expect(publicKindsForPath("/notifications")).toEqual([]);
   expect(publicKindsForPath("/messages")).toEqual([]);
   expect(publicKindsForPath("/unknown")).toEqual([]);
+});
+
+beforeEach(() => vi.clearAllMocks());
+
+it("opening or clearing notifications refreshes only the member's list (N57)", async () => {
+  const { revalidateNotifications } = await import("@/lib/revalidate");
+  revalidateNotifications();
+  expect(cache.revalidatePath.mock.calls).toEqual([["/notifications"]]);
+  // Notifications are private: no shared public data is thrown away.
+  expect(cache.revalidateTag).not.toHaveBeenCalled();
+});
+
+it("notification actions never revalidate the whole app", () => {
+  const file = path.join(process.cwd(), "src", "app", "(product)", "notifications", "actions.ts");
+  const source = fs.readFileSync(file, "utf8");
+  expect(source).not.toMatch(/revalidatePath\(\s*"\/"/);
+  expect(source).toMatch(/revalidateNotifications\(\)/);
+});
+
+it("a root revalidation is what clears every kind of public data — never let a browser choose the path", async () => {
+  const { revalidatePath } = await import("@/lib/revalidate");
+  revalidatePath("/");
+  expect(cache.revalidateTag).toHaveBeenCalledTimes(ALL_PUBLIC_KINDS.length);
+});
+
+// social/actions.ts still takes a path, but only honours the shapes on its
+// `ALLOWED_PATHS` list (`revalidateIfAllowed`), never `/` or `/admin`.
+it("no action revalidates a path read from its arguments or form (N58)", () => {
+  const src = path.join(process.cwd(), "src");
+  const offenders = sourceFiles(src)
+    .filter((file) => /actions\.ts$/.test(file))
+    .filter((file) => {
+      const source = fs.readFileSync(file, "utf8");
+      return /formData\.get\("path"\)/.test(source) || /\brevalidatePath\(\s*path\s*\)/.test(source) && !/revalidateIfAllowed/.test(source);
+    })
+    .map((file) => path.relative(src, file));
+  expect(offenders).toEqual([]);
 });

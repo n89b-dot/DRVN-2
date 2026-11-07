@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "@/lib/revalidate";
+import { revalidateNotifications } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
@@ -50,8 +50,7 @@ export async function markNotificationRead(id: string): Promise<NotificationOpen
       return { error: "write_failed" };
     }
 
-    revalidatePath("/notifications");
-    revalidatePath("/", "layout");
+    revalidateNotifications();
   }
 
   return { href: notification.href };
@@ -77,8 +76,8 @@ export async function markAllNotificationsRead(): Promise<{ marked: number } | {
     return { error: "Couldn't mark notifications as read. Try again." };
   }
 
-  revalidatePath("/notifications");
-  // The badge lives in the shell, so every product surface needs refreshing.
-  revalidatePath("/", "layout");
+  // The badge lives in the shell; revalidating anything from an action
+  // refreshes the shell too, so the list is all that needs naming (N57).
+  revalidateNotifications();
   return { marked: updated?.length ?? 0 };
 }

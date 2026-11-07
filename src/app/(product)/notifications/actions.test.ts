@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   from: vi.fn(),
   revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
   redirect: vi.fn(),
   reportError: vi.fn(),
 }));
@@ -11,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getUser: mocks.getUser }, from: mocks.from }),
 }));
-vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
+vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath, revalidateTag: mocks.revalidateTag }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
 
@@ -37,8 +38,11 @@ describe("notification read actions", () => {
     mocks.from.mockReturnValueOnce(lookup).mockReturnValueOnce(update);
 
     await expect(markNotificationRead("notice-1")).resolves.toEqual({ href: "/orders/1" });
-    expect(mocks.revalidatePath).toHaveBeenCalledWith("/notifications");
-    expect(mocks.revalidatePath).toHaveBeenCalledWith("/", "layout");
+    // N57: the member's own list, nothing else — opening one notification
+    // used to revalidate `/` as a layout, clearing every page and all the
+    // shared public data for everyone.
+    expect(mocks.revalidatePath.mock.calls).toEqual([["/notifications"]]);
+    expect(mocks.revalidateTag).not.toHaveBeenCalled();
   });
 
   it("keeps navigation on notifications and exposes feedback when persistence fails", async () => {
@@ -54,6 +58,8 @@ describe("notification read actions", () => {
   it("returns the persisted mark-all count and reports a failed batch", async () => {
     mocks.from.mockReturnValueOnce(chain({ data: [{ id: "1" }, { id: "2" }], error: null }));
     await expect(markAllNotificationsRead()).resolves.toEqual({ marked: 2 });
+    expect(mocks.revalidatePath.mock.calls).toEqual([["/notifications"]]);
+    expect(mocks.revalidateTag).not.toHaveBeenCalled();
 
     mocks.from.mockReturnValueOnce(chain({ data: null, error: { message: "write failed" } }));
     await expect(markAllNotificationsRead()).resolves.toEqual({ error: "Couldn't mark notifications as read. Try again." });
