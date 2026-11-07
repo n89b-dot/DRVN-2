@@ -24,6 +24,9 @@ export const DEFAULT_AGENT_MODEL = "claude-opus-5-5";
 export const MODEL_PRICES: Record<string, { input: number; output: number }> = {
   "claude-opus-5-5": { input: 4, output: 20 },
   "claude-sonnet-5-5": { input: 2, output: 10 },
+  // The listing importer's default (DEFAULT_IMPORT_MODEL); without a price its
+  // calls would settle with no cost and never count toward the caps.
+  "claude-sonnet-5": { input: 2, output: 10 },
   "claude-haiku-5-5": { input: 0.1, output: 0.5 },
 };
 
