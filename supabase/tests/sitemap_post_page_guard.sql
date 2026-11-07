@@ -108,7 +108,7 @@ begin
   end if;
 
   perform set_config('role', 'supabase_admin', true);
-  raise notice 'sitemap post page checks passed';
+  raise notice 'all sitemap post page checks passed';
 end $$;
 
 rollback;
