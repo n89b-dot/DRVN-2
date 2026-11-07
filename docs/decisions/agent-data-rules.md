@@ -45,8 +45,8 @@ allow-list per tool, never by passing records whole.
 - The member's own cars and mods: make, model, year, generation, the build lines.
 - Public fitment evidence and price comparables, as aggregates.
 - The outcome the rules already decided, so the model can explain it ("countered at $420").
-- From A4: messages the owner received about their own listing, wrapped as untrusted data, with
-  the other member shown as "the buyer" (no name, username or id).
+- From A4: questions the owner received about their own listing (never an order's thread),
+  wrapped as untrusted data, with the other member shown as "the buyer" (no name, username or id).
 
 **Never sent:**
 - Postal addresses, phone numbers and email addresses, of anyone.
@@ -82,8 +82,14 @@ Both steps are tested with fixtures in `tests/agent-evals/`.
   text, but they're never sent.
 - **Email addresses and phone numbers** typed into chat are stored, but sent to the model as
   `[email]` / `[phone]`.
-- Postal addresses aren't pattern-matched (too unreliable). They're kept out because no tool
-  ever reads one: the agent can't see checkout or shipping addresses.
+- Postal addresses aren't pattern-matched (too unreliable), and no pattern redaction is
+  complete. Addresses are kept out by what the tools read: the agent can't see checkout or
+  shipping addresses, and its one message read leaves out order threads and their event notes,
+  where buyers arrange delivery (`read_listing_messages` filters on `order_id is null` and
+  `kind = 'message'`; OS-W04, 7 Nov 2026). A buyer who types an address into a question before
+  buying can still reach the model; that is the remaining gap.
+- Every earlier turn is redacted again before each model call, the agent's own replies
+  included; the stored chat keeps what the member typed (readiness report two, 63).
 
 ## 4. Draft wording for the privacy and terms pages
 

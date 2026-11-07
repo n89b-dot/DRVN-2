@@ -622,6 +622,52 @@ export type Database = {
           },
         ]
       }
+      agent_chat_requests: {
+        Row: {
+          created_at: string
+          member_message_id: string | null
+          owner_id: string
+          reply_message_id: string | null
+          request_id: string
+        }
+        Insert: {
+          created_at?: string
+          member_message_id?: string | null
+          owner_id: string
+          reply_message_id?: string | null
+          request_id: string
+        }
+        Update: {
+          created_at?: string
+          member_message_id?: string | null
+          owner_id?: string
+          reply_message_id?: string | null
+          request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_chat_requests_member_message_id_fkey"
+            columns: ["member_message_id"]
+            isOneToOne: false
+            referencedRelation: "agent_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_chat_requests_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_chat_requests_reply_message_id_fkey"
+            columns: ["reply_message_id"]
+            isOneToOne: false
+            referencedRelation: "agent_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_controls: {
         Row: {
           cleared_at: string | null
@@ -1068,6 +1114,38 @@ export type Database = {
           value?: number | null
         }
         Relationships: []
+      }
+      agent_spend_holds: {
+        Row: {
+          amount_usd: number
+          created_at: string
+          feature: string
+          id: string
+          owner_id: string
+        }
+        Insert: {
+          amount_usd: number
+          created_at?: string
+          feature: string
+          id?: string
+          owner_id: string
+        }
+        Update: {
+          amount_usd?: number
+          created_at?: string
+          feature?: string
+          id?: string
+          owner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_spend_holds_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       agent_spend_limits: {
         Row: {
@@ -5964,6 +6042,25 @@ export type Database = {
         }[]
       }
       agent_chat_card_ok: { Args: { p_card: Json }; Returns: boolean }
+      agent_chat_message_json: { Args: { p_id: string }; Returns: Json }
+      agent_chat_turn_begin: {
+        Args: {
+          p_body: string
+          p_images?: string[]
+          p_owner: string
+          p_request: string
+        }
+        Returns: Json
+      }
+      agent_chat_turn_finish: {
+        Args: {
+          p_body: string
+          p_cards?: Json
+          p_owner: string
+          p_request: string
+        }
+        Returns: Json
+      }
       agent_claim_jobs: {
         Args: { p_lease_seconds?: number; p_limit?: number }
         Returns: {
@@ -6102,6 +6199,23 @@ export type Database = {
       }
       agent_retention_sweep: { Args: never; Returns: Json }
       agent_spend_allowed: { Args: { p_owner: string }; Returns: Json }
+      agent_spend_reserve: {
+        Args: { p_amount_usd: number; p_feature: string; p_owner: string }
+        Returns: Json
+      }
+      agent_spend_settle: {
+        Args: {
+          p_cost_usd?: number
+          p_feature: string
+          p_hold: string
+          p_input_tokens: number
+          p_model: string
+          p_output_tokens: number
+          p_owner: string
+          p_task?: string
+        }
+        Returns: undefined
+      }
       agent_usage_retention_sweep: { Args: never; Returns: number }
       apply_stripe_dispute_event: {
         Args: {
@@ -7275,6 +7389,7 @@ export type Database = {
       }
       profile_is_visible: { Args: { p_id: string }; Returns: boolean }
       profile_sales_count: { Args: { p_profile: string }; Returns: number }
+      prune_listing_edit_requests: { Args: never; Returns: number }
       prune_rate_limits: { Args: never; Returns: undefined }
       purchase_begin: {
         Args: {

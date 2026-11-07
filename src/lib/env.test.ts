@@ -119,4 +119,18 @@ describe("validatePaymentsEnv", () => {
     const { mode } = validatePaymentsEnv({ NODE_ENV: "test", STRIPE_SECRET_KEY: "sk_test_x" });
     expect(mode).toBe("stripe");
   });
+
+  it("checks the agent's model and worker URL when the beta is on in production", () => {
+    const agentOn = { ...LIVE, TRUST_PROXY_HEADERS: "true", AGENTS_BETA: "on", ANTHROPIC_API_KEY: "sk-ant-x" };
+    expect(validatePaymentsEnv(agentOn).warnings).toEqual([]);
+    expect(validatePaymentsEnv({ ...agentOn, AGENT_MODEL: "claude-sonnet-5-5", AGENT_WORKER_DATABASE_URL: "postgresql://agent_worker.ref:pw@pooler.example:6543/postgres" }).warnings).toEqual([]);
+    expect(() => validatePaymentsEnv({ ...agentOn, AGENT_MODEL: "claude-next-9" })).toThrow(/AGENT_MODEL/);
+    expect(() => validatePaymentsEnv({ ...agentOn, AGENT_WORKER_DATABASE_URL: "https://pooler.example/postgres" })).toThrow(/AGENT_WORKER_DATABASE_URL/);
+    expect(() => validatePaymentsEnv({ ...agentOn, AGENT_WORKER_DATABASE_URL: "postgresql://pooler.example:6543/postgres" })).toThrow(/AGENT_WORKER_DATABASE_URL/);
+    // Without a key the agent is off, not broken: a warning, not a refusal.
+    const { ANTHROPIC_API_KEY: _key, ...noKey } = agentOn;
+    expect(validatePaymentsEnv(noKey).warnings).toEqual([expect.stringMatching(/without ANTHROPIC_API_KEY/)]);
+    // Off, nothing is checked.
+    expect(() => validatePaymentsEnv({ ...LIVE, TRUST_PROXY_HEADERS: "true", AGENT_MODEL: "claude-next-9" })).not.toThrow();
+  });
 });
