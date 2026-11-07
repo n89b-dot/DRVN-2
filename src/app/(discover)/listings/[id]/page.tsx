@@ -198,7 +198,7 @@ export default async function ListingPage({
     { data: questions },
     { data: save },
     garageFitment,
-    { count: soldCount },
+    { data: soldCount },
     { count: openOfferCount },
     { data: publicOfferFloor },
   ] = await Promise.all([
@@ -273,12 +273,11 @@ export default async function ListingPage({
     user
       ? fetchGarageFitment(supabase, user.id)
       : Promise.resolve({ cars: [], index: new Map<string, string>() }),
-    // Track record for the seller line: parts they've actually sold here.
-    supabase
-      .from("listings")
-      .select("id", { count: "exact", head: true })
-      .eq("seller_id", listing.seller_id)
-      .eq("status", "sold"),
+    // Track record for the seller line: sales buyers actually paid for
+    // (N71). Counting the seller's listings marked sold counted their own
+    // "Mark sold" clicks, which anyone could make; profile_sales_count counts
+    // paid orders, as the profile's trust line does.
+    supabase.rpc("profile_sales_count", { p_profile: listing.seller_id }),
     // The owner panel's one open question: offers waiting on them.
     isOwn
       ? supabase
@@ -348,7 +347,7 @@ export default async function ListingPage({
     .join("")
     .slice(0, 2)
     .toUpperCase();
-  const sold = soldCount ?? 0;
+  const sold = Number(soldCount ?? 0);
   const sellerRecord = [
     avgRating ? ratingLine(avgRating, sellerRating?.review_count ?? 0) : null,
     sold > 0 ? `${sold} sold on DRVN` : null,

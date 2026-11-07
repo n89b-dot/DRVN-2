@@ -17,6 +17,7 @@ import {
   MIN_CHARGE_CENTS,
   OFFER_OUT_OF_BOUNDS_MESSAGE,
 } from "@/lib/payments/charge-bounds";
+import { PAYOUTS_NOT_READY_CODE } from "@/lib/payments/payout-readiness";
 
 /** A below-minimum offer is refused without saying what the minimum is. */
 const OFFER_BELOW_MINIMUM_MESSAGE = "That's lower than the seller will accept. Try a higher offer.";
@@ -164,6 +165,9 @@ function moveErrorMessage(code: string | undefined): string | null {
     case "OF009": return "Too many offer moves in a short time. Try again in a few minutes.";
     case "P0002": return "That offer no longer exists.";
     case CHARGE_OUT_OF_BOUNDS_CODE: return OFFER_OUT_OF_BOUNDS_MESSAGE;
+    // Accepting reserves the part, which the database refuses while the
+    // seller's payouts are off (20261107210000, N244).
+    case PAYOUTS_NOT_READY_CODE: return "This sale can't go ahead until the seller's payouts are set up. Nothing was charged.";
     default: return null;
   }
 }

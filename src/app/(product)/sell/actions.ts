@@ -28,6 +28,9 @@ import {
   chargeWithinBounds,
 } from "@/lib/payments/charge-bounds";
 import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
+import { PAYOUTS_NOT_READY_CODE } from "@/lib/payments/payout-readiness";
+
+import { MAX_SHIPPING_CENTS, PAYOUTS_REQUIRED, PHOTO_REQUIRED, listingWriteRefusal } from "./listing-refusal";
 import { saveListingAgent } from "@/features/agent/actions";
 
 export type SellState = {
@@ -104,12 +107,19 @@ async function readListingFields(formData: FormData, userId: string) {
   // draft — and by the database for every write).
   if (price > MAX_CHARGE_CENTS) return { error: LISTING_PRICE_OUT_OF_BOUNDS_MESSAGE };
   if (!Number.isFinite(shipping) || shipping < 0) return { error: "Enter a valid shipping cost." };
+  // The database's own bounds (listings_shipping_bounds, listings_text_bounds),
+  // checked here so a save is never refused by the database for something the
+  // form can say first (N72).
+  if (shipping > MAX_SHIPPING_CENTS) return { error: "Shipping can't be more than $100,000." };
   if (floor !== null && (!Number.isFinite(floor) || floor <= 0 || floor > price)) {
     return { error: "The offer floor must be above zero and no more than your asking price." };
   }
 
   const description = String(formData.get("description") ?? "").trim();
   if (description.length > 8000) return { error: "Keep the description under 8000 characters." };
+
+  const location = String(formData.get("location") ?? "").trim();
+  if (location.length > 120) return { error: "Keep the location under 120 characters." };
 
   const compatibility = String(formData.get("compatibility_notes") ?? "").trim();
   if (compatibility.length > 2000) {
@@ -252,7 +262,7 @@ async function readListingFields(formData: FormData, userId: string) {
       // Showing it is the seller's choice, and only means something with a minimum (O-3).
       show_offer_floor: floor !== null && formData.get("show_offer_floor") === "on",
       allows_collection: shippingMode === "pickup_only" ? true : allowsCollection,
-      location: String(formData.get("location") ?? "").trim() || null,
+      location: location || null,
       compatibility_notes: compatibility || null,
       part_number: partNumber || null,
       brand: brand || null,
@@ -262,9 +272,6 @@ async function readListingFields(formData: FormData, userId: string) {
     },
   };
 }
-
-const PHOTO_REQUIRED =
-  "Add at least one photo before publishing — a listing goes public with its picture. Drafts can save without one.";
 
 export async function createListing(_prev: SellState, formData: FormData): Promise<SellState> {
   const { supabase, user } = await requireUser();
@@ -295,6 +302,7 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
     return { error: PHOTO_REQUIRED };
   }
   const modItemId = String(formData.get("mod_item_id") ?? "");
+  if (modItemId && !uuid.test(modItemId)) return { error: "The source build line is invalid." };
   const importId = String(formData.get("import_id") ?? "");
   const payloadHash = createHash("sha256")
     .update(JSON.stringify({
@@ -313,8 +321,11 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
   });
   if (claimed.error) {
     return {
+      // 22023 now means only that this form's request already made a
+      // listing with other details: a refused or abandoned attempt is taken
+      // over by the next one (N72, claim_listing_creation 20261107210000).
       error: claimed.error.code === "22023"
-        ? "This save request no longer matches the listing form. Reload and try again."
+        ? "This form already saved a listing. Find it in your listings, or reload the page to start a new one."
         : "Couldn't prepare this listing. Try again.",
     };
   }
@@ -330,27 +341,18 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
   // unfinished attempt is admitted again; a denial releases an unused claim
   // so a second click cannot masquerade as a free recovery.
   if (!claim.completed && !(await allowAction(RATE_LIMITS.createListing, user.id))) {
-    const discarded = await supabase.rpc(
-      "discard_listing_creation",
-      { p_request: requestId, p_payload_hash: payloadHash }
-    );
-    if (discarded.error || discarded.data !== true) {
-      reportError("[sell] rate-limited listing claim wasn't discarded", {
-        requestId,
-        error: discarded.error,
-      });
-    }
+    await releaseCreationClaim(supabase, requestId, payloadHash);
     return { error: rateLimitMessage(RATE_LIMITS.createListing) };
   }
 
+  // Checked after the claim so a completed request still recovers its
+  // listing. A refusal releases the unused claim; the database would also let
+  // the changed "save as draft" take it over (N72, 20261107210000).
   if (!claim.completed && !asDraft && !(await sellerCanPublish(user.id))) {
-    return {
-      error:
-        "Publishing needs payouts set up first (Selling → Payouts), so a sale has somewhere to send your money. You can still save this as a draft.",
-    };
+    await releaseCreationClaim(supabase, requestId, payloadHash);
+    return { error: PAYOUTS_REQUIRED };
   }
 
-  if (modItemId && !uuid.test(modItemId)) return { error: "The source build line is invalid." };
   const saved = await supabase.rpc(
     "save_listing_creation",
     {
@@ -364,13 +366,12 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
     }
   );
   if (saved.error) {
-    reportError("[sell] atomic listing creation failed", { requestId, error: saved.error });
+    const refusal = listingWriteRefusal(saved.error.code);
+    if (!refusal) reportError("[sell] atomic listing creation failed", { requestId, error: saved.error });
     return {
       error: saved.error.code === "40001"
         ? "This listing changed while the save was being recovered. Refresh before continuing."
-        : saved.error.code === CHARGE_OUT_OF_BOUNDS_CODE
-          ? LISTING_PRICE_OUT_OF_BOUNDS_MESSAGE
-          : "Couldn't save the complete listing. Your form is still here — try again.",
+        : refusal ?? "Couldn't save the complete listing. Your form is still here — try again.",
     };
   }
   const saveResult = saved.data as unknown as {
@@ -428,6 +429,21 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
   if (agentError) redirect(`/listings/${listingId}/edit?agent=failed`);
   if (asDraft) redirect(`/listings/${listingId}/edit?saved=draft`);
   redirect(`/listings/${listingId}`);
+}
+
+/** Gives back an unused creation claim, so a refused attempt costs nothing. */
+async function releaseCreationClaim(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  requestId: string,
+  payloadHash: string
+) {
+  const discarded = await supabase.rpc("discard_listing_creation", {
+    p_request: requestId,
+    p_payload_hash: payloadHash,
+  });
+  if (discarded.error || discarded.data !== true) {
+    reportError("[sell] refused listing claim wasn't discarded", { requestId, error: discarded.error });
+  }
 }
 
 /**
@@ -703,7 +719,19 @@ export async function setListingStatus(
     .update({ status })
     .eq("id", id)
     .eq("seller_id", user.id);
-  if (error) return { error: error.message };
+  if (error) {
+    // The database holds the same rules (20261107210000): payouts and a
+    // photo to go live, whatever this action checked a moment ago.
+    if (error.code === PAYOUTS_NOT_READY_CODE) {
+      return {
+        error: "Publishing needs payouts set up first, so a sale has somewhere to send your money.",
+        needsOnboarding: true,
+      };
+    }
+    const refusal = listingWriteRefusal(error.code);
+    if (!refusal) reportError("[sell] listing status change failed", { id, status, error });
+    return { error: refusal ?? "Couldn't change the listing. Try again." };
+  }
 
 
   revalidatePath("/sell");
