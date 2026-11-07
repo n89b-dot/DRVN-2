@@ -45,7 +45,7 @@ export function resolveAiConfig(env: EnvLike = process.env): AiConfig {
   else mode = production ? "disabled" : "stub";
   const iterations = Number(env.AGENT_MAX_ITERATIONS);
   const model = env.AGENT_MODEL || DEFAULT_AGENT_MODEL;
-  // A model with no price can't be capped (agent_spend_allowed sums cost_usd),
+  // A model with no price can't be capped (agent_spend_reserve sums cost_usd),
   // so a real call to one is refused rather than made for free.
   if (mode === "anthropic" && !MODEL_PRICES[model]) mode = "disabled";
   return {
