@@ -165,7 +165,10 @@ export function AgentChat({
         const first = await sendAgentMessage({ text, about: context ? { kind: context.kind, id: context.id } : undefined, images: ready, requestId });
         // Cleared while it ran: nothing from the old conversation comes back.
         if (!current() || first.cleared) return;
-        const result = await waitForReply(first, pollAgentReply, { everyMs: REPLY_POLL_MS, forMs: REPLY_WAIT_MS, alive: () => mounted.current && current(), onProgress: merge });
+        // Only a pending send waits; an answered one is shown straight away.
+        const result = first.pending
+          ? await waitForReply(first, pollAgentReply, { everyMs: REPLY_POLL_MS, forMs: REPLY_WAIT_MS, alive: () => mounted.current && current(), onProgress: merge })
+          : first;
         if (!current() || result.cleared) return;
         if (result.pending) {
           // Still running: the id stays, so sending again picks this turn back up.
