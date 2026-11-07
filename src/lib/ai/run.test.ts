@@ -176,16 +176,43 @@ describe("the kill switch and suspension (readiness 66, N127)", () => {
     expect(reserved).toEqual([]);
   });
 
-  it("a switch flipped mid-turn stops the next round", async () => {
+  it("a switch flipped while a tool runs stops the next request (checked after the tools, before the provider)", async () => {
     const { fetch } = provider([toolUse("read_listing", { listingId: LISTING }), text("never")]);
-    let checks = 0;
-    const halted = async () => ++checks > 1;
+    let flipped = false;
+    const db = memberDb({ listings: [LISTING_ROW] });
+    const slowRead: MemberClient = {
+      ...db,
+      from: (table: string) => {
+        // The admin flips "Every agent" while this read is running.
+        flipped = true;
+        return db.from(table as never);
+      },
+    } as unknown as MemberClient;
     const { spend, settled } = ledger();
-    const result = await runAgentTurn({ context: modelContext(OWNER, "buyer"), supabase: memberDb({ listings: [LISTING_ROW] }), message: "hi", client: await anthropicClient({ fetch }), config, spend, halted });
+    const result = await runAgentTurn({ context: modelContext(OWNER, "buyer"), supabase: slowRead, message: "hi", client: await anthropicClient({ fetch }), config, spend, halted: async () => flipped });
     expect(result).toMatchObject({ ok: false, code: "paused" });
+    // The tool ran to its end; the request after it never went out.
+    expect(result.toolCalls.map((call) => call.name)).toEqual(["read_listing"]);
     expect(fetch).toHaveBeenCalledTimes(1);
-    // The round it did make is still counted.
-    expect(settled).toEqual([expect.objectContaining({ inputTokens: 100, outputTokens: 20 })]);
+    // The round it did make is still counted, and nothing unknown is charged.
+    expect(settled).toEqual([expect.objectContaining({ inputTokens: 100, outputTokens: 20, costUsd: estimateCostUsd(config.model, 100, 20) })]);
+  });
+
+  it("a tool that finishes with too little time left doesn't start another request", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const { fetch } = provider([toolUse("read_listing", { listingId: LISTING }), text("never")]);
+    const db = memberDb({ listings: [LISTING_ROW] });
+    const slowRead: MemberClient = {
+      ...db,
+      from: (table: string) => {
+        vi.setSystemTime(Date.now() + 26_000);
+        return db.from(table as never);
+      },
+    } as unknown as MemberClient;
+    const { spend } = ledger();
+    const result = await runAgentTurn({ context: modelContext(OWNER, "buyer"), supabase: slowRead, message: "hi", client: await anthropicClient({ fetch }), config, spend, halted: notHalted, deadline: Date.now() + 30_000 });
+    expect(result).toMatchObject({ ok: false, code: "timeout" });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("a refusal from the database (suspended, or a switch it sees) makes no provider request", async () => {
@@ -235,7 +262,36 @@ describe("one turn's own bounds (readiness 67, N121)", () => {
     await expect(pending).resolves.toMatchObject({ ok: false, code: "timeout" });
     // Aborted, so not retried.
     expect(fetch).toHaveBeenCalledTimes(1);
+    // The provider may have processed it: its worst case is charged, not released.
     expect(settled).toHaveLength(1);
+    expect(settled[0]).toMatchObject({ inputTokens: 0, outputTokens: 0 });
+    expect(settled[0].costUsd!).toBeGreaterThan(0);
+    expect(settled[0].costUsd!).toBeLessThanOrEqual(TURN_CAP_USD);
+  });
+
+  it("a later round lost in transit is charged at its worst case on top of the rounds that came back", async () => {
+    let calls = 0;
+    const fetch = vi.fn(async () => {
+      if (++calls === 1) return new Response(JSON.stringify(message(toolUse("read_listing", { listingId: LISTING }))), { status: 200, headers: { "content-type": "application/json" } });
+      throw new TypeError("socket hang up");
+    });
+    const { spend, settled } = ledger();
+    const result = await runAgentTurn({ context: modelContext(OWNER, "buyer"), supabase: memberDb({ listings: [LISTING_ROW] }), message: "hi", client: await anthropicClient({ fetch }), config, spend, halted: notHalted });
+    expect(result).toMatchObject({ ok: false, code: "model_error" });
+    expect(settled).toHaveLength(1);
+    expect(settled[0]).toMatchObject({ inputTokens: 100, outputTokens: 20 });
+    expect(settled[0].costUsd!).toBeGreaterThan(estimateCostUsd(config.model, 100, 20)! + 0.1);
+    expect(settled[0].costUsd!).toBeLessThanOrEqual(TURN_CAP_USD);
+  });
+
+  it("a request the provider rejected outright (a 400, never retried or billed) releases the reservation", async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "bad" } }), { status: 400, headers: { "content-type": "application/json" } }));
+    const { spend, settled } = ledger();
+    const result = await runAgentTurn({ context: modelContext(OWNER, "buyer"), supabase: memberDb({}), message: "hi", client: await anthropicClient({ fetch }), config, spend, halted: notHalted });
+    expect(result).toMatchObject({ ok: false, code: "model_error" });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(settled).toEqual([expect.objectContaining({ inputTokens: 0, outputTokens: 0 })]);
+    expect(settled[0].costUsd ?? 0).toBe(0);
   });
 
   it("stops when the caller gives up", async () => {
@@ -262,5 +318,17 @@ describe("one turn's own bounds (readiness 67, N121)", () => {
     const result = await runAgentTurn({ context: modelContext(OWNER, "buyer"), supabase: memberDb({}), message: "hi", client: await anthropicClient({ fetch }), config, spend, halted: notHalted });
     expect(result).toMatchObject({ ok: false, code: "model_error" });
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("checks the switches right before the first request too, once the budget is held", async () => {
+    const { fetch } = provider([text("never")]);
+    let checks = 0;
+    const { spend, settled } = ledger();
+    const result = await runAgentTurn({ context: modelContext(OWNER, "buyer"), supabase: memberDb({}), message: "hi", client: await anthropicClient({ fetch }), config, spend, halted: async () => ++checks > 1 });
+    expect(result).toMatchObject({ ok: false, code: "paused" });
+    expect(fetch).not.toHaveBeenCalled();
+    // Reserved, then released whole: nothing was sent.
+    expect(settled).toEqual([expect.objectContaining({ inputTokens: 0, outputTokens: 0 })]);
+    expect(settled[0].costUsd ?? 0).toBe(0);
   });
 });

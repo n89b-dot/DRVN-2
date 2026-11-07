@@ -6087,6 +6087,10 @@ export type Database = {
         }
         Returns: Json
       }
+      agent_chat_turn_status: {
+        Args: { p_owner: string; p_request: string }
+        Returns: Json
+      }
       agent_claim_jobs: {
         Args: { p_lease_seconds?: number; p_limit?: number }
         Returns: {

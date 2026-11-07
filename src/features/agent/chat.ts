@@ -20,11 +20,17 @@ import { createClient } from "@/lib/supabase/server";
 import { SUSPENDED_MESSAGE } from "@/lib/suspension";
 
 export type ChatMessage = { id: string; role: "member" | "agent"; body: string; cards: ResolvedCard[]; images: string[]; created_at: string };
+/**
+ * `pending` means the send was accepted but its reply isn't stored yet: the
+ * first attempt of this request id is still running. The client keeps the id
+ * and asks pollAgentReply until the reply is there (OS-W04 follow-up).
+ */
 export type ChatState = {
   error?: string;
   messages?: ChatMessage[];
   /** The chat was cleared while this send ran: show nothing from it. */
   cleared?: boolean;
+  pending?: { requestId: string };
 };
 
 const MAX_LENGTH = 4000;
@@ -141,7 +147,7 @@ export async function sendAgentMessage(input: { text: string; scope?: AgentScope
     const resolved = await resolveCards(supabase, replayCards);
     return {
       messages: toChatMessages([turn0.member, ...(turn0.reply ? [turn0.reply] : [])], resolved),
-      ...(turn0.reply ? {} : { error: "Your agent is still answering that. Its reply will appear here when it's done." }),
+      ...(turn0.reply ? {} : { pending: { requestId } }),
     };
   }
 
@@ -187,6 +193,30 @@ export async function sendAgentMessage(input: { text: string; scope?: AgentScope
   capture(user.id, { event: "agent_chat_turn", props: { tool_calls: Math.min(turn.toolCalls.length, 9), ok: turn.ok } });
   const resolved = await resolveCards(supabase, ((stored?.cards ?? []) as TurnCard[]));
   return { messages: toChatMessages([turn0.member, ...(stored ? [stored] : [])], resolved) };
+}
+
+/**
+ * Where a pending send stands (OS-W04 follow-up): the member's own request
+ * only, read through agent_chat_turn_status. Nothing is stored or sent, so
+ * it isn't rate limited like a send; the client asks every few seconds and
+ * stops when the reply is there or the send's deadline has long passed.
+ */
+export async function pollAgentReply(requestId: string): Promise<ChatState> {
+  if (typeof requestId !== "string" || !UUID.test(requestId)) return { error: "Couldn't find that message." };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Sign in again to see your agent's reply." };
+  const { data, error } = await createAdminClient().rpc("agent_chat_turn_status", { p_owner: user.id, p_request: requestId });
+  if (error || !data) return { error: "Couldn't check on your agent's reply. Reload to see it." };
+  const status = data as { found: boolean; member: StoredMessage | null; reply: StoredMessage | null };
+  if (!status.found || !status.member) return { error: "Couldn't find that message." };
+  const resolved = await resolveCards(supabase, ((status.reply?.cards ?? []) as TurnCard[]));
+  return {
+    messages: toChatMessages([status.member, ...(status.reply ? [status.reply] : [])], resolved),
+    ...(status.reply ? {} : { pending: { requestId } }),
+  };
 }
 
 function toChatMessages(rows: StoredMessage[], resolved: Map<string, ResolvedCard>): ChatMessage[] {

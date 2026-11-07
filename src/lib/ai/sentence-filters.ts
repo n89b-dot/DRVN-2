@@ -9,6 +9,7 @@ import { reportError } from "@/lib/monitoring";
 import { agentModelHalted } from "@/lib/agent/controls";
 
 import { anthropicClient } from "./client";
+import { providerRejected } from "./outcome";
 import { estimateCostUsd, resolveAiConfig, type AiConfig } from "./config";
 import { redactForModel } from "./redact";
 import { databaseLedger, type SpendLedger } from "./spend";
@@ -84,12 +85,16 @@ export async function sentenceToFilters(options: {
   const ledger = options.spend ?? databaseLedger();
   // One call's worst case, held before it is made (the reservation also
   // refuses a suspended member and a switched-off agent in the database).
-  const reservation = await ledger.reserve(options.ownerId, "marketplace_filters", FILTERS_RESERVE_USD(config.model));
+  const reserved = FILTERS_RESERVE_USD(config.model);
+  const reservation = await ledger.reserve(options.ownerId, "marketplace_filters", reserved);
   if (!reservation.ok) return { ok: false, code: reservation.reason === "paused" ? "ai_disabled" : "spend_cap" };
   let inputTokens = 0;
   let outputTokens = 0;
+  // Spend we can't see: the call's worst case while its outcome is unknown.
+  let unresolvedUsd = 0;
   try {
     const client = options.client ?? (await anthropicClient());
+    unresolvedUsd = reserved;
     const message = await client.messages.create({
       model: config.model,
       max_tokens: FILTERS_MAX_TOKENS,
@@ -99,6 +104,7 @@ export async function sentenceToFilters(options: {
       tool_choice: { type: "tool", name: TOOL.name },
       messages: [{ role: "user", content: redactForModel(options.sentence.slice(0, 300)) }],
     });
+    unresolvedUsd = 0;
     inputTokens = message.usage.input_tokens;
     outputTokens = message.usage.output_tokens;
     const call = message.content.find((block): block is Anthropic.ToolUseBlock => block.type === "tool_use" && block.name === TOOL.name);
@@ -106,11 +112,14 @@ export async function sentenceToFilters(options: {
     if (!filters.q && !filters.category) return { ok: false, code: "nothing" };
     return { ok: true, filters, href: marketplaceHref(filters) };
   } catch (error) {
+    // Refused outright costs nothing; a lost or failed call may have been billed.
+    if (providerRejected(error)) unresolvedUsd = 0;
     reportError("[marketplace] sentence to filters failed", { kind: error instanceof Error ? error.name : "unknown" });
     return { ok: false, code: "model_error" };
   } finally {
-    const usage = usageRecord({ model: config.model, inputTokens, outputTokens, taskId: null, feature: "marketplace_filters" });
-    if (inputTokens + outputTokens > 0) logUsage(usage);
+    const counted = usageRecord({ model: config.model, inputTokens, outputTokens, taskId: null, feature: "marketplace_filters" });
+    const usage = unresolvedUsd > 0 ? { ...counted, costUsd: (counted.costUsd ?? 0) + unresolvedUsd } : counted;
+    if (inputTokens + outputTokens > 0 || unresolvedUsd > 0) logUsage(usage);
     await ledger.settle(options.ownerId, reservation.hold, usage);
   }
 }

@@ -20,6 +20,8 @@ export type CapabilityRun = {
   supabase: MemberClient;
   /** The member's own photos on the message being answered (A3d), by index. */
   attachments?: readonly string[];
+  /** The agent turn's clock: once it fires, a capability isn't started, and one that finishes late is discarded. */
+  signal?: AbortSignal;
 };
 
 export type Capability<I extends z.ZodType = z.ZodType, O extends z.ZodType = z.ZodType> = {
@@ -61,7 +63,9 @@ export async function invokeCapability<I extends z.ZodType, O extends z.ZodType>
   }
   const input = capability.input.safeParse(rawInput);
   if (!input.success) throw new CapabilityError("invalid_input", `${capability.name}: ${input.error.issues.map((issue) => issue.message).join("; ")}`);
+  if (run.signal?.aborted) throw new CapabilityError("failed", `${capability.name} was stopped`);
   const result = await capability.run(run, input.data);
+  if (run.signal?.aborted) throw new CapabilityError("failed", `${capability.name} was stopped`);
   const output = capability.output.safeParse(result);
   if (!output.success) throw new CapabilityError("invalid_output", `${capability.name} returned something off its contract`);
   return output.data;
