@@ -106,9 +106,11 @@ export default function FeesPage() {
         <Rv className="tile" stagger={1}>
           <TileHead label="What the buyer pays" />
           <p className="text-body leading-relaxed">
-            The asking price plus the seller&apos;s shipping. Nothing is added at checkout — the
-            number on the listing is the number you pay. The fee is invisible to buyers because it
-            comes out of the seller&apos;s side.
+            The item price plus shipping. When the seller sets the shipping, the listing shows it and
+            that&apos;s what you pay. When the listing says &ldquo;Shipping calculated at
+            checkout&rdquo;, the seller ships with DRVN Shipping: the cost depends on where it&apos;s
+            going, so checkout shows the rates once you&apos;ve entered your address, before you pay.
+            DRVN&apos;s fee is never added on top — it comes out of the seller&apos;s side.
           </p>
         </Rv>
 

@@ -30,6 +30,7 @@ import { paymentsAreLive } from "@/lib/payments/provider";
 import { getPublicPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 import { deliveryLabel } from "@/lib/marketplace/delivery";
 import { listingHref, normalizeMarketplaceState, shoppingReturn } from "@/lib/marketplace/state";
+import { listingShareDescription } from "@/lib/share-copy";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
 import { getBetaAccess } from "@/lib/beta-access";
 
@@ -63,6 +64,17 @@ const loadListingImages = cache(async (id: string) => {
   const supabase = await createClient();
   return supabase.from("listing_images").select("*").eq("listing_id", id).order("position");
 });
+/** The car the part came off, read under the visitor's row security: a
+ *  private or suspended member's car comes back empty. Shared by the share
+ *  text and the page. */
+const loadSourceCar = cache(async (carId: string) => {
+  const supabase = await createClient();
+  return supabase
+    .from("cars")
+    .select("id, slug, name, make, model, year, is_public, cover_image_url")
+    .eq("id", carId)
+    .maybeSingle();
+});
 
 /**
  * Per-listing metadata with the cover as the OG image. A part listing is the
@@ -78,14 +90,13 @@ export async function generateMetadata({
   const [{ data: listing }, { data: images }] = await Promise.all([loadListing(id), loadListingImages(id)]);
 
   if (!listing) return { title: "Listing not found - DRVN" };
+  const { data: sourceCar } = listing.source_car_id ? await loadSourceCar(listing.source_car_id) : { data: null };
 
   const image = images?.[0] ?? null;
 
   const price = formatPrice(listing.price_cents);
   const sold = listing.status === "sold";
-  const description =
-    listing.description?.slice(0, 155) ??
-    `${conditionLabel(listing.condition)} · ${price} · a used part off a real modified car, on DRVN.`;
+  const description = listingShareDescription(listing, sourceCar);
 
   return {
     title: `${listing.title} — ${price}${sold ? " (sold)" : ""} - DRVN`,
@@ -204,13 +215,7 @@ export default async function ListingPage({
       .select("username, display_name, location, avatar_url")
       .eq("id", listing.seller_id)
       .single(),
-    listing.source_car_id
-      ? supabase
-          .from("cars")
-          .select("id, slug, name, make, model, year, is_public, cover_image_url")
-          .eq("id", listing.source_car_id)
-          .single()
-      : Promise.resolve({ data: null }),
+    listing.source_car_id ? loadSourceCar(listing.source_car_id) : Promise.resolve({ data: null }),
     supabase
       .from("listings")
       .select("id, title, price_cents, shipping_cents, shipping_mode, allows_collection, condition, location, part_number, brand, part_miles, part_miles_unit, seller_id, source_car_id, status")
