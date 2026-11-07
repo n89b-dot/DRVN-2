@@ -1,4 +1,4 @@
--- AG-7's member-level agent mode (20261026130000): the column's shape, who
+-- AG-7's member-level agent mode (20261107170000): the column's shape, who
 -- may read and write it, and that a member can only set their own.
 -- Transactional; disposable local database only.
 begin;

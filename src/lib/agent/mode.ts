@@ -1,6 +1,6 @@
 /**
  * AG-7: the member-level agent setting — Off · Suggest · Act within my limits
- * (profiles.agent_mode, 20261026130000). Pure: types and copy only, so client
+ * (profiles.agent_mode, 20261107170000). Pure: types and copy only, so client
  * components can say why an entry point is disabled. The read is
  * `loadAgentMode` in member-mode.ts (server-only).
  *

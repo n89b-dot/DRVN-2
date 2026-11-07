@@ -21,7 +21,7 @@ alter table public.profiles add constraint profiles_agent_mode_check
   check (agent_mode in ('off', 'suggest', 'act'));
 
 comment on column public.profiles.agent_mode is
-  'AG-7: how far the member''s agent may go — off, suggest (no mandates), act (20261026130000). Owner-written; no client select grant.';
+  'AG-7: how far the member''s agent may go — off, suggest (no mandates), act (20261107170000). Owner-written; no client select grant.';
 
 -- The owner sets it through the existing "users update own profile" policy;
 -- 0017 replaced the table-wide update grant with a column list, so the new
