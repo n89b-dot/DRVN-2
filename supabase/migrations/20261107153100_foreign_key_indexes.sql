@@ -11,7 +11,8 @@
 --
 -- Coverage was measured, not taken from the report: every migration applied
 -- to a fresh database, then every public foreign key checked for an index
--- whose leading columns are the key's columns. A partial index counts only
+-- whose leading key columns (not INCLUDE columns; a valid index) are the
+-- key's columns. A partial index counts only
 -- when its predicate is "<column> IS NOT NULL", which every lookup by a value
 -- satisfies. 74 keys had none (the report's six, plus offer_rounds.buyer_id,
 -- were among them). This adds 67:

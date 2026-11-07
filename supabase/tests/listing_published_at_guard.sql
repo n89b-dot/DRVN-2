@@ -36,8 +36,8 @@ begin
   insert into public.listings(seller_id, source_car_id, title, category, price_cents, currency, status, brand, created_at)
   values (v_seller, v_car, 'Zzpub drafted ten days ago', 'engine', 1000, 'USD', 'draft', 'Zzpubbrand', now() - interval '10 days')
   returning id into v_draft;
-  insert into public.listings(seller_id, title, category, price_cents, currency, status, created_at, published_at)
-  values (v_seller, 'Zzpub dated ahead', 'engine', 1000, 'USD', 'active', now() + interval '1 year', now() + interval '1 year')
+  insert into public.listings(seller_id, source_car_id, title, category, price_cents, currency, status, brand, created_at, published_at)
+  values (v_seller, v_car, 'Zzpub dated ahead', 'engine', 1000, 'USD', 'active', 'Zzpubbrand', now() + interval '1 year', now() + interval '1 year')
   returning id into v_future;
 
   if (select published_at from public.listings where id = v_old) is distinct from now() - interval '3 days' then
@@ -49,7 +49,6 @@ begin
   if (select published_at from public.listings where id = v_future) > now() then
     raise exception 'FAIL 1c: a writer dated a part into the future';
   end if;
-  delete from public.listings where id = v_future;
 
   -- 2. The writer can't move it.
   update public.listings set published_at = now() + interval '1 year' where id = v_old;
@@ -70,6 +69,16 @@ begin
   if (select published_at from public.listings where id = v_draft) is distinct from v_published then
     raise exception 'FAIL 3b: pause and relist moved the first publication time';
   end if;
+
+  -- 1d. A part dated ahead is clamped in its vehicle rows too (the
+  --     migration re-copies existing rows; the trigger copies new ones), so
+  --     vehicle-filtered Newest orders by the same time its position holds.
+  if (select published_at from public.listing_vehicle_fit where listing_id = v_future limit 1)
+     is distinct from (select published_at from public.listings where id = v_future)
+     or (select max(published_at) from public.listing_vehicle_fit where listing_id = v_future) > now() then
+    raise exception 'FAIL 1d: listing_vehicle_fit holds a part''s future date, not its publication time';
+  end if;
+  delete from public.listings where id = v_future;
 
   -- 4. Newest: the just-published draft leads, by every read path.
   got := array(select id from public.marketplace_page(p_query => '', p_brand => 'Zzpubbrand', p_sort => 'newest', p_limit => 10));
@@ -110,9 +119,15 @@ begin
     raise exception 'FAIL 6: the search document has no publication time: %', doc->>'published_at_us';
   end if;
 
-  -- 7. Nothing that has left draft is without one (the backfill and the trigger).
+  -- 7. Nothing that has left draft is without one (the backfill and the
+  --    trigger), and every vehicle row holds its part's time, existing rows
+  --    included (the migration's re-copy).
   if exists (select 1 from public.listings where status <> 'draft' and published_at is null) then
-    raise exception 'FAIL 7: a part off draft has no publication time';
+    raise exception 'FAIL 7a: a part off draft has no publication time';
+  end if;
+  if exists (select 1 from public.listing_vehicle_fit f join public.listings l on l.id = f.listing_id
+             where f.published_at is distinct from l.published_at) then
+    raise exception 'FAIL 7b: a listing_vehicle_fit row holds a different time from its part';
   end if;
 
   raise notice 'all listing publication time checks passed';

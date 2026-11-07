@@ -4,7 +4,8 @@
 -- Postgres never indexes the referencing side for you. Without one, deleting
 -- a parent row (account deletion, a deleted listing, the agent retention
 -- sweep) reads the whole child table once per row. An index covers a key when
--- its leading columns are exactly the key's columns, in any order; a partial
+-- its leading key columns (not INCLUDE columns) are exactly the key's
+-- columns, in any order, and it is valid (not a failed CONCURRENTLY build); a partial
 -- index covers a one-column key only when its predicate is
 -- "<column> IS NOT NULL" (every lookup by a value satisfies that).
 --
@@ -35,6 +36,10 @@ begin
          exists (
            select 1 from pg_index i
            where i.indrelid = c.conrelid
+             -- A valid, ready index, whose KEY columns (never INCLUDE
+             -- columns, which can't be searched) start with the key's.
+             and i.indisvalid and i.indisready
+             and cardinality(c.conkey) <= i.indnkeyatts
              and (select array_agg(x order by x) from unnest((i.indkey::int2[])[0:cardinality(c.conkey) - 1]) x)
                  = (select array_agg(x order by x) from unnest(c.conkey) x)
              and (i.indpred is null

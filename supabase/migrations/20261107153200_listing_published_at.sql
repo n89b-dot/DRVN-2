@@ -79,6 +79,13 @@ drop index if exists public.listings_active_brand_idx;
 -- 4. listing_vehicle_fit copies the date it is ordered by. Renaming the
 --    column carries listing_vehicle_fit_newest_idx with it.
 alter table public.listing_vehicle_fit rename column created_at to published_at;
+-- The rows were copied from created_at, and the backfill above fires no
+-- trigger: re-copy each from its part, so a part dated ahead (clamped to now
+-- above) reads in the same order here as its page position says.
+update public.listing_vehicle_fit v
+   set published_at = l.published_at
+  from public.listings l
+ where l.id = v.listing_id and v.published_at is distinct from l.published_at;
 
 create or replace function public.refresh_listing_vehicle_fit(p_listings uuid[], p_lock boolean default true)
 returns void
