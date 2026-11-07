@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { unstable_rethrow, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -51,6 +52,8 @@ function PanelThread({ aboutRef }: { aboutRef: AgentAboutRef | null }) {
   const [jobs, setJobs] = useState(false);
   const [userId, setUserId] = useState<string | undefined>(undefined);
   const [failed, setFailed] = useState(false);
+  // AG-7: the member's agent is Off in Settings.
+  const [disabled, setDisabled] = useState<string | null>(null);
   const key = aboutRef ? `${aboutRef.kind}:${aboutRef.id}` : "";
 
   useEffect(() => {
@@ -59,6 +62,7 @@ function PanelThread({ aboutRef }: { aboutRef: AgentAboutRef | null }) {
       .then((result) => {
         if (!live) return;
         if (!result) return setFailed(true);
+        if ("disabled" in result) return setDisabled(result.disabled);
         setMessages((current) => current ?? result.messages);
         setAbout(result.about);
         setJobs(result.jobs);
@@ -75,6 +79,16 @@ function PanelThread({ aboutRef }: { aboutRef: AgentAboutRef | null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
+  if (disabled) {
+    return (
+      <p className="field__hint mt-4">
+        {disabled}{" "}
+        <Link href="/settings#agent" className="jumplink">
+          Change it →
+        </Link>
+      </p>
+    );
+  }
   if (failed) return <p className="field__hint mt-4">Couldn&apos;t open your agent here. Try the full page.</p>;
   if (!messages) return <SkeletonRows rows={3} />;
   return <AgentChat initial={messages} about={about} jobs={jobs} userId={userId} />;

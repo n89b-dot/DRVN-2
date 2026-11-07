@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 
 import { agentStepOpen } from "@/lib/agent/beta";
 import { modelContext, type AgentScope } from "@/lib/agent/context";
+import { loadAgentMode } from "@/lib/agent/member-mode";
+import { agentModeAllowsChat, agentModeRefusal } from "@/lib/agent/mode";
 import { capture } from "@/lib/analytics";
 import { runAgentTurn, type TurnCard, type TurnImage } from "@/lib/ai/run";
 import { isOwnedStorageUrl } from "@/lib/media-url";
@@ -93,6 +95,10 @@ export async function sendAgentMessage(input: { text: string; scope?: AgentScope
   const suspended = await supabase.rpc("is_suspended", { uid: user.id });
   if (suspended.error) return { error: "Couldn't send that. Try again." };
   if (suspended.data === true) return { error: SUSPENDED_MESSAGE };
+  // AG-7: an agent set to Off answers nothing, from /agent or the side panel
+  // (readiness 64). Refused before anything is stored or sent.
+  const mode = await loadAgentMode(user.id);
+  if (!agentModeAllowsChat(mode)) return { error: agentModeRefusal(mode) ?? "Agent is off in Settings." };
 
   // Photos (A3d) only once the jobs step is open, and only the member's own
   // listing-images uploads; the database checks the folder again.
@@ -187,12 +193,17 @@ function toChatMessages(rows: StoredMessage[], resolved: Map<string, ResolvedCar
  * what the opener asked about, read as the member. Loaded when the panel
  * first opens, never with every page.
  */
-export async function openAgentChat(about?: { kind: string; id: string } | null): Promise<{ messages: ChatMessage[]; about: ChatAbout | null; jobs: boolean; userId: string } | null> {
+export async function openAgentChat(
+  about?: { kind: string; id: string } | null,
+): Promise<{ messages: ChatMessage[]; about: ChatAbout | null; jobs: boolean; userId: string } | { disabled: string } | null> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user || !(await agentStepOpen("chat"))) return null;
+  // AG-7: Off in Settings closes the panel's chat too, saying where to change it.
+  const mode = await loadAgentMode(user.id);
+  if (!agentModeAllowsChat(mode)) return { disabled: agentModeRefusal(mode) ?? "Agent is off in Settings." };
   const [messages, resolved, jobs] = await Promise.all([loadChat(supabase, user.id), resolveAbout(supabase, user.id, about), agentStepOpen("jobs")]);
   return { messages, about: resolved, jobs, userId: user.id };
 }
