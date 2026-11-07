@@ -55,7 +55,6 @@ export default async function BuildCard({ params }: { params: Promise<{ slug: st
         }}
       >
         {showPhoto && (
-          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={car!.cover_image_url!}
             alt=""

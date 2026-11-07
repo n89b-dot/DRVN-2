@@ -56,6 +56,7 @@ export function ReportProblemForm({ orderId }: { orderId: string }) {
         const result: CommerceState = await response.json();
         if (!response.ok || result.error) { setState({ error: result.error || "The dispute could not be opened." }); return; }
         // A full navigation is independent of a stalled Server Action transition.
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- deliberate full document load (4aef789): router.push would re-enter the stalled transition this escapes
         window.location.assign(`/orders/${orderId}`);
       } catch { setState({ error: "The result could not be confirmed. Reload the order before trying again." }); }
       finally { submitting.current = false; setPending(false); }

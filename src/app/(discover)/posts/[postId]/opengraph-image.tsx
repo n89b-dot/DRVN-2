@@ -56,7 +56,6 @@ export default async function PostCard({ params }: { params: Promise<{ postId: s
         }}
       >
         {image?.url && (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={image.url} alt="" style={{ width: 660, height: 630, objectFit: "cover" }} />
         )}
         <div

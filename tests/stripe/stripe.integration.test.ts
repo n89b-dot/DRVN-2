@@ -42,7 +42,6 @@ if (key && !hasTestKey) {
   );
 }
 if (!hasTestKey) {
-  // eslint-disable-next-line no-console
   console.warn(
     "⚠ STRIPE INTEGRATION SKIPPED — no sk_test_ key configured (STRIPE_SECRET_KEY). " +
       "This coverage did NOT run."
