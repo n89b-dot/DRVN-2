@@ -14,9 +14,11 @@ import { reportError } from "@/lib/monitoring";
  * the proxy refuses `/_next/image` for any object in
  * public.copyright_blocked_media (20261107231002), cached copy or not.
  *
- * The list is small and changes only when an admin acts, so each server
- * instance keeps it for a minute: an image request never waits on the
- * database twice in that time. A failed read keeps the last good list (or
+ * The list is small and changes only when an admin acts, so each proxy
+ * instance keeps it for 15 seconds: image requests share one small read in
+ * that time. The proxy is bundled apart from the app (and on Vercel runs
+ * apart from it), so the admin action can't reach this copy: a takedown is
+ * refused here within 15 seconds. A failed read keeps the last good list (or
  * none) and serves the image: a database blip mustn't blank every photo.
  *
  * Server code only (it reads with the service key). It builds its own client
@@ -24,7 +26,7 @@ import { reportError } from "@/lib/monitoring";
  * meant for React Server Components, not the proxy.
  */
 
-const TTL_MS = 60_000;
+export const BLOCKED_MEDIA_TTL_MS = 15_000;
 
 let cached: { keys: Set<string>; at: number } | null = null;
 let loading: Promise<Set<string>> | null = null;
@@ -41,7 +43,7 @@ async function load(): Promise<Set<string>> {
 }
 
 export async function blockedMediaKeys(now: number = Date.now()): Promise<Set<string>> {
-  if (cached && now - cached.at < TTL_MS) return cached.keys;
+  if (cached && now - cached.at < BLOCKED_MEDIA_TTL_MS) return cached.keys;
   loading ??= load()
     .then((keys) => {
       cached = { keys, at: Date.now() };
@@ -58,7 +60,7 @@ export async function blockedMediaKeys(now: number = Date.now()): Promise<Set<st
   return loading;
 }
 
-/** Drops this instance's copy, so a takedown here applies at once. */
+/** Drops this module's copy (tests; a fresh read on the next request). */
 export function forgetBlockedMedia(): void {
   cached = null;
 }

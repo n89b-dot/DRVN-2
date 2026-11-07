@@ -3,14 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // R69-dmca: the console's Take down and Reject on a copyright notice. The
 // database function decides (admin, step-up, one transaction, audit); the
 // action parses the targets, then tells the members, starts the storage
-// deletion and drops the cached pages and the proxy's blocked list.
+// deletion and drops the cached pages.
 
 const mocks = vi.hoisted(() => ({
   context: vi.fn(),
   sessionRpc: vi.fn(),
   notify: vi.fn(),
   cleanup: vi.fn(),
-  forget: vi.fn(),
   revalidate: vi.fn(),
 }));
 
@@ -25,7 +24,6 @@ vi.mock("@/lib/payments/late-refund-recovery", () => ({ verifyLateRefundRecovery
 vi.mock("./replay-webhook", () => ({ dispatchRecordedWebhookEvent: vi.fn() }));
 vi.mock("./alerts", () => ({ sendAdminAlert: vi.fn() }));
 vi.mock("@/lib/media-lifecycle", () => ({ scheduleMediaCleanup: mocks.cleanup }));
-vi.mock("@/lib/copyright/blocked-media", () => ({ forgetBlockedMedia: mocks.forget }));
 vi.mock("@/lib/copyright/hosts", () => ({ copyrightHosts: () => ({ site: ["drvn.app"], storage: ["proj.supabase.co"] }) }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ rpc: mocks.sessionRpc }) }));
 vi.mock("@/lib/supabase/admin", () => ({
@@ -82,7 +80,6 @@ describe("copyright takedown", () => {
       expect.objectContaining({ user_id: SELLER, kind: "copyright_takedown", body: expect.stringContaining("Photographer's notice") }),
     ]);
     expect(mocks.cleanup).toHaveBeenCalledWith(SELLER);
-    expect(mocks.forget).toHaveBeenCalled();
     expect(mocks.revalidate).toHaveBeenCalledWith("/", "layout");
   });
 

@@ -221,6 +221,7 @@ test.describe.serial("guest checkout", () => {
       el.type = "text";
       el.value = "no@domain";
     });
+    await page.getByLabel(/18 or over/i).check();
     await page.locator('input[name="ship_name"]').fill("Guest Buyer");
     await page.locator('input[name="ship_line1"]').fill("1 Test Street");
     await page.locator('input[name="ship_city"]').fill("Reno");

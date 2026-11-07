@@ -20,7 +20,6 @@ import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { reportError } from "@/lib/monitoring";
 import { scheduleMediaCleanup } from "@/lib/media-lifecycle";
-import { forgetBlockedMedia } from "@/lib/copyright/blocked-media";
 import { takedownTargets } from "@/lib/copyright/notice";
 import { copyrightHosts } from "@/lib/copyright/hosts";
 
@@ -1446,8 +1445,9 @@ export async function adminCaseUpdate(formData: FormData) {
  * database function (copyright_takedown, 20261107231002) checks the admin
  * and a fresh step-up itself, does all of it in one transaction and writes
  * the audit row; this parses the form, then tells the members whose content
- * went, starts the storage deletion, and clears the cached pages and the
- * proxy's list of blocked images.
+ * went, starts the storage deletion, and clears the cached pages. The proxy
+ * refuses the photos' cached optimised copies within 15 seconds
+ * (src/lib/copyright/blocked-media.ts).
  */
 export async function adminCopyrightTakedown(
   _prev: AdminActionState,
@@ -1505,7 +1505,6 @@ export async function adminCopyrightTakedown(
     // rather than at the next scheduled run.
     for (const owner of result.owners) scheduleMediaCleanup(owner);
   }
-  forgetBlockedMedia();
   revalidatePath("/", "layout");
   revalidatePath("/admin", "layout");
 

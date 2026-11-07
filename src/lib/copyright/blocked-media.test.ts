@@ -8,7 +8,7 @@ vi.mock("@supabase/supabase-js", () => ({
 vi.mock("@/lib/env", () => ({ requireServerEnv: () => ({ url: "https://proj.supabase.co", serviceRoleKey: "service" }) }));
 vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
 
-const { blockedMediaKeys, forgetBlockedMedia, imageRequestObjectKey } = await import("./blocked-media");
+const { BLOCKED_MEDIA_TTL_MS, blockedMediaKeys, forgetBlockedMedia, imageRequestObjectKey } = await import("./blocked-media");
 
 const OWNER = "8f6c2a52-3d1e-4b8a-9c3f-2b1d4e5f6a7b";
 
@@ -27,22 +27,15 @@ describe("blocked media", () => {
     expect(imageRequestObjectKey(new URL("https://drvn.app/_next/image"))).toBeNull();
   });
 
-  it("reads the list once a minute, not once a request", async () => {
-    mocks.select.mockResolvedValue({ data: [{ object_key: "listing-images/a/b.webp" }], error: null });
-    const first = await blockedMediaKeys(1_000);
-    await blockedMediaKeys(30_000);
-    expect(first.has("listing-images/a/b.webp")).toBe(true);
-    expect(mocks.select).toHaveBeenCalledTimes(1);
-    await blockedMediaKeys(Date.now() + 61_000);
-    expect(mocks.select).toHaveBeenCalledTimes(2);
-  });
-
-  it("a takedown on this instance applies at once", async () => {
+  it("shares one read between requests, and sees a new takedown within 15 seconds", async () => {
     mocks.select.mockResolvedValueOnce({ data: [], error: null });
-    expect((await blockedMediaKeys()).size).toBe(0);
-    mocks.select.mockResolvedValueOnce({ data: [{ object_key: "avatars/a/b.webp" }], error: null });
-    forgetBlockedMedia();
-    expect((await blockedMediaKeys()).has("avatars/a/b.webp")).toBe(true);
+    const start = Date.now();
+    expect((await blockedMediaKeys(start)).size).toBe(0);
+    mocks.select.mockResolvedValueOnce({ data: [{ object_key: "listing-images/a/b.webp" }], error: null });
+    expect((await blockedMediaKeys(start + 10_000)).size).toBe(0);
+    expect(mocks.select).toHaveBeenCalledTimes(1);
+    expect((await blockedMediaKeys(start + BLOCKED_MEDIA_TTL_MS + 1)).has("listing-images/a/b.webp")).toBe(true);
+    expect(mocks.select).toHaveBeenCalledTimes(2);
   });
 
   it("serves images when the list can't be read, keeping the last good list", async () => {

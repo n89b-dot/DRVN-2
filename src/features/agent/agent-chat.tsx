@@ -134,6 +134,22 @@ export function AgentChat({
     else window.scrollTo({ top: document.documentElement.scrollHeight, behavior });
   }, [messages]);
 
+  // R-audit-composer: on phones and tablets the composer is pinned above the
+  // bottom bar (02-shell.css), out of the page's flow, so the page keeps
+  // room for it at its end. Its height changes (a longer message, a topic,
+  // photos), so it is measured. The side panel's composer isn't pinned.
+  useEffect(() => {
+    const box = section.current?.querySelector<HTMLElement>(".chatbox");
+    if (!box || section.current?.closest(".sidepanel__body") || typeof ResizeObserver === "undefined") return;
+    const root = document.documentElement;
+    const observer = new ResizeObserver(() => root.style.setProperty("--agent-composer-h", `${box.offsetHeight}px`));
+    observer.observe(box);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--agent-composer-h");
+    };
+  }, []);
+
   // A send can come back pending (its first attempt is still running): ask
   // for the reply until it lands, while this chat is on screen. The request
   // id stays in `attempt` until its reply has arrived (OS-W04 follow-up).
