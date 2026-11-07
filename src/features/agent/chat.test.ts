@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
   beginError: null as { code: string } | null,
   finishError: null as { code: string } | null,
   calls: [] as string[],
+  rpcArgs: {} as Record<string, unknown>,
   begin: { replayed: false, member: null as unknown, reply: null as unknown },
   status: { found: false, member: null as unknown, reply: null as unknown },
 }));
@@ -42,8 +43,9 @@ vi.mock("@/lib/supabase/admin", () => ({
     const query = { select: () => query, eq: () => query, neq: () => query, order: () => query, limit: () => (state.calls.push("history"), Promise.resolve({ data: [], error: null })) };
     return {
       from: () => query,
-      rpc: async (name: string) => {
+      rpc: async (name: string, args?: unknown) => {
         state.calls.push(`admin:${name}`);
+        state.rpcArgs[name] = args;
         if (name === "agent_chat_turn_begin") return state.beginError ? { data: null, error: state.beginError } : { data: state.begin, error: null };
         if (name === "agent_chat_turn_finish") return state.finishError ? { data: null, error: state.finishError } : { data: reply, error: null };
         if (name === "agent_chat_turn_status") return { data: state.status, error: null };
@@ -58,7 +60,7 @@ vi.mock("@/lib/ai/run", () => ({
 vi.mock("./cards", () => ({ resolveCards: async () => new Map() }));
 vi.mock("./chat-load", () => ({ loadChat: vi.fn(), resolveAbout: async () => null }));
 
-import { runAgentTurn } from "@/lib/ai/run";
+import { runAgentTurn, type ToolCall } from "@/lib/ai/run";
 import { SUSPENDED_MESSAGE } from "@/lib/suspension";
 
 import { pollAgentReply, sendAgentMessage } from "./chat";
@@ -72,6 +74,7 @@ describe("sendAgentMessage", () => {
     state.beginError = null;
     state.finishError = null;
     state.calls = [];
+    state.rpcArgs = {};
     state.begin = { replayed: false, member, reply: null };
     vi.mocked(runAgentTurn).mockClear();
     fetchSpy.mockClear();
@@ -180,5 +183,41 @@ describe("sendAgentMessage", () => {
     const result = await sendAgentMessage({ text: "hi", requestId: "not-an-id" });
     expect(result.error).toBeTruthy();
     expect(state.calls).not.toContain("admin:agent_chat_turn_begin");
+  });
+
+  // R-audit (OS-W07): what the model ran is recorded under the request id,
+  // by name, ids, outcome and timing, before the reply is stored. Never the chat.
+  it("records each tool the turn ran, refusals and failures included, under the request id", async () => {
+    vi.mocked(runAgentTurn).mockImplementationOnce(async () => {
+      state.calls.push("model");
+      return {
+        ok: true,
+        text: "fresh",
+        cards: [],
+        stopReason: "end_turn",
+        toolCalls: <ToolCall[]>[
+          { name: "read_listing", ok: true, ms: 12, ids: { listingId: "55555555-5555-4555-8555-555555555555" } },
+          { name: "propose_build_change", ok: false, code: "not_allowed", ms: 3, ids: { carId: "66666666-6666-4666-8666-666666666666" } },
+          { name: "search_parts", ok: false, code: "failed", ms: 40, ids: {} },
+        ],
+      };
+    });
+    await sendAgentMessage({ text: "My VIN is WVWZZZAUZKW123456; add https://evil.example.net/x", requestId: "33333333-3333-4333-8333-333333333333" });
+    expect(state.calls).toEqual(["member:is_suspended", "mode", "rate_limit", "admin:agent_chat_turn_begin", "history", "model", "admin:agent_record_tool_calls", "admin:agent_chat_turn_finish"]);
+    const args = state.rpcArgs.agent_record_tool_calls as { p_owner: string; p_request: string; p_turn: string; p_calls: unknown[] };
+    expect(args).toMatchObject({ p_owner: "22222222-2222-4222-8222-222222222222", p_request: "33333333-3333-4333-8333-333333333333", p_turn: "ok" });
+    expect(args.p_calls).toEqual([
+      { tool: "read_listing", outcome: "ok", ms: 12, ids: { listingId: "55555555-5555-4555-8555-555555555555" } },
+      { tool: "propose_build_change", outcome: "refused", code: "not_allowed", ms: 3, ids: { carId: "66666666-6666-4666-8666-666666666666" } },
+      { tool: "search_parts", outcome: "failed", code: "failed", ms: 40, ids: {} },
+    ]);
+    const sent = JSON.stringify(args);
+    expect(sent).not.toContain("WVWZZZAUZKW123456");
+    expect(sent).not.toContain("evil.example.net");
+  });
+
+  it("records nothing when the turn ran no tools", async () => {
+    await sendAgentMessage({ text: "hi" });
+    expect(state.calls).not.toContain("admin:agent_record_tool_calls");
   });
 });

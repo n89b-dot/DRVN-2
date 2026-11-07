@@ -334,7 +334,7 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
             <div className="rowlist">
               <ObjectRow title="Selling" meta="Handles offers on your listings within your minimum and target. Turn it on from a listing." href="/listings" />
               <ObjectRow title="Buying" meta="Negotiates a part for you up to your private max. Start it from a listing's Make an offer." href="/marketplace" />
-              <ObjectRow title="Garage" meta="Answers what fits your car and what parts sell for. Ask below." />
+              <ObjectRow title="Garage" meta="Finds parts for your car and keeps its build up to date. Ask below." />
             </div>
             <p className="field__hint mt-3">Nothing to set up first. {AGENT_ACCEPT_RULE} It never messages anyone else.</p>
           </section>

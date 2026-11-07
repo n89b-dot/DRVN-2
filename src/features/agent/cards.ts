@@ -7,6 +7,7 @@ import type { TurnCard } from "@/lib/ai/run";
 import { LOW_CONFIDENCE_THRESHOLD } from "@/lib/mods/parse";
 import { signChatPhotos } from "@/lib/agent/chat-photos";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeProductLink, type SafeLink } from "@/lib/mods/safe-link";
 
 /** A result card ready to draw: what the agent pointed at, read as the member. */
 export type ResolvedCard =
@@ -20,6 +21,13 @@ export type ResolvedCard =
       /** What it replaces, still named as it was. */
       replaces: string | null;
       image: string | null;
+      /**
+       * The product link the change saves, as Confirm will save it: its host
+       * and full address, shown on the card (N124). Null when there is none.
+       */
+      link: SafeLink | null;
+      /** The draft carried a link that isn't a safe web address: it is left off, and the card says so. */
+      linkLeftOff: boolean;
       /** Saved: a mod line with the draft's id is on the car. */
       applied: boolean;
       /** The car's build page once saved; the mods editor with the line filled in before. */
@@ -142,6 +150,7 @@ async function resolveBuildChanges(supabase: SupabaseClient<Database>, cards: Tu
     const applied = modOf.get(draft.id)?.car_id === car.id;
     const old = draft.replaces ? modOf.get(draft.replaces) : undefined;
     const replaces = old && old.car_id === car.id ? [old.brand, old.product].filter(Boolean).join(" ") || "the old part" : null;
+    const link = safeProductLink(draft.product_url);
     return [
       {
         kind: "build_change" as const,
@@ -150,6 +159,8 @@ async function resolveBuildChanges(supabase: SupabaseClient<Database>, cards: Tu
         part: [draft.brand, draft.product].filter(Boolean).join(" "),
         replaces,
         image: draft.image_url,
+        link,
+        linkLeftOff: Boolean(draft.product_url) && !link,
         applied,
         href: `/cars/${car.slug}`,
         editHref: `/garage/${car.id}/edit?change=${draft.id}#mods`,

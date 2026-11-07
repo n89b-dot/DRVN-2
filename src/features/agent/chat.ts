@@ -9,6 +9,7 @@ import { modelContext, type AgentScope } from "@/lib/agent/context";
 import { loadAgentMode } from "@/lib/agent/member-mode";
 import { agentModeAllowsChat, agentModeRefusal } from "@/lib/agent/mode";
 import { capture } from "@/lib/analytics";
+import { recordToolCalls } from "@/lib/ai/audit";
 import { runAgentTurn, type TurnCard, type TurnImage } from "@/lib/ai/run";
 import { chatPhotoPath, readChatPhoto, signChatPhotos } from "@/lib/agent/chat-photos";
 import { parsePhotoJob, type PhotoJob } from "@/lib/agent/photo-job";
@@ -66,7 +67,7 @@ const FALLBACK: Record<string, string> = {
   suspended: SUSPENDED_MESSAGE,
   timeout: "That took too long, so I stopped. Try again, or ask one thing at a time.",
   ai_disabled: "Chat isn't switched on here yet. Everything I do is also on the listing and offer pages.",
-  refused: "I can't help with that one. I can look things up on DRVN for you: parts, your car, what fits and what things sell for.",
+  refused: "I can't help with that one. I can look things up on DRVN for you: parts for sale, your cars and their builds.",
   incomplete: "That took more steps than I can do at once. Try asking one thing at a time.",
   not_allowed: "I can't do that from chat.",
   model_error: "Something went wrong on my side. Try again in a moment.",
@@ -188,6 +189,8 @@ export async function sendAgentMessage(input: {
     deadline,
     signal: deadlineSignal,
   });
+  // The audit trail (R-audit): every tool the model ran, by name, ids, outcome and timing, under this request id.
+  await recordToolCalls(admin, user.id, requestId, turn);
   const replyBody = turn.ok ? turn.text || "Done." : FALLBACK[turn.code] ?? FALLBACK.model_error;
   const replyCards = turn.ok ? turn.cards : [];
 

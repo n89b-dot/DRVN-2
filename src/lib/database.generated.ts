@@ -6998,6 +6998,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      agent_record_tool_calls: {
+        Args: {
+          p_calls: Json
+          p_owner: string
+          p_request: string
+          p_turn: string
+        }
+        Returns: number
+      }
       agent_redact_cards: { Args: { p_text: string }; Returns: string }
       agent_renew_lease: {
         Args: { p_job: string; p_lease: string; p_lease_seconds?: number }

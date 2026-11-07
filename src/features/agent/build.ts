@@ -7,7 +7,7 @@ import { capture } from "@/lib/analytics";
 import type { TurnCard } from "@/lib/ai/run";
 import { createClient } from "@/lib/supabase/server";
 
-import { buildChangeItems, buildListItems, type BuildDraft, type BuildList } from "./build-change";
+import { buildChangeItems, buildListItems, confirmedLink, type BuildDraft, type BuildList } from "./build-change";
 
 export type BuildChangeState = { error?: string; ok?: string; sellHref?: string | null };
 
@@ -19,8 +19,12 @@ export type BuildChangeState = { error?: string; ok?: string; sellHref?: string 
  * under the draft's id, and the part it replaces marked removed, never
  * deleted. Saving again converges on the same line, so a double tap or a
  * lost response does nothing twice.
+ *
+ * `shown` is what the card showed the member (N124): the link it named, or
+ * null. The draft is saved only when the link it saves (confirmedLink) is
+ * exactly that one, so Confirm can never save a link the member didn't see.
  */
-export async function confirmBuildChange(cardId: string): Promise<BuildChangeState> {
+export async function confirmBuildChange(cardId: string, shown: { productUrl: string | null } = { productUrl: null }): Promise<BuildChangeState> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -39,6 +43,9 @@ export async function confirmBuildChange(cardId: string): Promise<BuildChangeSta
     (card): card is BuildDraft | BuildList => (card.kind === "build_change" || card.kind === "build_list") && card.id === cardId,
   );
   if (!draft) return { error: "That change isn't available any more." };
+  if (draft.kind === "build_change" && confirmedLink(draft) !== (typeof shown?.productUrl === "string" ? shown.productUrl : null)) {
+    return { error: "That change isn't the one shown. Reload to see it again." };
+  }
 
   const { data: car } = await supabase.from("cars").select("id").eq("id", draft.car).eq("owner_id", user.id).maybeSingle();
   if (!car) return { error: "That car isn't in your garage any more." };

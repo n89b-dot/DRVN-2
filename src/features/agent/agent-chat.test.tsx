@@ -9,11 +9,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * composer so they can keep typing.
  */
 
-const mocks = vi.hoisted(() => ({ send: vi.fn(), clear: vi.fn(), upload: vi.fn() }));
+const mocks = vi.hoisted(() => ({ send: vi.fn(), clear: vi.fn(), upload: vi.fn(), confirm: vi.fn() }));
 
 vi.mock("next/navigation", () => ({ unstable_rethrow: () => {} }));
 vi.mock("./chat", () => ({ sendAgentMessage: mocks.send }));
-vi.mock("./build", () => ({ confirmBuildChange: vi.fn() }));
+vi.mock("./build", () => ({ confirmBuildChange: mocks.confirm }));
 vi.mock("./clear-chat", () => ({ clearAgentChat: mocks.clear }));
 vi.mock("@/lib/media-upload", () => ({ uploadImages: mocks.upload }));
 
@@ -51,6 +51,7 @@ beforeEach(() => {
   mocks.send.mockReset();
   mocks.clear.mockReset();
   mocks.upload.mockReset();
+  mocks.confirm.mockReset();
 });
 
 afterEach(async () => {
@@ -200,5 +201,51 @@ describe("Clear chat drops the photos waiting to send (OS-W08 follow-up)", () =>
     await act(async () => announceAgentEvent(AGENT_CHAT_CLEARED));
     expect(log()!.children).toHaveLength(0);
     await expectNothingAttached();
+  });
+});
+
+describe("starters (OS-W07 N170)", () => {
+  it("offers only what the agent can do: no fitment, sale prices or task status", async () => {
+    await mount();
+    const starters = [...container.querySelectorAll('[aria-label="Starters"] button')].map((b) => b.textContent?.trim());
+    expect(starters).toContain("Find parts for my car");
+    expect(starters).toContain("Update my build");
+    for (const dead of ["Will this fit my car?", "What do parts like this sell for?", "What's my agent doing?"]) expect(starters).not.toContain(dead);
+  });
+});
+
+describe("Update my build confirm card (OS-W07 N124)", () => {
+  const link = { url: "https://www.kwsuspensions.com/en/products/v3-coilovers", host: "www.kwsuspensions.com" };
+  const card = {
+    kind: "build_change" as const,
+    id: "55555555-5555-4555-8555-555555555555",
+    carName: "Mk8 Golf R",
+    part: "KW V3 coilovers",
+    replaces: null,
+    image: null,
+    link,
+    linkLeftOff: false,
+    applied: false,
+    href: "/cars/mk8",
+    editHref: "/garage/c/edit?change=55555555-5555-4555-8555-555555555555#mods",
+    sellHref: null,
+  };
+
+  it("shows where the link goes, host and full address, before Confirm, and confirms exactly that link", async () => {
+    mocks.confirm.mockResolvedValue({ ok: "Saved to your build." });
+    await mount([{ ...message("m-2", "agent", "Here's the change."), cards: [card] }]);
+    expect(container.textContent).toContain("Link goes to");
+    expect(container.textContent).toContain(link.host);
+    expect(container.textContent).toContain(link.url);
+    await click(button("Confirm")!);
+    expect(mocks.confirm).toHaveBeenCalledWith(card.id, { productUrl: link.url });
+  });
+
+  it("says a link was left off, and confirms with none", async () => {
+    mocks.confirm.mockResolvedValue({ ok: "Saved to your build." });
+    await mount([{ ...message("m-2", "agent", "Here's the change."), cards: [{ ...card, link: null, linkLeftOff: true }] }]);
+    expect(container.textContent).toContain("Left off");
+    await click(button("Confirm")!);
+    expect(mocks.confirm).toHaveBeenCalledWith(card.id, { productUrl: null });
   });
 });
