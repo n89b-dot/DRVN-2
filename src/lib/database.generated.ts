@@ -2611,6 +2611,42 @@ export type Database = {
         }
         Relationships: []
       }
+      media_cleanup_queue: {
+        Row: {
+          attempts: number
+          bucket: string
+          enqueued_at: string
+          generation: string
+          last_error: string | null
+          next_attempt_at: string
+          owner_id: string
+          path: string
+          reason: string
+        }
+        Insert: {
+          attempts?: number
+          bucket: string
+          enqueued_at?: string
+          generation?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          owner_id: string
+          path: string
+          reason: string
+        }
+        Update: {
+          attempts?: number
+          bucket?: string
+          enqueued_at?: string
+          generation?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          owner_id?: string
+          path?: string
+          reason?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           attachments: string[]
@@ -6371,6 +6407,10 @@ export type Database = {
         Args: { p_payload_hash: string; p_request: string }
         Returns: Json
       }
+      claim_media_deletion: {
+        Args: { p_bucket: string; p_path: string }
+        Returns: Json
+      }
       claim_outbound_label_void: {
         Args: { p_shipment: string; p_worker: string }
         Returns: Json
@@ -6473,6 +6513,10 @@ export type Database = {
       claim_unmapped_payment_requests: { Args: never; Returns: Json }
       complete_listing_creation: {
         Args: { p_listing: string; p_payload_hash: string; p_request: string }
+        Returns: boolean
+      }
+      complete_media_deletion: {
+        Args: { p_bucket: string; p_path: string; p_token: string }
         Returns: boolean
       }
       complete_outbound_label: {
@@ -6891,6 +6935,10 @@ export type Database = {
         }[]
       }
       mark_due_transfer_intents: { Args: never; Returns: number }
+      mark_media_deletion_uncertain: {
+        Args: { p_bucket: string; p_path: string; p_token: string }
+        Returns: boolean
+      }
       mark_order_dispatched: {
         Args: {
           p_actor: string
@@ -7290,6 +7338,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      media_object_referenced: {
+        Args: { p_bucket: string; p_path: string }
+        Returns: boolean
+      }
       merge_products: {
         Args: { p_actor?: string; p_basis?: string; p_products: string[] }
         Returns: string
@@ -7661,6 +7713,10 @@ export type Database = {
       refresh_marketplace_facet_counts: { Args: never; Returns: undefined }
       refresh_search_words: { Args: never; Returns: undefined }
       release_expired_reservations: { Args: never; Returns: Json }
+      release_media_claim: {
+        Args: { p_bucket: string; p_path: string; p_token: string }
+        Returns: boolean
+      }
       release_seller_carry_payout: {
         Args: {
           p_attempts: number

@@ -2,7 +2,7 @@ import { jobHeartbeat } from "./job-lease";
 import { stripeClient } from "./payments/stripe";
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { deleteMediaIfUnreferenced } from "@/lib/media-lifecycle";
+import { removeMediaObject } from "@/lib/media-lifecycle";
 import { reportError } from "@/lib/monitoring";
 import { purgeAccountExportsForUser } from "@/lib/account-export-worker";
 import { deletionOutcome } from "@/lib/account-deletion-policy";
@@ -31,11 +31,15 @@ async function drainStorage(admin: ReturnType<typeof createAdminClient>, job: Jo
   for (const object of objects.data) {
     if (Date.now() >= deadline) return false;
     await heartbeat();
-    const publicUrl = admin.storage.from(object.bucket).getPublicUrl(object.path).data.publicUrl;
-    const outcome = await deleteMediaIfUnreferenced(publicUrl, true);
-    if (outcome === "skipped") throw new Error("Storage cleanup needs retry");
+    // The listing comes from the member's own folders, so they are its owner.
+    // Strict: a failed lookup or removal throws and the job retries. An
+    // object no reference could ever name canonically is kept, not retried
+    // forever.
+    const outcome = await removeMediaObject({ bucket: object.bucket, path: object.path }, job.payload.user_id, { strict: true, admin });
+    // Busy: another remover holds the object's claim right now; come back.
+    if (outcome === "failed" || outcome === "busy") throw new Error("Storage cleanup needs retry");
     await heartbeat();
-    await admin.from("deletion_storage_tasks").update({ status: outcome === "referenced" ? "retained" : "deleted" }).eq("job_id", job.id).eq("bucket", object.bucket).eq("path", object.path).throwOnError();
+    await admin.from("deletion_storage_tasks").update({ status: outcome === "removed" ? "deleted" : "retained" }).eq("job_id", job.id).eq("bucket", object.bucket).eq("path", object.path).throwOnError();
   }
   const remaining = await admin.from("deletion_storage_tasks").select("path").eq("job_id", job.id).eq("status", "pending").limit(1).throwOnError();
   return remaining.data.length === 0;

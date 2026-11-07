@@ -12,7 +12,7 @@ import { checklistFor, sanitizeChecklist } from "@/lib/marketplace/grading";
 import { integratedShippingEnabled } from "@/lib/shipping/provider";
 import { getCategory, isValidListingCategory } from "@/lib/marketplace/taxonomy";
 import { sellerCanPublish } from "@/lib/payments/connect";
-import { deleteMediaIfUnreferenced, finalizeMediaUrls } from "@/lib/media-lifecycle";
+import { deleteMediaIfUnreferenced, finalizeMediaUrls, scheduleMediaCleanup } from "@/lib/media-lifecycle";
 import { keepValidGalleryImages } from "@/lib/media-url";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
@@ -742,7 +742,9 @@ export async function deleteListing(
         : error.message,
     };
   }
-
+  // The delete queued the listing's photos (20261107203000); remove the ones
+  // no order snapshot keeps without waiting for the daily job.
+  scheduleMediaCleanup(user.id);
 
   revalidatePath("/sell");
   revalidatePath("/marketplace");

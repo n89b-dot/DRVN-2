@@ -13,7 +13,7 @@ import {
 import { DISPUTE_CATEGORIES } from "@/features/commerce/disputes";
 import { TextField } from "@/components/ui";
 import { formatPrice } from "@/lib/payments/fee";
-import { createClient } from "@/lib/supabase/client";
+import { uploadFailureMessage, uploadImages } from "@/lib/media-upload";
 import { useRecoverableAction } from "@/features/commerce/use-recoverable-action";
 
 function Result({ state }: { state: CommerceState }) {
@@ -206,18 +206,19 @@ export function DisputeEvidenceForm({ orderId, userId }: { orderId: string; user
     const file = files?.[0];
     if (!file) return;
     setUploadError(null);
-    if (file.size > 10 * 1024 * 1024) return setUploadError("Photos must be under 10MB.");
-    if (!file.type.startsWith("image/")) return setUploadError("That isn't an image.");
     setUploading(true);
     try {
-      const supabase = createClient();
-      const ext = file.name.split(".").pop() ?? "jpg";
-      const objectPath = `${userId}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage
-        .from("dispute-evidence")
-        .upload(objectPath, file, { contentType: file.type });
-      if (error) return setUploadError(error.message);
-      setPath(objectPath);
+      // Evidence keeps its original bytes (no re-encode) and Storage only
+      // takes it at `<uploader>/<order>/<file>` while this order is disputed
+      // (20261107203000). uploadImages ledgers it, so a photo never attached
+      // is reclaimed after 48h.
+      const { uploaded, failed } = await uploadImages({
+        files: [file],
+        bucket: "dispute-evidence",
+        pathPrefix: `${userId}/${orderId}`,
+      });
+      if (failed.length) return setUploadError(uploadFailureMessage(failed));
+      setPath(uploaded[0].path);
       setPreviewUrl(URL.createObjectURL(file));
     } finally {
       setUploading(false);

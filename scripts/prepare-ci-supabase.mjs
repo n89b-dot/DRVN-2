@@ -18,3 +18,13 @@ for (const [name,value] of Object.entries(settings)) {
  if (/KEY|SECRET/.test(name)) console.log(`::add-mask::${value}`);
  appendFileSync(destination, `${name}=${value}\n`);
 }
+// The database refuses new member photo URLs until it knows the storage
+// origin (20261107203000, fail-closed). Record the local one, as the
+// production deploy step does (docs/production-runbook.md).
+const origin = settings.NEXT_PUBLIC_SUPABASE_URL;
+const recorded = await fetch(`${origin}/rest/v1/job_config?on_conflict=key`, {
+ method: "POST",
+ headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+ body: JSON.stringify({ key: "media_storage_origin", value: origin }),
+});
+if (!recorded.ok) throw new Error(`Could not record the media storage origin (${recorded.status})`);

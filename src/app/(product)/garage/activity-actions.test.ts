@@ -16,6 +16,7 @@ vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
 vi.mock("@/lib/media-lifecycle", () => ({
   deleteMediaIfUnreferenced: vi.fn(),
   finalizeMediaUrls: mocks.finalize,
+  scheduleMediaCleanup: vi.fn(),
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => {

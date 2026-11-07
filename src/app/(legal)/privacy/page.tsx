@@ -262,6 +262,11 @@ export default function PrivacyPage() {
             cleared 7 days after an import finishes.
           </li>
           <li>Photos uploaded to a form you never saved: deleted after 48 hours.</li>
+          <li>
+            Photos of a car, update or listing you delete: deleted from our storage shortly after,
+            and within a day, unless a buyer&apos;s order keeps them as its record. Copies someone
+            already saved, or a browser has cached, can&apos;t be recalled.
+          </li>
           <li>Rate-limit counters: deleted after a day.</li>
           <li>Your chat with your agent: deleted 12 months after its last message.</li>
           <li>

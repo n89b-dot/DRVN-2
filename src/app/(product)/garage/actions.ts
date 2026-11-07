@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { slugify } from "@/lib/format";
 import { ACTIVITY_TITLE_MAX } from "@/lib/limits";
 import { blockMediaUrls, normalizeBlocks, type ActivityBlock } from "@/lib/activity-blocks";
-import { deleteMediaIfUnreferenced, finalizeMediaUrls } from "@/lib/media-lifecycle";
+import { deleteMediaIfUnreferenced, finalizeMediaUrls, scheduleMediaCleanup } from "@/lib/media-lifecycle";
 import { isAllowedVideoUrl, isOwnedStorageUrl, keepValidImageUrls } from "@/lib/media-url";
 import { MOD_CATEGORIES, type ModCategory } from "@/lib/mods/parse";
 import { allowAction, rateLimitMessage, RATE_LIMITS } from "@/lib/rate-limit";
@@ -308,11 +308,14 @@ export async function deleteCar(
   _previous: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "Car is missing." };
   const { error } = await supabase.from("cars").delete().eq("id", id);
   if (error) return { error: error.message };
+  // The delete queued the car's photos (and its posts') for removal
+  // (20261107203000); take them down now rather than at the next daily run.
+  scheduleMediaCleanup(user.id);
 
   // Deleting an already-absent id is the desired state after a response was
   // lost. RLS still prevents this call from changing anybody else's car.
@@ -1118,6 +1121,8 @@ export async function deleteActivityPost(
 
   const { error } = await supabase.from("activity_posts").delete().eq("id", postId);
   if (error) return { error: error.message };
+  // Its photos were queued by the delete; remove the unreferenced ones now.
+  scheduleMediaCleanup(user.id);
 
   // W-5: a post about a part has no car sheet to go back to.
   if (!post.car_id) {

@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 
 import type { CarImage } from "@/lib/database.types";
-import { uploadImages } from "@/lib/media-upload";
+import { uploadFailureMessage, uploadImages } from "@/lib/media-upload";
 import { Button, ConfirmDialog, Dialog, DropZone, Media, SortableGrid, SortableItem, TileHead } from "@/components/ui";
 
 import {
@@ -124,8 +124,10 @@ export function GalleryManager({
         // Public photography (§S4): orientation, resize, EXIF/GPS strip.
         normalize: true,
       });
+      // Every photo that didn't make it, by name and reason — not just the
+      // last one (N64).
+      if (result.failed.length) setError(uploadFailureMessage(result.failed));
       for (const failure of result.failed) {
-        setError(failure.reason);
         // Only failures a retry could actually fix feed the Retry list —
         // an oversize or non-image file will fail again identically.
         if (failure.retryable) failed.push(failure.file);

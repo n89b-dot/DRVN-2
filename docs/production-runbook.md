@@ -147,6 +147,25 @@ insert into public.job_config (key, value) values
 on conflict (key) do update set value = excluded.value, updated_at = now();
 ```
 
+Storage origin for member photos (20261107203000). The database refuses a
+member's new photo reference (car, gallery, listing, post, avatar) unless it
+is a public URL on this origin, and refuses **all** of them while the row is
+missing: a migration can't know the origin, and failing open would accept
+URLs on any host that are never revalidated. Set it **in the same step as
+applying that migration**, to the project's `NEXT_PUBLIC_SUPABASE_URL` origin
+(scheme and host, no path or trailing slash):
+
+```sql
+insert into public.job_config (key, value)
+values ('media_storage_origin', 'https://<project-ref>.supabase.co')
+on conflict (key) do update set value = excluded.value, updated_at = now();
+```
+
+The upload route and the media-gc job also record it from the server's own
+`NEXT_PUBLIC_SUPABASE_URL` if it's missing (never overwriting a set value),
+so a missed step heals on the first photo upload, but photo saves fail until
+then. CI's bootstrap (`scripts/prepare-ci-supabase.mjs`) sets the local one.
+
 Confirm the nine pg_cron jobs (times are the database's UTC):
 
 | Job | Schedule | Runs |
@@ -280,6 +299,7 @@ Hosted acceptance still requires:
       separately) and the test-mode clause is gone.
 - [ ] `release-gate` is the required check on `main` (§8; public repo or GitHub Pro).
 - [ ] `job_config` points at the production worker URL.
+- [ ] `job_config.media_storage_origin` is the production storage origin (§4).
 - [ ] A dispute, a refund, and a payout have each been exercised once in live
       mode with a real card and a Connect test seller before public launch.
 

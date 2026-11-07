@@ -39,14 +39,17 @@ const SERVER_NORMALIZED_BUCKETS = ["avatars", "car-images", "activity-images", "
 export async function normalizePublicPhoto(file: File): Promise<File> {
   const MAX_EDGE = 2560;
   const SKIP_UNDER_BYTES = 1_500_000;
-  if (!file.type.startsWith("image/") || file.type === "image/gif") return file;
+  const heic = isHeicFile(file);
+  if ((!file.type.startsWith("image/") && !heic) || file.type === "image/gif") return file;
   try {
     const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
     const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
     // Already small in bytes and pixels → keep the original (EXIF intact is
     // acceptable only when we're not re-encoding; GPS-bearing camera files
     // are essentially never under this ceiling at full resolution).
-    if (file.size < SKIP_UNDER_BYTES && scale === 1) {
+    // A HEIC is always converted: the server's image library can't decode
+    // the HEVC photos iPhones take (N64), so it must arrive as JPEG.
+    if (!heic && file.size < SKIP_UNDER_BYTES && scale === 1) {
       bitmap.close();
       return file;
     }
@@ -63,12 +66,48 @@ export async function normalizePublicPhoto(file: File): Promise<File> {
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, "image/jpeg", 0.85),
     );
-    if (!blob || blob.size >= file.size) return file;
+    if (!blob || (!heic && blob.size >= file.size)) return file;
     const name = file.name.replace(/\.[a-z0-9]+$/i, "") + ".jpg";
     return new File([blob], name, { type: "image/jpeg" });
   } catch {
     return file;
   }
+}
+
+/** iPhone photos: HEIC/HEIF, by type or (when the browser reports none) by name. */
+export function isHeicFile(file: File): boolean {
+  return /^image\/hei[cf](-sequence)?$/i.test(file.type) || (!file.type && /\.(heic|heif)$/i.test(file.name));
+}
+
+const HEIC_PUBLIC_REASON = (name: string) =>
+  `${name} is a HEIC photo this browser can't convert. Save it as a JPEG and try again — on iPhone, Settings › Camera › Formats › Most Compatible takes JPEGs.`;
+const HEIC_EVIDENCE_REASON = (name: string) =>
+  `${name} is a HEIC photo, which can't be shown as evidence. Evidence is kept exactly as taken, so save it as a JPEG and add that instead.`;
+
+/**
+ * What a failed upload to /api/media/public-photo means for the person
+ * uploading. Several of its refusals have no body (413) or a generic one, and
+ * a raw "Unexpected end of JSON input" told nobody anything (N64).
+ */
+export function publicPhotoFailureReason(name: string, status: number, error?: string): { reason: string; retryable: boolean } {
+  if (status === 401) return { reason: "Sign in again to upload photos.", retryable: false };
+  if (status === 413) return { reason: `${name} is too large to upload.`, retryable: false };
+  if (status === 415) return { reason: error || `${name} isn't a photo format DRVN can use. Try a JPEG, PNG or WebP.`, retryable: false };
+  if (status === 422) return { reason: error || `${name} couldn't be processed. Try it as a JPEG, PNG or WebP.`, retryable: false };
+  if (status === 429) return { reason: error || "Upload limit reached. Try again later.", retryable: true };
+  if (status === 400) return { reason: `${name} couldn't be uploaded here.`, retryable: false };
+  return { reason: `${name} failed to upload — check your connection and retry.`, retryable: true };
+}
+
+/**
+ * One line naming every photo that didn't make it and why, for the
+ * uploader's error area. Each reason is kept; none is collapsed into a
+ * generic "some photos couldn't be added" (N64).
+ */
+export function uploadFailureMessage(failed: UploadFailure[]): string {
+  const reasons = failed.map(({ file, reason }) => (reason.includes(file.name) ? reason : `${file.name}: ${reason}`));
+  if (reasons.length <= 1) return reasons[0] ?? "";
+  return `${reasons.length} photos weren't added. ${reasons.join(" ")}`;
 }
 
 export async function uploadImages({
@@ -97,31 +136,49 @@ export async function uploadImages({
     // anything — without this a dropped PDF reaches the bucket's mime
     // allowlist and comes back as a raw storage error with a Retry that can
     // never succeed.
-    if (!file.type.startsWith("image/")) {
+    if (!file.type.startsWith("image/") && !isHeicFile(file)) {
       failed.push({ file, reason: `Photos only — ${file.name} isn't an image.`, retryable: false });
       continue;
     }
-    if (normalize) file = await normalizePublicPhoto(file);
+    const serverNormalized = SERVER_NORMALIZED_BUCKETS.includes(bucket);
+    if (isHeicFile(file)) {
+      // Evidence keeps its original bytes, and its bucket takes no HEIC.
+      if (!serverNormalized) {
+        failed.push({ file, reason: HEIC_EVIDENCE_REASON(file.name), retryable: false });
+        continue;
+      }
+      const original = file;
+      file = await normalizePublicPhoto(file);
+      if (isHeicFile(file)) {
+        failed.push({ file: original, reason: HEIC_PUBLIC_REASON(original.name), retryable: false });
+        continue;
+      }
+    } else if (normalize) file = await normalizePublicPhoto(file);
     if (file.size > maxBytes) {
       failed.push({ file, reason: `${file.name} is over ${maxMb}MB.`, retryable: false });
       continue;
     }
-    if (SERVER_NORMALIZED_BUCKETS.includes(bucket)) {
+    if (serverNormalized) {
       const body = new FormData(); body.set("file", file); body.set("bucket", bucket); body.set("pathPrefix", pathPrefix);
+      let response: Response;
       try {
         // The bucket rides in a header too, so the route can pick its rate
         // limit before reading the body.
-        const response = await fetch("/api/media/public-photo", {
+        response = await fetch("/api/media/public-photo", {
           method: "POST",
           body,
           headers: { "x-upload-bucket": bucket },
         });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "Photo upload failed.");
-        uploaded.push({ url: result.url, path: result.path, file });
-      } catch (error) {
-        failed.push({ file, reason: error instanceof Error ? error.message : "Photo upload failed.", retryable: true });
+      } catch {
+        failed.push({ file, ...publicPhotoFailureReason(file.name, 0) });
+        continue;
       }
+      const result = (await response.json().catch(() => null)) as { url?: string; path?: string; error?: string } | null;
+      if (!response.ok || !result?.url || !result.path) {
+        failed.push({ file, ...publicPhotoFailureReason(file.name, response.ok ? 0 : response.status, result?.error) });
+        continue;
+      }
+      uploaded.push({ url: result.url, path: result.path, file });
       continue;
     }
     // Only private buckets that keep original bytes (evidence) upload straight
@@ -134,13 +191,15 @@ export async function uploadImages({
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
-      const ext = file.name.split(".").pop() ?? "jpg";
+      // Storage only accepts a plain `<uuid>.<ext>` file name here.
+      const named = file.name.includes(".") ? file.name.split(".").pop()! : "";
+      const ext = /^[A-Za-z0-9]{1,10}$/.test(named) ? named.toLowerCase() : "jpg";
       const path = `${pathPrefix}/${crypto.randomUUID()}.${ext}`;
       const { error } = await supabase.storage
         .from(bucket)
         .upload(path, file, { contentType: file.type });
       if (error) {
-        failed.push({ file, reason: error.message, retryable: true });
+        failed.push({ file, ...directUploadFailureReason(file.name, error.message) });
         continue;
       }
       const {
@@ -150,10 +209,24 @@ export async function uploadImages({
       // caller's persist step fails, the 48h sweep reclaims the object.
       void recordStagedUpload(bucket, path, publicUrl).catch(() => {});
       uploaded.push({ url: publicUrl, path, file });
-    } catch (error) {
-      failed.push({ file, reason: error instanceof Error && error.message ? error.message : "Upload failed.", retryable: true });
+    } catch {
+      failed.push({ file, reason: `${file.name} failed to upload — check your connection and retry.`, retryable: true });
     }
   }
 
   return { uploaded, failed };
+}
+
+/** A Storage refusal on the direct (evidence) path, in words. */
+function directUploadFailureReason(name: string, message: string): { reason: string; retryable: boolean } {
+  if (/row-level security|unauthori[sz]ed|403/i.test(message)) {
+    return { reason: `${name} can't be added — evidence goes in only while the dispute is open, up to 8 photos each.`, retryable: false };
+  }
+  if (/mime|content type|invalid_mime_type/i.test(message)) {
+    return { reason: `${name} isn't a format evidence can use. Try a JPEG, PNG or WebP.`, retryable: false };
+  }
+  if (/too large|exceeded|maximum allowed size|413/i.test(message)) {
+    return { reason: `${name} is too large to upload.`, retryable: false };
+  }
+  return { reason: `${name} failed to upload — try again.`, retryable: true };
 }

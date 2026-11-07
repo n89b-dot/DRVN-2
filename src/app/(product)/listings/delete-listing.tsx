@@ -36,7 +36,7 @@ export function DeleteListing({
       title="Delete this listing?"
       destructive
       consequences={[
-        "Removes the listing and its photos permanently",
+        "Removes the listing permanently; its photos are then deleted from DRVN's storage",
         "Any open offers and their conversations go with it",
         "This can't be undone — archiving keeps the record instead",
         "A reserved or sold listing can't be deleted — its order history depends on it",
