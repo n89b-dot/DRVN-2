@@ -128,7 +128,7 @@ describe("validatePaymentsEnv", () => {
     expect(() => validatePaymentsEnv({ ...agentOn, AGENT_WORKER_DATABASE_URL: "https://pooler.example/postgres" })).toThrow(/AGENT_WORKER_DATABASE_URL/);
     expect(() => validatePaymentsEnv({ ...agentOn, AGENT_WORKER_DATABASE_URL: "postgresql://pooler.example:6543/postgres" })).toThrow(/AGENT_WORKER_DATABASE_URL/);
     // Without a key the agent is off, not broken: a warning, not a refusal.
-    const { ANTHROPIC_API_KEY: _key, ...noKey } = agentOn;
+    const noKey = Object.fromEntries(Object.entries(agentOn).filter(([name]) => name !== "ANTHROPIC_API_KEY"));
     expect(validatePaymentsEnv(noKey).warnings).toEqual([expect.stringMatching(/without ANTHROPIC_API_KEY/)]);
     // Off, nothing is checked.
     expect(() => validatePaymentsEnv({ ...LIVE, TRUST_PROXY_HEADERS: "true", AGENT_MODEL: "claude-next-9" })).not.toThrow();
