@@ -2110,6 +2110,42 @@ export type Database = {
         }
         Relationships: []
       }
+      ledger_reconciliation_runs: {
+        Row: {
+          checked: Json
+          detail: string | null
+          discrepancies: number
+          finished_at: string | null
+          id: string
+          started_at: string
+          status: string
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          checked?: Json
+          detail?: string | null
+          discrepancies?: number
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          window_end: string
+          window_start: string
+        }
+        Update: {
+          checked?: Json
+          detail?: string | null
+          discrepancies?: number
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       likes: {
         Row: {
           created_at: string
@@ -6203,6 +6239,7 @@ export type Database = {
         Returns: Json
       }
       admin_retry_seller_carry_payout: { Args: { p_id: string }; Returns: Json }
+      admin_retry_transfer_intent: { Args: { p_order: string }; Returns: Json }
       admin_role: { Args: never; Returns: string }
       admin_set_agent_beta_step: {
         Args: { p_open: boolean; p_reason: string; p_step: string }

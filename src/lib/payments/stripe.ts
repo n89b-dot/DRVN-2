@@ -7,6 +7,7 @@ import type { PaymentProvider, PaymentRequest, PaymentResult, RefundOptions, Ref
 import { reportError } from "@/lib/monitoring";
 import { chargeWithinBounds } from "./charge-bounds";
 import { readSettlementRisk } from "./payout-hold";
+import { STRIPE_API_VERSION } from "./stripe-api-version";
 
 /**
  * Stripe, via PaymentIntents.
@@ -36,7 +37,8 @@ function stripe(): Stripe {
   if (!client) {
     const key = stripeSecretKey();
     if (!key) throw new Error("STRIPE_SECRET_KEY is not configured");
-    client = new Stripe(key, { timeout: 10_000, maxNetworkRetries: 0 });
+    // Pinned explicitly (N144): the SDK's default would follow the SDK.
+    client = new Stripe(key, { apiVersion: STRIPE_API_VERSION, timeout: 10_000, maxNetworkRetries: 0 });
   }
   return client;
 }

@@ -169,14 +169,24 @@ export async function applyRefundLifecycleEvent(
   return outcome.ok ? "committed" : "retry";
 }
 
-async function completeChargeRefundCollection(charge: Stripe.Charge): Promise<Stripe.Refund[]> {
-  if (!charge.refunds?.has_more) return charge.refunds?.data ?? [];
+const CHARGE_REFUND_PAGE_SIZE = 100;
+const MAX_CHARGE_REFUND_PAGES = 10;
+
+/**
+ * Every refund on a charge, from the supported interface (N105). On the
+ * pinned API version (stripe-api-version.ts) a Charge carries no `refunds`
+ * list at all, so reading `charge.refunds` gave an empty list and skipped
+ * the per-refund journal. The list is also current, where the event's charge
+ * is a snapshot that may be older than events already applied. Bounded:
+ * a charge with more than 1,000 refunds is retried, never half-read.
+ */
+export async function listChargeRefunds(chargeId: string): Promise<Stripe.Refund[]> {
   const refunds: Stripe.Refund[] = [];
   let startingAfter: string | undefined;
-  for (let page = 0; page < 10; page += 1) {
+  for (let page = 0; page < MAX_CHARGE_REFUND_PAGES; page += 1) {
     const listed = await stripeClient().refunds.list({
-      charge: charge.id,
-      limit: 100,
+      charge: chargeId,
+      limit: CHARGE_REFUND_PAGE_SIZE,
       ...(startingAfter ? { starting_after: startingAfter } : {}),
     });
     refunds.push(...listed.data);
@@ -186,6 +196,29 @@ async function completeChargeRefundCollection(charge: Stripe.Charge): Promise<St
     startingAfter = last.id;
   }
   throw new Error("Stripe refund collection exceeded the safe reconciliation bound");
+}
+
+/** Statuses of a local refund operation whose money is not in refunded_cents
+ *  yet and which the refund state machine is still driving. */
+const IN_FLIGHT_REFUND_STATUSES = ["requested", "provider_pending", "provider_succeeded", "effects_pending"];
+
+/**
+ * How many of the outstanding cents belong to local refund operations that
+ * are still applying their effects: refunds of this charge Stripe reports
+ * succeeded, whose operation exists but hasn't booked refunded_cents yet. The
+ * operation is the durable owner of that money (resumeIncompleteRefunds drives
+ * it, the refunds health queue pages if it sticks), so it is not unattributed.
+ */
+async function inFlightRefundCents(admin: Admin, succeededRefundIds: string[]): Promise<number> {
+  if (!succeededRefundIds.length) return 0;
+  const { data, error } = await admin
+    .from("refund_operations")
+    .select("refund_reference, amount_cents, status, effects_completed_at")
+    .in("refund_reference", succeededRefundIds);
+  if (error) persistenceFailure("in-flight refund lookup failed", { error });
+  return (data ?? [])
+    .filter((op) => op.effects_completed_at == null && IN_FLIGHT_REFUND_STATUSES.includes(op.status))
+    .reduce((sum, op) => sum + op.amount_cents, 0);
 }
 
 /**
@@ -294,7 +327,7 @@ export async function applyChargeRefund(
 ): Promise<"committed" | "recovery_recorded" | "retry"> {
   let refunds: Stripe.Refund[];
   try {
-    refunds = await completeChargeRefundCollection(charge);
+    refunds = await listChargeRefunds(charge.id);
   } catch (error) {
     reportError("[stripe:webhook] complete refund collection lookup failed", {
       charge: charge.id,
@@ -361,17 +394,25 @@ export async function applyChargeRefund(
     persistenceFailure("refund attribution lookup failed", { intentId, charge: charge.id, freshError });
   }
   const alreadyRecorded = (fresh ?? []).reduce((sum, p) => sum + (p.refunded_cents ?? 0), 0);
-  const successfulTotal = refunds
-    .filter((refund) => refund.status === "succeeded")
-    .reduce((sum, refund) => sum + refund.amount, 0);
-  const expectedAtStripe = Math.max(charge.amount_refunded, successfulTotal);
-  const outstanding = expectedAtStripe - alreadyRecorded;
+  // What Stripe says has succeeded, from the current list. Not the event's
+  // charge.amount_refunded: that counter includes refunds still pending and,
+  // on a delivery that arrives out of order, describes an older charge (one
+  // whose later refund has since failed, say). Comparing it opened false
+  // "unattributed refund" cases for normal refunds (N105).
+  const succeeded = refunds.filter((refund) => refund.status === "succeeded");
+  const successfulTotal = succeeded.reduce((sum, refund) => sum + refund.amount, 0);
+  const outstanding = successfulTotal - alreadyRecorded;
   if (outstanding > 0 && !sawRecovery) {
+    // Local refunds still booking their effects own their share of the gap;
+    // only what no operation accounts for is a case.
+    const inFlight = await inFlightRefundCents(admin, succeeded.map((refund) => refund.id));
+    const unowned = outstanding - inFlight;
+    if (unowned <= 0) return "committed";
     await recordUnattributedRefundRecovery(
       admin,
       charge,
-      outstanding,
-      `Charge ${charge.id} (intent ${intentId}) has ${outstanding} successful provider refund cents absent from the local ledger.`
+      unowned,
+      `Charge ${charge.id} (intent ${intentId}) has ${unowned} successful provider refund cents absent from the local ledger.`
     );
     return "recovery_recorded";
   }
@@ -589,10 +630,12 @@ export async function applyAccountUpdate(
 
   // A seller who just became payable unblocks their stuck funds eagerly —
   // the worker's next run pays them out instead of waiting on a retry cycle.
+  // That includes a payout Stripe refused for a restricted account (N8),
+  // which otherwise waits a day before its next try (transfer-worker.ts).
   if (payable && sellers?.length) {
     const { error: unblockError } = await admin
       .from("transfer_intents")
-      .update({ status: "ready", last_error: null })
+      .update({ status: "ready", last_error: null, next_attempt_at: null })
       .in("seller_id", sellers.map((s) => s.id))
       .eq("status", "blocked_unpayable");
     if (unblockError) {
