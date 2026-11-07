@@ -26,6 +26,8 @@ export async function waitForReply(
   while (result.pending && options.alive() && now() < giveUpAt) {
     options.onProgress(result.messages ?? []);
     await sleep(options.everyMs);
+    // The chat may have closed while this waited.
+    if (!options.alive()) break;
     result = await poll(result.pending.requestId);
   }
   return result;

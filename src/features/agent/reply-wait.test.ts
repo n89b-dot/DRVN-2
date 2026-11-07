@@ -34,6 +34,13 @@ describe("waiting for a pending send's reply", () => {
     expect(poll).toHaveBeenCalledTimes(3);
   });
 
+  it("doesn't ask again when the chat closed during the wait", async () => {
+    let open = true;
+    const poll = vi.fn();
+    await waitForReply({ pending: { requestId: REQUEST } }, poll, { everyMs: 1, forMs: 10_000, alive: () => open, onProgress: () => {}, sleep: async () => void (open = false) });
+    expect(poll).not.toHaveBeenCalled();
+  });
+
   it("stops asking once the chat is closed, and doesn't ask at all for a finished send", async () => {
     const poll = vi.fn();
     expect(await waitForReply({ messages: [msg("m-1"), msg("r-1")] }, poll, { everyMs: 1, forMs: 10, alive: () => true, onProgress: () => {} })).toEqual({ messages: [msg("m-1"), msg("r-1")] });

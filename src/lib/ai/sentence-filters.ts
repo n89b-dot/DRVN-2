@@ -103,7 +103,11 @@ export async function sentenceToFilters(options: {
       tools: [TOOL],
       tool_choice: { type: "tool", name: TOOL.name },
       messages: [{ role: "user", content: redactForModel(options.sentence.slice(0, 300)) }],
-    });
+    },
+    // One attempt only: the reservation covers one call's worst case, so a
+    // retry wouldn't fit it, and a hidden SDK retry could hide a billed
+    // attempt behind the final answer (OS-W04 follow-up).
+    { maxRetries: 0 });
     unresolvedUsd = 0;
     inputTokens = message.usage.input_tokens;
     outputTokens = message.usage.output_tokens;

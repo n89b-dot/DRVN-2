@@ -312,12 +312,88 @@ describe("one turn's own bounds (readiness 67, N121)", () => {
     expect(reserved).toEqual([]);
   });
 
-  it("retries a failed request once, not the SDK's default twice", async () => {
+  it("retries a failed request once, in its own loop, not the SDK's default twice", async () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify({ type: "error", error: { type: "overloaded_error", message: "busy" } }), { status: 529, headers: { "content-type": "application/json", "retry-after-ms": "1" } }));
     const { spend } = ledger();
     const result = await runAgentTurn({ context: modelContext(OWNER, "buyer"), supabase: memberDb({}), message: "hi", client: await anthropicClient({ fetch }), config, spend, halted: notHalted });
     expect(result).toMatchObject({ ok: false, code: "model_error" });
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  describe("every attempt is accounted for on its own (GPT review of #79)", () => {
+    const ok = () => new Response(JSON.stringify(message(text("Here you go."))), { status: 200, headers: { "content-type": "application/json" } });
+    const bad = () => new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "bad" } }), { status: 400, headers: { "content-type": "application/json" } });
+    const lost = () => {
+      throw new TypeError("socket hang up");
+    };
+    async function turn(...answers: (() => Response)[]) {
+      let call = 0;
+      const fetch = vi.fn(async () => answers[Math.min(call++, answers.length - 1)]());
+      const { spend, settled } = ledger();
+      const result = await runAgentTurn({ context: modelContext(OWNER, "buyer"), supabase: memberDb({}), message: "hi", client: await anthropicClient({ fetch }), config, spend, halted: notHalted });
+      return { result, fetch, usage: settled[0] };
+    }
+
+    it("lost, then a 400: the lost attempt is still charged, the 400 isn't", async () => {
+      const { result, fetch, usage } = await turn(lost, bad);
+      expect(result).toMatchObject({ ok: false, code: "model_error" });
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(usage.costUsd!).toBeGreaterThan(0);
+    });
+
+    it("lost, then lost: both attempts are charged, and together they fit the reservation", async () => {
+      const once = (await turn(lost, bad)).usage.costUsd!;
+      const { result, fetch, usage } = await turn(lost, lost);
+      expect(result).toMatchObject({ ok: false, code: "model_error" });
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(usage.costUsd!).toBeCloseTo(once * 2, 6);
+      expect(usage.costUsd!).toBeLessThanOrEqual(TURN_CAP_USD);
+    });
+
+    it("lost, then a success: the reply's tokens and the lost attempt's worst case", async () => {
+      const once = (await turn(lost, bad)).usage.costUsd!;
+      const { result, fetch, usage } = await turn(lost, ok);
+      expect(result).toMatchObject({ ok: true, text: "Here you go." });
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(usage).toMatchObject({ inputTokens: 100, outputTokens: 20 });
+      expect(usage.costUsd!).toBeCloseTo(estimateCostUsd(config.model, 100, 20)! + once, 6);
+    });
+
+    it("a switch flipped while waiting to retry stops the retry", async () => {
+      let flipped = false;
+      const fetch = vi.fn(async () => {
+        // The admin pauses the agent during the retry wait.
+        setTimeout(() => (flipped = true), 10);
+        return new Response(JSON.stringify({ type: "error", error: { type: "overloaded_error", message: "busy" } }), { status: 529, headers: { "content-type": "application/json", "retry-after-ms": "100" } });
+      });
+      const { spend, settled } = ledger();
+      const result = await runAgentTurn({ context: modelContext(OWNER, "buyer"), supabase: memberDb({}), message: "hi", client: await anthropicClient({ fetch }), config, spend, halted: async () => flipped });
+      expect(result).toMatchObject({ ok: false, code: "paused" });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(settled[0].costUsd!).toBeGreaterThan(0);
+    });
+
+    it("no retry starts with too little time left", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const fetch = vi.fn(async () => {
+        vi.setSystemTime(Date.now() + 26_000);
+        return new Response(JSON.stringify({ type: "error", error: { type: "overloaded_error", message: "busy" } }), { status: 529, headers: { "content-type": "application/json", "retry-after-ms": "0" } });
+      });
+      const { spend } = ledger();
+      const result = await runAgentTurn({ context: modelContext(OWNER, "buyer"), supabase: memberDb({}), message: "hi", client: await anthropicClient({ fetch }), config, spend, halted: notHalted, deadline: Date.now() + 30_000 });
+      expect(result).toMatchObject({ ok: false, code: "timeout" });
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("a retry that wouldn't fit what is left of the reservation isn't sent", async () => {
+      // A first round near half the cap: one charged unknown attempt leaves too little for a second.
+      const big = "a long earlier message ".repeat(1_400);
+      const fetch = vi.fn(async () => lost());
+      const { spend } = ledger();
+      const result = await runAgentTurn({ context: modelContext(OWNER, "buyer"), supabase: memberDb({}), message: "hi", history: [{ role: "user", content: big }, { role: "assistant", content: "ok" }, { role: "user", content: big }, { role: "assistant", content: "ok" }], client: await anthropicClient({ fetch }), config, spend, halted: notHalted });
+      expect(result).toMatchObject({ ok: false, code: "incomplete" });
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("checks the switches right before the first request too, once the budget is held", async () => {
