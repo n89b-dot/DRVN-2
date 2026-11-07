@@ -1,7 +1,7 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
-import { cleanupFixtureUser, fixtureAdmin } from "./fixtures";
+import { cleanupFixtureUser, confirmAdminAuthenticator, fixtureAdmin } from "./fixtures";
 
 function totp(secret: string) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -94,6 +94,7 @@ test("admin decides an ambiguous product identity from the review list", async (
     await expect(secret).toBeVisible();
     await page.getByLabel("Authenticator code").fill(totp((await secret.textContent())!));
     await page.getByRole("button", { name: /verify/i }).click();
+    await confirmAdminAuthenticator(page, admin, actorId, "/admin/products");
     await expect(page).toHaveURL(/\/admin\/products$/);
 
     await expect(page.getByRole("heading", { name: "Products" })).toBeVisible();

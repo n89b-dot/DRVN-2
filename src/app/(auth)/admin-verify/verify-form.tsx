@@ -1,9 +1,30 @@
 "use client";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-export function AdminVerifyForm({ factorId, next = "/admin" }: { factorId?: string; next?: string }) {
+
+/** What the operator checks with the new member before confirming it (N136). */
+function AwaitingConfirmation({ factorId, enrolledAt }: { factorId: string; enrolledAt?: string }) {
+  return <div role="status" className="my-4">
+    <p className="mb-2">Your authenticator is set up. Before the console opens, the operator who added you has to confirm it with you, by phone or in person.</p>
+    <p className="mb-2">Read them this reference:</p>
+    <p className="my-2 break-all"><code>{factorId}</code></p>
+    {enrolledAt && <p className="text-micro text-dim">Set up {new Date(enrolledAt).toLocaleString()}</p>}
+    <p className="mt-2">If you didn&apos;t set this one up, tell the operator: someone else has your password.</p>
+  </div>;
+}
+
+export function AdminVerifyForm({ factorId, next = "/admin", awaitingConfirmation }: {
+  factorId?: string;
+  next?: string;
+  /** A promoted member the operator hasn't confirmed yet: once their factor
+   *  is verified they are shown its reference instead of the console. */
+  awaitingConfirmation?: { factorId?: string; enrolledAt?: string };
+}) {
   const [factor, setFactor] = useState(factorId);
   const [enrollment, setEnrollment] = useState<{ qr_code: string; secret: string }>();
+  const [confirmed, setConfirmed] = useState<{ factorId: string; enrolledAt?: string } | undefined>(
+    awaitingConfirmation?.factorId ? { factorId: awaitingConfirmation.factorId, enrolledAt: awaitingConfirmation.enrolledAt } : undefined
+  );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   async function enroll() {
@@ -27,10 +48,16 @@ export function AdminVerifyForm({ factorId, next = "/admin" }: { factorId?: stri
     try {
       const { error } = await createClient().auth.mfa.challengeAndVerify({ factorId: factor, code: String(form.get("code") || "").trim() });
       if (error) throw error;
+      if (awaitingConfirmation) {
+        setEnrollment(undefined);
+        setConfirmed({ factorId: factor, enrolledAt: new Date().toISOString() });
+        return;
+      }
       window.location.assign(next);
     } catch { setError("The code was not accepted. Try the current code from your authenticator."); }
     finally { setBusy(false); }
   }
+  if (confirmed) return <AwaitingConfirmation factorId={confirmed.factorId} enrolledAt={confirmed.enrolledAt} />;
   return <>
     {!factor && <button className="relbtn" disabled={busy} onClick={enroll}>Set up authenticator</button>}
     {enrollment && <div className="my-4">

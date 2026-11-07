@@ -28,9 +28,11 @@ export async function generateMetadata() {
 /**
  * The admin gate. Non-admins — signed out, signed in, whoever — get a real
  * 404: the same not-found page any unknown route renders, so the console's
- * existence is not confirmed by a 403. The layout check is convenience; every
- * server action re-verifies membership itself (src/lib/admin/actions.ts), and
- * the database enforces reads via is_admin() policies regardless.
+ * existence is not confirmed by a 403. The layout check is convenience: it
+ * doesn't re-run on client navigation and a hand-made request can skip it, so
+ * every privileged read checks again beside the data (requireAdminRead in
+ * src/lib/admin/guard.ts, N11) and every server action re-verifies membership
+ * itself (src/lib/admin/actions.ts).
  *
  * Deliberately NOT the product AppShell: the console is its own surface with
  * its own nav, structured so the whole (admin) group could lift onto a
