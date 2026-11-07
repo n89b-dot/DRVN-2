@@ -20,7 +20,12 @@ import { createClient } from "@/lib/supabase/server";
 import { SUSPENDED_MESSAGE } from "@/lib/suspension";
 
 export type ChatMessage = { id: string; role: "member" | "agent"; body: string; cards: ResolvedCard[]; images: string[]; created_at: string };
-export type ChatState = { error?: string; messages?: ChatMessage[] };
+export type ChatState = {
+  error?: string;
+  messages?: ChatMessage[];
+  /** The chat was cleared while this send ran: show nothing from it. */
+  cleared?: boolean;
+};
 
 const MAX_LENGTH = 4000;
 const HISTORY = 20;
@@ -119,6 +124,9 @@ export async function sendAgentMessage(input: { text: string; scope?: AgentScope
   const begun = await admin.rpc("agent_chat_turn_begin", { p_owner: user.id, p_request: requestId, p_body: text, p_images: images });
   if (begun.error || !begun.data) {
     if (begun.error?.code === "42501") return { error: SUSPENDED_MESSAGE };
+    // Off saved in another tab after the read above: the database's own
+    // check, under the member's lock (R-agentmode, 20261107190000).
+    if (begun.error?.code === "AG009") return { error: agentModeRefusal("off") ?? "Agent is off in Settings." };
     reportError("[agent] message not stored", { code: begun.error?.code });
     return { error: "Couldn't send that. Try again." };
   }
@@ -169,6 +177,10 @@ export async function sendAgentMessage(input: { text: string; scope?: AgentScope
   const replyCards = turn.ok ? turn.cards : [];
 
   const reply = await admin.rpc("agent_chat_turn_finish", { p_owner: user.id, p_request: requestId, p_body: replyBody.slice(0, 8000), p_cards: replyCards });
+  // The member cleared the chat while this turn ran (N125): their message is
+  // gone, so the request has no member message and nothing is stored. Return
+  // nothing either, or the deleted message would come back on screen.
+  if (reply.error?.code === "P0002") return { messages: [], cleared: true };
   if (reply.error || !reply.data) reportError("[agent] reply not stored", { code: reply.error?.code });
   const stored = (reply.data ?? null) as StoredMessage | null;
 

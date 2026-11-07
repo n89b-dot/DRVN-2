@@ -8,6 +8,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   suspended: false as boolean | null,
   mode: "act" as "off" | "suggest" | "act",
+  beginError: null as { code: string } | null,
+  finishError: null as { code: string } | null,
   calls: [] as string[],
   begin: { replayed: false, member: null as unknown, reply: null as unknown },
 }));
@@ -41,8 +43,8 @@ vi.mock("@/lib/supabase/admin", () => ({
       from: () => query,
       rpc: async (name: string) => {
         state.calls.push(`admin:${name}`);
-        if (name === "agent_chat_turn_begin") return { data: state.begin, error: null };
-        if (name === "agent_chat_turn_finish") return { data: reply, error: null };
+        if (name === "agent_chat_turn_begin") return state.beginError ? { data: null, error: state.beginError } : { data: state.begin, error: null };
+        if (name === "agent_chat_turn_finish") return state.finishError ? { data: null, error: state.finishError } : { data: reply, error: null };
         return { data: null, error: null };
       },
     };
@@ -65,6 +67,8 @@ describe("sendAgentMessage", () => {
   beforeEach(() => {
     state.suspended = false;
     state.mode = "act";
+    state.beginError = null;
+    state.finishError = null;
     state.calls = [];
     state.begin = { replayed: false, member, reply: null };
     vi.mocked(runAgentTurn).mockClear();
@@ -129,6 +133,24 @@ describe("sendAgentMessage", () => {
     expect(result).toEqual({ error: "Agent is off in Settings." });
     expect(state.calls).toEqual(["member:is_suspended", "mode"]);
     expect(runAgentTurn).not.toHaveBeenCalled();
+  });
+
+  it("stops at the database when Off was saved after the app read Act (R-agentmode)", async () => {
+    // The app's read said Act; another tab saved Off before
+    // agent_chat_turn_begin, which refuses under the member's lock.
+    state.beginError = { code: "AG009" };
+    const result = await sendAgentMessage({ text: "hi" });
+    expect(result).toEqual({ error: "Agent is off in Settings." });
+    expect(state.calls).toContain("mode");
+    expect(runAgentTurn).not.toHaveBeenCalled();
+  });
+
+  it("returns nothing, not the deleted message, when the chat was cleared mid-turn (N125)", async () => {
+    // The clear deleted the member's message; agent_chat_turn_finish finds
+    // the request without it and stores no reply.
+    state.finishError = { code: "P0002" };
+    const result = await sendAgentMessage({ text: "hi" });
+    expect(result).toEqual({ messages: [], cleared: true });
   });
 
   it("still answers under Suggest: the chat is a suggestion, never a negotiation", async () => {

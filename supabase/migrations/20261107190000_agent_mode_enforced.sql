@@ -21,6 +21,12 @@
 --      agent_authority, which every worker write passes through
 --      (agent_offer_move, agent_offer_open, agent_request_approval,
 --      agent_record_decision), takes the lock shared and refuses with AG003.
+--   4. The chat: agent_chat_turn_begin, the only path that stores a
+--      member's message (and so starts a model turn), refuses under Off with
+--      AG009, read under the member's lock, shared (blocking: it holds no
+--      other lock yet). Suggest still chats. Spend reserve is left to
+--      20261107190500 (PR #79), which restates it; a turn that began before
+--      a save to Off still finishes, as a write past a kill switch's check does.
 --
 -- Lock order: listing → offer → job → member (agent_member_lock_key) →
 -- mandate → task → approval. agent_mode_set takes no listing, offer or job
@@ -28,7 +34,8 @@
 -- the member's lock and every later one sees the new mode.
 --
 -- Restated from their latest definitions, with only the lines marked AG-7
--- added: agent_mandate_set (20261026100000), agent_mandate_set_status,
+-- added: agent_chat_turn_begin (20261107100000), agent_mandate_set
+-- (20261026100000), agent_mandate_set_status,
 -- agent_claim_jobs and agent_authority (20261021100100). CREATE OR REPLACE
 -- keeps their grants. Guard: supabase/tests/agent_mode_enforcement_guard.sql.
 -- Idempotent.
@@ -381,5 +388,51 @@ grant execute on function public.agent_mode_set(text) to authenticated;
 -- The column is written only through agent_mode_set, so Off always ends
 -- what was running (20261107170000 granted a direct update).
 revoke update (agent_mode) on public.profiles from authenticated;
+
+-- 4. The chat starts only when the agent isn't Off.
+create or replace function public.agent_chat_turn_begin(p_owner uuid, p_request uuid, p_body text, p_images text[] default '{}'::text[])
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $function$
+declare
+  v_request public.agent_chat_requests;
+  v_member uuid;
+begin
+  if p_owner is null or p_request is null then
+    raise exception 'invalid chat message' using errcode = '22023';
+  end if;
+  if public.is_suspended(p_owner) then
+    raise exception 'account is suspended' using errcode = '42501';
+  end if;
+  -- AG-7 (R-agentmode): an agent set to Off answers nothing. Read under the
+  -- member's lock, shared, before any chat row is touched (member → chat
+  -- rows; agent_mode_set takes no chat lock). Waiting here is safe and short:
+  -- a save in flight finishes, and this send then sees what it saved.
+  perform pg_advisory_xact_lock_shared(public.agent_member_lock_key(p_owner));
+  if (select p.agent_mode from public.profiles p where p.id = p_owner) is not distinct from 'off' then
+    raise exception 'Your agent is off in Settings' using errcode = 'AG009';
+  end if;
+  delete from public.agent_chat_requests where created_at < now() - interval '7 days';
+
+  insert into public.agent_chat_requests(owner_id, request_id) values (p_owner, p_request)
+  on conflict (owner_id, request_id) do nothing;
+  if not found then
+    -- Seen before: wait for the first attempt's row, then replay it.
+    select * into v_request from public.agent_chat_requests
+    where owner_id = p_owner and request_id = p_request for update;
+    return jsonb_build_object('replayed', true,
+      'member', public.agent_chat_message_json(v_request.member_message_id),
+      'reply', public.agent_chat_message_json(v_request.reply_message_id));
+  end if;
+
+  select a.id into v_member from public.agent_chat_append(p_owner, 'member', p_body, '[]'::jsonb, coalesce(p_images, '{}'::text[])) a;
+  update public.agent_chat_requests set member_message_id = v_member where owner_id = p_owner and request_id = p_request;
+  return jsonb_build_object('replayed', false, 'member', public.agent_chat_message_json(v_member), 'reply', null);
+end;
+$function$;
+
 
 commit;

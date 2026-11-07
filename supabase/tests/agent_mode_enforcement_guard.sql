@@ -9,6 +9,9 @@
 --      (agent_authority, AG003), and a queued one is cancelled at claim.
 --   5. The locks that serialise them: a mandate start and a worker write
 --      hold the member's lock shared, a mode save holds it exclusively.
+--   6. The chat: under Off agent_chat_turn_begin stores nothing and refuses
+--      (AG009), so a send that read Act before another tab saved Off stops at
+--      the database; Suggest still chats.
 -- Transactional; disposable local database only.
 begin;
 
@@ -170,6 +173,22 @@ begin
   perform pg_temp.reset();
   if (select j2.status from public.agent_jobs j2 where j2.dedup_key like 'mode-guard-open:%') <> 'cancelled' then
     raise exception 'FAIL 20: the job for an owner set to Off was not cancelled';
+  end if;
+
+  -- 6. The chat. The member is Off now (check 4b): a send that read Act
+  --    earlier reaches the database after the save, and stops there.
+  perform pg_temp.reset();
+  c := pg_temp.code(format('select public.agent_chat_turn_begin(%L, %L, ''Will this fit?'')', buyer, gen_random_uuid()));
+  if c <> 'AG009' then raise exception 'FAIL 21: a chat turn began under Off (%)', c; end if;
+  if exists (select 1 from public.agent_messages where owner_id = buyer) or exists (select 1 from public.agent_chat_requests where owner_id = buyer) then
+    raise exception 'FAIL 22: a refused chat turn stored something';
+  end if;
+  perform pg_temp.act(buyer);
+  perform public.agent_mode_set('suggest');
+  perform pg_temp.reset();
+  r := public.agent_chat_turn_begin(buyer, gen_random_uuid(), 'Will this fit?');
+  if (r->>'replayed')::boolean or r->'member' is null or r->'member' = 'null'::jsonb then
+    raise exception 'FAIL 23: Suggest refused the chat (%)', r;
   end if;
 
   raise notice 'all agent mode enforcement checks passed';
