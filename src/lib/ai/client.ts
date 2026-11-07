@@ -12,7 +12,10 @@ import type Anthropic from "@anthropic-ai/sdk";
  * retries, so one call could hang for half an hour (OS-W04 N121). DRVN's
  * clients retry once and give each attempt at most MODEL_ATTEMPT_TIMEOUT_MS;
  * a caller with a deadline (a chat turn) asks for a shorter timeout and
- * passes its abort signal with every request.
+ * passes its abort signal with every request. Calls that are spend-capped
+ * (chat, sentence-to-filters) turn the SDK's retry off per request
+ * (`maxRetries: 0`) and retry, if at all, in their own checked loop, so no
+ * attempt is hidden from the spend accounting.
  */
 export const MODEL_MAX_RETRIES = 1;
 export const MODEL_ATTEMPT_TIMEOUT_MS = 60_000;

@@ -9,8 +9,9 @@ import { confirmBuildChange } from "./build";
 import { AGENT_CHAT_CLEARED, useAgentEvent } from "./chat-events";
 import { ClearAgentChat } from "./clear-agent-chat";
 import type { ResolvedCard } from "./cards";
-import { sendAgentMessage, type ChatMessage } from "./chat";
+import { pollAgentReply, sendAgentMessage, type ChatMessage } from "./chat";
 import type { ChatAbout } from "./chat-load";
+import { mergeMessages, waitForReply } from "./reply-wait";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { uploadImages } from "@/lib/media-upload";
 
@@ -18,6 +19,9 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour
 
 /** Starters above the composer (design 02): each fills the box, never sends. They follow what you opened it from. */
 const STARTERS = ["Will this fit my car?", "What do parts like this sell for?", "Update my build", "Find parts for my car", "What's my agent doing?"];
+/** How often, and for how long, a pending send asks for its reply: past the server's 120 s deadline for one send. */
+const REPLY_POLL_MS = 3_000;
+const REPLY_WAIT_MS = 150_000;
 /** A3d's jobs, once their step is open. */
 const JOB_STARTERS = ["Paste my build", "List the parts that came off", "List this part from my photos", "Post an update"];
 const MAX_PHOTOS = 4;
@@ -130,6 +134,17 @@ export function AgentChat({
     else window.scrollTo({ top: document.documentElement.scrollHeight, behavior });
   }, [messages]);
 
+  // A send can come back pending (its first attempt is still running): ask
+  // for the reply until it lands, while this chat is on screen. The request
+  // id stays in `attempt` until its reply has arrived (OS-W04 follow-up).
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
   function send() {
     const text = draft.trim();
     if ((!text && !ready.length) || pending || uploading) return;
@@ -139,16 +154,33 @@ export function AgentChat({
     if (attempt.current?.key !== key) attempt.current = { key, id: crypto.randomUUID() };
     const requestId = attempt.current.id;
     const sentIn = generation.current;
+    // Still this conversation: a clear (N125) drops a send, and its polling, from before it.
+    const current = () => sentIn === generation.current;
+    // By id: a replayed or polled message already on screen isn't added twice.
+    const merge = (incoming: ChatMessage[] = []) => {
+      if (current()) setMessages((shown) => mergeMessages(shown, incoming));
+    };
     startTransition(async () => {
       try {
-        const result = await sendAgentMessage({ text, about: context ? { kind: context.kind, id: context.id } : undefined, images: ready, requestId });
+        const first = await sendAgentMessage({ text, about: context ? { kind: context.kind, id: context.id } : undefined, images: ready, requestId });
         // Cleared while it ran: nothing from the old conversation comes back.
-        if (sentIn !== generation.current || result.cleared) return;
+        if (!current() || first.cleared) return;
+        // Only a pending send waits; an answered one is shown straight away.
+        const result = first.pending
+          ? await waitForReply(first, pollAgentReply, { everyMs: REPLY_POLL_MS, forMs: REPLY_WAIT_MS, alive: () => mounted.current && current(), onProgress: merge })
+          : first;
+        if (!current() || result.cleared) return;
+        if (result.pending) {
+          // Still running: the id stays, so sending again picks this turn back up.
+          merge(result.messages);
+          if (mounted.current) setError("Your agent is taking longer than usual. Its reply will be here when you reload.");
+          return;
+        }
         if (result.error) setError(result.error);
         if (result.messages?.length) {
           attempt.current = null;
           sent.current = true;
-          setMessages((current) => [...current, ...result.messages!]);
+          merge(result.messages);
           setDraft("");
           photos.forEach((photo) => URL.revokeObjectURL(photo.preview));
           setPhotos([]);

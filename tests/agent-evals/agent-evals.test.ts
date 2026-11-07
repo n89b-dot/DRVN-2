@@ -64,26 +64,31 @@ describe("eval fixtures: negotiation decisions", () => {
   }
 });
 
-/** A stand-in for the SDK's tool runner: the "model" calls whatever the script says, and finishes with text. */
+/**
+ * A stand-in for the provider: the "model" calls whatever the script says, one
+ * tool per round, and finishes with text. Tools the request doesn't offer are
+ * noted and skipped, the way a model can only call what it was given.
+ */
 function scriptedClient(script: { tool: string; input: unknown }[], finalText = "Done.") {
   const seen: { params?: Record<string, unknown>; toolResults: string[]; unknownTools: string[] } = { toolResults: [], unknownTools: [] };
+  let next = 0;
   const client = {
     beta: {
       messages: {
-        toolRunner(params: Record<string, unknown>) {
-          seen.params = params;
-          const tools = params.tools as { name: string; run: (input: unknown) => Promise<string> }[];
-          return {
-            async *[Symbol.asyncIterator]() {
-              for (const step of script) {
-                const tool = tools.find((candidate) => candidate.name === step.tool);
-                if (!tool) { seen.unknownTools.push(step.tool); continue; }
-                seen.toolResults.push(await tool.run(step.input));
-                yield { content: [], stop_reason: "tool_use", usage: { input_tokens: 10, output_tokens: 5 } };
-              }
-              yield { content: [{ type: "text", text: finalText }], stop_reason: "end_turn", usage: { input_tokens: 10, output_tokens: 5 } };
-            },
-          };
+        async create(params: Record<string, unknown>) {
+          seen.params ??= structuredClone(params);
+          const messages = params.messages as { role: string; content: unknown }[];
+          const last = messages.at(-1)!;
+          if (Array.isArray(last.content)) {
+            for (const block of last.content as { type: string; content?: unknown }[]) if (block.type === "tool_result") seen.toolResults.push(String(block.content));
+          }
+          const offered = new Set((params.tools as { name: string }[]).map((tool) => tool.name));
+          while (next < script.length && !offered.has(script[next].tool)) seen.unknownTools.push(script[next++].tool);
+          if (next < script.length) {
+            const step = script[next++];
+            return { content: [{ type: "tool_use", id: `toolu_${next}`, name: step.tool, input: step.input }], stop_reason: "tool_use", usage: { input_tokens: 10, output_tokens: 5 } };
+          }
+          return { content: [{ type: "text", text: finalText }], stop_reason: "end_turn", usage: { input_tokens: 10, output_tokens: 5 } };
         },
       },
     },
@@ -189,7 +194,7 @@ describe("eval fixtures: the model's boundary", () => {
     const counting: SpendLedger = { reserve: async () => ({ ok: true, hold: "h" }), settle: async (_owner, _hold, usage) => void recorded.push(usage) };
     // A "model" that burns a million input tokens a step: on Opus that is $4, past the per-turn cap on the first message.
     const expensive = {
-      beta: { messages: { toolRunner: () => ({ async *[Symbol.asyncIterator]() { for (;;) yield { content: [], stop_reason: "tool_use", usage: { input_tokens: 1_000_000, output_tokens: 0 } }; } }) } },
+      beta: { messages: { create: async () => ({ content: [], stop_reason: "tool_use", usage: { input_tokens: 1_000_000, output_tokens: 0 } }) } },
     } as unknown as NonNullable<Parameters<typeof runAgentTurn>[0]["client"]>;
     const result = await runAgentTurn({ context: modelContext("22222222-2222-4222-8222-222222222222", "buyer"), supabase: fakeSupabase(), message: "hi", client: expensive, config, spend: counting, halted: notHalted });
     expect(result).toMatchObject({ ok: false, code: "incomplete" });
@@ -479,6 +484,33 @@ describe("eval fixtures: sentence to filters (A4)", () => {
     const capped: SpendLedger = { reserve: async () => ({ ok: false, reason: "spend_cap" }), settle: async () => {} };
     expect(await sentenceToFilters({ ownerId: member, sentence: "x y z w", client, config, spend: capped, halted: notHalted })).toEqual({ ok: false, code: "spend_cap" });
     expect(sent).toHaveLength(0);
+  });
+});
+
+describe("sentence to filters: spend when the call's outcome is unknown (OS-W04 follow-up)", () => {
+  const config = { ...resolveAiConfig({ NODE_ENV: "test", ANTHROPIC_API_KEY: "test" }), mode: "anthropic" as const };
+  const member = "22222222-2222-4222-8222-222222222222";
+  const failing = (error: unknown) =>
+    ({ messages: { create: async () => { throw error; } } }) as unknown as NonNullable<Parameters<typeof sentenceToFilters>[0]["client"]>;
+  const recording = () => {
+    const reserved: number[] = [];
+    const settled: { costUsd: number | null }[] = [];
+    const spend: SpendLedger = { reserve: async (_o, _f, amount) => (reserved.push(amount), { ok: true, hold: "h" }), settle: async (_o, _h, usage) => void settled.push(usage) };
+    return { spend, reserved, settled };
+  };
+
+  it("a call lost in transit keeps its whole reservation charged", async () => {
+    const { spend, reserved, settled } = recording();
+    const result = await sentenceToFilters({ ownerId: member, sentence: "bilstein b16 e46", client: failing(new TypeError("socket hang up")), config, spend, halted: notHalted });
+    expect(result).toEqual({ ok: false, code: "model_error" });
+    expect(settled[0].costUsd).toBe(reserved[0]);
+    expect(reserved[0]).toBeGreaterThan(0);
+  });
+
+  it("a call the provider refused outright (400) is released", async () => {
+    const { spend, settled } = recording();
+    await sentenceToFilters({ ownerId: member, sentence: "bilstein b16 e46", client: failing(Object.assign(new Error("bad request"), { status: 400 })), config, spend, halted: notHalted });
+    expect(settled[0].costUsd ?? 0).toBe(0);
   });
 });
 

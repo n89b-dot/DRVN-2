@@ -16,6 +16,7 @@ import { CapabilityError, invokeCapability, type MemberClient } from "@/lib/capa
 import { reportError } from "@/lib/monitoring";
 
 import { anthropicClient } from "./client";
+import { providerRejected } from "./outcome";
 import { estimateCostUsd, resolveAiConfig, type AiConfig } from "./config";
 import { redactForModel } from "./redact";
 import { UNTRUSTED_RULE, wrapToolResult } from "./untrusted";
@@ -23,7 +24,9 @@ import { databaseLedger, type SpendLedger } from "./spend";
 import { logUsage, usageRecord } from "./usage";
 
 /**
- * One agent turn, around the SDK's tool runner (agent plan A2, `run.ts`).
+ * One agent turn (agent plan A2, `run.ts`): DRVN's own request → tools →
+ * request loop over the SDK's messages.create, so every check below runs
+ * right before each provider request, after the tools have finished.
  * Built and tested here, first used by members in A3c.
  *
  * - The model gets only the read and draft tools allow-listed for the scope
@@ -224,6 +227,25 @@ export function agentSystemPrompt(scope: AgentScope, jobs = false): string {
   ].join("\n\n");
 }
 
+/** Attempts per round: the first and one retry, each checked and charged on its own. */
+export const MODEL_ATTEMPTS = 2;
+
+/** Worth another attempt: a lost connection, a timeout, 408, 409, 429 or a 5xx (what the SDK itself would retry). */
+function retryable(error: unknown): boolean {
+  const status = (error as { status?: unknown } | null)?.status;
+  return typeof status !== "number" || status === 408 || status === 409 || status === 429 || status >= 500;
+}
+
+/** The provider's retry-after when it gives one (capped), or half a second. */
+function retryDelayMs(error: unknown): number {
+  const headers = (error as { headers?: { get?: (name: string) => string | null } } | null)?.headers;
+  const ms = Number(headers?.get?.("retry-after-ms"));
+  if (Number.isFinite(ms) && ms >= 0) return Math.min(ms, 8_000);
+  const seconds = Number(headers?.get?.("retry-after"));
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1_000, 8_000);
+  return 500;
+}
+
 /** UTF-8 bytes: an upper bound on the tokens text can become (every token is at least one byte). */
 function bytes(value: unknown): number {
   return Buffer.byteLength(typeof value === "string" ? value : JSON.stringify(value) ?? "", "utf8");
@@ -292,6 +314,13 @@ export async function runAgentTurn(options: {
   const timer = setTimeout(() => stop("deadline"), deadlineAt - Date.now());
   const onCallerAbort = () => stop("caller");
   options.signal?.addEventListener("abort", onCallerAbort, { once: true });
+  /** A wait the turn's clock can cut short. */
+  const pause = (ms: number) =>
+    new Promise<void>((resolve) => {
+      if (controller.signal.aborted) return resolve();
+      const timeout = setTimeout(resolve, ms);
+      controller.signal.addEventListener("abort", () => (clearTimeout(timeout), resolve()), { once: true });
+    });
   const abortedPromise = () =>
     new Promise<never>((_, reject) => {
       if (controller.signal.aborted) reject(new CapabilityError("failed", "The turn was stopped"));
@@ -303,8 +332,14 @@ export async function runAgentTurn(options: {
   let outputTokens = 0;
   let nextInputBound = 0;
   let spentUsd = 0;
+  // Attempts whose outcome is unknown (aborted, timed out, the connection
+  // lost, a 5xx): each may have been processed and billed, so each is
+  // charged at its worst case, never released as free (OS-W04 follow-up).
+  // Only a request the provider refused outright, which is never retried or
+  // billed, costs nothing.
+  let unresolvedUsd = 0;
   const budgetUsd = TURN_CAP_USD;
-  const roundFits = () => spentUsd + roundCeilingUsd(config.model, nextInputBound) <= budgetUsd;
+  const roundFits = () => spentUsd + unresolvedUsd + roundCeilingUsd(config.model, nextInputBound) <= budgetUsd;
 
   const tools = modelToolsFor(options.context.scope)
     .filter((capability) => options.jobs || !JOB_TOOLS.has(capability.name))
@@ -327,7 +362,7 @@ export async function runAgentTurn(options: {
           }
           try {
             const result = await Promise.race([
-              invokeCapability(capability, { context: options.context, supabase: options.supabase, attachments: (options.images ?? []).map((image) => image.url) }, args),
+              invokeCapability(capability, { context: options.context, supabase: options.supabase, attachments: (options.images ?? []).map((image) => image.url), signal: controller.signal }, args),
               abortedPromise(),
             ]);
             toolCalls.push({ name: capability.name, ok: true });
@@ -379,12 +414,7 @@ export async function runAgentTurn(options: {
             return wrapToolResult(capability.name, { error: code });
           }
         };
-        const text = await answer();
-        // This result is part of the next round's input: if that round's
-        // worst case no longer fits the reservation, it isn't started.
-        nextInputBound += bytes(text) + 100;
-        if (!roundFits()) stop("budget");
-        return text;
+        return answer();
       },
     }),
   );
@@ -417,8 +447,9 @@ export async function runAgentTurn(options: {
       return await runRounds();
     } finally {
       // A turn that failed or was cut short still cost its tokens; the caps count them.
-      const usage = usageRecord({ model: config.model, inputTokens, outputTokens, taskId: options.taskId ?? null, feature: "agent_chat" });
-      if (inputTokens + outputTokens > 0) logUsage(usage);
+      const counted = usageRecord({ model: config.model, inputTokens, outputTokens, taskId: options.taskId ?? null, feature: "agent_chat" });
+      const usage = unresolvedUsd > 0 ? { ...counted, costUsd: (counted.costUsd ?? 0) + unresolvedUsd } : counted;
+      if (inputTokens + outputTokens > 0 || unresolvedUsd > 0) logUsage(usage);
       await ledger.settle(ownerId, hold, usage);
     }
   } finally {
@@ -431,62 +462,89 @@ export async function runAgentTurn(options: {
       reportError(`[agent] turn stopped: ${cut ?? "aborted"}`, { taskId: options.taskId ?? null, inputTokens, outputTokens });
       return { ok: false, code: cut === "paused" ? "paused" : cut === "budget" ? "incomplete" : "timeout", toolCalls };
     };
+    // What the provider is sent for each tool: its name, description and schema, never the code.
+    const definitions: Anthropic.Beta.BetaTool[] = tools.map((tool) => {
+      const { name, description, input_schema } = tool as unknown as Anthropic.Beta.BetaTool;
+      return { name, description, input_schema };
+    });
+    const byName = new Map(tools.map((tool) => [tool.name, tool]));
+    const messages: Anthropic.Beta.BetaMessageParam[] = [...history, current];
+    // Sends one round, retrying it here rather than in the SDK (maxRetries: 0),
+    // so every attempt passes the same checks and is accounted for on its own.
+    const sendRound = async (client: RunnerClient): Promise<Anthropic.Beta.BetaMessage | null> => {
+      for (let attempt = 1; ; attempt++) {
+        // Right before every attempt, after any tools have finished and after
+        // any retry wait: the switches, the clock, and the attempt's worst
+        // case against what is left of the reservation (readiness 66 and 67, N121).
+        if (await halted(ownerId)) stop("paused");
+        else if (deadlineAt - Date.now() < MIN_ROUND_MS) stop("deadline");
+        else if (!roundFits()) stop("budget");
+        if (cut) return null;
+        const ceiling = roundCeilingUsd(config.model, nextInputBound);
+        try {
+          return await client.beta.messages.create(
+            {
+              model: config.model,
+              max_tokens: MAX_OUTPUT_TOKENS,
+              system,
+              tools: definitions,
+              messages,
+              output_config: { effort: "medium" },
+              // A safeguard decline is retried on the model DRVN's account routes it to.
+              betas: ["server-side-fallback-2026-07-01"],
+              fallbacks: "default",
+            },
+            // This turn's clock; one attempt per call, none longer than the time that is left.
+            { signal: controller.signal, maxRetries: 0, timeout: Math.max(1_000, deadlineAt - Date.now()) },
+          );
+        } catch (error) {
+          // Refused outright: not processed, not billed, and not worth retrying.
+          if (providerRejected(error)) throw error;
+          // Anything else may have been processed: this attempt is charged.
+          unresolvedUsd += ceiling;
+          if (cut || controller.signal.aborted || attempt >= MODEL_ATTEMPTS || !retryable(error)) throw error;
+          await pause(retryDelayMs(error));
+        }
+      }
+    };
     try {
-      // One retry (client.ts), and no attempt longer than the time that is left.
       const client = options.client ?? (await anthropicClient({ timeoutMs: Math.max(1_000, deadlineAt - Date.now()) }));
-      const runner = client.beta.messages.toolRunner(
-        {
-          model: config.model,
-          max_tokens: MAX_OUTPUT_TOKENS,
-          max_iterations: config.maxIterations,
-          system,
-          tools,
-          messages: [...history, current],
-          output_config: { effort: "medium" },
-          // A safeguard decline is retried on the model DRVN's account routes it to.
-          betas: ["server-side-fallback-2026-07-01"],
-          fallbacks: "default",
-        },
-        // Every request the runner makes, and every tool it runs, gets this turn's clock.
-        { signal: controller.signal },
-      );
-      let last: Anthropic.Beta.BetaMessage | null = null;
-      for await (const message of runner) {
-        last = message;
+      for (let round = 0; round < config.maxIterations; round++) {
+        const message = await sendRound(client);
+        if (!message) return timedOut();
         const roundInput = message.usage.input_tokens + (message.usage.cache_creation_input_tokens ?? 0) + (message.usage.cache_read_input_tokens ?? 0);
         inputTokens += roundInput;
         outputTokens += message.usage.output_tokens;
         spentUsd = estimateCostUsd(config.model, inputTokens, outputTokens) ?? Number.POSITIVE_INFINITY;
-        // The next round is sent this round's input and output again, plus
-        // the tool results (added as each tool answers).
-        nextInputBound = roundInput + message.usage.output_tokens;
-        if (message.stop_reason !== "tool_use") continue;
-        if (!roundFits()) {
-          stop("budget");
-          break;
+
+        if (message.stop_reason === "refusal") {
+          reportError("[agent] model refused", { taskId: options.taskId ?? null });
+          return { ok: false, code: "refused", toolCalls };
         }
-        if (deadlineAt - Date.now() < MIN_ROUND_MS) {
-          stop("deadline");
-          break;
+        if (message.stop_reason !== "tool_use") {
+          if (message.stop_reason === "max_tokens" || message.stop_reason === "pause_turn") return { ok: false, code: "incomplete", toolCalls };
+          const text = message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n").trim();
+          return { ok: true, text, toolCalls, cards, stopReason: message.stop_reason };
         }
-        // The switches again before the next round: one flipped mid-turn stops it here.
-        if (await halted(ownerId)) {
-          stop("paused");
-          break;
-        }
+
+        // The model's tool calls, run here and returned as untrusted data.
+        messages.push({ role: "assistant", content: message.content as Anthropic.Beta.BetaContentBlockParam[] });
+        const uses = message.content.filter((block): block is Anthropic.Beta.BetaToolUseBlock => block.type === "tool_use");
+        const results = await Promise.all(
+          uses.map(async (use): Promise<Anthropic.Beta.BetaToolResultBlockParam> => {
+            const tool = byName.get(use.name);
+            if (!tool) return { type: "tool_result", tool_use_id: use.id, content: `Error: no tool named ${use.name}`, is_error: true };
+            return { type: "tool_result", tool_use_id: use.id, content: (await tool.run(use.input as never)) as string };
+          }),
+        );
+        messages.push({ role: "user", content: results });
+        // The next round is sent this round's input and output again, plus the tool results.
+        nextInputBound = roundInput + message.usage.output_tokens + results.reduce((sum, result) => sum + bytes(result.content) + 100, 0);
       }
-      if (cut) return timedOut();
-      if (!last) return { ok: false, code: "model_error", toolCalls };
-      if (last.stop_reason === "refusal") {
-        reportError("[agent] model refused", { taskId: options.taskId ?? null });
-        return { ok: false, code: "refused", toolCalls };
-      }
-      if (last.stop_reason === "tool_use" || last.stop_reason === "max_tokens" || last.stop_reason === "pause_turn") {
-        return { ok: false, code: "incomplete", toolCalls };
-      }
-      const text = last.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n").trim();
-      return { ok: true, text, toolCalls, cards, stopReason: last.stop_reason };
+      // Out of rounds with the model still calling tools.
+      return { ok: false, code: "incomplete", toolCalls };
     } catch (error) {
+      // Every unknown attempt is already in unresolvedUsd (sendRound).
       if (cut || controller.signal.aborted) return timedOut();
       // Ids and the error's kind only: never the conversation.
       reportError("[agent] model error", { taskId: options.taskId ?? null, kind: error instanceof Error ? error.name : "unknown" });

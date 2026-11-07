@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   finishError: null as { code: string } | null,
   calls: [] as string[],
   begin: { replayed: false, member: null as unknown, reply: null as unknown },
+  status: { found: false, member: null as unknown, reply: null as unknown },
 }));
 
 const member = { id: "m-1", role: "member", body: "hi", cards: [], images: [], created_at: "2026-11-07T10:00:00Z" };
@@ -45,6 +46,7 @@ vi.mock("@/lib/supabase/admin", () => ({
         state.calls.push(`admin:${name}`);
         if (name === "agent_chat_turn_begin") return state.beginError ? { data: null, error: state.beginError } : { data: state.begin, error: null };
         if (name === "agent_chat_turn_finish") return state.finishError ? { data: null, error: state.finishError } : { data: reply, error: null };
+        if (name === "agent_chat_turn_status") return { data: state.status, error: null };
         return { data: null, error: null };
       },
     };
@@ -59,7 +61,7 @@ vi.mock("./chat-load", () => ({ loadChat: vi.fn(), resolveAbout: async () => nul
 import { runAgentTurn } from "@/lib/ai/run";
 import { SUSPENDED_MESSAGE } from "@/lib/suspension";
 
-import { sendAgentMessage } from "./chat";
+import { pollAgentReply, sendAgentMessage } from "./chat";
 
 const fetchSpy = vi.spyOn(globalThis, "fetch");
 
@@ -119,12 +121,26 @@ describe("sendAgentMessage", () => {
     expect(result.messages?.map((m) => m.body)).toEqual(["hi", "Stored reply"]);
   });
 
-  it("a retry while the first send is still answering says so, and doesn't start another", async () => {
+  it("a retry while the first send is still answering comes back pending, with the same request id, and doesn't start another", async () => {
     state.begin = { replayed: true, member, reply: null };
     const result = await sendAgentMessage({ text: "hi", requestId: "33333333-3333-4333-8333-333333333333" });
     expect(runAgentTurn).not.toHaveBeenCalled();
     expect(result.messages?.map((m) => m.id)).toEqual(["m-1"]);
-    expect(result.error).toMatch(/still answering/);
+    expect(result.pending).toEqual({ requestId: "33333333-3333-4333-8333-333333333333" });
+    expect(result.error).toBeUndefined();
+  });
+
+  it("polling a pending send returns its reply once stored, and stores or sends nothing itself", async () => {
+    state.status = { found: true, member, reply: null };
+    const waiting = await pollAgentReply("33333333-3333-4333-8333-333333333333");
+    expect(waiting.pending).toEqual({ requestId: "33333333-3333-4333-8333-333333333333" });
+    state.status = { found: true, member, reply };
+    const done = await pollAgentReply("33333333-3333-4333-8333-333333333333");
+    expect(done.pending).toBeUndefined();
+    expect(done.messages?.map((m) => m.id)).toEqual(["m-1", "r-1"]);
+    expect(state.calls.filter((call) => call !== "admin:agent_chat_turn_status")).toEqual([]);
+    expect(runAgentTurn).not.toHaveBeenCalled();
+    expect((await pollAgentReply("nope")).error).toBeTruthy();
   });
 
   it("answers nothing when the member's agent is Off in Settings (AG-7, readiness 64)", async () => {
