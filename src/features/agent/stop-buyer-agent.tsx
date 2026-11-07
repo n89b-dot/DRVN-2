@@ -15,18 +15,31 @@ export function StopBuyerAgent({
   mandateId,
   offerId,
   compact = false,
+  live = true,
 }: {
   mandateId: string;
   /** The offer the control sits on, so its page refreshes too. */
   offerId?: string | null;
   /** In a row's action slot: a ghost button rather than the destructive one. */
   compact?: boolean;
+  /**
+   * Whether the mandate is still running. The stop revalidates the page it
+   * sits on, so its Server Action response carries that page with the
+   * mandate revoked alongside "Stopped.". A caller that dropped the control
+   * then unmounted the result with it, and "Stopped." showed only if React
+   * committed it before that tree. So callers keep this mounted across the
+   * stop, and a stopped mandate shows only this visit's result, or nothing.
+   */
+  live?: boolean;
 }) {
   const [state, submit, pending] = useRecoverableAction<AgentState>(
     stopBuyerAgent,
     "Couldn't confirm your agent stopped. Check Agent before trying again.",
   );
   if (state.ok) return <ResultNote ok={state.ok} />;
+  // Stopped (here or elsewhere): nothing left to stop, and any error or
+  // lost-response notice is answered by the page that now says so.
+  if (!live) return null;
   return (
     <div className={compact ? "flex flex-wrap items-center justify-end gap-2" : "grid gap-2"}>
       <ConfirmDialog
