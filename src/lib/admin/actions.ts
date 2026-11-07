@@ -9,6 +9,7 @@ import { revalidatePath } from "@/lib/revalidate";
 import { auditedAction } from "./audit";
 import { sendAdminAlert } from "./alerts";
 import { markWebhookEventProcessed } from "@/lib/payments/settlement";
+import { recordWebhookFailure } from "@/lib/payments/webhook-failures";
 import { dispatchRecordedWebhookEvent } from "./replay-webhook";
 import { runMoneyWorkerPass } from "@/lib/money-worker";
 import { ACCOUNT_DELETION_REASON } from "./presentation";
@@ -18,6 +19,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { reportError } from "@/lib/monitoring";
+import { scheduleMediaCleanup } from "@/lib/media-lifecycle";
 
 /**
  * Admin mutations. Every action:
@@ -702,7 +704,7 @@ export async function adminRemoveReportedContent(
   const isPost = report.subject_type === "post";
 
   try {
-    await auditedAction(
+    const { removed } = await auditedAction(
       ctx.admin,
       {
         actorId: ctx.userId,
@@ -758,6 +760,9 @@ export async function adminRemoveReportedContent(
         return { removed: row };
       }
     );
+    // Deleting the post queued its photos (20261107203000, N51); taken-down
+    // content shouldn't stay reachable by link until the daily job.
+    if (isPost) scheduleMediaCleanup(removed.author_id);
     await notifyReporter(ctx.admin, reportId, "actioned");
     revalidatePath("/admin", "layout");
     revalidatePath("/home");
@@ -902,6 +907,89 @@ export async function adminResolveRecovery(
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not close the case." };
   }
+}
+
+// ---------- Seller credit payouts (20261008100100 / 20261026150000) ----------
+
+type CarryPayoutControl = "retry" | "cancel";
+
+/**
+ * The console's controls for a seller credit payout the worker has given up
+ * on (readiness 21). Both read the row first and refuse in plain words
+ * before anything is journalled, so a simple "already paid" never leaves an
+ * operation awaiting reconciliation; the database function re-checks under
+ * its own lock and is the one that moves the row (and, on cancel, the
+ * seller's credit).
+ */
+async function controlCarryPayout(
+  control: CarryPayoutControl,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const payoutId = field(formData, "payout_id");
+  const reason = field(formData, "reason");
+  if (!/^[0-9a-f-]{36}$/i.test(payoutId)) return { error: "Missing payout." };
+  if (!reason) return { error: "A reason is required — it goes in the audit log." };
+
+  const { data: payout, error: readError } = await ctx.admin
+    .from("seller_carry_payouts")
+    .select("id, status, amount_cents, lease_expires_at, provider_call_may_have_occurred")
+    .eq("id", payoutId)
+    .maybeSingle();
+  if (readError) return { error: "Couldn't read that payout. Try again." };
+  if (!payout) return { error: "That payout no longer exists." };
+  if (payout.status === "paid" || payout.status === "cancelled") return { error: `This payout is already ${payout.status}.` };
+  if (payout.status === "processing" && payout.lease_expires_at && new Date(payout.lease_expires_at).getTime() > Date.now()) {
+    return { error: "A worker holds this payout right now. Try again in a few minutes." };
+  }
+  if (control === "cancel" && payout.provider_call_may_have_occurred) {
+    return {
+      error: `Stripe may have been called for this payout, so it can't be cancelled. Find the transfer in Stripe (group carry-payout:${payout.id}), then Retry so the worker completes it.`,
+    };
+  }
+
+  try {
+    const result = await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: `payments.carry_payout_${control}`,
+        subjectType: "payment",
+        subjectId: payout.id,
+        reason,
+        metadata: { amountCents: payout.amount_cents, previousStatus: payout.status },
+      },
+      async () => {
+        const { data, error } = await ctx.admin.rpc(
+          control === "retry" ? "admin_retry_seller_carry_payout" : "admin_cancel_seller_carry_payout",
+          { p_id: payout.id }
+        );
+        if (error) throw new Error(error.message);
+        return data as { status?: string; credit_restored_cents?: number } | null;
+      }
+    );
+    revalidatePath("/admin", "layout");
+    if (control === "retry") return { ok: `Payout queued again — the next worker pass picks it up (${formatPrice(payout.amount_cents)}).` };
+    const restored = result?.credit_restored_cents ?? 0;
+    return {
+      ok: restored
+        ? `Payout cancelled. ${formatPrice(restored)} is back on the seller's credit balance.`
+        : "Payout cancelled. The seller's account is gone, so there was no balance to restore.",
+    };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : `Could not ${control} the payout.` };
+  }
+}
+
+export async function adminRetryCarryPayout(_prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
+  return controlCarryPayout("retry", formData);
+}
+
+export async function adminCancelCarryPayout(_prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
+  return controlCarryPayout("cancel", formData);
 }
 
 // ---------- Internal notes / party messaging (console audit follow-ups) ----------
@@ -1183,9 +1271,27 @@ export async function adminReplayWebhookEvent(
         if (!row.payload) {
           throw new Error("Recorded before payload retention (0023) — nothing stored to replay.");
         }
-        const result = await dispatchRecordedWebhookEvent(ctx.admin, row.id, row.payload);
-        if (result === "retry") throw new Error("Replay needs another attempt; the event remains unprocessed.");
-        await markWebhookEventProcessed(ctx.admin, eventId);
+        // Every failed replay of the loaded, unprocessed event is counted on it
+        // (N109): an explicit retry once as "retry", a throw from dispatch or
+        // from the completion marker once as "error".
+        const failure = { provider: row.id.startsWith("easypost:") ? "easypost" : "stripe", type: "console_replay" } as const;
+        let result: Awaited<ReturnType<typeof dispatchRecordedWebhookEvent>>;
+        try {
+          result = await dispatchRecordedWebhookEvent(ctx.admin, row.id, row.payload);
+        } catch (error) {
+          await recordWebhookFailure(ctx.admin, row.id, "error", { ...failure, error });
+          throw error;
+        }
+        if (result === "retry") {
+          await recordWebhookFailure(ctx.admin, row.id, "retry", failure);
+          throw new Error("Replay needs another attempt; the event remains unprocessed.");
+        }
+        try {
+          await markWebhookEventProcessed(ctx.admin, eventId);
+        } catch (error) {
+          await recordWebhookFailure(ctx.admin, row.id, "error", { ...failure, error });
+          throw error;
+        }
         return { result };
       }
     );

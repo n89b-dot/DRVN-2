@@ -28,6 +28,15 @@ describe("what may be answered from the shared copy", () => {
     expect(PUBLIC_READ_FUNCTIONS.has("bump_listing_view")).toBe(false);
   });
 
+  it("the public counts and pages (OS-W22), never a member's own saves or follows", () => {
+    for (const name of ["listing_engagement_counts", "seller_review_summaries", "post_reaction_counts", "post_comment_page", "car_update_page"]) {
+      expect(isCacheablePublicRead("POST", `${REST}/rpc/${name}`), name).toBe(true);
+    }
+    for (const name of ["followed_feed_rows", "saved_counts", "saved_listing_page", "saved_page"]) {
+      expect(PUBLIC_READ_FUNCTIONS.has(name), name).toBe(false);
+    }
+  });
+
   it("nothing outside the data API", () => {
     expect(isCacheablePublicRead("GET", "https://db.example.co/auth/v1/user")).toBe(false);
     expect(isCacheablePublicRead("GET", "https://db.example.co/storage/v1/object/x")).toBe(false);

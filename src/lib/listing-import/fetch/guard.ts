@@ -35,6 +35,7 @@ const FORBIDDEN_V4: [number, number][] = [
   [V4(172, 16, 0, 0), 12], // RFC1918
   [V4(192, 0, 0, 0), 24], // IETF protocol assignments
   [V4(192, 0, 2, 0), 24], // TEST-NET-1
+  [V4(192, 88, 99, 0), 24], // 6to4 relay anycast (deprecated)
   [V4(192, 168, 0, 0), 16], // RFC1918
   [V4(198, 18, 0, 0), 15], // benchmarking
   [V4(198, 51, 100, 0), 24], // TEST-NET-2
@@ -85,8 +86,9 @@ function parseIpv6(host: string): number[] | null {
     const head = parseGroups(ip.slice(0, doubleColon));
     const tail = parseGroups(ip.slice(doubleColon + 2));
     if (!head || !tail) return null;
+    // "::" stands for at least one zero group; anything else is malformed.
     const fillers = 8 - head.length - tail.length - (v4Tail?.length ?? 0);
-    if (fillers < 0) return null;
+    if (fillers < 1) return null;
     hextets = [...head, ...Array(fillers).fill(0), ...tail, ...(v4Tail ?? [])];
   } else {
     const groups = parseGroups(ip);
@@ -96,39 +98,63 @@ function parseIpv6(host: string): number[] | null {
   return hextets.length === 8 ? hextets : null;
 }
 
-function isForbiddenIpv6(hextets: number[]): boolean {
-  const [h0] = hextets;
-  const isZero = (from: number, to: number) => hextets.slice(from, to).every((h) => h === 0);
+/**
+ * An address in one canonical form, whatever notation it arrived in. An IPv6
+ * address that is only a wrapper for an IPv4 one — IPv4-mapped
+ * (::ffff:a.b.c.d, also written ::ffff:7f00:1 or 0:0:0:0:0:ffff:127.0.0.1) —
+ * becomes that IPv4 address, so the IPv4 rules decide it and no spelling of
+ * 127.0.0.1 is treated as "some IPv6 address". Null when unparseable.
+ */
+export type CanonicalAddress = { family: 4; value: number } | { family: 6; hextets: number[] };
 
-  // :: (unspecified) and ::1 (loopback)
-  if (isZero(0, 7) && (hextets[7] === 0 || hextets[7] === 1)) return true;
-  // IPv4-mapped ::ffff:a.b.c.d and IPv4-translated ::ffff:0:a.b.c.d / 64:ff9b::/96
-  if (isZero(0, 5) && hextets[5] === 0xffff) {
-    return isForbiddenIpv4(((hextets[6] << 16) | hextets[7]) >>> 0);
+export function canonicalAddress(address: string): CanonicalAddress | null {
+  const v4 = parseIpv4(address.trim());
+  if (v4 !== null) return { family: 4, value: v4 };
+  const v6 = parseIpv6(address);
+  if (v6 === null) return null;
+  if (v6.slice(0, 5).every((h) => h === 0) && v6[5] === 0xffff) {
+    return { family: 4, value: (((v6[6] << 16) | v6[7]) >>> 0) };
   }
-  if (h0 === 0x64 && hextets[1] === 0xff9b) {
-    return isForbiddenIpv4(((hextets[6] << 16) | hextets[7]) >>> 0);
+  return { family: 6, hextets: v6 };
+}
+
+const embedded = (high: number, low: number) => (((high << 16) | low) >>> 0);
+
+/**
+ * Forbidden IPv6 space, as an allow-list: only global unicast (2000::/3) is
+ * ever a website. Everything outside it is refused — unspecified and
+ * loopback, the deprecated IPv4-compatible ::a.b.c.d (::/96), IPv4-translated
+ * ::ffff:0:a.b.c.d, discard-only 100::/64, local-use NAT64 64:ff9b:1::/48,
+ * unique-local fc00::/7, link-local fe80::/10, the old site-local fec0::/10,
+ * multicast ff00::/8 and every unassigned block — except well-known NAT64
+ * (64:ff9b::/96), where the IPv4 address it carries decides. Inside 2000::/3
+ * the special-purpose blocks are refused, and 6to4 (2002::/16) is judged by
+ * the IPv4 address it carries.
+ */
+function isForbiddenIpv6(h: number[]): boolean {
+  if (h[0] === 0x64 && h[1] === 0xff9b && h.slice(2, 6).every((x) => x === 0)) {
+    return isForbiddenIpv4(embedded(h[6], h[7]));
   }
-  // fe80::/10 link-local, fc00::/7 unique-local, ff00::/8 multicast
-  if ((h0 & 0xffc0) === 0xfe80) return true;
-  if ((h0 & 0xfe00) === 0xfc00) return true;
-  if ((h0 & 0xff00) === 0xff00) return true;
-  // 2001:db8::/32 documentation
-  if (h0 === 0x2001 && hextets[1] === 0x0db8) return true;
+  if ((h[0] & 0xe000) !== 0x2000) return true;
+  // 2001::/23 IETF protocol assignments: Teredo 2001::/32 (an obfuscated
+  // IPv4 client address), benchmarking 2001:2::/48, ORCHID and the rest.
+  if (h[0] === 0x2001 && h[1] < 0x0200) return true;
+  if (h[0] === 0x2001 && h[1] === 0x0db8) return true; // documentation
+  if (h[0] === 0x2002) return isForbiddenIpv4(embedded(h[1], h[2])); // 6to4
+  if (h[0] === 0x3ffe) return true; // the returned 6bone block
+  if (h[0] === 0x3fff && (h[1] & 0xf000) === 0) return true; // documentation 3fff::/20
   return false;
 }
 
 /**
  * True when the resolved address must never be connected to. Accepts IPv4 and
- * IPv6 literals in the forms DNS resolution produces.
+ * IPv6 literals in any notation; each is canonicalised first.
  */
 export function isForbiddenAddress(address: string): boolean {
-  const v4 = parseIpv4(address);
-  if (v4 !== null) return isForbiddenIpv4(v4);
-  const v6 = parseIpv6(address);
-  if (v6 !== null) return isForbiddenIpv6(v6);
+  const canonical = canonicalAddress(address);
   // Unparseable = unknowable = forbidden. Fail closed.
-  return true;
+  if (!canonical) return true;
+  return canonical.family === 4 ? isForbiddenIpv4(canonical.value) : isForbiddenIpv6(canonical.hextets);
 }
 
 export type UrlCheck =

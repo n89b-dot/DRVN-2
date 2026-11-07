@@ -17,6 +17,7 @@ import {
   fetchFeed,
   fetchFollowedFeed,
   fetchLocalFeed,
+  type FeedCursor,
   type FeedItem,
 } from "@/lib/feed";
 import { recommendListings } from "@/lib/recommendations";
@@ -24,6 +25,7 @@ import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-co
 import { requiredRead } from "@/lib/supabase/required-read";
 
 import { HomeFeedMore } from "./feed-more";
+import { splitHomeFeed } from "./fold";
 import { Greeting } from "./greeting";
 import { HOME_FEED_PAGE_SIZE, type HomeTab } from "./tabs";
 import { PostUpdatePrompt } from "./post-update-prompt";
@@ -40,10 +42,6 @@ export const metadata = { title: "Home - DRVN" };
  *  "All N cars" link — a two-car garage reads whole, a twenty-car garage
  *  never pushes the rail off the page. */
 const HOME_GARAGE_MAX = 3;
-/** H-5: how many posts run before the rail's first tile folds into the feed
- *  on a phone. With fewer posts than this it follows the last one. */
-const LEAD_POSTS = 3;
-
 
 const TAB_EMPTY: Record<HomeTab, { title: string; body: string }> = {
   following: {
@@ -172,7 +170,7 @@ export default async function HomePage({
           ? "foryou"
           : "following";
 
-  const feedPromise: Promise<{ items: FeedItem[]; hasMore: boolean }> =
+  const feedPromise: Promise<{ items: FeedItem[]; hasMore: boolean; nextCursor?: FeedCursor | null }> =
     tab === "following"
       ? fetchFollowedFeed(supabase, user.id, { page, pageSize: HOME_FEED_PAGE_SIZE })
       : tab === "local" && place
@@ -195,29 +193,17 @@ export default async function HomePage({
   const shownCars = garage.slice(0, HOME_GARAGE_MAX);
 
   // Depth for the garage card: how alive each build is (updates posted) and
-  // who's watching it (followers). One bounded round over the shown cars'
-  // ids, counted in memory — same pattern as the garage's own sheet loader.
-  // It needs only the garage, so it runs beside the feed rather than after.
+  // who's watching it (followers), counted by the database (garage_car_stats,
+  // the garage sheet's own numbers). It used to fetch every update and every
+  // follow row over the shown cars and count them here, which stops silently
+  // at 1,000 (N30). It needs only the garage, so it runs beside the feed.
   const garageStatsPromise = shownCars.length
-    ? Promise.all([
-        supabase
-          .from("activity_posts")
-          .select("car_id")
-          .in("car_id", shownCars.map((c) => c.id))
-          .not("published_at", "is", null),
-        supabase
-          .from("follows")
-          .select("target_id")
-          .eq("target_type", "car")
-          .in("target_id", shownCars.map((c) => c.id)),
-      ])
-    : Promise.resolve([{ data: [] as { car_id: string | null }[] }, { data: [] as { target_id: string }[] }] as const);
+    ? Promise.resolve(supabase.rpc("garage_car_stats", { p_cars: shownCars.map((c) => c.id) }))
+    : Promise.resolve({ data: [] as { car_id: string; updates: number; followers: number }[], error: null });
 
-  const [feed, [{ data: carPosts }, { data: carFollows }]] = await Promise.all([feedPromise, garageStatsPromise]);
-  const updatesBy = new Map<string, number>();
-  const followersBy = new Map<string, number>();
-  for (const p of carPosts ?? []) if (p.car_id) updatesBy.set(p.car_id, (updatesBy.get(p.car_id) ?? 0) + 1);
-  for (const f of carFollows ?? []) followersBy.set(f.target_id, (followersBy.get(f.target_id) ?? 0) + 1);
+  const [feed, garageStats] = await Promise.all([feedPromise, garageStatsPromise]);
+  // A count that couldn't be read is left off the card, never shown as 0.
+  const statsBy = new Map((garageStats.error ? [] : (garageStats.data ?? [])).map((row) => [row.car_id, row]));
 
   const tabs: { key: HomeTab; label: string }[] = [
     { key: "following", label: "Following" },
@@ -239,8 +225,9 @@ export default async function HomePage({
     .slice(0, 2)
     .toUpperCase();
   const firstName = profile?.display_name?.split(" ")[0];
-  const leadItems = feed.items.slice(0, LEAD_POSTS);
-  const restItems = feed.items.slice(LEAD_POSTS);
+  // H-5: the feed in three runs, so the rail's tiles can fold in between
+  // them on a phone (./fold.ts).
+  const { lead: leadItems, middle: middleItems, rest: restItems } = splitHomeFeed(feed.items);
 
   return (
     <div className="wrap">
@@ -266,9 +253,9 @@ export default async function HomePage({
 
       {/* H-4/H-5. Two columns from 1024px: the feed, and a rail beside it.
           Below that the two wrappers dissolve (`display: contents`) and
-          `order` folds the rail's tiles INTO the feed — after the third post,
-          and again at the end — rather than stranding them beneath it. A
-          tile with nothing in it doesn't render at all. */}
+          `order` folds the rail's tiles INTO the feed — after the third post
+          and after the eighth (./fold.ts) — rather than stranding them
+          beneath it. A tile with nothing in it doesn't render at all. */}
       <div className="deck deck--main">
         <div className="deck--main__feeds">
           {/* H-3 / W-1: the quick box, on top of the feed. The bar's Post
@@ -318,6 +305,13 @@ export default async function HomePage({
             )}
           </div>
 
+          {/* Posts four to eight: on a phone they sit between the two folds. */}
+          {middleItems.length > 0 && (
+            <div className="deck--main__feed deck--main__feed--middle">
+              <FeedList items={middleItems} variant="cards" engagement={{ path: "/home", isLoggedIn: true }} />
+            </div>
+          )}
+
           {/* H-4: the feed carries on as you reach its end, keyed by tab so a
               tab change starts a new column rather than appending to the old. */}
           {leadItems.length > 0 && (
@@ -325,8 +319,9 @@ export default async function HomePage({
               key={tab}
               tab={tab}
               initialItems={restItems}
-              seen={leadItems.map((i) => `${i.kind}-${i.id}`)}
+              seen={[...leadItems, ...middleItems].map((i) => `${i.kind}-${i.id}`)}
               initialHasMore={feed.hasMore}
+              initialCursor={feed.nextCursor ?? null}
             />
           )}
         </div>
@@ -350,8 +345,8 @@ export default async function HomePage({
                         key={car.id}
                         vehicle={car}
                         stats={{
-                          updates: updatesBy.get(car.id) ?? 0,
-                          followers: followersBy.get(car.id) ?? 0,
+                          updates: statsBy.get(car.id)?.updates ?? 0,
+                          followers: statsBy.get(car.id)?.followers ?? 0,
                         }}
                       />
                     ))}

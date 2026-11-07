@@ -30,6 +30,7 @@ import { paymentsAreLive } from "@/lib/payments/provider";
 import { getPublicPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 import { deliveryLabel } from "@/lib/marketplace/delivery";
 import { listingHref, normalizeMarketplaceState, shoppingReturn } from "@/lib/marketplace/state";
+import { listingShareDescription } from "@/lib/share-copy";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
 import { getBetaAccess } from "@/lib/beta-access";
 
@@ -37,6 +38,8 @@ import { ReportButton } from "@/features/moderation/report-button";
 import { PurchaseActions } from "./purchase-actions";
 import { AskAgentButton } from "@/features/agent/ask-agent-button";
 import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
+import { loadAgentMode } from "@/lib/agent/member-mode";
+import { agentModeAllowsChat, agentModeAllowsMandates, agentModeRefusal } from "@/lib/agent/mode";
 import { QASection, type QAItem } from "./qa-section";
 import { postHeadline } from "@/lib/activity/headline";
 import { postHref } from "@/lib/activity/href";
@@ -63,6 +66,17 @@ const loadListingImages = cache(async (id: string) => {
   const supabase = await createClient();
   return supabase.from("listing_images").select("*").eq("listing_id", id).order("position");
 });
+/** The car the part came off, read under the visitor's row security: a
+ *  private or suspended member's car comes back empty. Shared by the share
+ *  text and the page. */
+const loadSourceCar = cache(async (carId: string) => {
+  const supabase = await createClient();
+  return supabase
+    .from("cars")
+    .select("id, slug, name, make, model, year, is_public, cover_image_url")
+    .eq("id", carId)
+    .maybeSingle();
+});
 
 /**
  * Per-listing metadata with the cover as the OG image. A part listing is the
@@ -78,14 +92,13 @@ export async function generateMetadata({
   const [{ data: listing }, { data: images }] = await Promise.all([loadListing(id), loadListingImages(id)]);
 
   if (!listing) return { title: "Listing not found - DRVN" };
+  const { data: sourceCar } = listing.source_car_id ? await loadSourceCar(listing.source_car_id) : { data: null };
 
   const image = images?.[0] ?? null;
 
   const price = formatPrice(listing.price_cents);
   const sold = listing.status === "sold";
-  const description =
-    listing.description?.slice(0, 155) ??
-    `${conditionLabel(listing.condition)} · ${price} · a used part off a real modified car, on DRVN.`;
+  const description = listingShareDescription(listing, sourceCar);
 
   return {
     title: `${listing.title} — ${price}${sold ? " (sold)" : ""} - DRVN`,
@@ -128,6 +141,8 @@ export default async function ListingPage({
   // The viewer is a local token check (no network), so it can be known
   // before the first round and let viewer-only reads join it.
   const user = await getViewer();
+  // AG-7: the viewer's own agent mode, for the agent entry points below.
+  const agentMode = user && (await agentTabOpen()) ? await loadAgentMode(user.id) : "act";
 
   // Round 1: everything that needs only the listing id or the viewer.
   const [{ data: listing }, { data: images }, selectedVehicle, betaBuyerAccess, { data: taggedPostRows }] =
@@ -178,7 +193,7 @@ export default async function ListingPage({
     moreFromSellerCards,
     { data: sourceModLine },
     watchCounts,
-    { data: reviews },
+    { data: sellerRating },
     { data: fitments },
     { data: questions },
     { data: save },
@@ -204,13 +219,7 @@ export default async function ListingPage({
       .select("username, display_name, location, avatar_url")
       .eq("id", listing.seller_id)
       .single(),
-    listing.source_car_id
-      ? supabase
-          .from("cars")
-          .select("id, slug, name, make, model, year, is_public, cover_image_url")
-          .eq("id", listing.source_car_id)
-          .single()
-      : Promise.resolve({ data: null }),
+    listing.source_car_id ? loadSourceCar(listing.source_car_id) : Promise.resolve({ data: null }),
     supabase
       .from("listings")
       .select("id, title, price_cents, shipping_cents, shipping_mode, allows_collection, condition, location, part_number, brand, part_miles, part_miles_unit, seller_id, source_car_id, status")
@@ -238,7 +247,8 @@ export default async function ListingPage({
       : Promise.resolve({ data: null }),
     fetchWatchCounts(supabase, [id]),
     // Seller rating + Q&A
-    supabase.from("reviews").select("rating").eq("reviewee_id", listing.seller_id),
+    // Every review, averaged by the database (N30: the rows stopped at 1,000).
+    supabase.rpc("seller_review_summaries", { p_sellers: [listing.seller_id] }).maybeSingle(),
     supabase
       .from("listing_fitments")
       .select("make, model, year_start, year_end")
@@ -292,9 +302,7 @@ export default async function ListingPage({
   // R2-09: a public count from listing_watch_counts. null = couldn't read it.
   const watchCount = watchCounts?.get(id) ?? null;
 
-  const avgRating = (reviews ?? []).length
-    ? (reviews!.reduce((s, r) => s + r.rating, 0) / reviews!.length).toFixed(1)
-    : null;
+  const avgRating = sellerRating?.review_count ? Number(sellerRating.rating_avg).toFixed(1) : null;
 
   // Count the look, but never the seller's own — a seller refreshing their
   // listing must not inflate the number they price against. Fire-and-forget:
@@ -342,7 +350,7 @@ export default async function ListingPage({
     .toUpperCase();
   const sold = soldCount ?? 0;
   const sellerRecord = [
-    avgRating ? ratingLine(avgRating, (reviews ?? []).length) : null,
+    avgRating ? ratingLine(avgRating, sellerRating?.review_count ?? 0) : null,
     sold > 0 ? `${sold} sold on DRVN` : null,
   ]
     .filter(Boolean)
@@ -512,12 +520,17 @@ export default async function ListingPage({
                 resumeAction={resumeAction}
                 returnPath={detailPath}
                 agentOffers={Boolean(user) && listing.shipping_mode !== "drvn" && (await agentStepOpen("buyer"))}
+                agentRefusal={user && agentModeAllowsMandates(agentMode) ? null : agentModeRefusal(agentMode)}
               />
             )}
             {/* Ask about this listing (A3c): beside the page on desktop, /agent on a phone. */}
             {user && (await agentTabOpen()) && (await agentStepOpen("chat")) && (
               <div className="mt-2 grid">
-                <AskAgentButton about={{ kind: "listing", id: listing.id }} className="w-full" />
+                <AskAgentButton
+                  about={{ kind: "listing", id: listing.id }}
+                  className="w-full"
+                  disabledReason={agentModeAllowsChat(agentMode) ? null : agentModeRefusal(agentMode)}
+                />
               </div>
             )}
 

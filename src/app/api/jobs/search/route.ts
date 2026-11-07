@@ -1,5 +1,6 @@
 import { ensureSearchCollections } from "@/lib/search/collections";
 import { trackedWorker } from "@/lib/tracked-worker";
+import { cronAuthorized } from "@/lib/cron-auth";
 import { jobHeartbeat } from "@/lib/job-lease";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { indexListingNow, indexListingsNow } from "@/lib/marketplace/search/indexing";
@@ -12,7 +13,7 @@ const BATCH = 500;
 /** Stop starting batches after this long; maxDuration is 300 s. */
 const BUDGET_MS = 120_000;
 async function run(request: Request) {
-  if (!process.env.CRON_SECRET || request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) return new Response(null, { status: 404 });
+  if (!cronAuthorized(request)) return new Response(null, { status: 404 });
   if (!typesenseConfigured()) return Response.json({ configured: false, processed: 0 });
   await ensureSearchCollections();
   const admin = createAdminClient();

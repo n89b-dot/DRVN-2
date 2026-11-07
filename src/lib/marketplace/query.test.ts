@@ -11,14 +11,14 @@ vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 vi.mock("@/lib/vehicles/catalog", () => ({ resolveVehicleFilter: vi.fn() }));
 
 const MISSING = { data: null, count: null, error: { code: "PGRST202", message: "Could not find the function" } };
-const NEW_FUNCTIONS = ["marketplace_page", "marketplace_count", "listing_watch_counts", "seller_active_counts", "search_word_corrections"];
+const NEW_FUNCTIONS = ["marketplace_page", "marketplace_count", "listing_watch_counts", "seller_active_counts", "search_word_corrections", "listing_engagement_counts", "seller_review_summaries"];
 
 /** A Supabase client whose RPCs answer per function. `response` is the
  *  original path's answer (marketplace_browse_rows / _search_browse_rows,
  *  read with .range()); `page` and `count` are marketplace_page's and
  *  marketplace_count's, awaited directly. Both are "not deployed" (PGRST202)
  *  unless given, so tests of the original path run through its fallback. */
-function client(response: object, fresh: { page?: object; count?: object; corrections?: object } = {}) {
+function client(response: object, fresh: { page?: object; count?: object; corrections?: object; engagement?: object; reviews?: object } = {}) {
   const legacy = { select: vi.fn(), eq: vi.fn(), order: vi.fn(), range: vi.fn().mockResolvedValue(response) };
   legacy.select.mockReturnValue(legacy);
   legacy.eq.mockReturnValue(legacy);
@@ -39,6 +39,8 @@ function client(response: object, fresh: { page?: object; count?: object; correc
     rpc: vi.fn((name: string) => name === "marketplace_page" ? awaited(fresh.page ?? MISSING)
       : name === "marketplace_count" ? awaited(fresh.count ?? MISSING)
       : name === "search_word_corrections" ? awaited(fresh.corrections ?? MISSING)
+      : name === "listing_engagement_counts" ? awaited(fresh.engagement ?? { data: [], error: null })
+      : name === "seller_review_summaries" ? awaited(fresh.reviews ?? { data: [], error: null })
       : name === "listing_watch_counts" || name === "seller_active_counts" ? awaited({ data: [], error: null }) : legacy),
     from: vi.fn(table),
   } as unknown as SupabaseClient<Database>;
@@ -100,8 +102,7 @@ it("starts social lookups while fitment is still loading", async () => {
   const pending = fetchListings(supabase, {}, "viewer", { garage: Promise.resolve([]), selection: Promise.resolve({ makeId: 1, modelId: null, make: "BMW", model: null, label: "BMW" }) });
   // Allow the thenable queries to start without resolving the fitment request.
   await vi.waitFor(() => expect(started).toContain("listing_fitments"));
-  expect(started).toContain("likes");
-  expect(started).toContain("listing_questions");
+  expect(supabase.rpc).toHaveBeenCalledWith("listing_engagement_counts", { p_listings: ["listing"] });
   releaseFitment();
   expect(await pending).toMatchObject({ status: "success", total: 1 });
 });
@@ -152,6 +153,9 @@ it("counts the view itself when the page's total turned out not to be known", as
 const row = (n: number) => ({
   id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`, title: `Part ${n}`, price_cents: 1000 + n, condition: "used", location: null,
   created_at: `2026-10-05T10:00:${String(59 - (n % 60)).padStart(2, "0")}.123456+00:00`,
+  // Saved as a draft a month earlier than it went on sale: Newest is by the
+  // publication time, never the row's creation (N73).
+  published_at: `2026-11-05T10:00:${String(59 - (n % 60)).padStart(2, "0")}.654321+00:00`,
 });
 
 it("reads a page through marketplace_page, one part more than a page to know there is another", async () => {
@@ -163,7 +167,31 @@ it("reads a page through marketplace_page, one part more than a page to know the
   if (page.status !== "success") throw new Error("expected a page");
   expect(page.results).toHaveLength(24);
   // The next page starts after the 24th part shown, to the microsecond.
-  expect(decodePosition(page.nextCursor ?? undefined, "newest")).toEqual({ created: row(23).created_at, id: row(23).id });
+  expect(decodePosition(page.nextCursor ?? undefined, "newest")).toEqual({ created: row(23).published_at, id: row(23).id });
+});
+
+it("orders Newest and positions it by when a part was published, not when its row was made (N73)", async () => {
+  const supabase = client(MISSING, { page: { data: Array.from({ length: 25 }, (_, n) => row(n)), error: null }, count: { data: 40, error: null } });
+  const page = await fetchListings(supabase, {});
+  const pageQuery = vi.mocked(supabase.rpc).mock.results.find((_, i) => vi.mocked(supabase.rpc).mock.calls[i][0] === "marketplace_page")!.value;
+  expect(pageQuery.select).toHaveBeenCalledWith(expect.stringContaining("published_at"));
+  expect(pageQuery.order).toHaveBeenCalledWith("published_at", { ascending: false });
+  expect(pageQuery.order).not.toHaveBeenCalledWith("created_at", expect.anything());
+  if (page.status !== "success") throw new Error("expected a page");
+  const next = decodePosition(page.nextCursor ?? undefined, "newest");
+  expect(next?.created).toBe(row(23).published_at);
+  // The next page asks the database for parts published before that one.
+  const following = client(MISSING, { page: { data: [row(24)], error: null }, count: { data: 40, error: null } });
+  await fetchListings(following, { page: "2", after: page.nextCursor ?? undefined });
+  expect(following.rpc).toHaveBeenCalledWith("marketplace_page", expect.objectContaining({ p_after_created: row(23).published_at, p_after_id: row(23).id }));
+});
+
+it("the offset fallback orders Newest by publication too", async () => {
+  const supabase = client({ data: [], count: 0, error: null });
+  await fetchListings(supabase, {});
+  const legacy = vi.mocked(supabase.rpc).mock.results.find((_, i) => vi.mocked(supabase.rpc).mock.calls[i][0] === "marketplace_browse_rows")!.value;
+  expect(legacy.order).toHaveBeenCalledWith("published_at", { ascending: false });
+  expect(legacy.select).toHaveBeenCalledWith(expect.stringContaining("published_at"));
 });
 
 it("counts a filtered view only up to the cap, and says so", async () => {
@@ -217,4 +245,31 @@ it("ignores a position from another sort and reads the page by skipping", async 
   expect(supabase.rpc).toHaveBeenCalledWith("marketplace_page", expect.objectContaining({ p_offset: 24 }));
   expect(decodePosition("bm90LWEtdG9rZW4", "newest")).toBeNull();
   expect(decodePosition(encodePosition("newest", row(1)).slice(0, -2) + "zz", "newest")).toBeNull();
+});
+
+it("N30: card likes, questions and seller ratings come counted from the database, past 1,000", async () => {
+  const listing = { id: "listing", title: "Brakes", price_cents: 100, condition: "used", location: null, seller_id: "seller" };
+  const supabase = client({ data: [listing], count: 1, error: null }, {
+    engagement: { data: [{ listing_id: "listing", likes: 1500, questions: 1203 }], error: null },
+    reviews: { data: [{ seller_id: "seller", review_count: 1042, rating_avg: 4.6666 }], error: null },
+  });
+  const tables: string[] = [];
+  const from = supabase.from;
+  supabase.from = vi.fn((table: string) => {
+    tables.push(table);
+    if (table === "profiles") {
+      const query: Record<string, unknown> = { then: (resolve: (v: object) => unknown) => Promise.resolve({ data: [{ id: "seller", display_name: "Sam", username: "sam", avatar_url: null }], error: null }).then(resolve) };
+      for (const method of ["select", "eq", "in", "order", "not", "limit"]) query[method] = () => query;
+      return query;
+    }
+    return (from as unknown as (t: string) => unknown)(table);
+  }) as unknown as typeof supabase.from;
+  const page = await fetchListings(supabase, {});
+  if (page.status !== "success") throw new Error("expected a page");
+  expect(page.results[0]).toMatchObject({ like_count: 1500, question_count: 1203 });
+  expect(page.results[0].seller).toMatchObject({ rating: "4.7", review_count: 1042 });
+  // Nothing fetched row by row to be counted here.
+  expect(tables).not.toContain("likes");
+  expect(tables).not.toContain("listing_questions");
+  expect(tables).not.toContain("reviews");
 });

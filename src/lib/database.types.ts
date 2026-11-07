@@ -43,6 +43,9 @@ export type Profile = {
   suspended_reason: string | null;
   /** One-time importer content-rights acknowledgement (0047). */
   import_attested_at: string | null;
+  /** AG-7: how far the member's agent may go (20261107170000). Owner-written;
+   *  no client select grant — read server-side by loadAgentMode(). */
+  agent_mode: "off" | "suggest" | "act";
   created_at: string;
   updated_at: string;
 };
@@ -573,6 +576,8 @@ export type ShippingRateQuote = {
   currency: string;
   est_delivery_days: number | null;
   destination_hash: string;
+  /** Every provider-shipment input (20261107200100); reuse needs an exact match. */
+  request_fingerprint: string | null;
   parcel: Json;
   consumed_order_id: string | null;
   expires_at: string;
@@ -948,6 +953,11 @@ export type WebhookEvent = {
   /** Raw Stripe event, kept for console drill-in and replay (0023). Null for
    *  events recorded before payload retention. */
   payload: unknown | null;
+  /** Failed deliveries while unprocessed (20261107191000, record_webhook_failure). */
+  failed_attempts: number;
+  last_failed_at: string | null;
+  last_failure_kind: "retry" | "error" | null;
+  last_failure_detail: string | null;
 };
 
 export type TransferIntentStatus =

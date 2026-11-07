@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+import { recordWebhookFailure } from "@/lib/payments/webhook-failures";
 import { dispatchEasyPostEvent } from "@/lib/shipping/webhook";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { flushMonitoring, reportError } from "@/lib/monitoring";
@@ -50,9 +51,11 @@ export async function POST(request: Request): Promise<Response> {
   const admin = createAdminClient();
   const claimId = `easypost:${eventId}`;
 
+  let claimed = false;
   try {
     const fresh = await claimEvent(admin, claimId, description, event as Json);
     if (!fresh) return new Response("duplicate", { status: 200 });
+    claimed = true;
 
     await dispatchEasyPostEvent(admin, event);
 
@@ -68,6 +71,7 @@ export async function POST(request: Request): Promise<Response> {
     return new Response("ok", { status: 200 });
   } catch (error) {
     reportError("[easypost-webhook] processing failed", { eventId, description, error });
+    if (claimed) await recordWebhookFailure(admin, claimId, "error", { provider: "easypost", type: description, error });
     // Unprocessed (no processed_at stamp) — EasyPost redelivers, and the
     // claim logic reprocesses an unstamped event.
     return new Response("processing failed", { status: 500 });

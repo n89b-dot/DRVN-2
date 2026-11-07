@@ -2,11 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ObjectRow, PageHead, TileHead } from "@/components/ui";
+import { writeAudit } from "@/lib/admin/audit";
 import { getAdminContext } from "@/lib/admin/guard";
-import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { AgentChatGate } from "../../agent-admin-forms";
+import { approvalTitle, eventLine, limitsLine } from "./view";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,12 @@ const when = (iso: string | null) =>
  * their limits with versions, tasks, the record of what the agent did, and
  * its approvals — read-only. Their chat isn't loaded here; it opens only
  * through the audited gate below, for an abuse report or a dispute.
+ *
+ * The numbers on their limits are a seller's floor and a buyer's ceiling
+ * (agent-data-rules.md §1: admin surfaces show ids, states and counts). Only
+ * a full admin sees them, and each view writes one audit row first; a viewer
+ * sees the states and versions without the amounts, including the amounts
+ * derived from them (counters and approvals). See view.ts.
  */
 export default async function AdminAgentMember({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -26,6 +33,15 @@ export default async function AdminAgentMember({ params }: { params: Promise<{ i
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("id, username, display_name").eq("id", id).maybeSingle();
   if (!profile) notFound();
+  let showLimits = context.role === "admin";
+  if (showLimits) {
+    try {
+      await writeAudit(admin, { actorId: context.userId, action: "agent.limits_viewed", subjectType: "user", subjectId: id, reason: "support view of agent limits" });
+    } catch {
+      // Unrecorded means unseen.
+      showLimits = false;
+    }
+  }
 
   const [mandates, tasks, events, approvals] = await Promise.all([
     admin.from("agent_mandates").select("id, scope, listing_id, status, version, minimum_cents, target_cents, ceiling_cents, ceiling_basis, style, created_at, ended_at").eq("owner_id", id).order("created_at", { ascending: false }).limit(50),
@@ -39,17 +55,12 @@ export default async function AdminAgentMember({ params }: { params: Promise<{ i
     : { data: [] as { id: string; title: string }[] };
   const titleOf = new Map((listings ?? []).map((l) => [l.id, l.title]));
 
-  const limitsLine = (m: NonNullable<typeof mandates.data>[number]) =>
-    m.scope === "seller"
-      ? `minimum ${m.minimum_cents != null ? formatPrice(m.minimum_cents) : "the listing's"} · target ${m.target_cents != null ? formatPrice(m.target_cents) : "asking"} · ${m.style}`
-      : `max ${m.ceiling_cents != null ? formatPrice(m.ceiling_cents) : "—"} on ${m.ceiling_basis === "total" ? "item + shipping" : "the item"} · ${m.style}`;
-
   return (
     <>
       <PageHead
         eyebrow={<Link href="/admin/agent" className="jumplink">Agent</Link>}
         title={profile.display_name ?? `@${profile.username ?? "member"}`}
-        sub="Their agent, read-only. Pause it from the agent page's targeted switches (one member's agent)."
+        sub={`Their agent, read-only. Pause it from the agent page's targeted switches (one member's agent).${showLimits ? " Viewing their amounts is recorded in the audit log." : ""}`}
       />
 
       <section className="tile mb-8" aria-label="Limits">
@@ -60,7 +71,7 @@ export default async function AdminAgentMember({ params }: { params: Promise<{ i
               key={m.id}
               href={`/listings/${m.listing_id}`}
               title={`${m.scope === "seller" ? "Selling" : "Buying"} · ${titleOf.get(m.listing_id) ?? m.listing_id}`}
-              meta={`${m.status} · version ${m.version} · ${limitsLine(m)} · since ${when(m.created_at)}${m.ended_at ? ` · ended ${when(m.ended_at)}` : ""}`}
+              meta={`${m.status} · version ${m.version} · ${limitsLine(m, showLimits)} · since ${when(m.created_at)}${m.ended_at ? ` · ended ${when(m.ended_at)}` : ""}`}
             />
           ))}
           {!mandates.data?.length && <p className="order__meta">No agent limits set.</p>}
@@ -81,7 +92,7 @@ export default async function AdminAgentMember({ params }: { params: Promise<{ i
           <TileHead label="Approvals" end={<span className="chip">{approvals.data?.length ?? 0}</span>} />
           <div className="rowlist">
             {(approvals.data ?? []).map((a) => (
-              <ObjectRow key={a.id} title={`${a.reason ?? "approval"} · ${a.amount_cents != null ? formatPrice(a.amount_cents) : "—"}`} meta={`${a.status} · asked ${when(a.created_at)}${a.decided_at ? ` · answered ${when(a.decided_at)}` : ""}`} />
+              <ObjectRow key={a.id} title={approvalTitle(a, showLimits)} meta={`${a.status} · asked ${when(a.created_at)}${a.decided_at ? ` · answered ${when(a.decided_at)}` : ""}`} />
             ))}
             {!approvals.data?.length && <p className="order__meta">None asked.</p>}
           </div>
@@ -91,19 +102,9 @@ export default async function AdminAgentMember({ params }: { params: Promise<{ i
       <section className="tile mb-8" aria-label="Record">
         <TileHead label="What the agent did" end={<span className="chip">last {events.data?.length ?? 0}</span>} />
         <div className="rowlist">
-          {(events.data ?? []).map((e) => {
-            const inputs = (e.inputs ?? {}) as Record<string, unknown>;
-            const result = (e.result ?? {}) as Record<string, unknown>;
-            const what =
-              e.kind === "move"
-                ? `${String(inputs.kind ?? "move")}${typeof inputs.amount_cents === "number" ? ` ${formatPrice(inputs.amount_cents)}` : ""}`
-                : e.kind === "decision"
-                  ? `held: ${String(result.reason ?? result.decision ?? "")}`
-                  : e.kind === "approval"
-                    ? `owner ${String(result.choice ?? "answered")}`
-                    : e.kind;
-            return <ObjectRow key={e.id} title={what} meta={`${e.initiated_by ?? ""}${e.mandate_version != null ? ` · mandate v${e.mandate_version}` : ""} · ${when(e.created_at)}`} />;
-          })}
+          {(events.data ?? []).map((e) => (
+            <ObjectRow key={e.id} title={eventLine(e, showLimits)} meta={`${e.initiated_by ?? ""}${e.mandate_version != null ? ` · mandate v${e.mandate_version}` : ""} · ${when(e.created_at)}`} />
+          ))}
           {!events.data?.length && <p className="order__meta">Nothing recorded.</p>}
         </div>
       </section>

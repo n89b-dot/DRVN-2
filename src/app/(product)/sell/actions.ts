@@ -12,7 +12,7 @@ import { checklistFor, sanitizeChecklist } from "@/lib/marketplace/grading";
 import { integratedShippingEnabled } from "@/lib/shipping/provider";
 import { getCategory, isValidListingCategory } from "@/lib/marketplace/taxonomy";
 import { sellerCanPublish } from "@/lib/payments/connect";
-import { deleteMediaIfUnreferenced, finalizeMediaUrls } from "@/lib/media-lifecycle";
+import { deleteMediaIfUnreferenced, finalizeMediaUrls, scheduleMediaCleanup } from "@/lib/media-lifecycle";
 import { keepValidGalleryImages } from "@/lib/media-url";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
@@ -81,7 +81,7 @@ async function applyListingAgent(listingId: string, agent: ListingAgentInput | n
   if (!agent) return null;
   const result = await saveListingAgent({ listingId, on: agent.on, minimumCents: floor, targetCents: agent.targetCents, style: agent.style, acknowledgeBinding: agent.acknowledgeBinding });
   if (result.error) reportError("[sell] listing agent not saved", { listingId, error: result.error });
-  return result.error ?? null;
+  return result.error ? { error: result.error, stillPaused: Boolean(result.stillPaused) } : null;
 }
 
 /** Shared field parsing for create and update. */
@@ -546,7 +546,13 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
   revalidateListingEdit(id, parsed.fields.source_car_id);
   const agentError = await applyListingAgent(id, agent, parsed.fields.offer_floor_cents);
   return {
-    ok: agentError ? `Listing updated, but your agent's limits weren't saved: ${agentError}` : "Listing updated.",
+    // A paused agent that couldn't resume still had its limits saved; the
+    // message says that, not that nothing was saved (readiness 71).
+    ok: agentError
+      ? agentError.stillPaused
+        ? `Listing updated. ${agentError.error}`
+        : `Listing updated, but your agent's limits weren't saved: ${agentError.error}`
+      : "Listing updated.",
     version: result.updated_at,
     outcome: "saved",
   };
@@ -736,7 +742,9 @@ export async function deleteListing(
         : error.message,
     };
   }
-
+  // The delete queued the listing's photos (20261107203000); remove the ones
+  // no order snapshot keeps without waiting for the daily job.
+  scheduleMediaCleanup(user.id);
 
   revalidatePath("/sell");
   revalidatePath("/marketplace");

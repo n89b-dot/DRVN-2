@@ -9,7 +9,8 @@ import { ActivityGallery } from "@/features/activity/activity-gallery";
 import { ActivityBlocksView } from "@/features/activity/blocks-view";
 import { DeletePostButton } from "@/features/activity/delete-post-button";
 import { ActivityEngagement } from "@/features/activity/engagement";
-import { loadPostEngagement } from "@/features/activity/load-engagement";
+import { decodePageCursor } from "@/lib/page-cursor";
+import { loadPostEngagement, REPLIES_PARAM, replyPageLinks } from "@/features/activity/load-engagement";
 import { ListingCartButton } from "@/features/commerce/quick-commerce";
 import { normalizeBlocks, postLead } from "@/lib/activity-blocks";
 import { pageHeadline, postHeadline } from "@/lib/activity/headline";
@@ -53,8 +54,15 @@ export async function generateMetadata({
  * address per post — two would split the share links and the analytics, and
  * every link already in the world points at the car one.
  */
-export default async function PostPage({ params }: { params: Promise<{ postId: string }> }) {
+export default async function PostPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ postId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { postId } = await params;
+  const repliesBefore = decodePageCursor((await searchParams)[REPLIES_PARAM]);
   const supabase = await createClient();
   const user = await getViewer();
 
@@ -69,13 +77,13 @@ export default async function PostPage({ params }: { params: Promise<{ postId: s
   const car = post.cars as unknown as { slug: string } | null;
   if (car?.slug) redirect(`/cars/${car.slug}/activity/${post.id}`);
 
-  const [{ data: author }, { data: images }, { data: taggedRows }, { reactions, comments }, { data: saveRow }] = await Promise.all([
+  const [{ data: author }, { data: images }, { data: taggedRows }, engagement, { data: saveRow }] = await Promise.all([
     supabase.from("profiles").select("display_name, username, avatar_url").eq("id", post.author_id).maybeSingle(),
     supabase.from("activity_images").select("url, alt, position").eq("post_id", post.id).order("position"),
     supabase.from("activity_post_listings").select("listing_id, position").eq("post_id", post.id).order("position"),
     // A post without a car is still a post: people react to it and talk
     // under it. 200000 made that possible; this page had never asked.
-    loadPostEngagement(supabase, post.id, user?.id ?? null),
+    loadPostEngagement(supabase, post.id, user?.id ?? null, { before: repliesBefore }),
     user
       ? supabase
           .from("saves")
@@ -173,8 +181,10 @@ export default async function PostPage({ params }: { params: Promise<{ postId: s
         path={`/posts/${post.id}`}
         authorName={authorName}
         isLoggedIn={Boolean(user)}
-        reactions={reactions}
-        comments={comments}
+        reactions={engagement.reactions}
+        comments={engagement.comments}
+        replyCount={engagement.replyCount}
+        {...replyPageLinks(`/posts/${post.id}`, engagement, Boolean(repliesBefore))}
       />
 
       {user?.id === post.author_id && (

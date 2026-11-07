@@ -2,6 +2,7 @@ import "server-only";
 
 import type {
   AdminAuditLogEntry,
+  Database,
   DisputeCategory,
   Json,
   Listing,
@@ -503,7 +504,7 @@ export async function getOrderDetail(orderId: string): Promise<AdminOrderDetail 
     paymentRef
       ? a
           .from("webhook_events")
-          .select("id, type, received_at, processed_at, payload")
+          .select("id, type, received_at, processed_at, payload, failed_attempts, last_failed_at, last_failure_kind, last_failure_detail")
           .or(
             `payload->data->object->>id.eq.${paymentRef},payload->data->object->>payment_intent.eq.${paymentRef}`,
           )
@@ -1247,9 +1248,19 @@ export async function getReports(
 
 // ---------- Payments ops ----------
 
+/** A seller credit payout the worker has given up on (20261008100100):
+ *  status failed with no next attempt — exhausted, or set aside for an
+ *  operator ("no destination on record", an untrusted Stripe lookup). */
+export type StuckCarryPayout = Pick<
+  Database["public"]["Tables"]["seller_carry_payouts"]["Row"],
+  "id" | "seller_id" | "amount_cents" | "currency" | "status" | "attempts" | "last_error" | "provider_call_may_have_occurred" | "created_at" | "updated_at"
+> & { seller: PartyRef | null };
+
 export type PaymentsOps = {
   recoveries: (PaymentRecovery & { orderTitle: string })[];
   stuckIntents: (TransferIntent & { seller: PartyRef | null; orderTitle: string })[];
+  /** Seller credit payouts needing an operator's retry or cancel (readiness 21). */
+  stuckCarryPayouts: StuckCarryPayout[];
   /** In-flight, failed, and recovery-required refund operations (0026). */
   refundOps: (import("@/lib/database.types").RefundOperation & { orderTitle: string })[];
   /** Undelivered admin alerts: pending retries, exhausted, or no destination. */
@@ -1261,12 +1272,17 @@ export type PaymentsOps = {
     processedAt: string | null;
     /** Pretty-printed payload for the drill-in; null for pre-0023 events. */
     payload: string | null;
+    /** Failed deliveries of a still-unprocessed event (20261107191000). */
+    failedAttempts: number;
+    lastFailedAt: string | null;
+    /** "retry" or "error", with the handler's reason when it threw. */
+    lastFailure: string | null;
   }[];
 };
 
 export async function getPaymentsOps(opts: { query?: string } = {}): Promise<PaymentsOps> {
   const a = admin();
-  const [recoveries, intents, events, refundOps, alerts] = await Promise.all([
+  const [recoveries, intents, events, refundOps, alerts, carryPayouts] = await Promise.all([
     a
       .from("payment_recoveries")
       .select("*")
@@ -1299,6 +1315,16 @@ export async function getPaymentsOps(opts: { query?: string } = {}): Promise<Pay
       .in("status", ["pending", "failed", "disabled"])
       .order("created_at", { ascending: false })
       .limit(50),
+    // The worker leaves a payout it has given up on as failed with no next
+    // attempt (carry-payout-worker.ts); retrying rows carry a time and are
+    // not an operator's business yet.
+    a
+      .from("seller_carry_payouts")
+      .select("id, seller_id, amount_cents, currency, status, attempts, last_error, provider_call_may_have_occurred, created_at, updated_at")
+      .eq("status", "failed")
+      .is("next_attempt_at", null)
+      .order("created_at", { ascending: true })
+      .limit(100),
   ]);
 
   // Each panel is a queue an operator acts on; an unread one must not look
@@ -1308,16 +1334,18 @@ export async function getPaymentsOps(opts: { query?: string } = {}): Promise<Pay
   unlessFailed("webhook events", events.error);
   unlessFailed("refund operations", refundOps.error);
   unlessFailed("the admin alert backlog", alerts.error);
+  unlessFailed("stuck seller credit payouts", carryPayouts.error);
 
   const recoveryRows = recoveries.data ?? [];
   const intentRows = intents.data ?? [];
   const refundOpRows = refundOps.data ?? [];
+  const carryRows = carryPayouts.data ?? [];
   const titles = await titlesFor(a, [
     ...recoveryRows.map((r) => r.order_id).filter((id): id is string => Boolean(id)),
     ...intentRows.map((i) => i.order_id),
     ...refundOpRows.map((r) => r.order_id),
   ]);
-  const parties = await partiesFor(a, intentRows.map((i) => i.seller_id));
+  const parties = await partiesFor(a, [...intentRows.map((i) => i.seller_id), ...carryRows.map((p) => p.seller_id)]);
 
   const q = opts.query?.trim().toLowerCase();
   const filteredRecoveries = recoveryRows
@@ -1346,9 +1374,21 @@ export async function getPaymentsOps(opts: { query?: string } = {}): Promise<Pay
         (i.seller?.username ?? "").toLowerCase().includes(q)
     );
 
+  const stuckCarryPayouts: StuckCarryPayout[] = carryRows
+    .map((p) => ({ ...p, seller: p.seller_id ? (parties.get(p.seller_id) ?? null) : null }))
+    .filter(
+      (p) =>
+        !q ||
+        p.id.toLowerCase().startsWith(q) ||
+        (p.seller?.username ?? "").toLowerCase().includes(q) ||
+        (p.seller?.displayName ?? "").toLowerCase().includes(q) ||
+        (p.last_error ?? "").toLowerCase().includes(q)
+    );
+
   return {
     recoveries: filteredRecoveries,
     stuckIntents: filteredIntents,
+    stuckCarryPayouts,
     refundOps: refundOpRows
       .map((r) => ({ ...r, orderTitle: titles.get(r.order_id) ?? "Order" }))
       .filter(
@@ -1359,14 +1399,38 @@ export async function getPaymentsOps(opts: { query?: string } = {}): Promise<Pay
           r.status.includes(q)
       ),
     alertBacklog: alerts.data ?? [],
-    recentEvents: (events.data ?? []).map((e) => ({
+    recentEvents: (await withUnprocessedEvents(a, (events.data ?? []) as WebhookEvent[])).map((e) => ({
       id: e.id,
       type: e.type,
       receivedAt: e.received_at,
       processedAt: e.processed_at,
       payload: e.payload ? JSON.stringify(e.payload, null, 2) : null,
+      failedAttempts: e.failed_attempts,
+      lastFailedAt: e.last_failed_at,
+      lastFailure: e.last_failure_kind
+        ? `${e.last_failure_kind}${e.last_failure_detail ? ` — ${e.last_failure_detail}` : ""}`
+        : null,
     })),
   };
+}
+
+/**
+ * Events not yet applied, oldest first, then the recent ones (N109). An event
+ * Stripe keeps redelivering used to scroll out of the last 25 while it was
+ * still owed; it now stays at the top, with its attempts and last failure, and
+ * the same Replay (idempotent handlers, applied only on a confirmed outcome).
+ */
+async function withUnprocessedEvents(a: ReturnType<typeof admin>, recent: WebhookEvent[]): Promise<WebhookEvent[]> {
+  const { data, error } = await a
+    .from("webhook_events")
+    .select("*")
+    .is("processed_at", null)
+    .order("received_at", { ascending: true })
+    .limit(25);
+  unlessFailed("unprocessed webhook events", error);
+  const owed = (data ?? []) as WebhookEvent[];
+  const seen = new Set(owed.map((e) => e.id));
+  return [...owed, ...recent.filter((e) => !seen.has(e.id))];
 }
 
 // ---------- Audit log ----------

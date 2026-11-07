@@ -7,7 +7,6 @@ import { refundOrder } from "@/lib/payments/refunds";
 import { reportError } from "@/lib/monitoring";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { isOwnedDisputeEvidenceRef } from "@/lib/media-url";
-import { deriveEvidenceStoragePath } from "@/lib/evidence-urls";
 import { sendAdminAlert } from "@/lib/admin/alerts";
 import { SELLER_RESPONSE_DAYS } from "./disputes";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -410,7 +409,9 @@ export async function addDisputeEvidence(
   const url = String(formData.get("url") ?? "");
   const note = String(formData.get("note") ?? "").trim().slice(0, 500);
   if (!orderId) return { error: "Missing order." };
-  if (!isOwnedDisputeEvidenceRef(url, user.id)) {
+  // The bare `<uploader>/<order>/<file>` path Storage accepted for this
+  // dispute (20261107203000) — the uploader's own, for this order.
+  if (!isOwnedDisputeEvidenceRef(url, user.id, orderId)) {
     return { error: "That photo didn't upload correctly — try again." };
   }
 
@@ -440,10 +441,20 @@ export async function addDisputeEvidence(
     order_id: orderId,
     uploader_id: user.id,
     url,
-    storage_path: deriveEvidenceStoragePath(url),
+    storage_path: url,
     note: note || null,
   });
   if (error) return { error: error.message };
+  // Attached evidence is in use (the media reference check reads
+  // storage_path); stamp its staging row so the 48h sweep needn't re-check.
+  const { error: stagedError } = await admin
+    .from("staged_uploads")
+    .update({ consumed_at: new Date().toISOString() })
+    .eq("bucket", "dispute-evidence")
+    .eq("path", url)
+    .eq("owner_id", user.id)
+    .is("consumed_at", null);
+  if (stagedError) reportError("[disputes] evidence finalize failed", stagedError);
 
   revalidatePath(`/orders/${orderId}`);
   return { ok: "Photo attached to the dispute." };

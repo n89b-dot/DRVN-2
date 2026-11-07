@@ -24,6 +24,9 @@ export const DEFAULT_AGENT_MODEL = "claude-opus-5-5";
 export const MODEL_PRICES: Record<string, { input: number; output: number }> = {
   "claude-opus-5-5": { input: 4, output: 20 },
   "claude-sonnet-5-5": { input: 2, output: 10 },
+  // The listing importer's default (DEFAULT_IMPORT_MODEL); without a price its
+  // calls would settle with no cost and never count toward the caps.
+  "claude-sonnet-5": { input: 2, output: 10 },
   "claude-haiku-5-5": { input: 0.1, output: 0.5 },
 };
 
@@ -44,9 +47,13 @@ export function resolveAiConfig(env: EnvLike = process.env): AiConfig {
   else if (hasKey) mode = "anthropic";
   else mode = production ? "disabled" : "stub";
   const iterations = Number(env.AGENT_MAX_ITERATIONS);
+  const model = env.AGENT_MODEL || DEFAULT_AGENT_MODEL;
+  // A model with no price can't be capped (agent_spend_reserve sums cost_usd),
+  // so a real call to one is refused rather than made for free.
+  if (mode === "anthropic" && !MODEL_PRICES[model]) mode = "disabled";
   return {
     mode,
-    model: env.AGENT_MODEL || DEFAULT_AGENT_MODEL,
+    model,
     maxIterations: Number.isInteger(iterations) && iterations >= 1 && iterations <= 20 ? iterations : 8,
   };
 }

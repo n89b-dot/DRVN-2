@@ -4,14 +4,14 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui";
 import { FeedList } from "@/components/ui/feed-list";
-import type { FeedItem } from "@/lib/feed";
+import type { FeedCursor, FeedItem } from "@/lib/feed";
 
 import { loadHomeFeedPage } from "./actions";
 import type { HomeTab } from "./tabs";
 
 /**
- * The rest of Home's feed: what the server rendered after the first three
- * posts, then each further page as the reader nears the end (H-4) — the same
+ * The rest of Home's feed: what the server rendered after the eighth post
+ * (H-5's second fold, ./fold.ts), then each further page as the reader nears the end (H-4) — the same
  * mechanism as the Explore wall, one page at a time and one in flight.
  *
  * The "More" button is the same path for keyboard users, and for a browser
@@ -22,16 +22,21 @@ export function HomeFeedMore({
   initialItems,
   seen: alreadyShown,
   initialHasMore,
+  initialCursor = null,
 }: {
   tab: HomeTab;
   initialItems: FeedItem[];
   /** Keys of the posts rendered above this block, so none is repeated. */
   seen: string[];
   initialHasMore: boolean;
+  /** Where page two starts (page one's `nextCursor`): each page reads on
+   *  from the last instead of skipping everything before it. */
+  initialCursor?: FeedCursor | null;
 }) {
   const [items, setItems] = useState(initialItems);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(initialHasMore);
+  const [cursor, setCursor] = useState(initialCursor);
   const [pending, startTransition] = useTransition();
   const sentinel = useRef<HTMLDivElement>(null);
   const inFlight = useRef(false);
@@ -42,18 +47,19 @@ export function HomeFeedMore({
     const next = page + 1;
     startTransition(async () => {
       try {
-        const res = await loadHomeFeedPage(tab, next);
+        const res = await loadHomeFeedPage(tab, next, cursor);
         setItems((prev) => {
           const keys = new Set([...alreadyShown, ...prev.map((i) => `${i.kind}-${i.id}`)]);
           return [...prev, ...res.items.filter((i) => !keys.has(`${i.kind}-${i.id}`))];
         });
         setPage(next);
         setHasMore(res.hasMore);
+        setCursor(res.nextCursor);
       } finally {
         inFlight.current = false;
       }
     });
-  }, [alreadyShown, hasMore, page, tab]);
+  }, [alreadyShown, cursor, hasMore, page, tab]);
 
   useEffect(() => {
     const el = sentinel.current;

@@ -101,6 +101,8 @@ export class PaymentsConfigError extends Error {
   }
 }
 
+import { MODEL_PRICES } from "./ai/config";
+
 type EnvLike = Record<string, string | undefined>;
 
 /**
@@ -214,6 +216,27 @@ export function validatePaymentsEnv(env: EnvLike = process.env): {
       warnings.push(
         "No trusted client address source (not on Vercel and TRUST_PROXY_HEADERS is not true): every signed-out visitor shares one rate-limit bucket."
       );
+    }
+  }
+  // The agent in production (readiness report two, 67 and 76): a model with
+  // no price can't be capped, and a malformed worker URL would otherwise be
+  // found at the first scheduled sweep rather than at boot.
+  if (production && env.AGENTS_BETA === "on") {
+    const invalid: string[] = [];
+    if (env.AGENT_MODEL && !MODEL_PRICES[env.AGENT_MODEL]) {
+      invalid.push(`AGENT_MODEL (one of ${Object.keys(MODEL_PRICES).join(", ")})`);
+    }
+    if (env.AGENT_WORKER_DATABASE_URL) {
+      try {
+        const url = new URL(env.AGENT_WORKER_DATABASE_URL);
+        if (!["postgres:", "postgresql:"].includes(url.protocol) || !url.username || !url.password) throw new Error("shape");
+      } catch {
+        invalid.push("AGENT_WORKER_DATABASE_URL (postgresql://agent_worker.<ref>:<password>@<pooler-host>:6543/postgres)");
+      }
+    }
+    if (invalid.length) throw new PaymentsConfigError(`Agent configuration is invalid: ${invalid.join(", ")}.`);
+    if (!env.ANTHROPIC_API_KEY) {
+      warnings.push("AGENTS_BETA is on without ANTHROPIC_API_KEY: chat and sentence-to-filters say they are switched off; negotiation runs without the model.");
     }
   }
   return { mode, warnings };

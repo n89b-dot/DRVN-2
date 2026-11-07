@@ -129,7 +129,7 @@ image upload loop: validation, storage placement, GC staging).
 
 Source of truth: `src/components/registry.ts` (validated by `src/components/registry.test.ts`).
 
-### Primitives (90)
+### Primitives (91)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -151,6 +151,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `ConsentVideo` | Primitive | `@/components/ui` | YouTube video behind a play plate: nothing loads from YouTube until the visitor presses play. | Every embedded YouTube video (post bodies, the composer preview). Never render a YouTube iframe directly. |
 | `Countdown` | Primitive | `@/components/livesheet` | H:MM:SS countdown from an absolute expiry; server-authoritative. | Offer/order expiry windows. |
 | `CountedField` | Primitive | `@/components/ui` | Controlled input/textarea with a live character counter. — `.field__count` | Length-limited titles and bios. |
+| `CursorPagination` | Primitive | `@/components/ui` | Ghost "← Newest" / "Older →" links for a list read from a position; renders nothing when the list fits one page. | Lists that can grow without bound and page from where the last page ended (src/lib/page-cursor.ts): a build's updates, a post's replies, each Saved section. *Not for:* A list with page numbers and a total — that is Pagination. |
 | `DataRow` | Primitive | `@/components/ui` | Ruled baseline row (`.bline`) — read-only value row or labelled control row, with an optional trailing action (`end`). — `.bline` | Settings-style label/value and label/control lines, and build-sheet lines whose trailing slot carries a state chip or a 'Sell it' action. *Not for:* Full form fields with hints/errors — that's the `.field` family. |
 | `Dialog` | Primitive | `@/components/ui` | The sheet dialog — focus management, escape/backdrop dismissal, and a quiet Close in the panel's top-right corner (`.dialogbox__close`), never on the scrim below it. | Modal editing/confirmation surfaces. |
 | `DropZone` | Primitive | `@/components/ui` | Click/drag file target with busy state and keyboard support. — `.drop` | Every upload entry point (pair with lib/media-upload's uploadImages). |
@@ -179,7 +180,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `MessageBubble` | Primitive | `@/components/ui` | One message block inside a MessageRun — text, up to four photos, or both. — `.bubble / .bubble--photos` | Every message in a MessageRun. Photos are resolved URLs (signed, for private buckets); each opens full size. |
 | `MessageComposer` | Primitive | `@/components/ui` | The one-line send row — hidden fields, `.ctl` input, submit; block variant for the Q&A ask box. — `.composer__row / .composer` | Q&A ask/reply rows and comment boxes. The owning feature supplies action + pending. *Not for:* Replying in a conversation — use ChatComposer (multi-line, photos, pinned). |
 | `MessageRun` | Primitive | `@/components/ui` | Consecutive messages from one side of a conversation under a single meta line (who · time · about tag); `me` aligns right. — `.msgrun` | Person-to-person conversations (/messages, the offer page preview). The feature groups messages into runs. *Not for:* Public Q&A or comments — use Message. |
-| `MessageThread` | Primitive | `@/components/ui` | Discussion container (`.thread`) — annotation-style rows. — `.thread` | Public discussion: listing Q&A, comments, a short message preview on an order/offer page. *Not for:* A person-to-person conversation — that is MessageRun/MessageBubble/ThreadEvent inside `.convthread` (/messages). |
+| `MessageThread` | Primitive | `@/components/ui` | Discussion container (`.thread`) — annotation-style rows. `live` (with a `label`) makes it a polite, named `role=log`, so rows that arrive are announced; keep a live thread mounted while empty so the first one is too. — `.thread` | Public discussion: listing Q&A, comments, a short message preview on an order/offer page; `live` for a thread that grows while you watch (the agent chat). *Not for:* A person-to-person conversation — that is MessageRun/MessageBubble/ThreadEvent inside `.convthread` (/messages). |
 | `MetadataTags` | Primitive | `@/components/ui` | Wrapping row of plain chips. — `.chip` | Tag lists. |
 | `MetricCard` | Primitive | `@/components/ui` | KPI tile — microlabel, giant numeral, measured LiveDim line, floor-pinned footer link. With nothing to count pass the real zero ("0", "$0") and `blank`: a dim figure reads as a settled answer, where a dash read as loading. — `.tile + .num-giant` | KPI decks (`.deck--kpi`); calculations stay with the feature. |
 | `MobileActionBar` | Primitive | `@/components/ui` | Pinned bottom action bar (buybar) for compact widths. — `.buybar` | Primary commerce actions on PDP-like pages. One bottom surface per route. |

@@ -141,8 +141,10 @@ export async function hydrateListingCards(
             .select("id, display_name, username, avatar_url")
             .in("id", sellerIds)
         : Promise.resolve({ data: [] }),
+      // Every review, counted and averaged by the database: fetching the
+      // rows stopped at 1,000 across the page's sellers (N30).
       sellerIds.length
-        ? supabase.from("reviews").select("reviewee_id, rating").in("reviewee_id", sellerIds)
+        ? supabase.rpc("seller_review_summaries", { p_sellers: sellerIds })
         : Promise.resolve({ data: [] }),
       // The source car is always loaded: every card names the car the part
       // came off, which is the marketplace's whole premise — and links to
@@ -162,13 +164,12 @@ export async function hydrateListingCards(
     if (!coverByListing.has(image.listing_id)) coverByListing.set(image.listing_id, image.url);
   }
 
-  const ratingBySeller = new Map<string, { sum: number; n: number }>();
-  for (const r of sellerReviews ?? []) {
-    const agg = ratingBySeller.get(r.reviewee_id) ?? { sum: 0, n: 0 };
-    agg.sum += r.rating;
-    agg.n += 1;
-    ratingBySeller.set(r.reviewee_id, agg);
-  }
+  const ratingBySeller = new Map(
+    ((sellerReviews ?? []) as { seller_id: string; review_count: number; rating_avg: number }[]).map((row) => [
+      row.seller_id,
+      { avg: Number(row.rating_avg), n: Number(row.review_count) },
+    ])
+  );
   const activeBySeller = new Map(
     ((activeCounts ?? []) as { seller_id: string; total: number }[]).map((row) => [
       row.seller_id,
@@ -186,7 +187,7 @@ export async function hydrateListingCards(
           username: p.username,
           avatar_url: p.avatar_url,
           active_count: activeBySeller.get(p.id) ?? 0,
-          rating: agg ? (agg.sum / agg.n).toFixed(1) : null,
+          rating: agg ? agg.avg.toFixed(1) : null,
           review_count: agg?.n ?? 0,
         },
       ] as const;
@@ -252,7 +253,7 @@ export function listingRowsQuery(supabase: SupabaseClient<Database>, raw: Listin
     ...(workerViewer ? { p_viewer: workerViewer } : {}),
     // An exact count makes the database produce every matching part before
     // it returns the first page; callers that already know the total skip it.
-  }, options.count === false ? {} : { count: "exact" }).select("id, title, description, created_at, price_cents, shipping_cents, shipping_mode, allows_collection, condition, location, source_car_id, part_number, brand, part_miles, part_miles_unit, seller_id");
+  }, options.count === false ? {} : { count: "exact" }).select("id, title, description, created_at, published_at, price_cents, shipping_cents, shipping_mode, allows_collection, condition, location, source_car_id, part_number, brand, part_miles, part_miles_unit, seller_id");
   if (filters.category) query = query.eq("category", filters.category);
   if (filters.subcategory) query = query.eq("subcategory", filters.subcategory);
   if (filters.condition) query = query.eq("condition", filters.condition as "new" | "like_new" | "used" | "for_parts");
@@ -275,7 +276,7 @@ export const COUNT_CAP = 10_000;
  *  exactly. */
 export const SEARCH_CAP = 1_000;
 
-const CARD_COLUMNS = "id, title, description, created_at, price_cents, shipping_cents, shipping_mode, allows_collection, condition, location, source_car_id, part_number, brand, part_miles, part_miles_unit, seller_id";
+const CARD_COLUMNS = "id, title, description, created_at, published_at, price_cents, shipping_cents, shipping_mode, allows_collection, condition, location, source_car_id, part_number, brand, part_miles, part_miles_unit, seller_id";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -283,10 +284,12 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * its id — as one URL-safe token. Next links carry the last part shown,
  * Previous links the first. The date is kept as the database's own string:
  * a JS Date holds milliseconds, the database microseconds, and a rounded
- * position would skip or repeat parts.
+ * position would skip or repeat parts. Newest is by when a part first went
+ * on sale (published_at, migration 20261107153200), so that is the date a
+ * Newest position holds; a part for sale always has one.
  */
-export function encodePosition(sort: ListingSort, row: { id: string; created_at: string; price_cents: number }): string {
-  const key = sort === "newest" ? row.created_at : String(row.price_cents);
+export function encodePosition(sort: ListingSort, row: { id: string; created_at: string; published_at?: string | null; price_cents: number }): string {
+  const key = sort === "newest" ? (row.published_at ?? row.created_at) : String(row.price_cents);
   return btoa(`${sort}|${key}|${row.id}`).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
@@ -375,7 +378,7 @@ export async function fetchListings(
       : { p_offset: (page - 1) * PAGE_SIZE }),
   }).select(CARD_COLUMNS);
   // The function returns its page in order; asking again costs a sort of 25.
-  if (sort === "newest") pageQuery = pageQuery.order("created_at", { ascending: false }).order("id", { ascending: false });
+  if (sort === "newest") pageQuery = pageQuery.order("published_at", { ascending: false }).order("id", { ascending: false });
   else pageQuery = pageQuery.order("price_cents", { ascending: sort === "price_asc" }).order("id", { ascending: sort === "price_asc" });
 
   // A typed search the engine can answer: its page of ids and exact count,
@@ -504,7 +507,7 @@ async function fetchListingsByOffset(
     let query = listingRowsQuery(supabase, filters, undefined, { searchEntry, count: counted });
     if (sort === "price_asc") query = query.order("price_cents", { ascending: true });
     else if (sort === "price_desc") query = query.order("price_cents", { ascending: false });
-    else query = query.order("created_at", { ascending: false });
+    else query = query.order("published_at", { ascending: false });
     return query.order("id").range(from, from + PAGE_SIZE - 1);
   };
 
@@ -566,7 +569,7 @@ async function decorateListings(
   const cardsPromise = hydrateListingCards(supabase, listings);
   // The viewer's saves and likes over this page plus public like/question
   // counts, so each card's engagement strip renders pre-fired. All bounded
-  // by the page's ids.
+  // by the page's ids (a page is at most PAGE_SIZE parts).
   const viewerSavesPromise = Promise.resolve(viewerId
     ? supabase
         .from("saves")
@@ -575,11 +578,11 @@ async function decorateListings(
         .eq("target_type", "listing")
         .in("target_id", ids)
     : { data: [] as { target_id: string }[] });
-  const likesPromise = Promise.resolve(supabase
-    .from("likes")
-    .select("target_id")
-    .eq("target_type", "listing")
-    .in("target_id", ids));
+  // Like and question totals counted by the database: fetching the rows
+  // stopped at 1,000 across the page (N30).
+  const countsPromise = Promise.resolve(ids.length
+    ? supabase.rpc("listing_engagement_counts", { p_listings: ids })
+    : { data: [] as { listing_id: string; likes: number; questions: number }[], error: null });
   const viewerLikesPromise = Promise.resolve(viewerId
     ? supabase
         .from("likes")
@@ -588,10 +591,6 @@ async function decorateListings(
         .eq("target_type", "listing")
         .in("target_id", ids)
     : { data: [] as { target_id: string }[] });
-  const questionsPromise = Promise.resolve(supabase
-    .from("listing_questions")
-    .select("listing_id")
-    .in("listing_id", ids));
 
   // Fitment hint for the rows on this page — declared rows (0025) first,
   // source-car match as the fallback, mirroring the listing page's order.
@@ -635,18 +634,12 @@ async function decorateListings(
     }
   }
 
-  const [cards, { data: viewerSaves }, { data: likeRows }, { data: viewerLikes }, { data: questionRows }] =
-    await Promise.all([cardsPromise, viewerSavesPromise, likesPromise, viewerLikesPromise, questionsPromise]);
+  const [cards, { data: viewerSaves }, counts, { data: viewerLikes }] =
+    await Promise.all([cardsPromise, viewerSavesPromise, countsPromise, viewerLikesPromise]);
+  if (counts.error) reportError("[marketplace] engagement counts failed", counts.error);
   const savedIds = new Set((viewerSaves ?? []).map((s) => s.target_id));
   const likedIds = new Set((viewerLikes ?? []).map((l) => l.target_id));
-  const likeCounts = new Map<string, number>();
-  for (const row of likeRows ?? []) {
-    likeCounts.set(row.target_id, (likeCounts.get(row.target_id) ?? 0) + 1);
-  }
-  const questionCounts = new Map<string, number>();
-  for (const row of questionRows ?? []) {
-    questionCounts.set(row.listing_id, (questionCounts.get(row.listing_id) ?? 0) + 1);
-  }
+  const countsBy = new Map((counts.data ?? []).map((row) => [row.listing_id, row]));
 
   return cards.map((card) => ({
     ...card,
@@ -654,7 +647,7 @@ async function decorateListings(
     match_evidence: evidenceByListing.get(card.id) ?? null,
     viewer_saved: savedIds.has(card.id),
     viewer_liked: likedIds.has(card.id),
-    like_count: likeCounts.get(card.id) ?? 0,
-    question_count: questionCounts.get(card.id) ?? 0,
+    like_count: countsBy.get(card.id)?.likes ?? 0,
+    question_count: countsBy.get(card.id)?.questions ?? 0,
   }));
 }

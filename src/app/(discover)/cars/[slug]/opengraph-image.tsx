@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 
+import { ogImageSource } from "@/lib/media-url";
 import { createPublicClient } from "@/lib/supabase/public";
 
 export const alt = "Build on DRVN";
@@ -40,7 +41,10 @@ export default async function BuildCard({ params }: { params: Promise<{ slug: st
   const identity = car
     ? [car.year, car.make, car.model].filter(Boolean).join(" ")
     : "";
-  const showPhoto = Boolean(car?.is_public && car?.cover_image_url);
+  // The card renderer fetches the photo from our server, so only our own
+  // public storage is ever a destination (N55): a cover URL written straight
+  // into the database can't aim that fetch anywhere else.
+  const coverSrc = car?.is_public ? ogImageSource(car.cover_image_url) : null;
 
   return new ImageResponse(
     (
@@ -54,10 +58,9 @@ export default async function BuildCard({ params }: { params: Promise<{ slug: st
           fontFamily: "sans-serif",
         }}
       >
-        {showPhoto && (
-          // eslint-disable-next-line @next/next/no-img-element
+        {coverSrc && (
           <img
-            src={car!.cover_image_url!}
+            src={coverSrc}
             alt=""
             style={{ width: 660, height: 630, objectFit: "cover" }}
           />

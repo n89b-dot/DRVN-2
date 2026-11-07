@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
 
-import { AuthIntentDialog, Button, Message } from "@/components/ui";
+import { AuthIntentDialog, Button, CursorPagination, Message } from "@/components/ui";
 import { ReportButton } from "@/features/moderation/report-button";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
@@ -24,7 +24,7 @@ export type CommentView = {
 };
 
 /** "Delete" under a reply — two taps, because it can't be undone. */
-function DeleteReply({ commentId, path }: { commentId: string; path: string }) {
+function DeleteReply({ commentId }: { commentId: string }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +33,7 @@ function DeleteReply({ commentId, path }: { commentId: string; path: string }) {
   function remove() {
     setError(null);
     startTransition(async () => {
-      const result = await deleteComment(commentId, path);
+      const result = await deleteComment(commentId);
       if ("error" in result) {
         setError(result.error === "login" ? "Sign in again to delete this." : result.error);
         return;
@@ -79,13 +79,23 @@ export function ActivityEngagement({
   isLoggedIn,
   reactions,
   comments,
+  replyCount = comments.length,
+  earlierRepliesHref = null,
+  latestRepliesHref = null,
 }: {
   postId: string;
   path: string;
   authorName: string;
   isLoggedIn: boolean;
   reactions: ReactionState;
+  /** One page of replies, oldest first. */
   comments: CommentView[];
+  /** Every reply on the post, not just this page. */
+  replyCount?: number;
+  /** The page of replies before these; null when these reach the first. */
+  earlierRepliesHref?: string | null;
+  /** Back to the newest replies, when this is an earlier page. */
+  latestRepliesHref?: string | null;
 }) {
   const router = useRouter();
   // Optimistic with rollback: the count moves instantly, and if the server
@@ -127,7 +137,7 @@ export function ActivityEngagement({
     setReactError(null);
     startTransition(async () => {
       applyToggle(emoji);
-      const result = await toggleReaction(postId, emoji, path);
+      const result = await toggleReaction(postId, emoji);
       if ("error" in result && result.error) {
         if (result.error === "login") goLogin();
         else setReactError("That reaction didn't save — try again.");
@@ -136,7 +146,22 @@ export function ActivityEngagement({
   }
 
   return (
-    <div className="mt-10 border-t border-[color:var(--rule-mid)] pt-6">
+    <div id="replies" className="mt-10 border-t border-[color:var(--rule-mid)] pt-6">
+      {/* A busy post's replies come a page at a time (N56): the count is
+          every reply, and earlier ones are a link away. */}
+      {replyCount > comments.length && (
+        <p className="microlabel mb-3">
+          {replyCount} replies · showing {comments.length}
+        </p>
+      )}
+      <CursorPagination
+        className="!mt-0 mb-4"
+        label="Replies"
+        newestHref={latestRepliesHref}
+        olderHref={earlierRepliesHref}
+        newestLabel="← Latest replies"
+        olderLabel="Earlier replies →"
+      />
       {comments.length > 0 && (
         <div className="mb-6 grid gap-4">
           {comments.map((comment) => (
@@ -153,7 +178,7 @@ export function ActivityEngagement({
               meta={
                 comment.canDelete || !comment.mine ? (
                   <span className="inline-flex flex-wrap items-center gap-3">
-                    {comment.canDelete && <DeleteReply commentId={comment.id} path={path} />}
+                    {comment.canDelete && <DeleteReply commentId={comment.id} />}
                     {!comment.mine && (
                       <ReportButton
                         subjectType="comment"
@@ -209,7 +234,6 @@ export function ActivityEngagement({
               if (!body || pending) return;
               const fd = new FormData();
               fd.set("post_id", postId);
-              fd.set("path", path);
               fd.set("body", body);
               setReplyError(null);
               startReply(async () => {

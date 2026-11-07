@@ -27,7 +27,7 @@ async function createUser(label: string): Promise<TestUser & { id: string }> {
   return { ...user, id: created.data.user.id };
 }
 
-test("email entry survives a lost committed response and a retry adopts the pending change", async ({ page }) => {
+test("email change refuses without the password, then survives a lost committed response and a retry adopts the pending change", async ({ page }) => {
   const admin = fixtureAdmin();
   const user = await createUser("account-email");
   const nextEmail = `e2e-changed-${randomUUID().replaceAll("-", "")}@drvn.test`;
@@ -36,6 +36,17 @@ test("email entry survives a lost committed response and a retry adopts the pend
     await page.goto("/settings");
     const email = page.getByLabel("Sign-in email");
     await email.fill(nextEmail);
+    // N41: moving the sign-in email asks for the password, typed now. A
+    // wrong one moves nothing.
+    const password = page.getByLabel("Your password");
+    await password.fill("not-the-password");
+    await page.getByRole("button", { name: /Update email/ }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "That password isn't right." })).toBeVisible();
+    const untouched = await admin.auth.admin.getUserById(user.id);
+    if (untouched.error) throw untouched.error;
+    expect(untouched.data.user.new_email || null).toBeNull();
+    expect(untouched.data.user.email).toBe(user.email);
+    await password.fill(user.password);
 
     let interrupted = false;
     await page.route("**/settings*", async (route) => {

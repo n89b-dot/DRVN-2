@@ -9,5 +9,9 @@ if (!result.startsWith("export type Json =") || !result.includes("worker_health_
 const output = "// Generated from the isolated database after applying all migrations.\n" + result;
 const destination = "src/lib/database.generated.ts";
 if (process.argv.includes("--check")) {
-  if (readFileSync(destination, "utf8") !== output) throw new Error("Generated schema differs: run npm run db:types");
+  if (readFileSync(destination, "utf8") !== output) {
+    // CI keeps what the generator produced, so a branch can adopt it exactly.
+    if (process.env.DRVN_TYPES_MISMATCH_OUT) writeFileSync(process.env.DRVN_TYPES_MISMATCH_OUT, output);
+    throw new Error("Generated schema differs: run npm run db:types (in CI, take the database-generated artifact)");
+  }
 } else writeFileSync(destination, output);

@@ -40,8 +40,8 @@ declare
     'location',null,'compatibility_notes',null,'part_number','ABC-123','status','draft'
   );
   images_payload jsonb := jsonb_build_array(
-    jsonb_build_object('url','https://example.test/one.webp','alt','One'),
-    jsonb_build_object('url','https://example.test/two.webp','alt','Two')
+    jsonb_build_object('url','https://proj.supabase.co/storage/v1/object/public/listing-images/' || seller || '/one.webp','alt','One'),
+    jsonb_build_object('url','https://proj.supabase.co/storage/v1/object/public/listing-images/' || seller || '/two.webp','alt','Two')
   );
   fitments_payload jsonb := jsonb_build_array(
     jsonb_build_object('make','Audi','model','S4','year_start',2018,'year_end',2020)
@@ -49,6 +49,9 @@ declare
   numbers_payload jsonb := jsonb_build_array('ABC123','06M 145 722 H');
   rejected boolean := false;
 begin
+  -- Member photo writes need the storage origin recorded (20261107203000).
+  insert into public.job_config(key, value) values ('media_storage_origin', 'https://proj.supabase.co')
+    on conflict (key) do update set value = excluded.value;
   update public.beta_access_config set enforced=false where singleton=true;
   insert into auth.users(id,email,raw_user_meta_data)
   values

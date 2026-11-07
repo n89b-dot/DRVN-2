@@ -13,6 +13,7 @@ import {
   Select,
   TextArea,
   TextField,
+  TileHead,
 } from "@/components/ui";
 import { NOTIFICATION_PREFS, NOTIFICATION_PREF_GROUPS, prefEnabled } from "@/lib/notification-prefs";
 import type { SavedCard } from "@/lib/payments/customers";
@@ -23,6 +24,7 @@ import { DeleteAccount } from "./delete-account";
 import { ExportAccount } from "./export-account";
 import { PaymentMethods } from "./payment-methods";
 import { PasswordSection } from "./password-section";
+import type { IdentityProof } from "./reconfirm-identity";
 import { COUNTRIES, countryByCode } from "@/lib/geo/regions";
 
 type ProfileLink = { label: string; url: string };
@@ -110,6 +112,7 @@ const SETTINGS_SECTIONS = [
   { id: "profile", label: "Profile" },
   { id: "notifications", label: "Notifications" },
   { id: "privacy", label: "Privacy" },
+  { id: "agent", label: "Agent" },
   { id: "payments", label: "Payments" },
   { id: "shipping", label: "Shipping" },
   { id: "shop", label: "Shop" },
@@ -166,16 +169,22 @@ export function SettingsPanel({
   connect,
   paymentsLive,
   privacySection,
+  agentSection,
   shippingSection,
   shopSection,
+  identityProof,
 }: {
   profile: SettingsProfile;
+  /** How this member confirms it's them for email change and deletion (N41/N45). */
+  identityProof: IdentityProof;
   logout: () => Promise<void>;
   savedCards: SavedCard[];
   connect: ConnectSummary;
   paymentsLive: boolean;
   /** Settings → Privacy, server-rendered (reads the consent cookie + row). */
   privacySection?: React.ReactNode;
+  /** Settings → Agent (AG-7), server-rendered; absent while the agent isn't open to members. */
+  agentSection?: React.ReactNode;
   /** Settings → Shipping, server-rendered (0051 fulfillment profile). */
   shippingSection?: React.ReactNode;
   /** Settings → Shop, server-rendered (0056 shop profile). */
@@ -293,7 +302,7 @@ export function SettingsPanel({
           />
           <DataRow label="Display name" value={profile.display_name || "Not set"} />
           <div className="mt-4 border-t border-[color:var(--rule-soft)] pt-4">
-            <PasswordSection currentEmail={profile.email} />
+            <PasswordSection currentEmail={profile.email} proof={identityProof} />
           </div>
         </section>
         )}
@@ -471,6 +480,14 @@ export function SettingsPanel({
 
         {active === "privacy" && privacySection}
 
+        {active === "agent" &&
+          (agentSection ?? (
+            <section id="agent" className="tile">
+              <TileHead label="Agent" />
+              <p className="field__hint max-w-[62ch]">Your agent isn&apos;t available yet. This is where you&apos;ll choose how far it may go.</p>
+            </section>
+          ))}
+
         {active === "payments" && (
         <section id="payments" className="tile tile--deep">
           <div className="tile__head">
@@ -539,7 +556,7 @@ export function SettingsPanel({
             without your name where the law requires it.
           </p>
           <div className="mt-4">
-            <DeleteAccount />
+            <DeleteAccount proof={identityProof} />
           </div>
         </section>
         )}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 
 import { Alert, Button, PasswordField, TextField } from "@/components/ui";
+import { LOGIN_NOTICES, loginNotice } from "@/lib/auth-errors";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import { login, type AuthState } from "../actions";
@@ -28,6 +29,9 @@ export function LoginForm({
   // the OAuth button used to drop it, so "create an account instead" or
   // "continue with Google" silently abandoned whatever brought you here.
   const carry = next ? `?next=${encodeURIComponent(next)}` : "";
+  // Only known notices render, each with its own copy (N44, N49): the query
+  // string never puts words on the page.
+  const notice = loginNotice(message);
 
   return (
     <div>
@@ -39,16 +43,15 @@ export function LoginForm({
         Your garage, your listings, your orders — one sign-in.
       </p>
 
-      {message === "check-email" && (
-        <Alert tone="ok" ico="✓" className="mt-5" title="Confirmation sent">
-          Check your email to confirm your account, then sign in.
-        </Alert>
-      )}
-      {message === "auth-error" && (
-        <Alert tone="live" className="mt-5" role="alert" title="Link unavailable">
-          This sign-in or reset link is invalid, expired, or already used. Request a new password link if needed.
-          If you just confirmed your email in another browser or on another device, your account is
-          ready: sign in below to carry on where you left off.
+      {notice && (
+        <Alert
+          tone={LOGIN_NOTICES[notice].tone}
+          ico={notice === "check-email" ? "✓" : undefined}
+          className="mt-5"
+          role={notice === "check-email" || notice === "oauth-cancelled" ? "status" : "alert"}
+          title={LOGIN_NOTICES[notice].title}
+        >
+          {LOGIN_NOTICES[notice].body}
         </Alert>
       )}
 

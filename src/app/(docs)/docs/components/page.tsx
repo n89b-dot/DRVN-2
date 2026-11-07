@@ -27,6 +27,7 @@ import {
   ObjectRow,
   PageHead,
   Pagination,
+  CursorPagination,
   RatingStars,
   ResultNote,
   UnconfirmedOutcome,
@@ -346,6 +347,13 @@ export default function ComponentsPage() {
           note="Ghost prev/next with the mono page marker between; placeholders keep the row balanced at either edge. Renders nothing on a single first page. One component where four pages each hand-rolled the same nav."
         >
           <Pagination page={2} hasMore hrefFor={(p) => `#page-${p}`} />
+        </Specimen>
+        <Specimen
+          name="CursorPagination"
+          klass="CursorPagination"
+          note="For a list read from a position, not a page number: back to the newest, on to the next older page. Renders nothing when the list fits on one page."
+        >
+          <CursorPagination newestHref="#newest" olderHref="#older" label="Updates" olderLabel="Older updates →" />
         </Specimen>
         <Specimen
           name="Chip"
@@ -844,7 +852,7 @@ export default function ComponentsPage() {
         <Specimen
           name="The Explore card family, one footprint"
           klass="MosaicCell kind=car / update / part"
-          note="E-1: one wall, every card the same footprint with a fixed caption block \u2014 no double-width cells, no text-only cells. E-2: the kinds differ by label and one line only (build \u2192 car and counts; update \u2192 title or first line and the car; part \u2192 price, Off {car}, cart). Shown here at the phone wall's two-column width with the longest content each kind can carry, so the caption block is tested where it is tightest rather than on a comfortable desktop row. OBSERVED on /explore at 375px (2026-09-19): the wall is already two columns on a phone, but the cells are NOT one footprint \u2014 a build cell sits noticeably shorter than the update beside it and the rows run ragged, which is exactly what E-1 rules out. The caption block has to become a fixed height per kind, not a natural one, and that is WS13's first job."
+          note="E-1: one wall, every card the same footprint with a fixed caption block \u2014 no double-width cells, no text-only cells. E-2: the kinds differ by label and one line only (build \u2192 car and counts; update \u2192 title or first line and the car; part \u2192 price, Off {car}, cart). Shown here at the phone wall's two-column width with the longest content each kind can carry, so the caption block is tested where it is tightest rather than on a comfortable desktop row. OBSERVED on /explore at 375px (2026-09-19): the wall is already two columns on a phone, but the cells are NOT one footprint \u2014 a build cell sits noticeably shorter than the update beside it and the rows run ragged, which is exactly what E-1 rules out. The caption block has to become a fixed height per kind, not a natural one, and that is WS13's first job. DONE 2026-11-07 (OS-R-e1): on `.mosaic--uniform` the caption is one fixed, clipped height (144px narrow, 184px desktop) and every strip control is the cart square's height, so every card on the wall is one height; cards without a photo stay off the wall (photoWallItems). This specimen grid is not `.mosaic--uniform`, so it still shows natural captions."
         >
           <div className="mx-auto w-[375px] border border-dashed border-[color:var(--rule-mid)] px-4 py-4">
             <div className="grid grid-cols-2 gap-3">

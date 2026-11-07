@@ -32,7 +32,7 @@ const JOB_LABEL: Record<string, string> = {
   transfers: "Pay out sellers",
   transferReconciliation: "Reconcile payouts",
   refunds: "Finish interrupted refunds",
-  labelVoids: "Void unused shipping labels",
+  labelVoids: "Void unused shipping labels, register carrier tracking",
   returns: "Advance return timers",
   disputes: "Dispute deadlines and auto-refunds",
   alerts: "Deliver admin alerts",
@@ -41,6 +41,7 @@ const JOB_LABEL: Record<string, string> = {
   search: "Search index",
   deletions: "Account deletions and exports",
   savedSearches: "Saved-search alerts",
+  savedSearchDigests: "Saved-search email digests",
   media: "Clean up unused uploads",
   deliveryAutoConfirm: "Auto-confirm untracked deliveries",
 };

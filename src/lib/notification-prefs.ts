@@ -63,6 +63,15 @@ export const NOTIFICATION_PREFS = [
     label: "Saved-search matches",
     hint: "New inventory matching a search you asked to be told about",
   },
+  {
+    // The email channel for the same matches (N78): one digest a day per
+    // search at most. Governs no in-app kind; turning off the preference
+    // above stops these emails too.
+    key: "saved_search_emails",
+    group: "Marketplace",
+    label: "Saved-search emails",
+    hint: "One email a day at most for each search, listing its new matches",
+  },
 ] as const;
 
 export const NOTIFICATION_PREF_GROUPS = ["Profile", "Marketplace"] as const;
@@ -126,6 +135,7 @@ const PREF_KIND_RULES: Record<NotificationPrefKey, { kinds?: string[]; prefixes?
   // `order…` is dispatch and delivery except the two sale kinds above.
   order_updates: { prefixes: ["order", "dispute"], except: ["order_sold", "order_paid"] },
   saved_searches: { kinds: ["saved_search"] },
+  saved_search_emails: {},
 };
 
 /**

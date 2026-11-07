@@ -180,7 +180,7 @@ describe("Facebook adapter", () => {
     expect(outcome.source.structuredFacts?.priceText).toBe("A$1,850");
     expect(outcome.source.structuredFacts?.currency).toBe("AUD");
 
-    const ai = await extractListing(outcome.source, { aiMode: "stub", model: "x", browserEnabled: false, allowPrivateHosts: true });
+    const ai = await extractListing(outcome.source, { aiMode: "stub", model: "x", browserEnabled: false, allowPrivateHosts: true }, { ownerId: "44444444-4444-4444-8444-444444444444" });
     const finalized = ai.ok ? finalizeExtraction(ai.raw, outcome.source) : null;
     expect(finalized?.ok).toBe(true);
     if (!finalized?.ok) return;

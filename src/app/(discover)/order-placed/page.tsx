@@ -157,7 +157,7 @@ export default async function OrderPlacedPage({
       </div>
 
       <Foot
-        left="DRVN — every part came off a real car"
+        left="DRVN — parts for modified cars"
         right={<Link href="/protection">How buyer protection works →</Link>}
       />
     </div>

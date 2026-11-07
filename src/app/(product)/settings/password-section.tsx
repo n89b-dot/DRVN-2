@@ -6,7 +6,8 @@ import { useState, useTransition } from "react";
 import { Button, PasswordField, TextField } from "@/components/ui";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
-import { changeEmail, changePassword, type AccountState } from "./account-actions";
+import { changeEmail, changePassword, sendPasswordSetupLink, type AccountState } from "./account-actions";
+import { ReconfirmIdentity, type IdentityProof } from "./reconfirm-identity";
 
 function Feedback({ state }: { state: AccountState }) {
   if (!state.error && !state.ok) return null;
@@ -21,14 +22,49 @@ function Feedback({ state }: { state: AccountState }) {
   );
 }
 
+/**
+ * Sends the set-password email (N45): the one way to add a password for a
+ * member who signs in with Google, and the way back for anyone who has
+ * forgotten theirs.
+ */
+function PasswordLinkButton({ label, variant }: { label: string; variant: "default" | "quiet" }) {
+  const [state, setState] = useState<AccountState>({});
+  const [pending, startTransition] = useTransition();
+  return (
+    <div className="grid gap-2">
+      <div>
+        <Button
+          variant={variant}
+          disabled={pending}
+          onClick={() =>
+            startTransition(async () => {
+              setState({});
+              try {
+                setState(await sendPasswordSetupLink());
+              } catch (error) {
+                unstable_rethrow(error);
+                setState({ error: "The response was interrupted. Check your inbox before asking again." });
+              }
+            })
+          }
+        >
+          {pending ? "Sending…" : label}
+        </Button>
+      </div>
+      <Feedback state={state} />
+    </div>
+  );
+}
+
 /** Change email and password — neither was possible before. */
-export function PasswordSection({ currentEmail }: { currentEmail: string }) {
+export function PasswordSection({ currentEmail, proof }: { currentEmail: string; proof: IdentityProof }) {
   // Controlled fields must not replace what was typed before hydration
   // (see useHydrated): they stay disabled until the page is live.
   const ready = useHydrated();
   const [email, setEmail] = useState(currentEmail);
   const [emailState, setEmailState] = useState<AccountState>({});
   const [emailPending, startEmailTransition] = useTransition();
+  const [emailPassword, setEmailPassword] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [nextPassword, setNextPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -48,7 +84,9 @@ export function PasswordSection({ currentEmail }: { currentEmail: string }) {
           startEmailTransition(async () => {
             setEmailState({});
             try {
-              setEmailState(await changeEmail({}, formData));
+              const result = await changeEmail({}, formData);
+              setEmailState(result);
+              if (result.ok) setEmailPassword("");
             } catch (error) {
               unstable_rethrow(error);
               setEmailState({
@@ -77,6 +115,22 @@ export function PasswordSection({ currentEmail }: { currentEmail: string }) {
           fieldClassName="!mb-0"
           hint="We'll email the new address to confirm before anything changes."
         />
+        {/* N41: moving the sign-in email moves the account, so it asks
+            for fresh proof it's the owner. */}
+        {email.trim().toLowerCase() !== currentEmail.toLowerCase() && (
+          <ReconfirmIdentity
+            id="account-email-password"
+            proof={proof}
+            returnTo="/settings#account"
+            disabled={emailPending}
+            value={emailPassword}
+            onChange={(value) => {
+              setEmailPassword(value);
+              setEmailState({});
+            }}
+            needsGoogle={emailState.reauth === "oauth"}
+          />
+        )}
         <div>
           {/* Each form's submit is its section's one solid button; resend is
               the quiet alternative beside it. */}
@@ -100,6 +154,18 @@ export function PasswordSection({ currentEmail }: { currentEmail: string }) {
         </fieldset>
       </form>
 
+      {!proof.usesPassword ? (
+        /* N45: a Google-only member has no current password, so the change
+           form could never succeed. Say why, and offer the set-password
+           link instead. */
+        <div className="grid gap-3">
+          <p className="field__hint max-w-[62ch]">
+            You sign in with Google, so there&apos;s no password to change. To add one, we&apos;ll
+            email {currentEmail || "you"} a link that sets it. Google sign-in keeps working.
+          </p>
+          <PasswordLinkButton label="Email me a link to set a password" variant="default" />
+        </div>
+      ) : (
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -182,6 +248,13 @@ export function PasswordSection({ currentEmail }: { currentEmail: string }) {
         <Feedback state={passwordState} />
         </fieldset>
       </form>
+      )}
+      {proof.usesPassword && (
+        <div className="grid gap-2">
+          <p className="field__hint">Forgotten your password? We can email you a link to set a new one.</p>
+          <PasswordLinkButton label="Email me a reset link" variant="quiet" />
+        </div>
+      )}
     </div>
   );
 }

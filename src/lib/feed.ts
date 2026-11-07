@@ -1,10 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { leadingBeforeAfter, normalizeBlocks } from "@/lib/activity-blocks";
-import { followedFeedPage } from "@/lib/feed-merge";
+import { spaceSellerRuns } from "@/lib/feed-merge";
 import type { Database } from "@/lib/database.types";
 import { buildGarageFitmentIndex, matchGarageFitment } from "@/lib/marketplace/fitment";
-import { fetchWatchCounts } from "@/lib/marketplace/query";
 import { reportError } from "@/lib/monitoring";
 import { vehicleLabel } from "@/lib/vehicles/label";
 import { postHeadline } from "@/lib/activity/headline";
@@ -265,9 +264,7 @@ type HydrationIds = { postIds: string[]; carIds: string[]; listingIds: string[] 
  * per-page cost.
  *
  * One round trip: `feed_hydration` (migration 20260928120500) returns every
- * signal, counts already made, under the caller's own RLS. If the function
- * is missing (migration unapplied), this falls back to the per-table reads
- * it replaced — two dependent rounds, ~19 requests.
+ * signal, counts already made, under the caller's own RLS.
  *
  * Exported for Explore search (src/lib/explore/search/query.ts): search
  * result windows are the same (kind, id) shape, so feed and search hydrate
@@ -286,9 +283,7 @@ export async function hydrateFeedItems(
     carIds: rows.filter((r) => r.kind === "car").map((r) => r.id),
     listingIds: rows.filter((r) => r.kind === "part").map((r) => r.id),
   };
-  const data =
-    (await loadHydrationInOneCall(supabase, ids, viewerId)) ??
-    (await loadHydrationByTable(supabase, ids, viewerId));
+  const data = await loadHydrationInOneCall(supabase, ids, viewerId);
   return buildFeedItems(rows, data);
 }
 
@@ -310,7 +305,7 @@ async function loadHydrationInOneCall(
   supabase: SupabaseClient<Database>,
   { postIds, carIds, listingIds }: HydrationIds,
   viewerId?: string | null
-): Promise<HydrationData | null> {
+): Promise<HydrationData> {
   const { data, error } = await supabase.rpc("feed_hydration", {
     p_post_ids: postIds,
     p_car_ids: carIds,
@@ -318,8 +313,11 @@ async function loadHydrationInOneCall(
     p_viewer: viewerId ?? undefined,
   });
   if (error || !data) {
-    reportError("[feed] feed_hydration unavailable, falling back to per-table reads", error);
-    return null;
+    // N30: there is no per-table fallback any more. It counted likes,
+    // comments and the rest by fetching their rows, which stops silently at
+    // 1,000 — a card's numbers quietly short. A failed read is a failed page.
+    reportError("[feed] feed_hydration failed", error);
+    throw new Error("Could not load the feed");
   }
   const json = data as unknown as FeedHydrationJson;
   const byId = <T extends { id: string }, V>(list: T[], pick: (row: T) => V | null | undefined) => {
@@ -352,242 +350,6 @@ async function loadHydrationInOneCall(
     viewerSavedKeys: new Set(json.viewer_saves.map((s) => `${s.target_type}:${s.target_id}`)),
     viewerLikedPosts: new Set(json.viewer_reactions),
     viewerLikedKeys: new Set(json.viewer_likes.map((l) => `${l.target_type}:${l.target_id}`)),
-  };
-}
-
-/** The per-table reads `feed_hydration` replaced, counted here — kept as the
- *  fallback for a database without that function. */
-async function loadHydrationByTable(
-  supabase: SupabaseClient<Database>,
-  { postIds, carIds, listingIds }: HydrationIds,
-  viewerId?: string | null
-): Promise<HydrationData> {
-  const [postsRes, carsRes, listingsRes, garageRes] = await Promise.all([
-    postIds.length
-      ? supabase
-          .from("activity_posts")
-          .select("id, title, intro, car_id, author_id, published_at, body")
-          .in("id", postIds)
-      : Promise.resolve({ data: [] }),
-    carIds.length
-      ? supabase
-          .from("cars")
-          .select("id, slug, name, make, model, year, cover_image_url, owner_id, created_at")
-          .in("id", carIds)
-      : Promise.resolve({ data: [] }),
-    listingIds.length
-      ? supabase
-          .from("listings")
-          .select(
-            "id, title, price_cents, shipping_cents, condition, grade, location, part_number, seller_id, source_car_id, created_at"
-          )
-          .in("id", listingIds)
-      : Promise.resolve({ data: [] }),
-    // Viewer garage, fetched once per page for "Fits your <car>" hints.
-    viewerId
-      ? supabase.from("cars").select("name, make, model").eq("owner_id", viewerId)
-      : Promise.resolve({ data: [] }),
-  ]);
-
-  const posts = postsRes.data ?? [];
-  const cars = carsRes.data ?? [];
-  const listings = listingsRes.data ?? [];
-
-  // W-5: a post may have no car. The feed still carries it; it just has
-  // no build to name and no cover to borrow.
-  const postCarIds = [...new Set(posts.flatMap((p) => (p.car_id ? [p.car_id] : [])))];
-  const ownerIds = [
-    ...new Set([
-      ...cars.map((c) => c.owner_id),
-      ...posts.map((p) => p.author_id),
-      ...listings.map((l) => l.seller_id),
-    ]),
-  ];
-  const sourceCarIds = [
-    ...new Set(listings.map((l) => l.source_car_id).filter((id): id is string => Boolean(id))),
-  ];
-
-  const [
-    { data: postCars },
-    { data: owners },
-    { data: listingImages },
-    { data: postImages },
-    { data: reactionRows },
-    { data: carActivity },
-    { data: carListings },
-    { data: sourceCars },
-    watchCounts,
-    { data: viewerSaves },
-    { data: viewerReactions },
-    { data: likeRows },
-    { data: viewerLikes },
-    { data: commentRows },
-    { data: questionRows },
-  ] = await Promise.all([
-    postCarIds.length
-      ? supabase.from("cars").select("id, slug, name, year, make, model, is_public, cover_image_url").in("id", postCarIds)
-      : Promise.resolve({ data: [] }),
-    ownerIds.length
-      ? supabase.from("profiles").select("id, display_name, username, avatar_url").in("id", ownerIds)
-      : Promise.resolve({ data: [] }),
-    listingIds.length
-      ? supabase
-          .from("listing_images")
-          .select("listing_id, url, position")
-          .in("listing_id", listingIds)
-          .order("position")
-      : Promise.resolve({ data: [] }),
-    postIds.length
-      ? supabase
-          .from("activity_images")
-          .select("post_id, url, position")
-          .in("post_id", postIds)
-          .order("position")
-      : Promise.resolve({ data: [] }),
-    postIds.length
-      ? // The card's heart is the 🔥 reaction, so it counts 🔥 only.
-        supabase.from("activity_reactions").select("post_id").eq("emoji", "🔥").in("post_id", postIds)
-      : Promise.resolve({ data: [] }),
-    // Activity rollup for build cards: count + latest published_at per car.
-    carIds.length
-      ? supabase
-          .from("activity_posts")
-          .select("car_id, published_at")
-          .in("car_id", carIds)
-          .not("published_at", "is", null)
-      : Promise.resolve({ data: [] }),
-    // "N parts for sale" per build card.
-    carIds.length
-      ? supabase
-          .from("listings")
-          .select("source_car_id")
-          .eq("status", "active")
-          .in("source_car_id", carIds)
-      : Promise.resolve({ data: [] }),
-    // The source car of each listing: names the provenance line on every
-    // part card, and is the fitment source for a viewer with a garage.
-    sourceCarIds.length
-      ? supabase.from("cars").select("id, year, make, model, slug, is_public").in("id", sourceCarIds)
-      : Promise.resolve({ data: [] }),
-    listingIds.length ? fetchWatchCounts(supabase, listingIds) : Promise.resolve(new Map<string, number>() as Map<string, number> | null),
-    // The viewer's own marks, so every card renders its toggles pre-fired:
-    // saves over this page's listings+cars+posts, 🔥 reactions over posts.
-    viewerId && (listingIds.length || carIds.length || postIds.length)
-      ? supabase
-          .from("saves")
-          .select("target_type, target_id")
-          .eq("user_id", viewerId)
-          .in("target_id", [...listingIds, ...carIds, ...postIds])
-      : Promise.resolve({ data: [] }),
-    viewerId && postIds.length
-      ? supabase
-          .from("activity_reactions")
-          .select("post_id")
-          .eq("user_id", viewerId)
-          .eq("emoji", "🔥")
-          .in("post_id", postIds)
-      : Promise.resolve({ data: [] }),
-    // Public like counts over the page's listings+cars (0037).
-    listingIds.length || carIds.length
-      ? supabase
-          .from("likes")
-          .select("target_type, target_id")
-          .in("target_id", [...listingIds, ...carIds])
-      : Promise.resolve({ data: [] }),
-    viewerId && (listingIds.length || carIds.length)
-      ? supabase
-          .from("likes")
-          .select("target_type, target_id")
-          .eq("user_id", viewerId)
-          .in("target_id", [...listingIds, ...carIds])
-      : Promise.resolve({ data: [] }),
-    // Comment counts: post replies and listing questions.
-    postIds.length
-      ? supabase.from("activity_comments").select("post_id").in("post_id", postIds)
-      : Promise.resolve({ data: [] }),
-    listingIds.length
-      ? supabase.from("listing_questions").select("listing_id").in("listing_id", listingIds)
-      : Promise.resolve({ data: [] }),
-  ]);
-
-  const viewerSavedKeys = new Set(
-    (viewerSaves ?? []).map((s) => `${s.target_type}:${s.target_id}`)
-  );
-  const viewerLikedPosts = new Set((viewerReactions ?? []).map((r) => r.post_id));
-  const likeCountByKey = new Map<string, number>();
-  for (const row of likeRows ?? []) {
-    const key = `${row.target_type}:${row.target_id}`;
-    likeCountByKey.set(key, (likeCountByKey.get(key) ?? 0) + 1);
-  }
-  const viewerLikedKeys = new Set(
-    (viewerLikes ?? []).map((l) => `${l.target_type}:${l.target_id}`)
-  );
-  const commentCountByPost = new Map<string, number>();
-  for (const row of commentRows ?? []) {
-    commentCountByPost.set(row.post_id, (commentCountByPost.get(row.post_id) ?? 0) + 1);
-  }
-  const questionCountByListing = new Map<string, number>();
-  for (const row of questionRows ?? []) {
-    questionCountByListing.set(
-      row.listing_id,
-      (questionCountByListing.get(row.listing_id) ?? 0) + 1
-    );
-  }
-
-  const listingCover = new Map<string, string>();
-  for (const img of listingImages ?? []) {
-    if (!listingCover.has(img.listing_id)) listingCover.set(img.listing_id, img.url);
-  }
-  const postCover = new Map<string, string>();
-  const postImageCount = new Map<string, number>();
-  for (const img of postImages ?? []) {
-    if (!postCover.has(img.post_id)) postCover.set(img.post_id, img.url);
-    postImageCount.set(img.post_id, (postImageCount.get(img.post_id) ?? 0) + 1);
-  }
-  const reactionCount = new Map<string, number>();
-  for (const row of reactionRows ?? []) {
-    reactionCount.set(row.post_id, (reactionCount.get(row.post_id) ?? 0) + 1);
-  }
-  const carUpdateCount = new Map<string, number>();
-  const carLastActivity = new Map<string, string>();
-  for (const row of carActivity ?? []) {
-    if (!row.car_id) continue;
-    carUpdateCount.set(row.car_id, (carUpdateCount.get(row.car_id) ?? 0) + 1);
-    const prev = carLastActivity.get(row.car_id);
-    if (row.published_at && (!prev || row.published_at > prev)) {
-      carLastActivity.set(row.car_id, row.published_at);
-    }
-  }
-  const carForSaleCount = new Map<string, number>();
-  for (const row of carListings ?? []) {
-    if (row.source_car_id) {
-      carForSaleCount.set(row.source_car_id, (carForSaleCount.get(row.source_car_id) ?? 0) + 1);
-    }
-  }
-
-
-  return {
-    posts,
-    cars,
-    listings,
-    garage: garageRes.data ?? [],
-    postCars: postCars ?? [],
-    sourceCars: sourceCars ?? [],
-    owners: owners ?? [],
-    postCover,
-    postImageCount,
-    reactionCount,
-    commentCountByPost,
-    carUpdateCount,
-    carLastActivity,
-    carForSaleCount,
-    listingCover,
-    watchCounts,
-    questionCountByListing,
-    likeCountByKey,
-    viewerSavedKeys,
-    viewerLikedPosts,
-    viewerLikedKeys,
   };
 }
 
@@ -963,127 +725,59 @@ export type FollowedFeedPage = FeedPage & {
  * either. A part reaches the people who care about that seller or that build
  * without anyone having to follow a listing, which is not a thing you can do.
  *
- * Listings arrive from two directions at once: the seller is someone you
- * follow, or the part came off a car you follow. The same listing therefore
- * turns up twice, and `followedFeedPage` is what makes that one card —
- * along with the stable ordering paging depends on and the per-seller run
- * cap that stops one bulk lister owning the top of the feed. All of that
- * lives in `feed-merge.ts`, pure and tested without a database.
- *
- * Same in-memory-merge caveat as `_legacyFetchFeed`: the followed set can't
- * be paged through `feed_events`, because the view carries no follow edge.
+ * N31: the database does the joining. This used to read every follow (which
+ * stops at 1,000) and put every followed id into each lane's URL — past a
+ * few hundred follows the URL was too long and the feed showed empty.
+ * `followed_feed_rows` (20261107180000) reads each followed car's and
+ * person's newest rows, merges them into one order — newest, then id, the
+ * order `feed-merge.ts` defines — and gives one card for a part reached two
+ * ways. Pages read on from a position (`before`, the previous page's
+ * `nextCursor`); a page number still works for the first link into a page.
+ * The per-seller run cap is applied inside the page, never across pages.
  */
 export async function fetchFollowedFeed(
   supabase: SupabaseClient<Database>,
   userId: string,
-  opts: { page?: number; pageSize?: number } = {}
+  opts: { page?: number; pageSize?: number; before?: FeedCursor | null } = {}
 ): Promise<FollowedFeedPage> {
   const pageSize = opts.pageSize ?? DEFAULT_PAGE_SIZE;
   const page = Math.max(1, opts.page ?? 1);
-  const fetchLimit = Math.min(LEGACY_MAX_FETCH_PER_TABLE, page * pageSize + 1);
+  const before = opts.before ?? null;
 
-  const { data: follows } = await supabase
-    .from("follows")
-    .select("target_type, target_id")
-    .eq("follower_id", userId);
-
-  const followedCarIds = (follows ?? []).filter((f) => f.target_type === "car").map((f) => f.target_id);
-  const followedProfileIds = (follows ?? [])
-    .filter((f) => f.target_type === "profile")
-    .map((f) => f.target_id);
-  const followsNothing = followedCarIds.length === 0 && followedProfileIds.length === 0;
-
-  if (followsNothing) {
-    return { items: [], page, pageSize, hasMore: false, followsNothing: true };
-  }
-
-  // Every lane breaks timestamp ties by id, the same way `feed-merge` does:
-  // a limit that lands inside a bulk insert must cut the same rows each time.
-  let carsQuery = supabase
-    .from("cars")
-    .select("id, created_at")
-    .eq("is_public", true)
-    .order("created_at", { ascending: false })
-    .order("id", { ascending: false })
-    .limit(fetchLimit);
-  const carClauses = [
-    followedCarIds.length ? `id.in.(${followedCarIds.join(",")})` : null,
-    followedProfileIds.length ? `owner_id.in.(${followedProfileIds.join(",")})` : null,
-  ].filter(Boolean) as string[];
-  carsQuery = carClauses.length ? carsQuery.or(carClauses.join(",")) : carsQuery.eq("id", "");
-
-  let postsQuery = supabase
-    .from("activity_posts")
-    .select("id, published_at")
-    .not("published_at", "is", null)
-    .order("published_at", { ascending: false })
-    .order("id", { ascending: false })
-    .limit(fetchLimit);
-  const postClauses = [
-    followedCarIds.length ? `car_id.in.(${followedCarIds.join(",")})` : null,
-    followedProfileIds.length ? `author_id.in.(${followedProfileIds.join(",")})` : null,
-  ].filter(Boolean) as string[];
-  postsQuery = postClauses.length ? postsQuery.or(postClauses.join(",")) : postsQuery.eq("id", "");
-
-  // Active listings from followed sellers, and from followed cars. Two
-  // queries rather than one `or`, because the seller lane rides the new
-  // (seller_id, status, created_at desc) index and the car lane doesn't —
-  // an `or` across both would give up the index for the half that has one.
-  const listingsBySeller = followedProfileIds.length
-    ? supabase
-        .from("listings")
-        .select("id, created_at, seller_id")
-        .eq("status", "active")
-        .in("seller_id", followedProfileIds)
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false })
-        .limit(fetchLimit)
-    : Promise.resolve({ data: [] as { id: string; created_at: string; seller_id: string | null }[] });
-
-  const listingsByCar = followedCarIds.length
-    ? supabase
-        .from("listings")
-        .select("id, created_at, seller_id")
-        .eq("status", "active")
-        .in("source_car_id", followedCarIds)
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false })
-        .limit(fetchLimit)
-    : Promise.resolve({ data: [] as { id: string; created_at: string; seller_id: string | null }[] });
-
-  const [carsRes, postsRes, sellerListings, carListings] = await Promise.all([
-    carsQuery,
-    postsQuery,
-    listingsBySeller,
-    listingsByCar,
+  const [followed, rowsResult] = await Promise.all([
+    supabase.from("follows").select("target_id", { count: "exact", head: true }).eq("follower_id", userId),
+    supabase.rpc("followed_feed_rows", {
+      p_limit: pageSize + 1,
+      ...(before ? { p_before_at: before.at, p_before_id: before.id } : { p_offset: (page - 1) * pageSize }),
+    }),
   ]);
 
-  const asPart = (rows: { id: string; created_at: string; seller_id: string | null }[] | null) =>
-    (rows ?? []).map((l) => ({
-      kind: "part" as const,
-      id: l.id,
-      happened_at: l.created_at,
-      sellerId: l.seller_id,
-    }));
+  if (!followed.error && (followed.count ?? 0) === 0) {
+    return { items: [], page, pageSize, hasMore: false, followsNothing: true, nextCursor: null };
+  }
+  if (rowsResult.error || !rowsResult.data) {
+    reportError("[feed] followed_feed_rows failed", rowsResult.error);
+    throw new Error("Could not load the people and builds you follow");
+  }
 
-  const { rows: windowRows, hasMore } = followedFeedPage(
-    [
-      (postsRes.data ?? []).map((p) => ({
-        kind: "update" as const,
-        id: p.id,
-        happened_at: p.published_at!,
-      })),
-      (carsRes.data ?? []).map((c) => ({
-        kind: "car" as const,
-        id: c.id,
-        happened_at: c.created_at,
-      })),
-      asPart(sellerListings.data),
-      asPart(carListings.data),
-    ],
+  const rows = rowsResult.data.map((r) => ({
+    kind: r.kind as FeedKind,
+    id: r.id,
+    happened_at: r.happened_at,
+    sellerId: r.seller_id,
+  }));
+  const hasMore = rows.length > pageSize;
+  const pageRows = rows.slice(0, pageSize);
+  const last = pageRows[pageRows.length - 1];
+  const items = await hydrateFeedItems(supabase, spaceSellerRuns(pageRows), userId);
+  return {
+    items,
     page,
-    pageSize
-  );
-  const items = await hydrateFeedItems(supabase, windowRows, userId);
-  return { items, page, pageSize, hasMore, followsNothing: false };
+    pageSize,
+    hasMore,
+    followsNothing: false,
+    // The page's last row in the plain order, not after spacing: the next
+    // page starts below it whatever spacing moved.
+    nextCursor: hasMore && last ? { at: last.happened_at, id: last.id } : null,
+  };
 }

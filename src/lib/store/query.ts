@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database, ListingStatus } from "@/lib/database.types";
 import { hydrateListingCards, type ListingPage } from "@/lib/marketplace/query";
+import { boundedPage, MAX_PAGE } from "@/lib/page-param";
 
 import { storeStatusesFor } from "./visible-statuses";
 
@@ -40,7 +41,8 @@ export async function fetchStorePage(
   }
 ): Promise<ListingPage> {
   const statuses = storeStatusesFor(isOwner, tab);
-  const current = Math.max(1, page);
+  // A whole page within bounds before the offset is computed (N79).
+  const current = boundedPage(page);
   const from = (current - 1) * pageSize;
 
   if (!statuses.length) {
@@ -80,7 +82,7 @@ export async function fetchStorePage(
     results,
     page: current,
     pageSize,
-    hasMore: from + results.length < total,
+    hasMore: current < MAX_PAGE && from + results.length < total,
     total,
   };
 }

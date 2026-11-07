@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
+
+import { AskAgentButton } from "@/features/agent/ask-agent-button";
 import { useState } from "react";
 
 import { ListingRow } from "@/components/commerce";
 import { ShowcaseExplorer, type ShowcasePin } from "@/features/garage/showcase";
 import { BuildEvolution, type EvolutionMilestone } from "@/features/garage/build-evolution";
 import {
+  CursorPagination,
   EmptyState,
   ObjectRow,
   GalleryLightbox,
@@ -78,6 +81,7 @@ function ModRow({
   off = false,
   group,
   plate = false,
+  agentAsk = null,
 }: {
   mod: ModLine;
   carId: string;
@@ -86,6 +90,7 @@ function ModRow({
   /** The line's group, when the list is flat rather than under headings. */
   group?: string;
   plate?: boolean;
+  agentAsk?: { disabledReason: string | null } | null;
 }) {
   const name = [mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw || "Component";
   // The line a buyer reads back on their own build sheet. A private source
@@ -121,7 +126,16 @@ function ModRow({
       media={plate ? { src: mod.imageUrl ?? undefined, alt: "" } : undefined}
       title={name}
       meta={meta ?? undefined}
-      actions={<ModState mod={mod} carId={carId} isOwner={isOwner} off={off} />}
+      actions={
+        isOwner && agentAsk ? (
+          <span className="flex flex-wrap items-center justify-end gap-2">
+            <AskAgentButton about={{ kind: "car", id: carId }} disabledReason={agentAsk.disabledReason} />
+            <ModState mod={mod} carId={carId} isOwner={isOwner} off={off} />
+          </span>
+        ) : (
+          <ModState mod={mod} carId={carId} isOwner={isOwner} off={off} />
+        )
+      }
     />
   );
 }
@@ -179,6 +193,7 @@ export function CarTabs({
   modGroups,
   cameOff,
   activity,
+  activityPaging,
   forSale,
   soldFrom,
   carName,
@@ -188,13 +203,17 @@ export function CarTabs({
   initialTab,
   showcase,
   evolution,
+  agentAsk = null,
 }: {
   about: string | null;
   gallery: GalleryImage[];
   modGroups: ModGroup[];
   /** Parts that came off this car — still records, not deletions (A-2). */
   cameOff: ModLine[];
+  /** One page of updates, newest first. */
   activity: ActivityItem[];
+  /** Every published update, and the links to the pages around this one (N60). */
+  activityPaging?: { total: number; olderHref: string | null; newestHref: string | null };
   forSale: ForSaleItem[];
   soldFrom: number;
   carName: string;
@@ -206,6 +225,9 @@ export function CarTabs({
   showcase?: { imageUrl: string; pins: ShowcasePin[] } | null;
   /** Dated update milestones for the Build Evolution strip (§V). */
   evolution?: EvolutionMilestone[];
+  /** "Ask your agent" on the owner's build lines (A3c): present when the chat
+   *  is open to this owner; `disabledReason` when their agent is off (AG-7). */
+  agentAsk?: { disabledReason: string | null } | null;
 }) {
   const [lightbox, setLightbox] = useState<number | null>(null);
 
@@ -237,7 +259,7 @@ export function CarTabs({
             <div className="rowlist">
               {modGroups.flatMap((group) =>
                 group.items.map((mod) => (
-                  <ModRow
+                  <ModRow agentAsk={agentAsk}
                     key={mod.id}
                     mod={mod}
                     carId={carId}
@@ -260,7 +282,7 @@ export function CarTabs({
                     stamped "Fitted" on every entry regardless. */}
                 <div className="rowlist">
                   {group.items.map((mod) => (
-                    <ModRow key={mod.id} mod={mod} carId={carId} isOwner={isOwner} plate={buildHasPhotos} />
+                    <ModRow agentAsk={agentAsk} key={mod.id} mod={mod} carId={carId} isOwner={isOwner} plate={buildHasPhotos} />
                   ))}
                 </div>
               </div>
@@ -277,7 +299,7 @@ export function CarTabs({
               </div>
               <div className="rowlist">
                 {cameOff.map((mod) => (
-                  <ModRow
+                  <ModRow agentAsk={agentAsk}
                     key={mod.id}
                     mod={mod}
                     carId={carId}
@@ -390,7 +412,7 @@ export function CarTabs({
             </li>
           ))}
         </ul>
-      ) : (
+      ) : activityPaging?.newestHref ? null : (
         <EmptyState
           mark="✎"
           title="No updates yet"
@@ -407,6 +429,13 @@ export function CarTabs({
             : "The owner hasn't posted any updates for this car yet."}
         </EmptyState>
       )}
+      <CursorPagination
+        label="Updates"
+        newestHref={activityPaging?.newestHref}
+        olderHref={activityPaging?.olderHref}
+        newestLabel="← Newest updates"
+        olderLabel="Older updates →"
+      />
     </div>
   );
 
@@ -443,7 +472,7 @@ export function CarTabs({
       live: true,
       panel: forSalePanel,
     },
-    { key: "activity", label: "Activity", count: activity.length || null, panel: activityPanel },
+    { key: "activity", label: "Activity", count: (activityPaging?.total ?? activity.length) || null, panel: activityPanel },
     { key: "gallery", label: "Gallery", count: gallery.length || null, panel: galleryPanel },
   ];
 

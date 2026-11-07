@@ -14,6 +14,7 @@ import {
 import { betaAccessIsEnforced } from "@/lib/beta-access";
 import { hydrateListingCards } from "@/lib/marketplace/query";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
+import { LANDING_DESCRIPTION, LANDING_SUB } from "@/lib/share-copy";
 import { createPublicClient } from "@/lib/supabase/public";
 import { vehicleLabel, vehicleSubline } from "@/lib/vehicles/label";
 import { DISPUTE_WINDOW_DAYS } from "@/features/commerce/disputes";
@@ -37,13 +38,11 @@ const NUMBERS_BAND_FLOOR = 100;
 
 export const metadata = {
   title: "DRVN — The parts marketplace for modified cars",
-  description:
-    "Buy and sell parts off modified cars. Sell what comes off yours, and shop parts off cars like it — every part shown with the car it came from.",
+  description: LANDING_DESCRIPTION,
   alternates: { canonical: "/" },
   openGraph: {
     title: "DRVN — the parts marketplace for modified cars",
-    description:
-      "Sell what comes off your car. Shop parts off cars like yours, each one shown with the car it came from.",
+    description: LANDING_SUB,
     url: "/",
     type: "website",
   },
@@ -274,7 +273,7 @@ export default async function LandingPage() {
               The parts marketplace for modified <span className="live-word">cars.</span>
             </>
           }
-          sub="Sell what comes off your car. Shop parts off cars like yours, each one shown with the car it came from."
+          sub={LANDING_SUB}
         >
           <div className="mt-6 flex flex-wrap gap-3">
             <ButtonLink href={`#${PICKER_ID}`} variant="live">
@@ -295,7 +294,7 @@ export default async function LandingPage() {
           </div>
           {floor.length >= 2 && (
             <div className="landing-floor">
-              <span className="landing-floor__label">For sale now, off members’ cars</span>
+              <span className="landing-floor__label">For sale now, from members</span>
               <ul className="landing-floor__list">
                 {floor.map((card) => (
                   <li key={card.id}>
@@ -372,8 +371,8 @@ export default async function LandingPage() {
                 <li>
                   <span>
                     List the old one in a minute.{" "}
-                    <Link href={ADD_CAR_HREF} className="landing-inline">Add your car</Link> once and every
-                    part you sell carries it, so buyers see where it came from.
+                    <Link href={ADD_CAR_HREF} className="landing-inline">Add your car</Link> once and link
+                    it to the parts you sell, so buyers see where they came from.
                   </span>
                 </li>
                 <li><span>People who follow your car see the part first.</span></li>
@@ -386,8 +385,8 @@ export default async function LandingPage() {
               <h3 className="landing-lane__title">Find parts off cars like yours</h3>
               <ol className="landing-steps">
                 <li><span>Tell us what you drive.</span></li>
-                <li><span>Browse parts that came off the same car, or one like it.</span></li>
-                <li><span>See the car each part came off, and the person who fitted it.</span></li>
+                <li><span>Browse parts for the same car, or off one like it.</span></li>
+                <li><span>See the car a part came off and who fitted it, when the seller links it.</span></li>
                 <li>
                   <span>
                     Pay through DRVN. The seller isn’t paid until it arrives
@@ -400,11 +399,12 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* 4 — Why here: every part comes with the car it came off. */}
+        {/* 4 — Why here: parts that come with the car they came off. Only
+            listings with a source car are shown, so the claim stays true. */}
         {pairs.length >= 2 && (
           <section className="deck landing-sec" aria-labelledby="landing-pairs">
             <div className="landing-sec__head">
-              <h2 id="landing-pairs" className="landing-sec__title">Every part comes with its car.</h2>
+              <h2 id="landing-pairs" className="landing-sec__title">Parts that come with their car.</h2>
               <p className="landing-sec__sub">
                 See what it was fitted to, who fitted it and what else they’ve changed, before you buy.
               </p>
@@ -449,7 +449,7 @@ export default async function LandingPage() {
             </li>
             <li>
               <strong>See the car it came off</strong>
-              <span>The car, the owner, and what else they’ve changed.</span>
+              <span>When the seller links it: the car, the owner, and what else they’ve changed.</span>
             </li>
             <li>
               <strong>Paid only on delivery</strong>

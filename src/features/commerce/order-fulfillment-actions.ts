@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
-import { getShippingProvider, integratedShippingEnabled } from "@/lib/shipping/provider";
-import { readSettlementRisk } from "@/lib/payments/payout-hold";
+import { after } from "next/server";
+import { registerShipmentTracker, trackingConfigured } from "@/lib/shipping/tracker-registration";
 import { refundOrder } from "@/lib/payments/refunds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { capture } from "@/lib/analytics";
@@ -36,36 +36,16 @@ export async function markShipped(
     return { error: "Add the carrier and tracking number." };
   }
 
-  // An order at or above the owner's threshold can only be dispatched with
-  // tracking DRVN follows (20261009100000). Register the carrier tracker
-  // first so the dispatch can carry it; the database decides, and a DRVN
-  // label with this tracking number counts too. Unreadable settings are
-  // treated as "required" — a tracker is cheap, a refused dispatch is not.
-  let tracker: { provider: string; ref: string } | null = null;
-  if (integratedShippingEnabled()) {
-    const [{ data: order }, risk] = await Promise.all([
-      admin.from("orders").select("status, total_cents").eq("id", orderId).maybeSingle(),
-      readSettlementRisk(admin),
-    ]);
-    const requiredFrom = risk ? risk.trackingRequiredFromCents : 0;
-    if (order?.status === "paid" && requiredFrom !== null && order.total_cents >= requiredFrom) {
-      try {
-        const provider = getShippingProvider();
-        const summary = await provider.createTracker({ trackingCode: tracking, carrier });
-        if (summary.trackerRef) tracker = { provider: provider.name, ref: summary.trackerRef };
-      } catch (trackerError) {
-        reportError("[dispatch] tracker registration before dispatch failed", { orderId, trackerError });
-      }
-    }
-  }
-
+  // The database checks the seller and that the order can be dispatched
+  // before anything else happens (N94): no provider is called for a caller
+  // who isn't this order's seller. There is no amount rule (N110).
   const { data, error } = await admin.rpc("mark_order_dispatched", {
     p_order: orderId,
     p_actor: user.id,
     p_carrier: carrier,
     p_tracking: tracking,
-    ...(tracker ? { p_tracker_provider: tracker.provider, p_tracker_ref: tracker.ref } : {}),
   });
+  if (error?.code === "42501") return { error: "Only this order's seller can mark it dispatched." };
   if (error || !data) {
     reportError("[dispatch] atomic transition failed", { orderId, error });
     return { error: "We couldn't record dispatch. Check the order and try again." };
@@ -73,33 +53,19 @@ export async function markShipped(
   const result = data as { ok: boolean; applied: boolean; reason?: string; shipment_id?: string };
   if (!result.ok) return { error: result.reason ?? "This order cannot be dispatched." };
 
-  // Tracker registration is recoverable decoration around the committed local
-  // transition. An exact action replay only calls the provider while the
-  // authoritative shipment still has no tracker reference.
-  if (result.shipment_id && integratedShippingEnabled()) {
-    const { data: shipment, error: shipmentReadError } = await admin
-      .from("shipments")
-      .select("provider_tracker_id")
-      .eq("id", result.shipment_id)
-      .maybeSingle();
-    if (shipmentReadError) {
-      reportError("[dispatch] tracker state read failed", { orderId, shipmentReadError });
-    } else if (shipment && !shipment.provider_tracker_id) {
+  // Register the tracking number with the carrier tracker once the response
+  // is sent, whether or not DRVN Shipping is on (N110). The dispatch already
+  // queued a tracker_registration job; if these attempts fail, the money
+  // worker retries it. An unconfigured provider changes nothing here.
+  const shipmentId = result.shipment_id;
+  if (shipmentId && trackingConfigured()) {
+    after(async () => {
       try {
-        const provider = getShippingProvider();
-        const summary = await provider.createTracker({ trackingCode: tracking, carrier });
-        if (summary.trackerRef) {
-          const { error: trackerWriteError } = await admin
-            .from("shipments")
-            .update({ provider: provider.name, provider_tracker_id: summary.trackerRef })
-            .eq("id", result.shipment_id)
-            .is("provider_tracker_id", null);
-          if (trackerWriteError) reportError("[dispatch] tracker reference write failed", { orderId, trackerWriteError });
-        }
+        await registerShipmentTracker(admin, shipmentId);
       } catch (trackerError) {
-        reportError("[dispatch] tracker registration failed", { orderId, trackerError });
+        reportError("[dispatch] tracker registration failed; the worker retries", { orderId, trackerError });
       }
-    }
+    });
   }
 
   if (result.applied) capture(user.id, { event: "seller_dispatched" });

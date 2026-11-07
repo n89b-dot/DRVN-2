@@ -40,6 +40,7 @@ export function PurchaseActions({
   resumeAction = null,
   returnPath,
   agentOffers = false,
+  agentRefusal = null,
 }: {
   /** The seller's minimum, only when they chose to show it (O-3). */
   offerFloorCents?: number | null;
@@ -62,6 +63,8 @@ export function PurchaseActions({
   /** "Negotiate for me" is offered (A3b): the agent beta is on and the total
    *  is knowable before checkout (not DRVN Shipping). */
   agentOffers?: boolean;
+  /** AG-7: why "Negotiate for me" is disabled right now, or null when it works. */
+  agentRefusal?: string | null;
 }) {
   const router = useRouter();
   const detailPath = returnPath ?? `/listings/${listingId}`;
@@ -273,9 +276,19 @@ export function PurchaseActions({
               <FilterButton pressed={offerMode === "offer"} onClick={() => setOfferMode("offer")}>
                 Make an offer
               </FilterButton>
-              <FilterButton pressed={offerMode === "agent"} onClick={() => setOfferMode("agent")}>
+              <FilterButton
+                pressed={offerMode === "agent"}
+                onClick={() => setOfferMode("agent")}
+                disabled={Boolean(agentRefusal)}
+                aria-describedby={agentRefusal ? `${idBase}-agent-off` : undefined}
+              >
                 Negotiate for me
               </FilterButton>
+              {agentRefusal && (
+                <span id={`${idBase}-agent-off`} className="field__hint basis-full !mt-0">
+                  {agentRefusal}
+                </span>
+              )}
             </div>
           )}
           {agentOffers && offerMode === "agent" ? (

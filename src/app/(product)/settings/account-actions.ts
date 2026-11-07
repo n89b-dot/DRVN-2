@@ -3,10 +3,22 @@
 import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 
+import { AUTH_ERROR_COPY, publicAuthError } from "@/lib/auth-errors";
+import { confirmIdentity } from "@/lib/confirm-identity";
 import { reportError } from "@/lib/monitoring";
+import { allowAction, RATE_LIMITS } from "@/lib/rate-limit";
+import { deliverNotification } from "@/lib/notifications/deliver";
+import { safeRedirectPath } from "@/lib/safe-redirect";
+import { siteUrl } from "@/lib/site";
 import { createClient } from "@/lib/supabase/server";
 
-export type AccountState = { error?: string; ok?: string; pendingEmail?: boolean };
+export type AccountState = {
+  error?: string;
+  ok?: string;
+  pendingEmail?: boolean;
+  /** The change needs fresh proof it's the owner (N41): which kind to offer. */
+  reauth?: "password" | "oauth";
+};
 
 function isInvalidCredentials(error: unknown) {
   if (!error || typeof error !== "object") return false;
@@ -46,12 +58,22 @@ export async function changeEmail(_prev: AccountState, formData: FormData): Prom
     };
   }
 
+  // N41: moving the sign-in email hands the account to whoever controls the
+  // new address, so a session alone isn't enough: the password typed now, or
+  // (Google-only members) a sign-in moments ago. Checked after the no-change
+  // answers above, which change nothing.
+  const identity = await confirmIdentity(supabase, user, String(formData.get("current_password") ?? ""));
+  if (!identity.ok) return { error: identity.error, reauth: identity.reauth };
+
+  // The confirmation link lands on /confirm (token hash, any device), which
+  // reads `next` out of this address and sends the member back to Settings
+  // with a notice — not the home page (readiness 53).
+  const confirmed = new URL("/confirm", siteUrl());
+  confirmed.searchParams.set("next", safeRedirectPath("/settings?changed=email", "/settings"));
+
   try {
-    const { error } = await supabase.auth.updateUser({ email });
-    if (error) {
-      reportError("[settings] email change failed", { userId: user.id, error });
-      return { error: error.message };
-    }
+    const { error } = await supabase.auth.updateUser({ email }, { emailRedirectTo: confirmed.toString() });
+    if (error) return { error: publicAuthError(error, "settings email change", { userId: user.id }) };
   } catch (error) {
     reportError("[settings] email change transport failed", { userId: user.id, error });
     return { error: "Couldn't request that email change. Try again." };
@@ -116,18 +138,67 @@ export async function changePassword(
     const { error } = await supabase.auth.updateUser({ password: next });
     if (error) {
       const requestedPasswordWorks = await passwordWorks(next);
-      if (requestedPasswordWorks) return { ok: "Password updated." };
+      if (requestedPasswordWorks) return await passwordChanged(user.id);
       if (requestedPasswordWorks === null) {
         return { error: "Couldn't confirm the password change. Try again." };
       }
-      reportError("[settings] password change failed", { userId: user.id, error });
-      return { error: error.message };
+      return { error: publicAuthError(error, "settings password change", { userId: user.id }) };
     }
   } catch (error) {
-    if (await passwordWorks(next)) return { ok: "Password updated." };
+    if (await passwordWorks(next)) return await passwordChanged(user.id);
     reportError("[settings] password change transport failed", { userId: user.id, error });
     return { error: "Couldn't confirm the password change. Try again." };
   }
 
+  return passwordChanged(user.id);
+}
+
+/**
+ * The change went through: tell the owner, so a change they didn't make is
+ * something they hear about. Supabase Auth's own "password changed" email is
+ * a project setting that is off by default (and off in config.toml), so DRVN
+ * never relies on it: this goes through DRVN's notification door
+ * (deliver.ts), which is always on. Best-effort: the password is already
+ * changed, so a failed notice never turns the result into an error.
+ */
+async function passwordChanged(userId: string): Promise<AccountState> {
+  try {
+    await deliverNotification({
+      userId,
+      kind: "password_changed",
+      section: "marketplace",
+      title: "Your password was changed",
+      body: "If this was you, nothing else to do. If it wasn't, reset your password now from the sign-in page and contact support.",
+      href: "/settings#account",
+    });
+  } catch (error) {
+    reportError("[settings] password-changed notice failed", { userId, error });
+  }
   return { ok: "Password updated." };
+}
+
+/**
+ * "Email me a link to set a password" (N45). A member who signs in with
+ * Google has no current password to type, so the change-password form was
+ * unusable and nothing said what to do instead. This sends the ordinary
+ * reset email to the account's own address; its link opens a recovery
+ * session on /login/reset, where a password can be set without the current
+ * one (and only there, only from such a link: N20). Throttled per member.
+ */
+export async function sendPasswordSetupLink(): Promise<AccountState> {
+  const { supabase, user } = await requireUser();
+  if (!user.email) return { error: "Your account has no email address to send a link to." };
+  if (!(await allowAction(RATE_LIMITS.passwordSetupLink, `user:${user.id}`))) {
+    return { error: AUTH_ERROR_COPY.rate_limited };
+  }
+
+  const returnTo = new URL("/callback", siteUrl());
+  returnTo.searchParams.set("next", "/login/reset");
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(user.email, { redirectTo: returnTo.toString() });
+    if (error) return { error: publicAuthError(error, "settings password link", { userId: user.id }) };
+  } catch (error) {
+    return { error: publicAuthError(error, "settings password link", { userId: user.id }) };
+  }
+  return { ok: `We've emailed a link to ${user.email}. Open it to set a password.` };
 }

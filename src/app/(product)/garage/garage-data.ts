@@ -3,7 +3,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/database.types";
 import { orderCars } from "@/lib/cars/order";
 import { postHeadline } from "@/lib/activity/headline";
+import { reportError } from "@/lib/monitoring";
 import { requiredRead } from "@/lib/supabase/required-read";
+import { generationChoicesFor, type GenerationChoice } from "@/lib/vehicles/generation-choices";
 
 /**
  * Everything the garage knows about one car, measured — the numbers a
@@ -25,6 +27,11 @@ export type GarageSheet = {
   trim: string | null;
   engine: string | null;
   drivetrain: string | null;
+  /** The car's generation (20261020100000), when resolved or chosen. */
+  generationId: number | null;
+  /** A changeover year: two or more generations fit, and the owner is asked
+   *  (vehicles.md, "Generations"). Empty when there's nothing to ask. */
+  generationChoices: GenerationChoice[];
   /** Sheet number in the garage — order the cars were added. */
   index: number;
   photos: number;
@@ -62,6 +69,8 @@ export type GarageCar = {
   trim: string | null;
   engine: string | null;
   drivetrain: string | null;
+  catalog_model_id: number | null;
+  generation_id: number | null;
 };
 
 /** The owner's cars, main car first — step one of the garage. Split from
@@ -78,7 +87,7 @@ export async function loadGarageCars(
   const [carsResult, profileResult] = await Promise.all([
     supabase
       .from("cars")
-      .select("id, slug, name, make, model, year, cover_image_url, is_public, created_at, trim, engine, drivetrain")
+      .select("id, slug, name, make, model, year, cover_image_url, is_public, created_at, trim, engine, drivetrain, catalog_model_id, generation_id")
       .eq("owner_id", ownerId),
     supabase.from("profiles").select("main_car_id").eq("id", ownerId).maybeSingle(),
   ]);
@@ -104,10 +113,18 @@ export async function measureGarageSheets(
   if (!cars.length) return [];
   const ids = cars.map((c) => c.id);
 
-  const [imagesResult, statsResult] = await Promise.all([
+  // Changeover years: the generations of the models whose cars have none yet,
+  // so the sheet can ask. An optional read — without it, no picker today.
+  const unresolvedModels = [...new Set(cars.filter((c) => c.generation_id == null && c.catalog_model_id != null).map((c) => c.catalog_model_id as number))];
+  const [imagesResult, statsResult, generationsResult] = await Promise.all([
     supabase.from("car_images").select("car_id, url, position").in("car_id", ids).order("position"),
     supabase.rpc("garage_car_stats", { p_cars: ids }),
+    unresolvedModels.length
+      ? supabase.from("vehicle_generations").select("id, model_id, name, platform_code, year_start, year_end").in("model_id", unresolvedModels)
+      : Promise.resolve({ data: [], error: null }),
   ]);
+  if (generationsResult.error) reportError("[garage] generations unreadable", generationsResult.error);
+  const generations = generationsResult.data ?? [];
   // RR-11: these are the sheet's own numbers — a failed read is shown as a
   // failed page with "Try again", never as a zero nobody counted.
   const images = requiredRead(imagesResult, "your cars' photos");
@@ -147,6 +164,8 @@ export async function measureGarageSheets(
       trim: car.trim,
       engine: car.engine,
       drivetrain: car.drivetrain,
+      generationId: car.generation_id,
+      generationChoices: generationChoicesFor(car, generations),
       mods: row?.mods ?? 0,
       updates: row?.updates ?? 0,
       latestUpdate: latest

@@ -16,6 +16,31 @@ baselined migration history, rehearsed restore.
    deployment platform's secret store — not in the repo, not in `.env.local`.
 3. Auth settings: enable email confirmation (dev has it off for e2e), set the
    site URL to the production domain, add it to the redirect allowlist.
+4. Auth security settings (readiness N20, N41, N42). The app enforces its own
+   checks; these stop the same things being done by calling Supabase Auth
+   directly with the public key:
+   - Authentication → Providers → Email → **Secure password change: on**
+     (`secure_password_change = true` in `supabase/config.toml`). A password
+     change then needs a session under 24 hours old or one opened from an
+     emailed link. The app is stricter: Settings verifies the current
+     password, and `/login/reset` only accepts a session opened from a reset
+     link within the hour.
+   - **Secure email change: on** (`double_confirm_changes`): both addresses
+     must confirm. The app also asks for the password, or a Google sign-in
+     within ten minutes, before it requests the change or an account deletion.
+   - **Minimum password length: 8**, to match the app (config.toml still says 6
+     locally).
+   - Authentication → Rate Limits. Every sign-in and sign-up reaches Auth from
+     the app server's few addresses, so the per-IP defaults (30 sign-ins and
+     sign-ups per 5 minutes, `sign_in_sign_ups`) can lock everyone out on a busy
+     day. Raise "sign-ups and sign-ins" well above expected peak (the app
+     throttles per visitor and per email itself: `RATE_LIMITS.signIn*` and
+     `signUp*` in `src/lib/rate-limit.ts`), keep "token verifications" in step,
+     and set "emails sent per hour" to what the SMTP provider allows.
+   - Bot protection is the owner's call: Supabase Auth supports hCaptcha or
+     Cloudflare Turnstile (Authentication → Attack Protection). Turning it on
+     also blocks direct sign-up calls that bypass the app's throttle, but needs
+     a widget on the sign-up, sign-in and reset forms, so it is not on today.
 
 ## 2. Apply the schema
 
@@ -147,6 +172,25 @@ insert into public.job_config (key, value) values
 on conflict (key) do update set value = excluded.value, updated_at = now();
 ```
 
+Storage origin for member photos (20261107203000). The database refuses a
+member's new photo reference (car, gallery, listing, post, avatar) unless it
+is a public URL on this origin, and refuses **all** of them while the row is
+missing: a migration can't know the origin, and failing open would accept
+URLs on any host that are never revalidated. Set it **in the same step as
+applying that migration**, to the project's `NEXT_PUBLIC_SUPABASE_URL` origin
+(scheme and host, no path or trailing slash):
+
+```sql
+insert into public.job_config (key, value)
+values ('media_storage_origin', 'https://<project-ref>.supabase.co')
+on conflict (key) do update set value = excluded.value, updated_at = now();
+```
+
+The upload route and the media-gc job also record it from the server's own
+`NEXT_PUBLIC_SUPABASE_URL` if it's missing (never overwriting a set value),
+so a missed step heals on the first photo upload, but photo saves fail until
+then. CI's bootstrap (`scripts/prepare-ci-supabase.mjs`) sets the local one.
+
 Confirm the nine pg_cron jobs (times are the database's UTC):
 
 | Job | Schedule | Runs |
@@ -159,6 +203,7 @@ Confirm the nine pg_cron jobs (times are the database's UTC):
 | `drvn-deletion-worker` | `*/5 * * * *` | `invoke_remediation_worker('account-deletions')` → `/api/jobs/account-deletions` (deletions and exports) |
 | `drvn-media-gc` | `17 3 * * *` | `invoke_remediation_worker('media-gc')` → `/api/jobs/media-gc` |
 | `drvn-saved-search-worker` | `*/30 * * * *` | `invoke_remediation_worker('saved-searches')` → `/api/jobs/saved-searches` |
+| `drvn-saved-search-digests` | `41 * * * *` | `invoke_remediation_worker('saved-search-digests')` → `/api/jobs/saved-search-digests` (20261107200300) |
 | `drvn-listing-import-sweep` | `37 3 * * *` | `invoke_remediation_worker('listing-imports')` → `/api/jobs/listing-imports` (20261004150000) |
 
 `select jobname, schedule from cron.job order by 1;` must return exactly
@@ -252,6 +297,10 @@ Hosted acceptance still requires:
 
 1. Restore a verified database recovery point and the corresponding separately
    archived object versions into an isolated target with outbound jobs disabled.
+   Create the `agent_worker` role on the target first (`create role agent_worker
+   nologin noinherit;`, as 20261021100100 does): roles are cluster-level, so a
+   dump carries the grants to it but not the role, and the restore stops at the
+   first `GRANT … TO agent_worker` without it. The local drill does this itself.
 2. Run `supabase/tests/restore_integrity.sql`, all current `*_guard.sql` suites,
    and compare operation identities, immutable commercial snapshots, RLS,
    private object references and object checksums.
@@ -267,6 +316,7 @@ Hosted acceptance still requires:
 | Date | Rehearsal | Evidence and limits |
 |---|---|---|
 | 2026-09-06 | Local synthetic database + object archive | [Result](readiness-progress/evidence/2026-09-06-local-recovery.json); 104 migrations, 87 matching table fingerprints, object bytes/reference verified. Does not establish hosted RPO/RTO. |
+| 2026-10-24 | Local synthetic database + object archive, current chain | [Result](readiness-progress/evidence/2026-10-24-local-recovery.json); 219 migrations, 123 matching table fingerprints, object bytes/reference verified, restore integrity passed in 16 s. First run failed until the drill created the `agent_worker` role on the target (fixed the same day). Does not establish hosted RPO/RTO. |
 | Pending | Coordinated hosted restore and rollback | Requires isolated staging, provider reconciliation, approved targets and operator acceptance. |
 
 ## 7. Go-live checklist deltas
@@ -275,6 +325,7 @@ Hosted acceptance still requires:
       separately) and the test-mode clause is gone.
 - [ ] `release-gate` is the required check on `main` (§8; public repo or GitHub Pro).
 - [ ] `job_config` points at the production worker URL.
+- [ ] `job_config.media_storage_origin` is the production storage origin (§4).
 - [ ] A dispute, a refund, and a payout have each been exercised once in live
       mode with a real card and a Connect test seller before public launch.
 
@@ -331,8 +382,24 @@ nothing to set up beyond `job_config`. One pass checks every alert-enabled
 saved search for listings created since its last check and raises at most one
 in-app notification per search per pass. A search's first pass after opt-in
 only stamps the baseline — nobody is alerted about inventory that predates
-their opt-in. `/api/jobs/media-gc` and `/api/jobs/listing-imports` are
-scheduled the same way. To run any of them by hand:
+their opt-in.
+
+Email digests (N78, `drvn-saved-search-digests`, hourly): at most one email
+per saved search per day. Each alerting search has its own email window
+(`saved_search_email_cursors`), started when its alert is turned on and
+separate from the in-app cursor, so a digest carries every part published
+since the last one. From 08:00 London the first run of the day admits each
+search's window into `saved_search_email_digests` (unique per search per
+day); the later runs retry sends. A member with "Saved-search matches" or
+"Saved-search emails" off is not mailed, and neither is an unconfirmed
+address, a suspended or closing account, or a search whose alert went off. A
+digest not sent on its day expires; records are kept 90 days. Sending goes
+through `src/lib/email/send.ts`, selected by `EMAIL_PROVIDER` and sent from
+`EMAIL_FROM`. No provider is chosen yet (R-email): until one is, digests are
+recorded and nothing is sent, and the route logs and returns `provider: null`.
+
+`/api/jobs/media-gc` and `/api/jobs/listing-imports` are scheduled the same
+way. To run any of them by hand:
 `curl -X POST https://<domain>/api/jobs/<name> -H "Authorization: Bearer $CRON_SECRET"`.
 
 ## 9b. Independent worker monitor (GitHub Actions)
@@ -351,13 +418,63 @@ configured. In **Settings → Secrets and variables → Actions**:
 | Repository **variable** | `DRVN_MONITOR_ORIGIN` | the canonical `https://` origin, no path (e.g. `https://drvn.app`) |
 | Repository **secret** | `DRVN_MONITOR_SECRET` | the deployment's `CRON_SECRET` — `/api/health/workers` accepts only that bearer |
 
-This mode alerts only through GitHub's failed-workflow notifications. The
-`--watch` mode (transition alerts to `DRVN_MONITOR_ALERT_URL`, dead-man
-heartbeats to `DRVN_MONITOR_HEARTBEAT_URL`, state in
-`DRVN_MONITOR_STATE_FILE`) runs on a separately administered host, not in
-this workflow — see `docs/remediation-release-and-monitoring.md`. Before
-relying on either, pause a worker in staging and confirm an alert and a
-recovery actually arrive.
+This mode alerts only through GitHub's failed-workflow notifications; each
+problem is written to the run as an annotation (`job drvn-media-gc: overdue
+since …`), so the failure says what to fix. The `--watch` mode (transition
+alerts to `DRVN_MONITOR_ALERT_URL`, dead-man heartbeats to
+`DRVN_MONITOR_HEARTBEAT_URL`, state in `DRVN_MONITOR_STATE_FILE`) runs on a
+separately administered host, not in this workflow — see
+`docs/remediation-release-and-monitoring.md`. Before relying on either, stop a
+job in staging (below) and confirm an alert and a recovery actually arrive.
+
+**What health judges (20261107191000).** `private.scheduled_job_inventory()`
+is the one list of what pg_cron must run: every `drvn-*` job, its schedule,
+its command, the worker families it drives and how long it may go without a
+success. Check the scheduler against it by name and by running, never by
+counting rows:
+
+```sql
+select x->>'job' job, x->>'reason' reason, x->>'last_success' last_success
+from jsonb_array_elements(public.worker_health_snapshot()->'jobs') x order by 1;
+```
+
+`reason` is null when the job is fine; otherwise `not_scheduled`, `inactive`,
+`schedule_changed`, `command_changed`, `failing`, `stuck_running`,
+`never_succeeded` or `overdue` (`history_disabled` if `cron.log_run` is off).
+A job that has never run is not reported until the scheduler's own history is
+older than that job's budget, so a fresh project is not red overnight; a
+worker family that has never run is (run its route once by hand). The `config`
+block checks pg_cron, pg_net, run history, the `job_config` worker URL and
+that the scheduler's secret equals the deployment's `CRON_SECRET` (compared as
+a SHA-256; neither is returned). Queues count only work DRVN owes: an
+undelivered payout hold, a payout frozen by an unresolved chargeback and a
+seller who can't be paid yet are not overdue (blocked payouts show with
+`overdue: false`); refunds Stripe is still settling are
+`refunds/awaiting_provider`, late after 72 hours, while an outcome Stripe
+hasn't confirmed either way (a timeout, a failed lookup) is
+`refunds/provider_unknown`, aged from creation and late after two hours (and
+it fails the `refunds` family on every pass); provider events not yet
+applied are `webhooks/retrying` (with the highest attempt count; Admin →
+Payments lists them first, with the last failure, beside Replay), overdue
+after an hour; a chargeback loss whose lease ran out is
+`provider_disputes/loss_pending`. `drvn-cron-history-prune` keeps
+`cron.job_run_details` to 14 days.
+
+**Paging without noise (`--watch`).** An incident pages after
+`DRVN_MONITOR_CONFIRM_CHECKS` consecutive failing checks (default 2), again
+only when a problem not already paged appears (`worsened`) or every 30 minutes
+while it lasts (`still_unhealthy`), and once on `recovered`. Each alert carries
+`summary`, `problems` (area, name, reason, since, count; never a secret, URL
+or member data) and `runbook`. Set `DRVN_MONITOR_SILENCE_UNTIL` to an ISO
+time for planned work: nothing is sent until then, and an incident still open
+when it ends pages at once.
+
+**Stop a job deliberately (staging).** `select cron.alter_job((select jobid
+from cron.job where jobname = 'drvn-explore-trending'), active := false);`
+— within one check the endpoint returns 503 naming
+`job drvn-explore-trending: inactive`, and after the confirmation checks the
+destination receives `unhealthy`. Re-activate it (`active := true`); once it
+runs again the destination receives `recovered`.
 
 ## 10. DRVN Shipping — EasyPost setup (migrations 0051-0056)
 
@@ -377,6 +494,13 @@ shipping its own inventory. Before any production postage is enabled:
    The code stores `seller_fulfillment_profiles.easypost_end_shipper_id` as
    an opaque reference and passes it through the provider seam only — a move
    between models changes `src/lib/shipping/easypost.ts`, nothing else.
+   **Tracking is separate from labels** (N110): with `EASYPOST_API_KEY`
+   set, every seller-entered tracking number is registered with the EasyPost
+   tracker after dispatch, even while `FLAG_INTEGRATED_SHIPPING_V1` is off;
+   the money worker's `labelVoids` family retries what fails
+   (`tracker_registration` jobs). There is no amount limit on dispatch, and
+   nothing to switch for $1,000+ orders. With no key, dispatch is unchanged
+   and untracked.
 3. **Webhook**: create an EasyPost webhook pointing at
    `https://<domain>/api/shipping/easypost` (it acts on `tracker.created`
    and `tracker.updated`), generate a webhook secret, and
@@ -439,8 +563,8 @@ can't deliver webhooks, so a test purchase stays "pending" until the
 
 - **`scripts/dev-jobs.sh`** — calls `/api/jobs/*` with the `CRON_SECRET`
   from `.env.local` on the database's own intervals (search 2 min, account
-  deletions 5 min, transfers 10 min, saved searches 30 min, media GC and
-  listing imports daily). Each job runs once its interval has passed, so a
+  deletions 5 min, transfers 10 min, saved searches 30 min, saved-search
+  digests hourly, media GC and listing imports daily). Each job runs once its interval has passed, so a
   missed tick catches up once rather than piling up; a dead server retries
   next tick. Run it by hand for one pass.
 - **`scripts/dev-stripe-listen.sh`** — `stripe listen` forwarding to

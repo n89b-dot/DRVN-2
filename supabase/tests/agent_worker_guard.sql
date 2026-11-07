@@ -64,6 +64,8 @@ begin
   update public.beta_access_config set enforced = false where singleton = true;
   -- The guard drives agents, so lift the seeded "all" switch inside this transaction.
   update public.agent_controls set cleared_at = now() where scope = 'all' and cleared_at is null;
+  -- Mandates need their side's beta step open (20261026100000).
+  update public.agent_beta_steps set open = true where step in ('seller', 'buyer');
   insert into auth.users(id, email) values
     (seller, 'agent-seller@drvn.test'), (buyer, 'agent-buyer@drvn.test'), (other, 'agent-other@drvn.test');
   insert into public.listings(id, seller_id, title, category, price_cents, shipping_cents, status)

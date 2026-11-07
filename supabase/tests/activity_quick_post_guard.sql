@@ -17,6 +17,9 @@ declare
   v_count int;
 begin
   update public.beta_access_config set enforced = false where singleton;
+  -- Member photo writes need the storage origin recorded (20261107203000).
+  insert into public.job_config(key, value) values ('media_storage_origin', 'https://proj.supabase.co')
+    on conflict (key) do update set value = excluded.value;
   insert into auth.users(id, email) values (v_owner, 'quick-post-owner@drvn.test');
   insert into public.profiles(id, username) values (v_owner, 'quick_post_owner')
     on conflict (id) do update set username = excluded.username;
@@ -54,7 +57,7 @@ begin
     from public.write_activity_post(
       'quick', v_quick_op, v_car, null,
       '[{"type":"text","html":"<p>New wheels turned up.</p>"}]'::jsonb,
-      array['https://example.test/wheels.jpg']
+      array['https://proj.supabase.co/storage/v1/object/public/activity-images/' || v_owner || '/wheels.jpg']
     );
   if v_outcome <> 'published' then
     raise exception 'A quick post did not publish (got %)', v_outcome;
@@ -99,7 +102,7 @@ begin
     from public.write_activity_post(
       'quick', v_quick_op, v_car, null,
       '[{"type":"text","html":"<p>New wheels turned up.</p>"}]'::jsonb,
-      array['https://example.test/wheels.jpg']
+      array['https://proj.supabase.co/storage/v1/object/public/activity-images/' || v_owner || '/wheels.jpg']
     );
   if v_outcome <> 'replayed' then
     raise exception 'A repeated quick post did not replay (got %)', v_outcome;
@@ -127,7 +130,7 @@ begin
   perform public.write_activity_post(
     'update', v_quick_op, v_car, '',
     '[{"type":"text","html":"<p>New wheels turned up. 18s.</p>"}]'::jsonb,
-    array['https://example.test/wheels.jpg']
+    array['https://proj.supabase.co/storage/v1/object/public/activity-images/' || v_owner || '/wheels.jpg']
   );
   -- ...while a titled post still can't be edited down to nothing.
   v_rejected := false;

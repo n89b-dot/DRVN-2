@@ -1,7 +1,11 @@
 import { redirect } from "next/navigation";
 
+import { AgentChatPrivacy } from "./agent-chat-privacy";
+import { AgentSection } from "./agent-section";
 import { loadAnalyticsConsent } from "./analytics-consent";
 import { AnalyticsConsentForm } from "./analytics-consent-form";
+import { agentTabOpen } from "@/lib/agent/beta";
+import { loadAgentMode } from "@/lib/agent/member-mode";
 import { loadFulfillmentProfile } from "@/features/commerce/fulfillment";
 import { COUNTRIES } from "@/lib/geo/countries";
 import { getConnectAccountId } from "@/lib/payments/connect";
@@ -9,6 +13,9 @@ import { listSavedCards } from "@/lib/payments/customers";
 import { getPaymentProvider, paymentsAreLive } from "@/lib/payments/provider";
 import { integratedShippingEnabled } from "@/lib/shipping/provider";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
+import { Alert } from "@/components/ui";
+import { googleSignInEnabled } from "@/lib/auth-providers";
+import { authenticatedRecently, signsInWithPassword } from "@/lib/reauthentication";
 
 import { logout } from "@/app/(auth)/actions";
 
@@ -20,10 +27,15 @@ export const metadata = { title: "Settings - DRVN" };
 
 type ProfileLink = { label: string; url: string };
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ changed?: string }>;
+}) {
   const supabase = await getPageClient();
   const user = await getViewer();
   if (!user) redirect("/login");
+  const { changed } = await searchParams;
 
   // One parallel round. These used to run one after another (profile →
   // Connect → floor → shop → cards/fulfilment → consent), seven trips deep.
@@ -35,6 +47,10 @@ export default async function SettingsPage() {
     savedCards,
     fulfillment,
     analyticsEnabled,
+    agentOpen,
+    { count: agentChatMessages },
+    claims,
+    google,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -61,10 +77,31 @@ export default async function SettingsPage() {
     listSavedCards(user.id).catch(() => []),
     loadFulfillmentProfile(user.id),
     loadAnalyticsConsent(supabase, user.id),
+    agentTabOpen(),
+    // N125: the stored agent chat, read as the member, for Clear chat under
+    // Privacy — whatever the agent's mode or beta steps say.
+    supabase.from("agent_messages").select("id", { count: "exact", head: true }).eq("owner_id", user.id),
+    // N41/N45: how this member can confirm it's them — read from the
+    // session's verified claims (no extra round trip; getViewer did the same).
+    supabase.auth.getClaims().then(({ data }) => data?.claims ?? null, () => null),
+    googleSignInEnabled(),
   ]);
+  // AG-7: the agent's mode and how many mandates are live, for the Agent
+  // section — only while the Agent tab exists for members at all.
+  const [agentMode, { count: agentRunning }] = agentOpen
+    ? await Promise.all([
+        loadAgentMode(user.id),
+        supabase.from("agent_mandates").select("id", { count: "exact", head: true }).eq("owner_id", user.id).in("status", ["active", "paused"]),
+      ])
+    : ["act" as const, { count: 0 }];
   // Never render the profile form over a row that failed to load: its
   // fields would seed as empty strings and Save would blank the profile.
   if (!profile) throw new Error("Settings could not load your profile.");
+
+  // Landing from an email-change link (/confirm, readiness 53). Both addresses
+  // must confirm, so the notice says whether the change is done or still
+  // waiting on the other link; the auth user is read only on this landing.
+  const emailNotice = changed === "email" ? await emailChangeNotice(supabase) : null;
 
   const links = (Array.isArray(profile?.links) ? profile!.links : []) as ProfileLink[];
 
@@ -75,6 +112,11 @@ export default async function SettingsPage() {
     // own — without it the section register scrolls with no bleed and stops
     // dead at the column edge, saying nothing about the sections to its right.
     <div className="mx-auto w-full max-w-[900px] px-6 pb-10 [--gutter:24px]">
+      {emailNotice && (
+        <Alert tone={emailNotice.done ? "ok" : "default"} title={emailNotice.title} role="status" className="mb-6">
+          {emailNotice.body}
+        </Alert>
+      )}
       <SettingsPanel
         paymentsLive={paymentsAreLive()}
         savedCards={savedCards}
@@ -102,7 +144,18 @@ export default async function SettingsPage() {
           notification_prefs: profile?.notification_prefs ?? {},
         }}
         logout={logout}
-        privacySection={<AnalyticsConsentForm initialEnabled={analyticsEnabled} />}
+        identityProof={{
+          usesPassword: signsInWithPassword(claims?.app_metadata),
+          google,
+          confirmedRecently: authenticatedRecently(claims),
+        }}
+        privacySection={
+          <div className="grid gap-6">
+            <AnalyticsConsentForm initialEnabled={analyticsEnabled} />
+            {agentChatMessages ? <AgentChatPrivacy messages={agentChatMessages} /> : null}
+          </div>
+        }
+        agentSection={agentOpen ? <AgentSection initialMode={agentMode} running={agentRunning ?? 0} /> : undefined}
         shippingSection={
           <ShippingSection
             countries={COUNTRIES}
@@ -139,4 +192,25 @@ export default async function SettingsPage() {
       />
     </div>
   );
+}
+
+async function emailChangeNotice(
+  supabase: Awaited<ReturnType<typeof getPageClient>>,
+): Promise<{ done: boolean; title: string; body: string } | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  if (user.new_email) {
+    return {
+      done: false,
+      title: "One link confirmed",
+      body: `The change to ${user.new_email} completes once the link sent to the other address has been opened too.`,
+    };
+  }
+  return {
+    done: true,
+    title: "Sign-in email updated",
+    body: `You now sign in with ${user.email ?? "your new address"}.`,
+  };
 }

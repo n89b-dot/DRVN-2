@@ -6,7 +6,8 @@ import { profileBannerUrl } from "@/lib/cars/banner";
 import { ProfileBody } from "@/components/profile/profile-body";
 import { initialsFrom, splitLinks } from "@/components/profile/helpers";
 import { StorePanel, forSaleCount } from "@/features/store/store-panel";
-import { loadProfileView } from "@/lib/profile-data";
+import { loadProfileView, PROFILE_UPDATES_MAX_PAGE } from "@/lib/profile-data";
+import { parsePageParam } from "@/lib/page-param";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
 import { ProfileEditor } from "./profile-editor";
@@ -36,9 +37,9 @@ export default async function ProfilePage({
     supabase.from("profiles").select("id, username, display_name, headline, bio, location, links, avatar_url, profile_type, notification_prefs, payouts_enabled, main_car_id, store_note, created_at, updated_at").eq("id", user!.id).single(),
     loadProfileView(supabase, user!.id, {
       publicOnly: false,
-      listingsPage: Math.max(1, Number(listingsPageParam) || 1),
-      reviewsPage: Math.max(1, Number(reviewsPageParam) || 1),
-      updatesPage: Math.max(1, Number(updatesPageParam) || 1),
+      listingsPage: parsePageParam(listingsPageParam),
+      reviewsPage: parsePageParam(reviewsPageParam),
+      updatesPage: parsePageParam(updatesPageParam, PROFILE_UPDATES_MAX_PAGE),
     }),
     // Same banner the public page shows (P-1) — public cars only, so what you
     // see here is what a visitor sees.
@@ -104,6 +105,7 @@ export default async function ProfilePage({
         view={view}
         contactLinks={rest}
         basePath="/profile"
+        savedHref="/saved"
         initialTab={viewParam}
         storeNote={profile?.store_note}
         partsCount={partsForSale}
@@ -118,7 +120,7 @@ export default async function ProfilePage({
               viewerId={user!.id}
               basePath="/profile"
               tab={storeTab}
-              page={Math.max(1, Number(listingsPageParam) || 1)}
+              page={parsePageParam(listingsPageParam)}
             />
           </Suspense>
         }

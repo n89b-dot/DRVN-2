@@ -30,6 +30,7 @@ export type AdminAlert = {
     | "dispute_auto_refund_failed"
     | "recovery_case_opened"
     | "transfer_stuck"
+    | "media_cleanup_stuck"
     | "test";
   title: string;
   detail?: string;

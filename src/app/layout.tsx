@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 
 import { MotionPolicy } from "@/components/ui";
+import { SITE_DESCRIPTION } from "@/lib/share-copy";
 import { siteUrl } from "@/lib/site";
 import "./globals.css";
 
@@ -27,8 +28,7 @@ const plexMono = IBM_Plex_Mono({
  * and names both; marketplace routes override it with marketplace wording,
  * which is what a parts search engine should find.
  */
-const description =
-  "DRVN is the home for your car and its build. Document what you've done, follow what others are building, and buy or sell the parts that come off — with the car behind every part.";
+const description = SITE_DESCRIPTION;
 
 export const metadata: Metadata = {
   // Without metadataBase every relative OpenGraph/Twitter URL resolves against

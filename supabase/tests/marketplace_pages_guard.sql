@@ -24,7 +24,7 @@ begin
   if f ? 'min' then sql := sql || format(' and l.price_cents >= %s', f->>'min'); end if;
   sql := sql || case sort when 'price_asc' then ' order by l.price_cents asc, l.id asc'
                           when 'price_desc' then ' order by l.price_cents desc, l.id desc'
-                          else ' order by l.created_at desc, l.id desc' end
+                          else ' order by l.published_at desc, l.id desc' end
              || format(' limit %s offset %s) s', lim, skip);
   execute sql into result;
   return result;
@@ -36,7 +36,7 @@ create function pg_temp.new_page(f jsonb, sort text, skip int, lim int, pos uuid
     p_brand => coalesce(f->>'brand', ''), p_location => coalesce(f->>'location', ''), p_min_cents => (f->>'min')::int,
     p_vehicle => coalesce(f->>'vehicle', ''), p_vyear => coalesce((f->>'vyear')::int, 0), p_fit => coalesce((f->>'fit')::boolean, false),
     p_sort => sort,
-    p_after_created => (select created_at from public.listings where id = pos),
+    p_after_created => (select published_at from public.listings where id = pos),
     p_after_price => (select price_cents from public.listings where id = pos),
     p_after_id => pos, p_before => before, p_offset => skip, p_limit => lim)
 $$;

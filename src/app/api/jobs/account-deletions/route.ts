@@ -1,11 +1,12 @@
 import { processAccountExports, purgeExpiredAccountExports } from "@/lib/account-export-worker";
 import { trackedWorker } from "@/lib/tracked-worker";
+import { cronAuthorized } from "@/lib/cron-auth";
 import { processAccountDeletions } from "@/lib/account-deletion-worker";
 import { flushMonitoring, reportError } from "@/lib/monitoring";
 import { ALL_PUBLIC_KINDS } from "@/lib/supabase/public-cache";
 import { clearPublicData } from "@/lib/supabase/clear-public-data";
 async function run(request: Request) {
-  if (!process.env.CRON_SECRET || request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) return new Response(null, { status: 404 });
+  if (!cronAuthorized(request)) return new Response(null, { status: 404 });
   try {
     const results = await Promise.allSettled([processAccountDeletions(), processAccountExports(), purgeExpiredAccountExports()]);
     // A deleted account's cars, parts and posts leave the shared copy

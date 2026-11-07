@@ -1,5 +1,34 @@
 # Applying migrations
 
+## November 7 — fulfilment integrity, OS-W19 / OS-W30 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261107200100_fulfilment_integrity.sql` | not applied (PR only) |
+
+Apply before deploying the app from the same PR: the new app calls `pickup_mint_pass`. It sorts before `20261107203000_media_integrity.sql` (#73), which merged first; the two share no objects, so either order works. The old app keeps working against the new database (it still mints with its own upsert until it's replaced, and its pre-dispatch tracker call is simply no longer needed). `pickup_mint_pass` (new, service role only) mints and rotates a Pickup Pass under the same order-then-pass lock as `pickup_redeem` and never writes `redeemed_at`/`redeemed_by`, so a mint can't erase a handoff (N93). `mark_order_dispatched` is restated from `20261009100000` without the `tracking_required_from_cents` refusal (N110, "similar to eBay"); `settlement_settings.tracking_required_from_cents` is set to null and kept, unused. A first dispatch whose shipment has tracking but no carrier tracker queues a `tracker_registration` remediation job in the same transaction (dedup `tracker:<shipment id>`, first try in 5 minutes); `remediation_jobs_kind_check` gains that kind (restated from `20260905185725`; anything else that restates the check must keep it). `shipping_rate_quotes` gains `request_fingerprint` (a hash of every provider-shipment input: provider, both full addresses, end shipper, parcel); a stored quote is reused only on an exact match, and older rows (null) never are. Payout release rules are unchanged. Guards: `fulfilment_integrity_guard.sql` (new) and `payout_release_guard.sql` (check 1 and 6 updated for the removed rule).
+
+## November 7 — Media integrity and lifecycle, OS-W15 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261107203000_media_integrity.sql` | not applied |
+
+Apply after every earlier migration (it redefines no function another migration owns). Written as `20261107150500`; renamed when rebased so it sorts after main's latest (`20261107191000`). One storage object has one identity, `(bucket, decoded path)` (`private.media_object_key`, indexed on every photo column), and `public.media_object_referenced(bucket, path)` (service role only) is the one in-use check: it now counts dispute evidence by `storage_path` and message photos by path. Members can no longer insert, delete or rewrite `staged_uploads` rows (only stamp `consumed_at`); every row must name an object in its owner's own folder, and rows that don't are dropped from the ledger (storage untouched). Members can't delete media or evidence objects from Storage at all, evidence can't be overwritten, and evidence uploads only into `<uploader>/<order>/<file>` while that order is disputed and under 8 photos. A member's photo columns (car cover and gallery, hotspots, mod thumbnail, listing gallery, post photos and body media, avatar) only take their own canonical public URLs, on `job_config.media_storage_origin`, which fails closed: **set that row when applying this migration** (docs/production-runbook.md §4); until it exists no new member photo reference is accepted (the upload route and media-gc also record it from `NEXT_PUBLIC_SUPABASE_URL`, never overwriting). Deleting a car, post or listing queues its photos in `media_cleanup_queue`; the media job (and the deleting action, straight after) removes each one only if nothing references it. Removal first claims the object (`claim_media_deletion`, under a per-object lock) and gets an exclusive token: a second remover is told `busy`, and only the holder can `complete_media_deletion` (a tombstone) or `release_media_claim`; a claim past its 10-minute lease can be taken over. Uncertainty is sticky: an unknown Storage outcome (lost response, timeout, 5xx) is recorded on the claim (`mark_media_deletion_uncertain`), and a lease takeover makes the claim uncertain too. An uncertain claim is never released, only completed once a delete is confirmed (success, or not-found); only a definitive 400/401/403/404 refusal on a claim with no uncertainty releases it. The cleanup queue retries with backoff (`next_attempt_at`, 15 minutes doubling to a day), each object at most once per run, and an exhausted row raises a `media_cleanup_stuck` admin alert. Each enqueue gets a fresh `generation`; the worker dequeues or reschedules only the generation it read, so a request queued again mid-run survives. Every reference write, including the server's evidence attach, refuses a claimed object, so nothing attached mid-removal is lost. The queue is filled only as the deleted row's real owner (folder must match) and only for URLs on the recorded storage origin.
+
+Checked on a fresh database (native PostgreSQL 17 with the CI shim): every migration applies and every SQL guard passes, including the new `media_integrity_guard.sql`, which fails on the schema before this migration.
+
+## November 7 — AG-7, the member's agent mode (NOT applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261107170000_agent_member_mode.sql` | nowhere yet — not shared dev, not production |
+| `20261107190000_agent_mode_enforced.sql` | nowhere yet — not shared dev, not production |
+
+Apply after `20261107100000` (#64's agent model boundary, already on shared dev). Written as `20261026130000`; renamed when #66 was rebased onto #64 so it sorts after every migration already applied. It touches only `profiles` and redefines no function. One column, `profiles.agent_mode` (`'off' | 'suggest' | 'act'`, default `'act'`, Settings → Agent): Off disables every agent entry point, Suggest keeps the chat and price-drop suggestions but lets no mandate start, Act is today's behaviour. The owner writes it through the existing "users update own profile" policy plus a column update grant (0017's column-list model); there is no client select grant — the app reads it server-side for the signed-in member only. The worker is unchanged: it acts only on a live mandate, which the app refuses to start outside Act and ends when the member drops below it. Guard: `supabase/tests/agent_member_mode_guard.sql`.
+
+**`20261107190000` (R-agentmode)**, apply right after `20261107170000`. The mode holds in the database: `agent_mode_set(p_mode)` is the only write (the column update grant is revoked) and, below Act, revokes every live mandate with its open task and pending cards in the same transaction. `agent_mandate_set` and a resume (`agent_mandate_set_status(…, 'active')`) refuse below Act with `AG009`; `agent_claim_jobs` cancels a job whose owner is below Act and `agent_authority` (every worker write) refuses with `AG003`. `agent_chat_turn_begin`, the only path that stores a member's chat message, refuses under Off with `AG009` (restated from 20261107100000; spend reserve is left to 20261107190500, PR #79). All of them read the mode under `agent_member_lock_key(owner)`, shared, which `agent_mode_set` takes exclusively. Lock order: listing → offer → job → member → mandate → task → approval. Restated from their latest definitions: `agent_chat_turn_begin` (20261107100000), `agent_mandate_set` (20261026100000), `agent_mandate_set_status`, `agent_claim_jobs`, `agent_authority` (20261021100100). New: `agent_member_lock_key`, `agent_mode_set`. Guards: `agent_mode_enforcement_guard.sql`, `agent_member_mode_guard.sql`.
+
 ## October 25 — "Ask about DRVN" cards and sentence-to-filters usage, A4 (shared dev project)
 
 | File | Applied to |
@@ -626,7 +655,7 @@ for a plausible buyer receipt and for the untracked auto-confirm.
 an untracked first dispatch at or above the tracking threshold. Deploy the
 app with it: the old app keeps working (it calls with four arguments) but
 can't register a tracker first, so $1,000+ orders need a DRVN label until the
-new app is live. Guard: `payout_release_guard.sql`; three existing guards
+new app is live. (Superseded: `20261107200100` removes the amount rule.) Guard: `payout_release_guard.sql`; three existing guards
 updated for the new deployed values.
 ## October 8 — round five: guest auto-confirm warning email
 

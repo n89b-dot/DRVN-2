@@ -8,9 +8,13 @@ import { listSavedCards } from "@/lib/payments/customers";
 import { Rv } from "@/components/livesheet";
 import { Foot, ObjectRow } from "@/components/ui";
 import { completeReservedOrder } from "@/features/commerce/actions";
+import { PRICE_ROUND_COLUMNS, agentPriceLine, type PriceRound } from "@/features/commerce/agent-price";
+import { requiredRead } from "@/lib/supabase/required-read";
 import { formatPrice } from "@/lib/payments/fee";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
+
+import { reservationHoldEndsAt } from "./hold";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -22,8 +26,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
  *
  * Accepting an offer used to charge the buyer on the seller's click, which
  * produced a paid order with no delivery address — unfulfillable, and billed
- * to someone who had never seen a total. Acceptance now holds the part for 24
- * hours and sends the buyer here to supply an address and confirm.
+ * to someone who had never seen a total. Acceptance now holds the part
+ * (listings.reserved_until) and sends the buyer here to supply an address
+ * and confirm.
  */
 export default async function CompleteOrderPage({
   params,
@@ -80,7 +85,7 @@ export default async function CompleteOrderPage({
           .order("position")
       : Promise.resolve({ data: [] }),
     listingIds.length
-      ? supabase.from("listings").select("id, allows_collection").in("id", listingIds)
+      ? supabase.from("listings").select("id, allows_collection, reserved_until").in("id", listingIds)
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -96,9 +101,25 @@ export default async function CompleteOrderPage({
   const sellerName =
     seller?.display_name ?? (seller?.username ? `@${seller.username}` : order.seller_label) ?? "the seller";
 
-  const expiresSoon = order.created_at
-    ? new Date(new Date(order.created_at).getTime() + 24 * 60 * 60 * 1000)
+  // AG-4 (readiness 65): when an agent fixed the price being paid, the money
+  // block and the review right before payment both say whose. From the origin offer's rounds — a read the line can't
+  // stand in for, so a failed one throws rather than quietly saying nothing.
+  const priceLine = order.origin_offer_id
+    ? agentPriceLine(
+        requiredRead(
+          await supabase
+            .from("offer_rounds")
+            .select(PRICE_ROUND_COLUMNS)
+            .eq("offer_id", order.origin_offer_id)
+            .order("round_no"),
+          "this order's negotiation",
+        ) as PriceRound[],
+      )
     : null;
+
+  // N97: the hold's real end, as the database keeps it (the listing's
+  // reserved_until, set at acceptance) — never guessed from the order's age.
+  const expiresSoon = reservationHoldEndsAt(listings ?? []);
 
   return (
     <div className="mx-auto w-full max-w-[820px] px-5 pb-10">
@@ -171,6 +192,7 @@ export default async function CompleteOrderPage({
               savedCards={await listSavedCards(user.id).catch(() => [])}
               action={completeReservedOrder}
               orderId={id}
+              priceNote={priceLine?.text}
             />
           </Rv>
         </div>
@@ -194,6 +216,9 @@ export default async function CompleteOrderPage({
               <b>{formatPrice(order.total_cents)}</b>
             </dd>
           </dl>
+          {priceLine && (
+            <p className="spec-note mt-3 border-t border-[color:var(--rule-soft)] pt-3">{priceLine.text}</p>
+          )}
         </Rv>
       </section>
 

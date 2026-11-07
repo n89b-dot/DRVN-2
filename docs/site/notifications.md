@@ -102,6 +102,7 @@ Source of truth: `src/lib/notifications/kinds.ts`.
 | `comment_removed` | engagement | always shown | app (deliver.ts) | Moderation removed one of your replies. |
 | `account_suspended` | marketplace | always shown | app (deliver.ts) | Your account was suspended, with the reason. Posting, replying, messaging, Q&A and offers are blocked. |
 | `account_restored` | marketplace | always shown | app (deliver.ts) | Your suspension was lifted. |
+| `password_changed` | marketplace | always shown | app (deliver.ts) | Your password was changed from Settings (readiness 53). Always sent: Supabase Auth's own password-changed email is off unless the project turns it on. Never muted. |
 | `saved_search` | marketplace | `saved_searches` | app (deliver.ts) | New inventory matching a saved search with alerts on. |
 
 <!-- END GENERATED: notification-kinds -->

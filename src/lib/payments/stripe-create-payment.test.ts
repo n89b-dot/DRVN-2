@@ -144,7 +144,6 @@ describe("StripePaymentProvider.createPayment", () => {
   describe("card verification", () => {
     const settings = {
       receipt_release_after_days: 3,
-      tracking_required_from_cents: 100000,
       card_verification_from_cents: 50000,
     };
 

@@ -46,10 +46,13 @@ export function Rv({
   stagger = 0,
   className = "",
   style,
+  id,
   immediate: immediateProp = false,
 }: {
   children: ReactNode;
   as?: RvTag;
+  /** Anchor target, for a link that jumps to this block (e.g. `#dispatch`). */
+  id?: string;
   /** Stagger index — delays entry by index × 70ms (mockup convention). */
   stagger?: number;
   /** Render settled, with no hidden first frame. For a page's leading media
@@ -83,6 +86,7 @@ export function Rv({
   return (
     <MotionTag
       ref={ref}
+      id={id}
       data-reveal="true"
       className={`${shown ? "is-in " : ""}${className}`}
       style={style}

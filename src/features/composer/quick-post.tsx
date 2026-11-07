@@ -7,7 +7,7 @@ import { useRef, useState, useTransition } from "react";
 import { Button, ButtonLink } from "@/components/ui";
 import { createQuickPost } from "@/app/(product)/garage/actions";
 import { useHydrated } from "@/lib/hooks/useHydrated";
-import { uploadImages } from "@/lib/media-upload";
+import { uploadFailureMessage, uploadImages } from "@/lib/media-upload";
 
 import { PartPicker, type TaggablePart } from "./part-picker";
 import { handOffToComposer } from "./recovery";
@@ -96,7 +96,8 @@ export function QuickPost({
         normalize: true,
       });
       setPhotos((p) => [...p, ...result.uploaded.map((u) => u.url)].slice(0, 6));
-      if (result.failed.length) setError("Some photos couldn't be added.");
+      // Every photo that didn't make it, by name and reason (N64).
+      if (result.failed.length) setError(uploadFailureMessage(result.failed));
     } finally {
       setUploading(false);
     }

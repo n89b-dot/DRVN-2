@@ -622,6 +622,52 @@ export type Database = {
           },
         ]
       }
+      agent_chat_requests: {
+        Row: {
+          created_at: string
+          member_message_id: string | null
+          owner_id: string
+          reply_message_id: string | null
+          request_id: string
+        }
+        Insert: {
+          created_at?: string
+          member_message_id?: string | null
+          owner_id: string
+          reply_message_id?: string | null
+          request_id: string
+        }
+        Update: {
+          created_at?: string
+          member_message_id?: string | null
+          owner_id?: string
+          reply_message_id?: string | null
+          request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_chat_requests_member_message_id_fkey"
+            columns: ["member_message_id"]
+            isOneToOne: false
+            referencedRelation: "agent_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_chat_requests_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_chat_requests_reply_message_id_fkey"
+            columns: ["reply_message_id"]
+            isOneToOne: false
+            referencedRelation: "agent_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_controls: {
         Row: {
           cleared_at: string | null
@@ -1068,6 +1114,38 @@ export type Database = {
           value?: number | null
         }
         Relationships: []
+      }
+      agent_spend_holds: {
+        Row: {
+          amount_usd: number
+          created_at: string
+          feature: string
+          id: string
+          owner_id: string
+        }
+        Insert: {
+          amount_usd: number
+          created_at?: string
+          feature: string
+          id?: string
+          owner_id: string
+        }
+        Update: {
+          amount_usd?: number
+          created_at?: string
+          feature?: string
+          id?: string
+          owner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_spend_holds_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       agent_spend_limits: {
         Row: {
@@ -2329,11 +2407,11 @@ export type Database = {
           all_years: boolean
           car_owner_id: string | null
           car_public: boolean
-          created_at: string
           listing_id: string
           make_key: string
           model_key: string
           price_cents: number
+          published_at: string
           seller_id: string
           stated_also: boolean
           via: string
@@ -2343,11 +2421,11 @@ export type Database = {
           all_years?: boolean
           car_owner_id?: string | null
           car_public?: boolean
-          created_at: string
           listing_id: string
           make_key: string
           model_key: string
           price_cents: number
+          published_at: string
           seller_id: string
           stated_also?: boolean
           via: string
@@ -2357,11 +2435,11 @@ export type Database = {
           all_years?: boolean
           car_owner_id?: string | null
           car_public?: boolean
-          created_at?: string
           listing_id?: string
           make_key?: string
           model_key?: string
           price_cents?: number
+          published_at?: string
           seller_id?: string
           stated_also?: boolean
           via?: string
@@ -2399,6 +2477,7 @@ export type Database = {
           part_number: string | null
           part_number_compact: string | null
           price_cents: number
+          published_at: string | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -2437,6 +2516,7 @@ export type Database = {
           part_number?: string | null
           part_number_compact?: string | null
           price_cents: number
+          published_at?: string | null
           removed_at?: string | null
           removed_reason?: string | null
           reserved_until?: string | null
@@ -2475,6 +2555,7 @@ export type Database = {
           part_number?: string | null
           part_number_compact?: string | null
           price_cents?: number
+          published_at?: string | null
           removed_at?: string | null
           removed_reason?: string | null
           reserved_until?: string | null
@@ -2527,6 +2608,42 @@ export type Database = {
           key?: string
           subkey?: string
           total?: number
+        }
+        Relationships: []
+      }
+      media_cleanup_queue: {
+        Row: {
+          attempts: number
+          bucket: string
+          enqueued_at: string
+          generation: string
+          last_error: string | null
+          next_attempt_at: string
+          owner_id: string
+          path: string
+          reason: string
+        }
+        Insert: {
+          attempts?: number
+          bucket: string
+          enqueued_at?: string
+          generation?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          owner_id: string
+          path: string
+          reason: string
+        }
+        Update: {
+          attempts?: number
+          bucket?: string
+          enqueued_at?: string
+          generation?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          owner_id?: string
+          path?: string
+          reason?: string
         }
         Relationships: []
       }
@@ -2731,6 +2848,7 @@ export type Database = {
           kind: string
           read_at: string | null
           section: string
+          target_id: string | null
           title: string
           user_id: string
         }
@@ -2743,6 +2861,7 @@ export type Database = {
           kind: string
           read_at?: string | null
           section: string
+          target_id?: string | null
           title: string
           user_id: string
         }
@@ -2755,6 +2874,7 @@ export type Database = {
           kind?: string
           read_at?: string | null
           section?: string
+          target_id?: string | null
           title?: string
           user_id?: string
         }
@@ -4038,6 +4158,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          agent_mode: string
           avatar_url: string | null
           bio: string | null
           country: string | null
@@ -4063,6 +4184,7 @@ export type Database = {
           username: string | null
         }
         Insert: {
+          agent_mode?: string
           avatar_url?: string | null
           bio?: string | null
           country?: string | null
@@ -4088,6 +4210,7 @@ export type Database = {
           username?: string | null
         }
         Update: {
+          agent_mode?: string
           avatar_url?: string | null
           bio?: string | null
           country?: string | null
@@ -4850,6 +4973,103 @@ export type Database = {
           },
         ]
       }
+      saved_search_email_cursors: {
+        Row: {
+          checked_through: string
+          saved_search_id: string
+          updated_at: string
+        }
+        Insert: {
+          checked_through: string
+          saved_search_id: string
+          updated_at?: string
+        }
+        Update: {
+          checked_through?: string
+          saved_search_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_search_email_cursors_saved_search_id_fkey"
+            columns: ["saved_search_id"]
+            isOneToOne: true
+            referencedRelation: "saved_searches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_search_email_digests: {
+        Row: {
+          attempts: number
+          created_at: string
+          digest_day: string
+          href: string
+          id: string
+          items: Json
+          last_error: string | null
+          match_count: number
+          next_attempt_at: string
+          provider_message_id: string | null
+          saved_search_id: string
+          search_name: string
+          sent_at: string | null
+          skip_reason: string | null
+          status: string
+          updated_at: string
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          digest_day: string
+          href: string
+          id?: string
+          items?: Json
+          last_error?: string | null
+          match_count: number
+          next_attempt_at?: string
+          provider_message_id?: string | null
+          saved_search_id: string
+          search_name: string
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          updated_at?: string
+          window_end: string
+          window_start: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          digest_day?: string
+          href?: string
+          id?: string
+          items?: Json
+          last_error?: string | null
+          match_count?: number
+          next_attempt_at?: string
+          provider_message_id?: string | null
+          saved_search_id?: string
+          search_name?: string
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          updated_at?: string
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_search_email_digests_saved_search_id_fkey"
+            columns: ["saved_search_id"]
+            isOneToOne: false
+            referencedRelation: "saved_searches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saved_searches: {
         Row: {
           alert: boolean
@@ -5449,6 +5669,7 @@ export type Database = {
           provider: string
           provider_shipment_id: string
           rate_ref: string
+          request_fingerprint: string | null
           service: string
           service_label: string
         }
@@ -5468,6 +5689,7 @@ export type Database = {
           provider: string
           provider_shipment_id: string
           rate_ref: string
+          request_fingerprint?: string | null
           service: string
           service_label: string
         }
@@ -5487,6 +5709,7 @@ export type Database = {
           provider?: string
           provider_shipment_id?: string
           rate_ref?: string
+          request_fingerprint?: string | null
           service?: string
           service_label?: string
         }
@@ -5830,21 +6053,33 @@ export type Database = {
       }
       webhook_events: {
         Row: {
+          failed_attempts: number
           id: string
+          last_failed_at: string | null
+          last_failure_detail: string | null
+          last_failure_kind: string | null
           payload: Json | null
           processed_at: string | null
           received_at: string
           type: string
         }
         Insert: {
+          failed_attempts?: number
           id: string
+          last_failed_at?: string | null
+          last_failure_detail?: string | null
+          last_failure_kind?: string | null
           payload?: Json | null
           processed_at?: string | null
           received_at?: string
           type: string
         }
         Update: {
+          failed_attempts?: number
           id?: string
+          last_failed_at?: string | null
+          last_failure_detail?: string | null
+          last_failure_kind?: string | null
           payload?: Json | null
           processed_at?: string | null
           received_at?: string
@@ -5897,6 +6132,10 @@ export type Database = {
       activity_post_search_text: { Args: { body: Json }; Returns: string }
       activity_post_visible: { Args: { p_post_id: string }; Returns: boolean }
       actor_name: { Args: { p_id: string }; Returns: string }
+      admin_cancel_seller_carry_payout: {
+        Args: { p_id: string }
+        Returns: Json
+      }
       admin_open_agent_chat: {
         Args: {
           p_case: string
@@ -5915,6 +6154,7 @@ export type Database = {
         Args: { p_from: string; p_to: string }
         Returns: Json
       }
+      admin_retry_seller_carry_payout: { Args: { p_id: string }; Returns: Json }
       admin_role: { Args: never; Returns: string }
       admin_set_agent_beta_step: {
         Args: { p_open: boolean; p_reason: string; p_step: string }
@@ -5932,6 +6172,17 @@ export type Database = {
       admin_set_agent_spend_limits: {
         Args: { p_global_usd: number; p_member_usd: number; p_reason: string }
         Returns: undefined
+      }
+      admit_saved_search_digest: {
+        Args: {
+          p_expected_through?: string
+          p_href: string
+          p_items: Json
+          p_match_count: number
+          p_saved_search_id: string
+          p_window_end: string
+        }
+        Returns: string
       }
       advance_search_rebuild: { Args: { p_run: string }; Returns: Json }
       agent_approval_decide: {
@@ -5964,6 +6215,29 @@ export type Database = {
         }[]
       }
       agent_chat_card_ok: { Args: { p_card: Json }; Returns: boolean }
+      agent_chat_message_json: { Args: { p_id: string }; Returns: Json }
+      agent_chat_turn_begin: {
+        Args: {
+          p_body: string
+          p_images?: string[]
+          p_owner: string
+          p_request: string
+        }
+        Returns: Json
+      }
+      agent_chat_turn_finish: {
+        Args: {
+          p_body: string
+          p_cards?: Json
+          p_owner: string
+          p_request: string
+        }
+        Returns: Json
+      }
+      agent_chat_turn_status: {
+        Args: { p_owner: string; p_request: string }
+        Returns: Json
+      }
       agent_claim_jobs: {
         Args: { p_lease_seconds?: number; p_limit?: number }
         Returns: {
@@ -6053,6 +6327,8 @@ export type Database = {
         Args: { p_mandate: string; p_status: string }
         Returns: string
       }
+      agent_member_lock_key: { Args: { p_owner: string }; Returns: number }
+      agent_mode_set: { Args: { p_mode: string }; Returns: Json }
       agent_offer_move: {
         Args: {
           p_amount: number
@@ -6102,6 +6378,23 @@ export type Database = {
       }
       agent_retention_sweep: { Args: never; Returns: Json }
       agent_spend_allowed: { Args: { p_owner: string }; Returns: Json }
+      agent_spend_reserve: {
+        Args: { p_amount_usd: number; p_feature: string; p_owner: string }
+        Returns: Json
+      }
+      agent_spend_settle: {
+        Args: {
+          p_cost_usd?: number
+          p_feature: string
+          p_hold: string
+          p_input_tokens: number
+          p_model: string
+          p_output_tokens: number
+          p_owner: string
+          p_task?: string
+        }
+        Returns: undefined
+      }
       agent_usage_retention_sweep: { Args: never; Returns: number }
       apply_stripe_dispute_event: {
         Args: {
@@ -6205,9 +6498,28 @@ export type Database = {
         }
         Returns: string
       }
+      car_update_page: {
+        Args: {
+          p_before_at?: string
+          p_before_id?: string
+          p_car: string
+          p_limit?: number
+        }
+        Returns: {
+          body: Json
+          id: string
+          intro: string
+          published_at: string
+          title: string
+        }[]
+      }
       charge_cents_in_bounds: { Args: { p_cents: number }; Returns: boolean }
       claim_listing_creation: {
         Args: { p_payload_hash: string; p_request: string }
+        Returns: Json
+      }
+      claim_media_deletion: {
+        Args: { p_bucket: string; p_path: string }
         Returns: Json
       }
       claim_outbound_label_void: {
@@ -6233,6 +6545,19 @@ export type Database = {
       claim_remediation_jobs: {
         Args: { p_kind: string; p_limit?: number }
         Returns: Json
+      }
+      claim_saved_search_digests: {
+        Args: { p_lease_seconds?: number; p_limit?: number }
+        Returns: {
+          attempt: number
+          digest_day: string
+          digest_id: string
+          href: string
+          items: Json
+          match_count: number
+          recipient: string
+          search_name: string
+        }[]
       }
       claim_search_job_batch: { Args: { p_limit: number }; Returns: Json }
       claim_search_jobs: { Args: never; Returns: Json }
@@ -6314,6 +6639,10 @@ export type Database = {
         Args: { p_listing: string; p_payload_hash: string; p_request: string }
         Returns: boolean
       }
+      complete_media_deletion: {
+        Args: { p_bucket: string; p_path: string; p_token: string }
+        Returns: boolean
+      }
       complete_outbound_label: {
         Args: { p_label: Json; p_shipment: string }
         Returns: Json
@@ -6333,6 +6662,16 @@ export type Database = {
       complete_return_label: {
         Args: { p_label: Json; p_return: string }
         Returns: Json
+      }
+      complete_saved_search_digest: {
+        Args: {
+          p_attempt: number
+          p_error?: string
+          p_id: string
+          p_outcome: string
+          p_provider_message_id?: string
+        }
+        Returns: string
       }
       complete_seller_carry_payout: {
         Args: { p_id: string; p_transfer_reference: string; p_worker: string }
@@ -6585,6 +6924,20 @@ export type Database = {
         Args: { p_job: string; p_lease: string; p_reference?: string }
         Returns: Json
       }
+      followed_feed_rows: {
+        Args: {
+          p_before_at?: string
+          p_before_id?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          happened_at: string
+          id: string
+          kind: string
+          seller_id: string
+        }[]
+      }
       freeze_accepted_offer_checkout: {
         Args: { p_actor: string; p_order: string; p_shipping: Json }
         Returns: Json
@@ -6674,6 +7027,14 @@ export type Database = {
         Args: { p_listing: string; p_request: string }
         Returns: Json
       }
+      listing_engagement_counts: {
+        Args: { p_listings: string[] }
+        Returns: {
+          likes: number
+          listing_id: string
+          questions: number
+        }[]
+      }
       listing_public_offer_floor: {
         Args: { p_listing: string }
         Returns: number
@@ -6708,6 +7069,10 @@ export type Database = {
         }[]
       }
       mark_due_transfer_intents: { Args: never; Returns: number }
+      mark_media_deletion_uncertain: {
+        Args: { p_bucket: string; p_path: string; p_token: string }
+        Returns: boolean
+      }
       mark_order_dispatched: {
         Args: {
           p_actor: string
@@ -6770,6 +7135,7 @@ export type Database = {
           part_number: string | null
           part_number_compact: string | null
           price_cents: number
+          published_at: string | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -6854,6 +7220,7 @@ export type Database = {
           part_number: string | null
           part_number_compact: string | null
           price_cents: number
+          published_at: string | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -6933,6 +7300,7 @@ export type Database = {
           part_number: string | null
           part_number_compact: string | null
           price_cents: number
+          published_at: string | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7016,6 +7384,7 @@ export type Database = {
           part_number: string | null
           part_number_compact: string | null
           price_cents: number
+          published_at: string | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7078,6 +7447,7 @@ export type Database = {
           part_number: string | null
           part_number_compact: string | null
           price_cents: number
+          published_at: string | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7102,6 +7472,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      media_object_referenced: {
+        Args: { p_bucket: string; p_path: string }
+        Returns: boolean
+      }
       merge_products: {
         Args: { p_actor?: string; p_basis?: string; p_products: string[] }
         Returns: string
@@ -7120,6 +7494,7 @@ export type Database = {
       my_car_vin: { Args: { p_car: string }; Returns: string }
       my_default_offer_floor: { Args: never; Returns: number }
       my_listing_offer_floor: { Args: { p_listing: string }; Returns: number }
+      notification_href_target: { Args: { p_href: string }; Returns: string }
       notify: {
         Args: {
           p_actor_id?: string
@@ -7200,11 +7575,45 @@ export type Database = {
         Args: { p_delivered_at: string; p_now: boolean; p_order: string }
         Returns: string
       }
+      pickup_mint_pass: {
+        Args: {
+          p_buyer_id: string
+          p_code_hash: string
+          p_expires_at: string
+          p_order_id: string
+          p_token_hash: string
+        }
+        Returns: Json
+      }
       pickup_redeem: {
         Args: { p_hash: string; p_order_id: string; p_seller_id: string }
         Returns: Json
       }
+      post_comment_page: {
+        Args: {
+          p_before_at?: string
+          p_before_id?: string
+          p_limit?: number
+          p_post: string
+        }
+        Returns: {
+          author_display_name: string
+          author_id: string
+          author_username: string
+          body: string
+          created_at: string
+          id: string
+        }[]
+      }
       post_href: { Args: { p_post_id: string }; Returns: string }
+      post_reaction_counts: {
+        Args: { p_post: string }
+        Returns: {
+          emoji: string
+          reacted: boolean
+          total: number
+        }[]
+      }
       post_search_doc: {
         Args: { p_intro: string; p_search_text: string; p_title: string }
         Returns: string
@@ -7275,6 +7684,7 @@ export type Database = {
       }
       profile_is_visible: { Args: { p_id: string }; Returns: boolean }
       profile_sales_count: { Args: { p_profile: string }; Returns: number }
+      prune_listing_edit_requests: { Args: never; Returns: number }
       prune_rate_limits: { Args: never; Returns: undefined }
       purchase_begin: {
         Args: {
@@ -7424,6 +7834,10 @@ export type Database = {
         }
         Returns: string
       }
+      record_webhook_failure: {
+        Args: { p_detail?: string; p_id: string; p_kind: string }
+        Returns: number
+      }
       record_worker_run: {
         Args: {
           p_family: string
@@ -7443,6 +7857,10 @@ export type Database = {
       refresh_marketplace_facet_counts: { Args: never; Returns: undefined }
       refresh_search_words: { Args: never; Returns: undefined }
       release_expired_reservations: { Args: never; Returns: Json }
+      release_media_claim: {
+        Args: { p_bucket: string; p_path: string; p_token: string }
+        Returns: boolean
+      }
       release_seller_carry_payout: {
         Args: {
           p_attempts: number
@@ -7547,6 +7965,52 @@ export type Database = {
         Args: { p_car_id: string; p_items: Json }
         Returns: Json
       }
+      saved_counts: {
+        Args: never
+        Returns: {
+          builds: number
+          followed_builds: number
+          followed_sellers: number
+          parts: number
+          posts: number
+          unavailable_parts: number
+        }[]
+      }
+      saved_listing_page: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_query?: string
+          p_sort?: string
+        }
+        Returns: {
+          listing_id: string
+          total: number
+        }[]
+      }
+      saved_page: {
+        Args: {
+          p_before_at?: string
+          p_before_id?: string
+          p_collection: string
+          p_limit?: number
+        }
+        Returns: {
+          saved_at: string
+          target_id: string
+        }[]
+      }
+      saved_search_digest_sweep: { Args: never; Returns: Json }
+      saved_search_digests_due: {
+        Args: { p_limit?: number }
+        Returns: {
+          checked_through: string
+          params: Json
+          saved_search_id: string
+          user_id: string
+          window_end: string
+        }[]
+      }
       search_car_ids: { Args: { p_query: string }; Returns: string[] }
       search_listing_documents: {
         Args: { p_ids: string[] }
@@ -7633,6 +8097,14 @@ export type Database = {
           sold_count: number
         }[]
       }
+      seller_review_summaries: {
+        Args: { p_sellers: string[] }
+        Returns: {
+          rating_avg: number
+          review_count: number
+          seller_id: string
+        }[]
+      }
       set_analytics_consent: {
         Args: { p_allowed: boolean }
         Returns: undefined
@@ -7671,6 +8143,14 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      sitemap_post_page: {
+        Args: { p_count: number; p_start: number }
+        Returns: {
+          car_slug: string
+          id: string
+          updated_at: string
+        }[]
+      }
       suggested_builders: {
         Args: { p_limit?: number; p_viewer?: string }
         Returns: {

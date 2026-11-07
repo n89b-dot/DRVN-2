@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const verifyOtp = vi.hoisted(() => vi.fn());
 const profile = vi.hoisted(() => ({ username: null as string | null }));
+// The signed-in user after verification, or null for a browser with no session.
+const viewer = vi.hoisted(() => ({ user: { id: "user-1" } as { id: string; new_email?: string } | null }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
-    auth: { verifyOtp, getUser: async () => ({ data: { user: { id: "user-1" } } }) },
+    auth: { verifyOtp, getUser: async () => ({ data: { user: viewer.user } }) },
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { username: profile.username } }) }) }) }),
   }),
 }));
@@ -15,6 +17,7 @@ const SITE = "https://drvn.example";
 beforeEach(() => {
   vi.clearAllMocks();
   profile.username = null;
+  viewer.user = { id: "user-1" };
   process.env.NEXT_PUBLIC_SITE_URL = SITE;
   verifyOtp.mockResolvedValue({ error: null });
 });
@@ -113,5 +116,93 @@ describe("member links work in any browser", () => {
   it("keeps a guest's order link going to their orders", async () => {
     const response = await POST(post({ token_hash: "abc", type: "email", next: "/orders", flow: "orders" }));
     expect(response.headers.get("location")).toBe(`${SITE}/orders`);
+  });
+});
+
+// A member changing their sign-in email (readiness 53): the link used to carry
+// Supabase's PKCE address and land on the home page with no word of what had
+// happened. It now carries a token hash and comes back to Settings.
+describe("email change links land on Settings", () => {
+  it("offers the confirm page for an email_change link and takes Settings out of the return address", async () => {
+    const redirectTo = encodeURIComponent(`${SITE}/confirm?next=${encodeURIComponent("/settings?changed=email")}`);
+    const response = await GET(new Request(`${SITE}/confirm?token_hash=abc&type=email_change&redirect_to=${redirectTo}`));
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(html).toContain("Confirm the change");
+    expect(html).toContain('name="type" value="email_change"');
+    expect(html).toContain('name="flow" value="email_change"');
+    expect(html).toContain('name="next" value="/settings?changed=email"');
+  });
+
+  it("falls back to Settings when the return address is missing, off-site or not Settings", async () => {
+    const bare = await (await GET(new Request(`${SITE}/confirm?token_hash=abc&type=email_change`))).text();
+    expect(bare).toContain('name="next" value="/settings?changed=email"');
+    const offsite = encodeURIComponent("https://evil.example/confirm?next=/settings?changed=email");
+    const stolen = await (await GET(new Request(`${SITE}/confirm?token_hash=abc&type=email_change&redirect_to=${offsite}`))).text();
+    expect(stolen).toContain('name="next" value="/settings?changed=email"');
+    const elsewhere = await (await GET(new Request(`${SITE}/confirm?token_hash=abc&type=email_change&next=/orders`))).text();
+    expect(elsewhere).toContain('name="next" value="/settings?changed=email"');
+    // Only Settings or a page under it: a lookalike path is not Settings.
+    const lookalike = await (await GET(new Request(`${SITE}/confirm?token_hash=abc&type=email_change&next=/settings-phish`))).text();
+    expect(lookalike).toContain('name="next" value="/settings?changed=email"');
+    const under = await (await GET(new Request(`${SITE}/confirm?token_hash=abc&type=email_change&next=/settings/account`))).text();
+    expect(under).toContain('name="next" value="/settings/account"');
+  });
+
+  it("the first of the two links, in a browser with no session, lands on the public result page", async () => {
+    // Secure email change: the first link verifies with no session and no user.
+    verifyOtp.mockResolvedValue({ data: { user: null, session: null }, error: null });
+    viewer.user = null;
+    const response = await POST(post({ token_hash: "first", type: "email_change", flow: "email_change", next: "/settings?changed=email" }));
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(`${SITE}/email-change?step=pending`);
+  });
+
+  it("the first link in a signed-in browser still says one link is confirmed", async () => {
+    verifyOtp.mockResolvedValue({ data: { user: null, session: null }, error: null });
+    viewer.user = { id: "user-1", new_email: "new@drvn.test" };
+    const response = await POST(post({ token_hash: "first", type: "email_change", flow: "email_change", next: "/settings?changed=email" }));
+    expect(response.headers.get("location")).toBe(`${SITE}/email-change?step=pending`);
+  });
+
+  it("account A's first link opened in a browser signed in as account B still says pending", async () => {
+    // Verify returns no session and no user for A; B's own session has no
+    // pending change, which says nothing about A's.
+    verifyOtp.mockResolvedValue({ data: { user: null, session: null }, error: null });
+    viewer.user = { id: "account-b" };
+    const response = await POST(post({ token_hash: "a-first", type: "email_change", flow: "email_change", next: "/settings?changed=email" }));
+    expect(response.headers.get("location")).toBe(`${SITE}/email-change?step=pending`);
+  });
+
+  it("says done without a session only when the verification returns the token's own account, finished", async () => {
+    verifyOtp.mockResolvedValue({ data: { user: { id: "account-a", new_email: null }, session: null }, error: null });
+    viewer.user = { id: "account-b" };
+    const done = await POST(post({ token_hash: "a-second", type: "email_change", flow: "email_change", next: "/settings?changed=email" }));
+    expect(done.headers.get("location")).toBe(`${SITE}/email-change?step=done`);
+    verifyOtp.mockResolvedValue({ data: { user: { id: "account-a", new_email: "a-new@drvn.test" }, session: null }, error: null });
+    const waiting = await POST(post({ token_hash: "a-first", type: "email_change", flow: "email_change", next: "/settings?changed=email" }));
+    expect(waiting.headers.get("location")).toBe(`${SITE}/email-change?step=pending`);
+  });
+
+  it("the second link, opened in a browser with no session, signs in and lands on Settings", async () => {
+    // The completing verification returns the session; the client stores it.
+    verifyOtp.mockResolvedValue({ data: { user: { id: "user-1" }, session: { access_token: "t" } }, error: null });
+    viewer.user = null;
+    const response = await POST(post({ token_hash: "second", type: "email_change", flow: "email_change", next: "/settings?changed=email" }));
+    expect(response.headers.get("location")).toBe(`${SITE}/settings?changed=email`);
+  });
+
+  it("verifies the token as an email change and lands on Settings with the notice", async () => {
+    verifyOtp.mockResolvedValue({ data: { user: { id: "user-1" }, session: { access_token: "t" } }, error: null });
+    const response = await POST(post({ token_hash: "abc", type: "email_change", flow: "email_change", next: "/settings?changed=email" }));
+    expect(verifyOtp).toHaveBeenCalledWith({ token_hash: "abc", type: "email_change" });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(`${SITE}/settings?changed=email`);
+  });
+
+  it("sends a failed email-change verification to the sign-in page like every other link", async () => {
+    verifyOtp.mockResolvedValue({ error: { message: "expired" } });
+    const response = await POST(post({ token_hash: "abc", type: "email_change", flow: "email_change", next: "/settings?changed=email" }));
+    expect(response.headers.get("location")).toContain("/login?message=auth-error");
   });
 });

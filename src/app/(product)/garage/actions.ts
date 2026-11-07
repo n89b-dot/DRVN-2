@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { slugify } from "@/lib/format";
 import { ACTIVITY_TITLE_MAX } from "@/lib/limits";
 import { blockMediaUrls, normalizeBlocks, type ActivityBlock } from "@/lib/activity-blocks";
-import { deleteMediaIfUnreferenced, finalizeMediaUrls } from "@/lib/media-lifecycle";
+import { deleteMediaIfUnreferenced, finalizeMediaUrls, scheduleMediaCleanup } from "@/lib/media-lifecycle";
 import { isAllowedVideoUrl, isOwnedStorageUrl, keepValidImageUrls } from "@/lib/media-url";
 import { MOD_CATEGORIES, type ModCategory } from "@/lib/mods/parse";
 import { allowAction, rateLimitMessage, RATE_LIMITS } from "@/lib/rate-limit";
@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { capture } from "@/lib/analytics";
 import { reportError } from "@/lib/monitoring";
+import { confirmIdentity } from "@/lib/confirm-identity";
 
 import { decodeVin, decodeVinResult } from "@/lib/vehicles/vpic";
 import { matchCatalogByName, resolveCatalogSelection } from "@/lib/vehicles/catalog";
@@ -23,7 +24,13 @@ import { isKnownPlace } from "@/lib/geo/regions";
 import { postHref } from "@/lib/activity/href";
 import { SUSPENDED_MESSAGE, isSuspended } from "@/lib/suspension";
 
-export type ActionState = { error?: string; ok?: string; href?: string };
+export type ActionState = {
+  error?: string;
+  ok?: string;
+  href?: string;
+  /** Deletion needs fresh proof it's the owner (N41): which kind to offer. */
+  reauth?: "password" | "oauth";
+};
 
 async function requireUser() {
   const supabase = await createClient();
@@ -272,15 +279,50 @@ export async function updateCar(_prev: ActionState, formData: FormData): Promise
   return { ok: decodeNote || "Changes saved." };
 }
 
+/**
+ * Which generation is this car? Asked on the sheet on a changeover year
+ * (readiness 83; vehicles.md, "Generations"). The owner updates their own car
+ * (RLS); car_generation_before_write keeps the choice only when it fits the
+ * car's model and year and marks it 'owner' — so the row is checked after the
+ * write rather than trusted.
+ */
+export async function setCarGeneration(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const { supabase } = await requireUser();
+  const carId = String(formData.get("car_id") ?? "");
+  const generationId = Number(formData.get("generation_id"));
+  if (!carId || !Number.isInteger(generationId) || generationId <= 0) return { error: "Pick a generation." };
+
+  const { data: updated, error } = await supabase
+    .from("cars")
+    .update({ generation_id: generationId, updated_at: new Date().toISOString() })
+    .eq("id", carId)
+    .select("slug, generation_id, generation_source")
+    .maybeSingle();
+  if (error) {
+    reportError("[garage] set generation failed", { carId, code: error.code });
+    return { error: "Couldn't save that. Try again." };
+  }
+  if (!updated) return { error: "Car not found." };
+  if (updated.generation_id !== generationId || updated.generation_source !== "owner") {
+    return { error: "That generation doesn't fit this car's model and year." };
+  }
+  revalidatePath("/garage");
+  revalidatePath(`/cars/${updated.slug}`);
+  return { ok: "Generation saved." };
+}
+
 export async function deleteCar(
   _previous: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "Car is missing." };
   const { error } = await supabase.from("cars").delete().eq("id", id);
   if (error) return { error: error.message };
+  // The delete queued the car's photos (and its posts') for removal
+  // (20261107203000); take them down now rather than at the next daily run.
+  scheduleMediaCleanup(user.id);
 
   // Deleting an already-absent id is the desired state after a response was
   // lost. RLS still prevents this call from changing anybody else's car.
@@ -1086,6 +1128,8 @@ export async function deleteActivityPost(
 
   const { error } = await supabase.from("activity_posts").delete().eq("id", postId);
   if (error) return { error: error.message };
+  // Its photos were queued by the delete; remove the unreferenced ones now.
+  scheduleMediaCleanup(user.id);
 
   // W-5: a post about a part has no car sheet to go back to.
   if (!post.car_id) {
@@ -1240,15 +1284,27 @@ export async function updateProfile(_prev: ActionState, formData: FormData): Pro
  * failed on a foreign-key violation for anyone who had ever traded.
  */
 export async function deleteAccount(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
 
   const confirmation = String(formData.get("confirm") ?? "").trim();
   if (confirmation !== "DELETE") {
     return { error: 'Type DELETE to confirm.' };
   }
+  // N41: typing DELETE proves nothing about who is at the session. The
+  // password typed now, or a Google sign-in moments ago, is checked
+  // server-side before the request is made.
+  const identity = await confirmIdentity(supabase, user, String(formData.get("current_password") ?? ""));
+  if (!identity.ok) return { error: identity.error, reauth: identity.reauth };
 
   const { data, error } = await supabase.rpc("request_account_deletion");
-  if (error) return { error: error.message };
+  if (error) {
+    // N49: the database's wording stays in telemetry.
+    if (error.code === "42501" && /suspended/i.test(error.message ?? "")) {
+      return { error: "Your account is suspended, so deletion can't be requested here yet. Email hello@drvn.app and we'll handle it." };
+    }
+    reportError("[settings] account deletion request failed", { userId: user.id, error });
+    return { error: "Couldn't request deletion. Nothing was changed — try again." };
+  }
   const result = data as unknown as { outcome?: string; job_id?: string; message?: string };
   if (result.outcome !== "cleanup_pending" || !result.job_id) {
     return { error: result.message ?? "Deletion needs review before cleanup can begin." };

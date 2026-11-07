@@ -2,9 +2,14 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { AgentHeader } from "@/components/commerce";
-import { ButtonLink, EmptyState, Foot, ObjectRow, SheetTabs, ThreadDivider, ThreadEvent, TileHead } from "@/components/ui";
+import { Alert, ButtonLink, EmptyState, Foot, ObjectRow, SheetTabs, ThreadDivider, ThreadEvent, TileHead } from "@/components/ui";
 import { ApprovalActions } from "@/features/agent/approval-actions";
+import { buyerStops } from "@/features/agent/buyer-stops";
+import { StopBuyerAgent } from "@/features/agent/stop-buyer-agent";
 import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
+import { AGENT_ACCEPT_RULE, AGENT_FOOT } from "@/lib/agent/copy";
+import { loadAgentMode } from "@/lib/agent/member-mode";
+import { AGENT_MODE_LABEL, agentModeAllowsChat } from "@/lib/agent/mode";
 import { AgentChat } from "@/features/agent/agent-chat";
 import { loadChat, parseAbout, resolveAbout } from "@/features/agent/chat-load";
 import { loadPriceNudges } from "@/features/agent/nudges";
@@ -14,12 +19,15 @@ import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
 export const metadata = { title: "Agent - DRVN" };
+/** A chat turn may run up to TURN_TIMEOUT_MS (run.ts); the action that serves it gets twice that. */
+export const maxDuration = 180;
 
 type Task = {
   id: string;
   scope: string;
   objective: string;
   status: string;
+  mandate_id: string | null;
   listing_id: string | null;
   offer_id: string | null;
   outcome: string | null;
@@ -100,7 +108,7 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
   const [{ data: tasks }, { data: approvals }, { data: mandates }, { data: events }] = await Promise.all([
     supabase
       .from("agent_tasks")
-      .select("id, scope, objective, status, listing_id, offer_id, outcome, updated_at, finished_at")
+      .select("id, scope, objective, status, mandate_id, listing_id, offer_id, outcome, updated_at, finished_at")
       .eq("owner_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(100),
@@ -120,10 +128,12 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
       .limit(40),
   ]);
 
+  // AG-7: Off hides the chat and the suggestions; Suggest keeps both but no mandate starts.
+  const mode = await loadAgentMode(user.id);
   // The chat (A3c), once its step is open (loadChat: the last 50, read as the member).
-  const chatOpen = await agentStepOpen("chat");
+  const chatOpen = (await agentStepOpen("chat")) && agentModeAllowsChat(mode);
   // A5: price-drop suggestions, with the seller's agent step.
-  const nudges = (await agentStepOpen("seller")) ? await loadPriceNudges(supabase, user.id, requestTime()) : [];
+  const nudges = (await agentStepOpen("seller")) && agentModeAllowsChat(mode) ? await loadPriceNudges(supabase, user.id, requestTime()) : [];
   const chat = chatOpen ? await loadChat(supabase, user.id) : [];
   // Opened from a listing or car on a phone ("Ask your agent"): the chip.
   const about = chatOpen ? await resolveAbout(supabase, user.id, parseAbout(aboutParam)) : null;
@@ -153,6 +163,9 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
   const titleOf = (listingId: string | null) => (listingId && listingById.get(listingId)?.title) || "A listing";
   const mediaOf = (listingId: string | null) => ({ src: (listingId && cover.get(listingId)) || undefined, alt: titleOf(listingId) });
 
+  // "Stop negotiating for me" on every live buyer mandate, exactly once:
+  // its Working row, its Needs you row, or a row of its own (buyer-stops.ts).
+  const stops = buyerStops(mandates ?? [], allTasks, pending);
   const needsTasks = new Set(pending.map((a) => a.task_id));
   const working = allTasks.filter((t) => !t.finished_at && !needsTasks.has(t.id));
   const done = allTasks.filter((t) => t.finished_at);
@@ -180,8 +193,19 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
         : task.scope === "buyer"
           ? "Opening an offer"
           : "Waiting for offers";
+    const buyerMandate = stops.onTask.get(task.id);
     return (
-      <ObjectRow key={task.id} as="li" href={href} media={mediaOf(task.listing_id)} title={titleOf(task.listing_id)} meta={meta} state={task.finished_at ? "done" : undefined} />
+      <ObjectRow
+        key={task.id}
+        as="li"
+        href={buyerMandate ? undefined : href}
+        mediaHref={buyerMandate ? href : undefined}
+        media={mediaOf(task.listing_id)}
+        title={titleOf(task.listing_id)}
+        meta={meta}
+        state={task.finished_at ? "done" : undefined}
+        actions={buyerMandate ? <StopBuyerAgent mandateId={buyerMandate} offerId={task.offer_id} compact /> : undefined}
+      />
     );
   };
 
@@ -235,7 +259,14 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
             mediaHref={approval.offer_id ? `/offers/${approval.offer_id}` : undefined}
             title={titleOf(task?.listing_id ?? null)}
             meta={approvalLine(approval.reason, approval.amount_cents)}
-            actions={<ApprovalActions approvalId={approval.id} offerId={approval.offer_id} amountCents={approval.amount_cents} />}
+            actions={
+              <>
+                <ApprovalActions approvalId={approval.id} offerId={approval.offer_id} amountCents={approval.amount_cents} />
+                {stops.onApproval.has(approval.id) && (
+                  <StopBuyerAgent mandateId={stops.onApproval.get(approval.id)!} offerId={approval.offer_id} compact />
+                )}
+              </>
+            }
           />
         );
       })}
@@ -243,18 +274,61 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
   );
   const listPanel = (rows: Task[], empty: string) =>
     rows.length ? <ul className="rowlist">{rows.map(taskRow)}</ul> : <p className="field__hint">{empty}</p>;
+  // Live buyer mandates with nothing in progress: still on, still stoppable.
+  const aloneRows = stops.alone.map((mandate) => (
+    <ObjectRow
+      key={mandate.id}
+      as="li"
+      mediaHref={`/listings/${mandate.listing_id}`}
+      media={mediaOf(mandate.listing_id)}
+      title={titleOf(mandate.listing_id)}
+      meta={mandate.status === "paused" ? "Negotiate for me is paused" : "Negotiate for me is on, with nothing in progress"}
+      actions={<StopBuyerAgent mandateId={mandate.id} compact />}
+    />
+  ));
+  const workingPanel =
+    working.length || aloneRows.length ? (
+      <ul className="rowlist">
+        {working.map(taskRow)}
+        {aloneRows}
+      </ul>
+    ) : (
+      <p className="field__hint">Nothing in progress.</p>
+    );
 
   const tabs = [
     ...(pending.length ? [{ key: "needs", label: "Needs you", count: pending.length, live: true, panel: needsPanel }] : []),
-    { key: "working", label: "Working", count: working.length, panel: listPanel(working, "Nothing in progress.") },
+    { key: "working", label: "Working", count: working.length + aloneRows.length, panel: workingPanel },
     { key: "done", label: "Done", count: done.length, panel: listPanel(done, "Nothing finished yet.") },
   ];
-  const nothingYet = !allTasks.length && !pending.length && !handling && !buying && !chat.length;
+  const nothingYet = !allTasks.length && !pending.length && !handling && !buying && !stops.alone.length && !chat.length;
   capture(user.id, { event: "agent_tab_viewed", props: { needs: pending.length === 0 ? "0" : pending.length === 1 ? "1" : pending.length <= 5 ? "2-5" : "6+" } });
 
   return (
     <div className="wrap">
       <AgentHeader status={status} />
+
+      {mode !== "act" && (
+        // AG-7: the member turned it down in Settings; nothing new starts from here.
+        <Alert title={`Your agent is set to ${AGENT_MODE_LABEL[mode]}`} className="mb-6">
+          {mode === "off"
+            ? "It does nothing until you turn it back on. "
+            : "It answers and suggests, but won't negotiate or start anything for you. "}
+          <Link href="/settings#agent" className="jumplink">
+            Change it in Settings →
+          </Link>
+          {!chatOpen && (
+            <>
+              {" "}
+              Your chat with it is under{" "}
+              <Link href="/settings#privacy" className="jumplink">
+                Settings → Privacy
+              </Link>
+              , where you can clear it.
+            </>
+          )}
+        </Alert>
+      )}
 
       {nothingYet && chatOpen ? (
         // First visit (design 08): what it does, in three groups, then the chat.
@@ -265,7 +339,7 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
             <ObjectRow title="Buying" meta="Negotiates a part for you up to your private max. Start it from a listing's Make an offer." href="/marketplace" />
             <ObjectRow title="Garage" meta="Answers what fits your car and what parts sell for. Ask below." />
           </div>
-          <p className="field__hint mt-3">Nothing to set up first. It never accepts for you, and it never messages anyone else.</p>
+          <p className="field__hint mt-3">Nothing to set up first. {AGENT_ACCEPT_RULE} It never messages anyone else.</p>
         </section>
       ) : nothingYet ? (
         <EmptyState
@@ -276,8 +350,8 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
             </ButtonLink>
           }
         >
-          Turn on “Let DRVN handle offers” on a listing: set your minimum and target, and your agent counters for you. It never
-          accepts for you, and it never messages the buyer.
+          Turn on “Let DRVN handle offers” on a listing: set your minimum and target, and your agent counters for you.{" "}
+          {AGENT_ACCEPT_RULE} It never messages the other side.
         </EmptyState>
       ) : (
         <>
@@ -335,7 +409,7 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
 
       {chatOpen && <AgentChat initial={chat} about={about} jobs={await agentStepOpen("jobs")} userId={user.id} />}
 
-      <Foot left="DRVN — your agent never accepts for you and never messages the other side" right={<Link href="/offers">All offers →</Link>} />
+      <Foot left={AGENT_FOOT} right={<Link href="/offers">All offers →</Link>} />
     </div>
   );
 }

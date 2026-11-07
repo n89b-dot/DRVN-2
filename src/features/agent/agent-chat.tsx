@@ -6,9 +6,12 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { AgentResultCard } from "@/components/commerce";
 import { Button, ButtonLink, ChatComposer, FilterButton, MessageBubble, MessageRun, MessageThread, ResultNote } from "@/components/ui";
 import { confirmBuildChange } from "./build";
+import { AGENT_CHAT_CLEARED, useAgentEvent } from "./chat-events";
+import { ClearAgentChat } from "./clear-agent-chat";
 import type { ResolvedCard } from "./cards";
-import { sendAgentMessage, type ChatMessage } from "./chat";
+import { pollAgentReply, sendAgentMessage, type ChatMessage } from "./chat";
 import type { ChatAbout } from "./chat-load";
+import { mergeMessages, waitForReply } from "./reply-wait";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { uploadImages } from "@/lib/media-upload";
 
@@ -16,6 +19,9 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour
 
 /** Starters above the composer (design 02): each fills the box, never sends. They follow what you opened it from. */
 const STARTERS = ["Will this fit my car?", "What do parts like this sell for?", "Update my build", "Find parts for my car", "What's my agent doing?"];
+/** How often, and for how long, a pending send asks for its reply: past the server's 120 s deadline for one send. */
+const REPLY_POLL_MS = 3_000;
+const REPLY_WAIT_MS = 150_000;
 /** A3d's jobs, once their step is open. */
 const JOB_STARTERS = ["Paste my build", "List the parts that came off", "List this part from my photos", "Post an update"];
 const MAX_PHOTOS = 4;
@@ -57,6 +63,22 @@ export function AgentChat({
   }
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // "Chat cleared." (N125), until the next message.
+  const [cleared, setCleared] = useState<string | null>(null);
+  // One id per message sent: sending the same words and photos again after
+  // a failure reuses it, so the server replays that turn instead of storing
+  // the message twice and asking the model again (OS-W04 N121).
+  const attempt = useRef<{ key: string; id: string } | null>(null);
+  // Which conversation this thread shows. A clear, here or anywhere else
+  // (Settings → Privacy, the other copy of this thread), starts a new one: a
+  // send still in flight from before it is dropped when it answers, or the
+  // deleted messages would come back (N125).
+  const generation = useRef(0);
+  useAgentEvent(AGENT_CHAT_CLEARED, () => {
+    generation.current += 1;
+    attempt.current = null;
+    setMessages([]);
+  });
   const [pending, startTransition] = useTransition();
   const sent = useRef(false);
   const section = useRef<HTMLElement>(null);
@@ -112,17 +134,53 @@ export function AgentChat({
     else window.scrollTo({ top: document.documentElement.scrollHeight, behavior });
   }, [messages]);
 
+  // A send can come back pending (its first attempt is still running): ask
+  // for the reply until it lands, while this chat is on screen. The request
+  // id stays in `attempt` until its reply has arrived (OS-W04 follow-up).
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
   function send() {
     const text = draft.trim();
     if ((!text && !ready.length) || pending || uploading) return;
     setError(null);
+    setCleared(null);
+    const key = JSON.stringify([text, ready]);
+    if (attempt.current?.key !== key) attempt.current = { key, id: crypto.randomUUID() };
+    const requestId = attempt.current.id;
+    const sentIn = generation.current;
+    // Still this conversation: a clear (N125) drops a send, and its polling, from before it.
+    const current = () => sentIn === generation.current;
+    // By id: a replayed or polled message already on screen isn't added twice.
+    const merge = (incoming: ChatMessage[] = []) => {
+      if (current()) setMessages((shown) => mergeMessages(shown, incoming));
+    };
     startTransition(async () => {
       try {
-        const result = await sendAgentMessage({ text, about: context ? { kind: context.kind, id: context.id } : undefined, images: ready });
+        const first = await sendAgentMessage({ text, about: context ? { kind: context.kind, id: context.id } : undefined, images: ready, requestId });
+        // Cleared while it ran: nothing from the old conversation comes back.
+        if (!current() || first.cleared) return;
+        // Only a pending send waits; an answered one is shown straight away.
+        const result = first.pending
+          ? await waitForReply(first, pollAgentReply, { everyMs: REPLY_POLL_MS, forMs: REPLY_WAIT_MS, alive: () => mounted.current && current(), onProgress: merge })
+          : first;
+        if (!current() || result.cleared) return;
+        if (result.pending) {
+          // Still running: the id stays, so sending again picks this turn back up.
+          merge(result.messages);
+          if (mounted.current) setError("Your agent is taking longer than usual. Its reply will be here when you reload.");
+          return;
+        }
         if (result.error) setError(result.error);
         if (result.messages?.length) {
+          attempt.current = null;
           sent.current = true;
-          setMessages((current) => [...current, ...result.messages!]);
+          merge(result.messages);
           setDraft("");
           photos.forEach((photo) => URL.revokeObjectURL(photo.preview));
           setPhotos([]);
@@ -136,62 +194,74 @@ export function AgentChat({
 
   return (
     <section ref={section} className="agentchat mt-6" aria-label="Chat with your agent">
+      {/* A polite live log, mounted before the first message: a screen
+          reader only announces additions to a region it already knows, so
+          the first reply is announced too. Focus stays in the composer. */}
+      <MessageThread live label="Conversation with your agent">
+        {messages.map((message) => (
+          <MessageRun key={message.id} me={message.role === "member"} who={message.role === "member" ? "You" : "Agent"} when={message.created_at} whenLabel={time(message.created_at)}>
+            <MessageBubble photos={message.images.length ? message.images : undefined}>{message.body}</MessageBubble>
+            {message.cards.map((card) =>
+              card.kind === "listing" ? (
+                <AgentResultCard
+                  key={card.id}
+                  eyebrow="Listing"
+                  title={card.title}
+                  meta={formatPrice(card.priceCents)}
+                  image={{ src: card.image ?? undefined, alt: card.title }}
+                  href={card.href}
+                />
+              ) : card.kind === "marketplace" ? (
+                <AgentResultCard
+                  key={card.id}
+                  eyebrow="On DRVN now"
+                  title={card.query}
+                  meta={`${card.capped ? "Over 1,000" : card.count.toLocaleString()} for sale · see them in Marketplace`}
+                  href={card.href}
+                />
+              ) : card.kind === "listing_draft" ? (
+                <AgentResultCard
+                  key={card.id}
+                  eyebrow="Listing from your photos"
+                  title={card.title}
+                  meta={`${card.photos} ${card.photos === 1 ? "photo" : "photos"} · you add the price and condition`}
+                  image={card.image ? { src: card.image, alt: card.title } : undefined}
+                  href={card.href}
+                />
+              ) : card.kind === "update_draft" ? (
+                <AgentResultCard
+                  key={card.id}
+                  eyebrow={`Update for your ${card.carName}`}
+                  title={card.title}
+                  meta="A draft in the update composer; you publish it"
+                  image={card.image ? { src: card.image, alt: card.title } : undefined}
+                  href={card.href}
+                />
+              ) : card.kind === "list_part" ? (
+                <AgentResultCard
+                  key={card.id}
+                  eyebrow={card.listed ? "Listed" : "Came off your " + card.carName}
+                  title={card.part}
+                  meta={card.listed ? "Open the listing" : "List it: fitment from your car; you add condition and photos"}
+                  href={card.href}
+                />
+              ) : (
+                <BuildChangeCard key={card.id} card={card} />
+              ),
+            )}
+          </MessageRun>
+        ))}
+      </MessageThread>
+
       {messages.length > 0 && (
-        <MessageThread>
-          {messages.map((message) => (
-            <MessageRun key={message.id} me={message.role === "member"} who={message.role === "member" ? "You" : "Agent"} when={message.created_at} whenLabel={time(message.created_at)}>
-              <MessageBubble photos={message.images.length ? message.images : undefined}>{message.body}</MessageBubble>
-              {message.cards.map((card) =>
-                card.kind === "listing" ? (
-                  <AgentResultCard
-                    key={card.id}
-                    eyebrow="Listing"
-                    title={card.title}
-                    meta={formatPrice(card.priceCents)}
-                    image={{ src: card.image ?? undefined, alt: card.title }}
-                    href={card.href}
-                  />
-                ) : card.kind === "marketplace" ? (
-                  <AgentResultCard
-                    key={card.id}
-                    eyebrow="On DRVN now"
-                    title={card.query}
-                    meta={`${card.capped ? "Over 1,000" : card.count.toLocaleString()} for sale · see them in Marketplace`}
-                    href={card.href}
-                  />
-                ) : card.kind === "listing_draft" ? (
-                  <AgentResultCard
-                    key={card.id}
-                    eyebrow="Listing from your photos"
-                    title={card.title}
-                    meta={`${card.photos} ${card.photos === 1 ? "photo" : "photos"} · you add the price and condition`}
-                    image={card.image ? { src: card.image, alt: card.title } : undefined}
-                    href={card.href}
-                  />
-                ) : card.kind === "update_draft" ? (
-                  <AgentResultCard
-                    key={card.id}
-                    eyebrow={`Update for your ${card.carName}`}
-                    title={card.title}
-                    meta="A draft in the update composer; you publish it"
-                    image={card.image ? { src: card.image, alt: card.title } : undefined}
-                    href={card.href}
-                  />
-                ) : card.kind === "list_part" ? (
-                  <AgentResultCard
-                    key={card.id}
-                    eyebrow={card.listed ? "Listed" : "Came off your " + card.carName}
-                    title={card.part}
-                    meta={card.listed ? "Open the listing" : "List it: fitment from your car; you add condition and photos"}
-                    href={card.href}
-                  />
-                ) : (
-                  <BuildChangeCard key={card.id} card={card} />
-                ),
-              )}
-            </MessageRun>
-          ))}
-        </MessageThread>
+        <div className="mt-2 flex justify-end">
+          <ClearAgentChat
+            onCleared={(message) => {
+              setMessages([]);
+              setCleared(message);
+            }}
+          />
+        </div>
       )}
 
       <div className="agentchat__starters mt-4 flex flex-wrap gap-2" role="group" aria-label="Starters">
@@ -244,7 +314,7 @@ export function AgentChat({
             </>
           ) : undefined
         }
-        below={<ResultNote error={error ?? photos.find((photo) => photo.error)?.error ?? null} />}
+        below={<ResultNote error={error ?? photos.find((photo) => photo.error)?.error ?? null} ok={cleared} />}
       />
     </section>
   );

@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -65,4 +66,22 @@ test("lookup rows split into found and missing", () => {
 
 test(".env.local parsing matches the seed scripts", () => {
   assert.deepEqual(parseEnvFile('# c\nA=1\nB="two=2"\n\n'), { A: "1", B: "two=2" });
+});
+
+test("seed scripts take the password from DRVN_SEED_PASSWORD and carry no literal", () => {
+  const files = readdirSync(root).filter((name) => /^\.seed-.*\.mjs$/.test(name));
+  for (const file of files) {
+    const text = readFileSync(root + file, "utf8");
+    if (!/signInWithPassword|password\s*:/i.test(text)) continue;
+    assert.match(text, /process\.env\.DRVN_SEED_PASSWORD/, `${file} must read DRVN_SEED_PASSWORD`);
+    assert.doesNotMatch(text, /\bPASSWORD\s*=\s*["'`]/, `${file} assigns a literal password`);
+    assert.doesNotMatch(text, /password\s*:\s*["'`]/i, `${file} signs in with a literal password`);
+  }
+});
+
+test("the console-admin smoke script stays out of the tree", () => {
+  const tracked = execFileSync("git", ["ls-files", "--", ".page-test.mjs"], { cwd: root, encoding: "utf8" });
+  assert.equal(tracked.trim(), "", ".page-test.mjs is tracked again");
+  const ignored = readFileSync(root + ".gitignore", "utf8").split("\n").map((line) => line.trim());
+  assert.ok(ignored.includes(".page-test.mjs"), ".page-test.mjs is not gitignored");
 });

@@ -989,15 +989,21 @@
     object-fit: cover;
     display: block;
   }
+  /* Remove: a 40px hit area (the touch floor) at the thumb's corner, drawing
+     the same 24px disc it always did — the gradient is the disc, centred
+     where the glyph sits. */
   .chatbox__thumb button {
     position: absolute;
-    top: 2px;
-    right: 2px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
+    top: 0;
+    right: 0;
+    width: 40px;
+    height: 40px;
+    padding: 8px 8px 0 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
     border: 0;
-    background: var(--ink);
+    background: radial-gradient(circle at 28px 15px, var(--ink) 11.5px, transparent 12.5px);
     color: var(--on-ink);
     font-size: 14px;
     line-height: 1;

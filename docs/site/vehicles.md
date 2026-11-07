@@ -41,7 +41,10 @@ product fitment instead.
 - **Changeover years are asked, not guessed.** Year ranges are the union of
   production years and main-market model years, so a 2020 Golf R covers both
   the Mk7 and the Mk8 and resolves to nothing. That is where the owner is
-  asked (UI not built yet; the column takes their answer today).
+  asked: the garage sheet's Next note offers the generations that fit
+  (`generationChoicesFor`, `src/lib/vehicles/generation-choices.ts`), and
+  `setCarGeneration` writes the choice as the owner — the trigger decides
+  whether it fits and marks it theirs.
 - **The owner's choice stands** while it still fits the car's model and year
   (`generation_source = 'owner'`); change the year past it and the car
   resolves again. A client can't claim a choice by writing

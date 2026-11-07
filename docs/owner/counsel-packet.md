@@ -128,10 +128,12 @@ A buyer can still report a problem for **30 days** after delivery, and a shop
 may offer change-of-mind returns for 14, 30 or 60 days, so most refunds after
 delivery come after the seller is paid. They are recovered from the seller's
 Stripe account (§3.6), and if that balance can't cover it, Stripe may take
-the shortfall from the seller's payout bank account. Terms §6 says so. Two
-related controls are also in the terms: card payments of $500 or more ask
-the buyer to verify with their bank (§1), and orders of $1,000 or more need
-tracking DRVN can follow (§7).
+the shortfall from the seller's payout bank account. Terms §6 says so. A
+related control is also in the terms: card payments of $500 or more ask the
+buyer to verify with their bank (§1). There is no amount limit on dispatch
+(N110, 7 November 2026, "similar to eBay"): DRVN registers a seller's
+tracking number with its carrier tracker where it can, and disputes are
+decided on the delivery evidence.
 
 A posted parcel with no DRVN-tracked number never gets a carrier scan. If the
 buyer never confirms, it is never delivered and the seller never paid. A rule

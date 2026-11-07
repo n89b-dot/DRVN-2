@@ -165,8 +165,8 @@ export default function PrivacyPage() {
             <strong>Anthropic</strong> — when you import a listing, the text of the page you
             imported is sent to Anthropic&apos;s AI service to draft the listing. When you chat
             with your agent, your message and recent chat, and what the agent looks up on DRVN to
-            answer you (listings, your own cars and build, and the messages you received about
-            your own listings), are sent to the same service.
+            answer you (listings, your own cars and build, and the questions you received about
+            your own listings, but not your order conversations), are sent to the same service.
             Card numbers, VINs, email addresses and phone numbers are removed from what you type
             before it&apos;s sent, and your agent&apos;s limits are never sent. Photos you add to
             a message to your agent are sent with that message. Your account details are not
@@ -262,6 +262,11 @@ export default function PrivacyPage() {
             cleared 7 days after an import finishes.
           </li>
           <li>Photos uploaded to a form you never saved: deleted after 48 hours.</li>
+          <li>
+            Photos of a car, update or listing you delete: deleted from our storage shortly after,
+            and within a day, unless a buyer&apos;s order keeps them as its record. Copies someone
+            already saved, or a browser has cached, can&apos;t be recalled.
+          </li>
           <li>Rate-limit counters: deleted after a day.</li>
           <li>Your chat with your agent: deleted 12 months after its last message.</li>
           <li>

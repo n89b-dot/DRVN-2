@@ -39,6 +39,7 @@ declare
     'agent_clear_conversation()',                      -- the caller's own agent chat
     'agent_mandate_set(text,uuid,integer,integer,integer,text,text,timestamp with time zone,boolean)', -- the caller's own agent limits, on their own listing or as a buyer
     'agent_mandate_set_status(uuid,text)',             -- pause, resume or turn off the caller's own mandate
+    'agent_mode_set(text)',                            -- the caller's own agent setting; below Act ends their own mandates (20261107190000)
     'become_shop()',                                   -- turns the caller's own profile into a shop
     'bind_checkout_analytics(uuid[])',                 -- tags the caller's own orders with consented analytics ids
     'bump_listing_view(uuid)',                         -- counts a view by the caller, rate-limited, never the seller's own
