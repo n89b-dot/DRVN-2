@@ -382,8 +382,6 @@ export default async function CarPage({
                 initialSaved={isSaved}
                 isLoggedIn={Boolean(user)}
               />
-              {/* N53: a build's name, description or photos can be reported. */}
-              <ReportButton subjectType="car" subjectId={car.id} subjectLabel="this build" isLoggedIn={Boolean(user)} />
             </span>
           )}
         </div>
@@ -442,6 +440,15 @@ export default async function CarPage({
         evolution={evolution}
         agentAsk={agentChat ? { disabledReason: askDisabled } : null}
       />
+
+      {/* N53: anyone but the owner can flag a build's name, description or
+          photos — the same quiet report link a post carries, below the
+          content so the header's actions still fit a phone. */}
+      {!isOwner && (
+        <div className="mt-8 border-t border-[color:var(--rule-soft)] pt-4">
+          <ReportButton subjectType="car" subjectId={car.id} subjectLabel="this build" isLoggedIn={Boolean(user)} />
+        </div>
+      )}
 
       {/* The page people land on from a shared link — the moment to say the
           visitor's own car could have one. Signed-out viewers only. */}
