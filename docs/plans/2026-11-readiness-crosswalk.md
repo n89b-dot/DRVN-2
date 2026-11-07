@@ -39,7 +39,7 @@ Each area below is proved by its own PR, whose title starts with every id that a
 
 ## Auth and account
 
-Proof PR: opened from `cloud/os-proof-sweep-auth`.
+Proof PR: #98, from `cloud/os-proof-sweep-auth`.
 
 | Item | Title | Status | Plan id / batch | PR / commit | Proving test (file › test name) |
 |---|---|---|---|---|---|
