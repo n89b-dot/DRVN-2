@@ -72,11 +72,13 @@ const nextConfig: NextConfig = {
             // including inside Stripe's Payment Element frame, which is how
             // Apple Pay and Google Pay render — so wallets silently never
             // appeared at checkout. Payment is now delegable to this origin
-            // and to Stripe.js's frame origin (the only Stripe frame origin
-            // the CSP's frame-src admits, src/proxy.ts); every other origin,
+            // and to Stripe.js's frame origins — js.stripe.com and the
+            // *.js.stripe.com origins Stripe.js now starts frames on, the
+            // same pair the CSP's frame-src admits (src/lib/csp.ts). Browsers
+            // without wildcard support ignore that entry. Every other origin,
             // and every other sensitive feature, stays blocked.
             key: "Permissions-Policy",
-            value: 'camera=(), microphone=(), geolocation=(), payment=(self "https://js.stripe.com")',
+            value: 'camera=(), microphone=(), geolocation=(), payment=(self "https://js.stripe.com" "https://*.js.stripe.com")',
           },
         ],
       },
