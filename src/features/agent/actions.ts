@@ -13,7 +13,12 @@ import { reportError } from "@/lib/monitoring";
 import { revalidatePath } from "@/lib/revalidate";
 import { createClient } from "@/lib/supabase/server";
 
-export type AgentState = { error?: string; ok?: string };
+export type AgentState = {
+  error?: string;
+  ok?: string;
+  /** The limits were saved but the paused agent couldn't be resumed (readiness 71). */
+  stillPaused?: boolean;
+};
 
 async function requireUser() {
   const supabase = await createClient();
@@ -140,7 +145,18 @@ export async function saveListingAgent(input: {
     return { error: agentError(result.code ?? undefined, "Couldn't save your agent's limits. Check the minimum and target.") };
   }
   if (live?.status === "paused") {
-    await supabase.rpc("agent_mandate_set_status", { p_mandate: live.id, p_status: "active" });
+    // Readiness 71: resuming is its own write, and the database can refuse it
+    // (a suspended account, a mandate that ended meanwhile). The limits are
+    // saved either way; the agent handles offers only once it says 'active'.
+    const { data: status, error } = await supabase.rpc("agent_mandate_set_status", { p_mandate: live.id, p_status: "active" });
+    if (error || status !== "active") {
+      reportError("[agent] resume refused", { listingId: input.listingId, mandateId: live.id, code: error?.code ?? null, status: status ?? null });
+      revalidatePath("/agent");
+      return {
+        error: `Your agent's limits are saved, but it is still paused and isn't handling offers. ${agentError(error?.code, "Couldn't resume it. Try again.")}`,
+        stillPaused: true,
+      };
+    }
   }
   revalidatePath("/agent");
   capture(user.id, { event: "agent_offers_enabled", props: { style: input.style, has_target: input.targetCents != null } });

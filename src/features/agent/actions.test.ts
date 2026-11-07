@@ -79,6 +79,41 @@ describe("the member's agent mode (AG-7)", () => {
   });
 });
 
+describe("resuming a paused seller agent (readiness 71)", () => {
+  const on = { listingId: LISTING, on: true, minimumCents: 20000, targetCents: 24000, style: "balanced" as const, acknowledgeBinding: true };
+
+  beforeEach(() => {
+    mocks.rows.set("agent_mandates", { data: { id: "m-1", status: "paused" }, error: null });
+  });
+
+  it("says the agent is handling offers only once the database has resumed it", async () => {
+    mocks.rpc.mockResolvedValue({ data: "active", error: null });
+    await expect(saveListingAgent(on)).resolves.toEqual({ ok: "Your agent is handling offers on this listing." });
+    expect(mocks.rpc).toHaveBeenCalledWith("agent_mandate_set_status", { p_mandate: "m-1", p_status: "active" });
+    expect(mocks.capture).toHaveBeenCalledWith("user-1", expect.objectContaining({ event: "agent_offers_enabled" }));
+  });
+
+  it.each([
+    ["a refusal", { data: null, error: { code: "42501" } }, "Your account can't do that right now."],
+    ["an ended mandate", { data: null, error: { code: "22023" } }, "Couldn't resume it. Try again."],
+    ["an answer other than active", { data: "paused", error: null }, "Couldn't resume it. Try again."],
+  ])("keeps the refusal on %s, and never claims the agent is handling offers", async (_case, answer, reason) => {
+    mocks.rpc.mockResolvedValue(answer);
+    const result = await saveListingAgent(on);
+    expect(result.ok).toBeUndefined();
+    expect(result.stillPaused).toBe(true);
+    expect(result.error).toBe(`Your agent's limits are saved, but it is still paused and isn't handling offers. ${reason}`);
+    expect(mocks.capture).not.toHaveBeenCalled();
+    expect(mocks.reportError).toHaveBeenCalledWith("[agent] resume refused", expect.objectContaining({ mandateId: "m-1" }));
+  });
+
+  it("doesn't try to resume a mandate that was already active", async () => {
+    mocks.rows.set("agent_mandates", { data: { id: "m-1", status: "active" }, error: null });
+    await expect(saveListingAgent(on)).resolves.toEqual({ ok: "Your agent is handling offers on this listing." });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+});
+
 describe("stopBuyerAgent (readiness 64)", () => {
   function form(mandateId = "m-1", offerId?: string) {
     const data = new FormData();

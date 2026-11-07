@@ -81,7 +81,7 @@ async function applyListingAgent(listingId: string, agent: ListingAgentInput | n
   if (!agent) return null;
   const result = await saveListingAgent({ listingId, on: agent.on, minimumCents: floor, targetCents: agent.targetCents, style: agent.style, acknowledgeBinding: agent.acknowledgeBinding });
   if (result.error) reportError("[sell] listing agent not saved", { listingId, error: result.error });
-  return result.error ?? null;
+  return result.error ? { error: result.error, stillPaused: Boolean(result.stillPaused) } : null;
 }
 
 /** Shared field parsing for create and update. */
@@ -546,7 +546,13 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
   revalidateListingEdit(id, parsed.fields.source_car_id);
   const agentError = await applyListingAgent(id, agent, parsed.fields.offer_floor_cents);
   return {
-    ok: agentError ? `Listing updated, but your agent's limits weren't saved: ${agentError}` : "Listing updated.",
+    // A paused agent that couldn't resume still had its limits saved; the
+    // message says that, not that nothing was saved (readiness 71).
+    ok: agentError
+      ? agentError.stillPaused
+        ? `Listing updated. ${agentError.error}`
+        : `Listing updated, but your agent's limits weren't saved: ${agentError.error}`
+      : "Listing updated.",
     version: result.updated_at,
     outcome: "saved",
   };
