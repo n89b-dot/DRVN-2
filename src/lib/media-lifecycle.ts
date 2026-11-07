@@ -13,7 +13,7 @@ import { reportError } from "@/lib/monitoring";
 import { sendAdminAlert } from "@/lib/admin/alerts";
 
 /**
- * Uploaded-media lifecycle (migrations 0029, 20261107150500).
+ * Uploaded-media lifecycle (migrations 0029, 20261107203000).
  *
  * Photos hit storage before any DB row references them, so the server
  * ledgers every upload as a `staged_uploads` row (the upload route, or
@@ -106,7 +106,7 @@ export async function removeMediaObject(
     const admin = options.admin ?? createAdminClient();
     // Claim, don't just check: under a per-object lock the database re-checks
     // every reference and hands this remover an exclusive claim token that
-    // every reference write then respects (20261107150500 §7). A check
+    // every reference write then respects (20261107203000 §7). A check
     // followed by a delete let evidence attached in between be deleted
     // anyway, and a shared claim let one remover release another's.
     const claimed = await admin.rpc("claim_media_deletion", { p_bucket: ref.bucket, p_path: ref.path });
@@ -374,7 +374,7 @@ export function scheduleMediaCleanup(ownerId: string): void {
 
 /**
  * The database accepts a member's photo URL only on our storage origin,
- * `job_config.media_storage_origin` (20261107150500), and refuses every new
+ * `job_config.media_storage_origin` (20261107203000), and refuses every new
  * one while that's missing. The deploy step sets it (docs/production-
  * runbook.md); the upload route and the media job also record it from the
  * server's own configuration, so a missed step heals on the first upload. A

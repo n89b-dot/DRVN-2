@@ -39,7 +39,7 @@ const DIRECT_UPLOAD_BUCKETS = ["dispute-evidence"];
 /**
  * Ledgers a fresh browser upload so an abandoned form can't orphan it.
  *
- * Members can't write `staged_uploads` themselves any more (20261107150500,
+ * Members can't write `staged_uploads` themselves any more (20261107203000,
  * N12): a row is a promise to the GC job that this member uploaded this
  * object, so only the server writes one, after checking the URL is ours, in
  * the claimed bucket/path, under the caller's own folder. The database

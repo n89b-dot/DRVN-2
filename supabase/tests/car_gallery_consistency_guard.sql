@@ -12,7 +12,7 @@ declare
 begin
   insert into auth.users(id,email,raw_user_meta_data) values(owner_id,'gallery-owner@drvn.test','{}'),(stranger,'gallery-stranger@drvn.test','{}');
   insert into public.cars(id,owner_id,slug,name,is_public) values(v_car,owner_id,'gallery-guard','Gallery guard',true);
-  -- Member photo writes need the storage origin recorded (20261107150500).
+  -- Member photo writes need the storage origin recorded (20261107203000).
   insert into public.job_config(key,value) values('media_storage_origin','http://127.0.0.1:54321')
     on conflict(key) do update set value=excluded.value;
   first_url:='http://127.0.0.1:54321/storage/v1/object/public/car-images/'||owner_id||'/one.webp';

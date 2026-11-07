@@ -19,7 +19,7 @@ for (const [name,value] of Object.entries(settings)) {
  appendFileSync(destination, `${name}=${value}\n`);
 }
 // The database refuses new member photo URLs until it knows the storage
-// origin (20261107150500, fail-closed). Record the local one, as the
+// origin (20261107203000, fail-closed). Record the local one, as the
 // production deploy step does (docs/production-runbook.md).
 const origin = settings.NEXT_PUBLIC_SUPABASE_URL;
 const recorded = await fetch(`${origin}/rest/v1/job_config?on_conflict=key`, {

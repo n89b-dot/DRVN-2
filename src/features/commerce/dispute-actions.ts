@@ -410,7 +410,7 @@ export async function addDisputeEvidence(
   const note = String(formData.get("note") ?? "").trim().slice(0, 500);
   if (!orderId) return { error: "Missing order." };
   // The bare `<uploader>/<order>/<file>` path Storage accepted for this
-  // dispute (20261107150500) — the uploader's own, for this order.
+  // dispute (20261107203000) — the uploader's own, for this order.
   if (!isOwnedDisputeEvidenceRef(url, user.id, orderId)) {
     return { error: "That photo didn't upload correctly — try again." };
   }

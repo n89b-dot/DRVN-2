@@ -64,7 +64,7 @@ export type StorageObjectRef = { bucket: string; path: string };
  * Every spelling of a storage-object URL: the public, signed and
  * authenticated object routes and the image-render route, with any query or
  * fragment. Mirrors `private.media_object_key` in
- * supabase/migrations/20261107150500_media_integrity.sql — the two must
+ * supabase/migrations/20261107203000_media_integrity.sql — the two must
  * agree, because the database's reference check and this module's deletion
  * target have to name the same object (N99).
  */
@@ -109,7 +109,7 @@ export function storageObjectKey(ref: StorageObjectRef): string {
  * True for the one spelling DRVN stores: our storage origin, the public
  * object route, a path that needs no percent-encoding, and nothing after it.
  * This is exactly what `getPublicUrl` returns for the paths uploads mint, and
- * what the database accepts in a member's photo columns (20261107150500).
+ * what the database accepts in a member's photo columns (20261107203000).
  */
 export function isCanonicalPublicStorageUrl(value: unknown): value is string {
   if (!isOwnStorageUrl(value)) return false;
@@ -152,7 +152,7 @@ export function ogImageSource(value: unknown): string | null {
  * dispute-evidence went private in 0027 (P0: it was a public bucket — see
  * supabase/migrations/0027_evidence_privacy.sql). A private object has no
  * fetchable "public" URL, so the upload flow submits the bare object path
- * instead of calling `getPublicUrl`. Since 20261107150500 Storage only takes
+ * instead of calling `getPublicUrl`. Since 20261107203000 Storage only takes
  * evidence at `<uploader>/<order>/<file>` while that order is disputed, so a
  * path attached to an order must be the uploader's own, for that order.
  */

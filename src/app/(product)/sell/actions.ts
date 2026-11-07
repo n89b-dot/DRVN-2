@@ -742,7 +742,7 @@ export async function deleteListing(
         : error.message,
     };
   }
-  // The delete queued the listing's photos (20261107150500); remove the ones
+  // The delete queued the listing's photos (20261107203000); remove the ones
   // no order snapshot keeps without waiting for the daily job.
   scheduleMediaCleanup(user.id);
 

@@ -8,7 +8,7 @@ do $$
 declare sender uuid:=gen_random_uuid(); recipient uuid:=gen_random_uuid(); blocked boolean; dispute uuid;
 begin
  insert into auth.users(id,email) values(sender,'photo-guard-sender@example.test'),(recipient,'photo-guard-recipient@example.test');
- -- Evidence uploads need an open dispute the uploader is party to (20261107150500).
+ -- Evidence uploads need an open dispute the uploader is party to (20261107203000).
  insert into public.orders(buyer_id,seller_id,status,subtotal_cents,platform_fee_cents,total_cents,currency)
  values(sender,recipient,'paid',1000,100,1000,'USD') returning id into dispute;
  update public.orders set status='disputed' where id=dispute;
@@ -29,7 +29,7 @@ begin
 
  -- The service role (the normalising route) still writes; the sender can
  -- still read their own photo. Deleting is the server's alone now
- -- (20261107150500): a member's delete removes nothing.
+ -- (20261107203000): a member's delete removes nothing.
  perform set_config('role','service_role',true);
  insert into storage.objects(bucket_id,name,owner) values('message-photos',sender||'/'||recipient||'/normalised.webp',sender);
  perform set_config('role','authenticated',true);

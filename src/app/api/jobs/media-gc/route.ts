@@ -19,7 +19,7 @@ import { cronAuthorized } from "@/lib/cron-auth";
  *     -H "Authorization: Bearer $CRON_SECRET"
  * See supabase/MIGRATIONS.md.
  *
- * Since 20261107150500 (N12) a staged row can only be written by the server
+ * Since 20261107203000 (N12) a staged row can only be written by the server
  * and only for an object in its owner's own folder, and this sweep removes
  * an object only as that verified owner — a row naming anyone else's object
  * (registered before the lockdown) is dropped from the ledger without

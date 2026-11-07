@@ -11,7 +11,7 @@ declare
   first_body jsonb := '[{"type":"text","style":"normal","text":"First saved body"}]'::jsonb;
   final_body jsonb := '[{"type":"text","style":"normal","text":"Published body"}]'::jsonb;
 begin
-  -- Member photo writes need the storage origin recorded (20261107150500).
+  -- Member photo writes need the storage origin recorded (20261107203000).
   insert into public.job_config(key, value) values ('media_storage_origin', 'https://proj.supabase.co')
     on conflict (key) do update set value = excluded.value;
   -- Signature gained p_listing_ids with the quick-post work (20260919194000).

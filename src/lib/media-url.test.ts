@@ -32,7 +32,7 @@ afterEach(() => {
  * N99: the in-use check and the deletion target must name the same object.
  * Every spelling of one object resolves to one (bucket, decoded path), the
  * same identity `private.media_object_key` computes in SQL
- * (20261107150500), so encoding or a variant route can't split them.
+ * (20261107203000), so encoding or a variant route can't split them.
  */
 describe("canonicalStorageObject — one identity per object (N99)", () => {
   it.each([

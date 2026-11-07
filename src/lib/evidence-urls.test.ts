@@ -48,7 +48,7 @@ describe("deriveEvidenceStoragePath", () => {
   it("accepts a bare path with no scheme", () => {
     expect(deriveEvidenceStoragePath({ url: "uid-123/photo.jpg" })).toBe("uid-123/photo.jpg");
     expect(deriveEvidenceStoragePath("uid-123/photo.jpg")).toBe("uid-123/photo.jpg");
-    // Since 20261107150500 evidence lives under the order it was added to.
+    // Since 20261107203000 evidence lives under the order it was added to.
     expect(deriveEvidenceStoragePath("uid-123/order-9/photo.jpg")).toBe("uid-123/order-9/photo.jpg");
   });
 

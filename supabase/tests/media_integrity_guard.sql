@@ -1,4 +1,4 @@
--- 20261107150500 (OS-W15): media integrity and lifecycle, attacked with
+-- 20261107203000 (OS-W15): media integrity and lifecycle, attacked with
 -- member credentials the way a client holding its own JWT can.
 --   N12  removal claims its object under a lock with an exclusive token
 --        (a second remover gets nothing, only the holder completes or

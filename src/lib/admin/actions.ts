@@ -760,7 +760,7 @@ export async function adminRemoveReportedContent(
         return { removed: row };
       }
     );
-    // Deleting the post queued its photos (20261107150500, N51); taken-down
+    // Deleting the post queued its photos (20261107203000, N51); taken-down
     // content shouldn't stay reachable by link until the daily job.
     if (isPost) scheduleMediaCleanup(removed.author_id);
     await notifyReporter(ctx.admin, reportId, "actioned");

@@ -314,7 +314,7 @@ export async function deleteCar(
   const { error } = await supabase.from("cars").delete().eq("id", id);
   if (error) return { error: error.message };
   // The delete queued the car's photos (and its posts') for removal
-  // (20261107150500); take them down now rather than at the next daily run.
+  // (20261107203000); take them down now rather than at the next daily run.
   scheduleMediaCleanup(user.id);
 
   // Deleting an already-absent id is the desired state after a response was

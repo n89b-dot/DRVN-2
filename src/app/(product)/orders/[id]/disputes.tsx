@@ -210,7 +210,7 @@ export function DisputeEvidenceForm({ orderId, userId }: { orderId: string; user
     try {
       // Evidence keeps its original bytes (no re-encode) and Storage only
       // takes it at `<uploader>/<order>/<file>` while this order is disputed
-      // (20261107150500). uploadImages ledgers it, so a photo never attached
+      // (20261107203000). uploadImages ledgers it, so a photo never attached
       // is reclaimed after 48h.
       const { uploaded, failed } = await uploadImages({
         files: [file],

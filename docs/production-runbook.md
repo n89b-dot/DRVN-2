@@ -147,7 +147,7 @@ insert into public.job_config (key, value) values
 on conflict (key) do update set value = excluded.value, updated_at = now();
 ```
 
-Storage origin for member photos (20261107150500). The database refuses a
+Storage origin for member photos (20261107203000). The database refuses a
 member's new photo reference (car, gallery, listing, post, avatar) unless it
 is a public URL on this origin, and refuses **all** of them while the row is
 missing: a migration can't know the origin, and failing open would accept

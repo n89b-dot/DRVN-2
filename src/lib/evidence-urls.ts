@@ -23,7 +23,7 @@ export function deriveEvidenceStoragePath(
   if (!url) return null;
 
   // Already a bare path (no scheme) — accept as-is if it looks like
-  // '{uid}/{filename}' (before 20261107150500) or '{uid}/{order}/{filename}'.
+  // '{uid}/{filename}' (before 20261107203000) or '{uid}/{order}/{filename}'.
   if (!/^https?:\/\//i.test(url)) {
     return /^[^/]+\/(?:[^/]+\/)?[^/]+$/.test(url) ? url : null;
   }
