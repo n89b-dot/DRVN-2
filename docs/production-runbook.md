@@ -252,6 +252,10 @@ Hosted acceptance still requires:
 
 1. Restore a verified database recovery point and the corresponding separately
    archived object versions into an isolated target with outbound jobs disabled.
+   Create the `agent_worker` role on the target first (`create role agent_worker
+   nologin noinherit;`, as 20261021100100 does): roles are cluster-level, so a
+   dump carries the grants to it but not the role, and the restore stops at the
+   first `GRANT … TO agent_worker` without it. The local drill does this itself.
 2. Run `supabase/tests/restore_integrity.sql`, all current `*_guard.sql` suites,
    and compare operation identities, immutable commercial snapshots, RLS,
    private object references and object checksums.
@@ -267,6 +271,7 @@ Hosted acceptance still requires:
 | Date | Rehearsal | Evidence and limits |
 |---|---|---|
 | 2026-09-06 | Local synthetic database + object archive | [Result](readiness-progress/evidence/2026-09-06-local-recovery.json); 104 migrations, 87 matching table fingerprints, object bytes/reference verified. Does not establish hosted RPO/RTO. |
+| 2026-10-24 | Local synthetic database + object archive, current chain | [Result](readiness-progress/evidence/2026-10-24-local-recovery.json); 219 migrations, 123 matching table fingerprints, object bytes/reference verified, restore integrity passed in 16 s. First run failed until the drill created the `agent_worker` role on the target (fixed the same day). Does not establish hosted RPO/RTO. |
 | Pending | Coordinated hosted restore and rollback | Requires isolated staging, provider reconciliation, approved targets and operator acceptance. |
 
 ## 7. Go-live checklist deltas

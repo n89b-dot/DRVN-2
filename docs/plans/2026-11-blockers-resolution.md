@@ -83,43 +83,37 @@ Some batches have no packet of their own:
 - W18 is waiting on rulings.
 - W08 and W28 are made only of items with existing packets.
 
-## Rulings needed (25 items, Claude's recommendation in bold)
+## Neil's rulings on the 25 (7 November 2026), checked by GPT against the code
 
-These are money rules or product and privacy choices. Each is built only after Neil rules. Saying "accept the recommendations" covers all of them.
+Neil ruled in chat. GPT (Codex) then checked every build against the code and corrected several; its corrections are folded in below.
 
-**Money**
+**Built as proposed, with GPT's corrections**
 
-| Item | Question | Recommendation |
+| Item | Ruling | Build (OS task) |
 |---|---|---|
-| N6 | A paid seller never ships. What is the buyer's remedy? | **Dispatch deadline of 5 days after payment (7 for pickup). After it, the buyer can cancel in one tap for a full refund, and the seller gets a defect.** |
-| N13 + N223 | An in-app dispute is closed while a bank chargeback is open | **An open chargeback freezes the payout. Closing in-app can't release it until the chargeback resolves.** |
-| N89 | Guests can hold any listing for free | **Keep the hold length. Cap guests at 2 concurrent holds per device or network, and allow 1 guest hold per listing.** |
-| N91 | Resolved disputes can be reopened | **A resolved dispute is final. Only an admin can reopen one, with an audit note.** |
-| N92 | A one-cent refund offer stalls a dispute | **Refund offers expire after 48 hours. The dispute then carries on to its normal escalation clock.** |
-| N95 | Delivery proof isn't tied to the order | **Tracking counts as proof only if the carrier's destination postcode matches the order's. Otherwise the case is held for review.** |
-| N110 | Orders of $1,000 or more need DRVN Shipping | **Keep the threshold. Until DRVN Shipping is live, listings are capped at $999, with a clear message.** |
-| R-hold | Fallback when the hold setting is missing | **The fallback is 2 days, matching the 4 October ruling.** |
+| N13 + N223 | An open bank chargeback freezes the payout | Enforce at transfer readiness, fresh-transfer admission, `prepare_transfer_dispatch` and both worker reads, from the provider dispute journal (not `stripe_dispute_id IS NULL`). Cover buyer close, admin close and refund completion. Built first (OS-W18). |
+| N6 | Copy eBay | Freeze dispatch-by and latest-delivery dates at purchase (handling time is per seller today). From the latest delivery date, the buyer has up to 30 days to report not received, including on undispatched orders. The seller has 3 business days to add valid tracking or refund. Either party can escalate between 3 and 21 business days, and DRVN refunds through the durable `refundOrder` when there's no valid tracking. Dispatch and tracking stay possible while a case is open. (OS-W29) |
+| N91 | Resolved is final | Finality applies to the in-app case only. Bank chargebacks still open after an in-app resolution. An admin-only audited reopen keeps the history. (OS-W29) |
+| N92 | Offers expire | Each refund offer gets an immutable 48-hour expiry, checked at acceptance and escalation. Neither a new offer nor an expiry resets the dispute clock. (OS-W29) |
+| N95 | Copy eBay | A separate verified-proof record: delivered status, the carrier's date (never "now"), a destination matching the frozen order (postcode, else city), a shipping scan before the latest delivery date, and signature at $750+. Missing or contradictory evidence goes to review. Proof never blocks dispatch. (OS-W29) |
+| R-disputecats | Add both | "Counterfeit" and "doesn't fit as listed", through the not-as-described and return path. (OS-W29) |
+| N110 | Similar to eBay, no limits on $1,000+ orders | Remove the amount-based dispatch refusal. Separate tracking from label buying, so seller-entered tracking is registered with the EasyPost tracker whenever it's available, asynchronously and with retries. Disputes are decided by the N95 proof rules. Payouts follow the normal release rules, with no new high-value hold. (OS-W30) |
+| N89 + beta | Guest caps approved; remove the invite-only beta | Remove the invitation machinery: config, invitations, memberships, signup claims, the three commerce guards, the gated `handle_new_user` and every app caller, plus the admin Invitations page. History stays restricted. Repair accounts left without profiles. Guest holds are capped atomically: 2 live per device and per network, and 1 live guest hold per listing. Both ship together, so opening guest checkout never exposes uncapped holds. The agent rollout switches (`AGENTS_BETA`, `agent_beta_steps`) are agent safety controls and stay. (OS-W31) |
+| N54, N59, R-directcontact | Block approved; hide suspended members; buyers may message sellers | Private directed blocks with a symmetric "either blocked" check in SQL, covering agent writes. The order exception applies only to communication attached to a shared order. Suspension filtering applies across post, comment and profile reads. Then a real "Message seller" path: a listing-context send attached to the person-pair conversation, with seller replies, SQL rate limits and block checks. Agents still never message people (AG-4). The PRD loses its no-cold-contact line. (OS-W32) |
+| N77 | Withdraw, don't delete | An atomic seller-authorised withdrawal, serialised with offers and checkout (listing-first lock). Live offers end with a listing-withdrawal reason, and buyers are notified. History is kept, and direct DELETE is guarded. (OS-W33) |
+| N16, N38 | Approved | Deletion scrubs Auth email and metadata, addresses, order party labels, message and comment bodies and exports, using a keyed email digest. Transaction keys are kept for 6 years on a defined clock, and the process is resumable. Usernames: audit collisions first, then enforce lowercase a-z, 0-9 and `_` at 3 to 30 characters, with reserved names and tombstones. NULL is allowed for incomplete or deleted profiles. (OS-W34, after W11) |
+| N78 | Daily digest | There is no saved-search email today. Build a daily digest outbox: unique per search per day, honouring recipient preferences, idempotent. (OS-W35) |
+| R-photos | Text-only chat | Ordinary chat sends no image bytes. The photo jobs ("Listing from photos", "Post an update") keep image access through an explicit server-validated photo-job mode. (OS-R-photos) |
+| R73 | Stop advertising | Remove `read_product`, `fitment_evidence` and `price_comparables` from the model's allow-list, starters and copy until graph answers exist. (OS-R73) |
+| R-usage, R-measures | Approved | Compute what the records support. Label approximations precisely, and mark the rest unavailable. (OS-R-usage, OS-R-measures) |
+| R-w3 | Keep the picker | Amend PRD W-3 to remove the link-paste requirement. Build nothing. (OS-R-w3) |
 
-**Product, privacy and legal**
+**Not now**
 
-| Item | Question | Recommendation |
-|---|---|---|
-| R-photos | Should chat photos go to the model? | **No, not for the beta. Text only.** |
-| R73 | Graph tools are honest stubs | **Take them out of advertised capabilities until graph answers ship.** |
-| R-betaaccess | Do exits from an offer need beta eligibility? | **Decline and withdraw need none. A re-offer does.** |
-| R69-age | Confirming members are 18 or over | **A checkbox at sign-up, Google onboarding and guest checkout, stored with a timestamp.** |
-| R69-dmca | Copyright takedown | **Build the notice form and the admin takedown queue now. The registered agent's address waits on the entity.** |
-| R-directcontact | Unprompted messages to sellers | **Allow listing messages only once a buyer starts the thread. Remove the unprompted branch.** |
-| R-w3 | Part for sale block in posts | **Build the own-listing link paste. The PRD stands.** |
-| R-disputecats | Fake part, or a part that doesn't fit | **Add the categories "counterfeit" and "doesn't fit as listed".** |
-| R-usage, R-measures | Agent and PRD measures | **Compute what existing events support. Mark the rest unavailable. No cohort study for the beta.** |
-| N16 | Personal data on account deletion | **Anonymise identity: hash the email, remove names and addresses, redact message bodies. Keep order and money rows for 6 years.** |
-| N38 | Username rules | **Lowercase a-z, 0-9 and `_`, 3 to 30 characters, reserved names, unique ignoring case. Audit existing handles first, and rename any collision with a notice.** |
-| N54 | Block and mute | **Block stops messages, offers, follows and comments both ways and hides content, but doesn't touch existing orders. Mute is left for later.** |
-| N59 | Suspended members' content | **Hide their posts, comments and profile from the public. Keep their order threads.** |
-| N77 | Deleting a listing that has offers | **The listing is withdrawn, not deleted. Its offers are marked withdrawn, with a notice to buyers.** |
-| N78 | Saved-search alert cadence | **At most one email per saved search per day, as a digest.** |
-| N28 | Edge caching | **Defer. Measure after launch.** |
+- **R69-age:** Neil is looking into it. For reference, eBay requires 18+ in its User Agreement, with no checkbox at sign-up.
+- **R69-dmca:** a later feature.
+- **N28:** deferred.
+- **R-hold:** not yet ruled.
 
 ## Owner or hosted, not code
 
