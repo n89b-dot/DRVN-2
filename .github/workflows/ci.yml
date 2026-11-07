@@ -302,7 +302,20 @@ jobs:
       - name: Generated database contract matches migrations
         env:
           DRVN_TYPES_DATABASE_URL: postgresql://supabase_admin:postgres@127.0.0.1:5432/postgres
+          DRVN_TYPES_MISMATCH_OUT: ${{ runner.temp }}/database.generated.ts
         run: node scripts/generate-database-types.mjs --check
+
+      # On a mismatch, keep the file the generator produced so a branch can
+      # take it as-is (download the artifact, copy it to
+      # src/lib/database.generated.ts) without running a local database.
+      - name: Keep the generated schema when it differs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: database-generated-${{ github.sha }}
+          path: ${{ runner.temp }}/database.generated.ts
+          if-no-files-found: ignore
+          retention-days: 7
 
   # Each runner owns local Supabase/Auth/Storage/Mailpit and synthetic fixtures.
   e2e:
