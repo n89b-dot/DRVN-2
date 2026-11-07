@@ -38,7 +38,7 @@ same seller action where possible. Do not create a manual seller credit or
 submit a provider refund against a different shipment. Carrier-specific live
 refund acceptance and settlement timing remain an operational launch check.
 
-For lost TOTP, a separately authorized operator must first verify identity and record that evidence reference. Call service-only `begin_admin_mfa_recovery(actor, target, reason)` before removing the lost factor through Supabase Auth administration. This invalidates previously issued administrator JWTs at both the application and RLS boundaries. Require a new sign-in and fresh authenticator enrollment; append completion to the audit using the returned operation ID. The automated drill proves this mechanism with synthetic identities; it does not replace the organization's human identity-verification procedure.
+For lost TOTP, a separately authorized operator must first verify identity and record that evidence reference. Call service-only `begin_admin_mfa_recovery(actor, target, reason)` before removing the lost factor through Supabase Auth administration. This invalidates previously issued administrator JWTs at both the application and RLS boundaries. Require a new sign-in and fresh authenticator enrollment; removing the confirmed factor leaves the membership pending, so the operator confirms the new factor with the person out of band (`confirm_admin_mfa`, `docs/production-runbook.md` §5) before the console reopens. Append completion to the audit using the returned operation ID. The automated drill proves this mechanism with synthetic identities; it does not replace the organization's human identity-verification procedure.
 
 ## Search rebuilds
 

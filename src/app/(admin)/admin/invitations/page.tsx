@@ -1,7 +1,6 @@
 
 import { PageHead } from "@/components/ui";
-import { getAdminContext } from "@/lib/admin/guard";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { adminReadClient, requireAdminRead } from "@/lib/admin/guard";
 
 import { type InvitationRowData } from "./invitation-row";
 import { InvitationsPanel } from "./invitations-panel";
@@ -19,8 +18,8 @@ type InvitationRecord = InvitationRowData & {
 };
 
 export default async function InvitationsPage() {
-  const context = await getAdminContext();
-  const admin = createAdminClient();
+  const context = await requireAdminRead();
+  const admin = await adminReadClient();
   const [{ data: config }, { data, error }, { data: expiredData, error: expiredError }] = await Promise.all([
     admin.from("beta_access_config").select("enforced").eq("singleton", true).maybeSingle(),
     admin
@@ -53,11 +52,11 @@ export default async function InvitationsPage() {
           invitations.map((invitation) => [invitation.id, new Date(invitation.expires_at).toLocaleDateString()]),
         )}
         expiredIds={[...expiredIds]}
-        canRevoke={context?.role === "admin"}
-        canCreate={context?.role === "admin" && Boolean(config?.enforced)}
+        canRevoke={context.role === "admin"}
+        canCreate={context.role === "admin" && Boolean(config?.enforced)}
         siteOrigin={siteOrigin}
         gateNote={
-          context?.role === "admin" ? (
+          context.role === "admin" ? (
             <p className="order__meta">
               Invitations only matter while the beta gate is on — right now anyone can join, buy and
               sell.

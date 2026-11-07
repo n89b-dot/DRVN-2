@@ -41,7 +41,9 @@ begin
   delete from public.job_config where key in ('transfer_worker_url', 'transfer_worker_secret');
   insert into auth.users(id, email) values
     (seller, 'schedule-seller@drvn.test'), (buyer, 'schedule-buyer@drvn.test'), (viewer, 'schedule-viewer@drvn.test');
-  insert into public.admin_users(user_id, role) values (viewer, 'viewer');
+  -- A confirmed authenticator (20261107200500), so the refusal below is the role's.
+  insert into auth.mfa_factors(id, user_id, friendly_name, factor_type, status, created_at, updated_at) values (gen_random_uuid(), viewer, 'guard', 'totp', 'verified', now(), now());
+  insert into public.admin_users(user_id, role, mfa_factor_id) select viewer, 'viewer', id from auth.mfa_factors where user_id = viewer;
   insert into public.listings(id, seller_id, title, category, price_cents, shipping_cents, status)
   values (part, seller, 'Schedule guard turbo', 'performance', 100000, 2000, 'active');
   insert into public.listing_private_terms(listing_id, seller_id, offer_floor_cents) values (part, seller, 60000)

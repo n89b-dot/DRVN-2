@@ -24,7 +24,12 @@ begin
   insert into auth.users(id, email) values
     (actor, 'reconcile-admin@example.test'), (viewer, 'reconcile-viewer@example.test'),
     (buyer, 'reconcile-buyer@example.test'), (seller, 'reconcile-seller@example.test');
-  insert into public.admin_users(user_id, role, note) values (actor, 'admin', 'guard'), (viewer, 'viewer', 'guard');
+  -- Confirmed authenticators (20261107200500): without one no admin privilege.
+  insert into auth.mfa_factors(id, user_id, friendly_name, factor_type, status, created_at, updated_at) values (gen_random_uuid(), actor, 'guard', 'totp', 'verified', now(), now());
+  insert into auth.mfa_factors(id, user_id, friendly_name, factor_type, status, created_at, updated_at) values (gen_random_uuid(), viewer, 'guard', 'totp', 'verified', now(), now());
+  insert into public.admin_users(user_id, role, note, mfa_factor_id)
+  select f.user_id, case when f.user_id = actor then 'admin' else 'viewer' end, 'guard', f.id
+  from auth.mfa_factors f where f.user_id in (actor, viewer);
   insert into public.orders(id, buyer_id, seller_id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, currency)
   values (ord, buyer, seller, 'paid', 5000, 0, 500, 5000, 'USD'),
          (fresh_ord, buyer, seller, 'paid', 5000, 0, 500, 5000, 'USD'),

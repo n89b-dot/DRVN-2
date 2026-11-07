@@ -8,6 +8,11 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
+// The read layer's gate (N11) passes: these tests are about the reads.
+vi.mock("./guard", async () => {
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  return { adminReadClient: async () => createAdminClient(), requireAdminRead: async () => ({ userId: "admin-1", role: "admin" }) };
+});
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({

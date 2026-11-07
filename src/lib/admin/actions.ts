@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 
 import { revalidatePath } from "@/lib/revalidate";
 
-import { auditedAction } from "./audit";
+import { auditedAction, RefusedOperationError } from "./audit";
 import { sendAdminAlert } from "./alerts";
 import { markWebhookEventProcessed } from "@/lib/payments/settlement";
 import { recordWebhookFailure } from "@/lib/payments/webhook-failures";
@@ -207,7 +207,10 @@ export async function adminForceRefund(
           resolveDispute: true,
           requestKey,
         });
-        if (!result.ok) throw new Error(result.error);
+        // A proven refusal (nothing reserved, or Stripe declined it) closes
+        // the request so a corrected retry isn't locked out (N134); anything
+        // uncertain keeps it for reconciliation.
+        if (!result.ok) throw result.refused ? new RefusedOperationError(result.error) : new Error(result.error);
         return result;
       }
     );

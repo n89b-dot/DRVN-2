@@ -210,16 +210,47 @@ Confirm the nine pg_cron jobs (times are the database's UTC):
 these. Without the `job_config` rows the SQL jobs still run, but every HTTP
 worker returns immediately without calling the app.
 
-## 5. Seed the first admin
+## 5. Seed the first admin (and every later one)
 
-```sql
-insert into public.admin_users (user_id, note)
-values ('<auth.users id>', 'founder')
-on conflict do nothing;
-```
+Membership is SQL-only by design (0018), and it counts only once the
+operator has confirmed the member's authenticator (20261107200500, N136).
+Without that step, whoever held the new member's password first could set up
+their own authenticator and take the console.
 
-Membership is SQL-only by design (0018). Turn on MFA for that account in
-Supabase Auth. The console is at `/admin`; it 404s for everyone else.
+1. Promote the account. It is now **pending**: no console, no admin rights.
+   ```sql
+   insert into public.admin_users (user_id, role, note)
+   values ('<auth.users id>', 'admin', 'founder')   -- or 'viewer'
+   on conflict do nothing;
+   ```
+2. The member signs in, opens `/admin`, is sent to `/admin-verify`, sets up
+   their authenticator app and enters a code. The page then shows the
+   factor's **reference** (its id) and when it was set up.
+3. Check it with the person **out of band** (phone or in person, never by
+   replying to an email or chat from that account). They read you the
+   reference; compare it with what Supabase Auth holds:
+   ```sql
+   select id, friendly_name, status, created_at
+   from auth.mfa_factors where user_id = '<auth.users id>' and factor_type = 'totp';
+   ```
+   One verified factor, the same id, set up when they say. If there is a
+   factor they didn't set up, someone else has their password: remove the
+   membership (`delete from public.admin_users where user_id = …`), delete
+   that factor in Supabase Auth, and have them change their password.
+4. Confirm it (service role, e.g. the SQL editor):
+   ```sql
+   select public.confirm_admin_mfa('<auth.users id>', '<factor id>',
+     '<your name>: phoned <member>, reference matched');
+   ```
+   The console opens for them on their next code. `admin_users` keeps who
+   confirmed it and when.
+
+If the confirmed factor is ever removed (a lost phone: the recovery steps in
+`docs/remediation-operations.md`), the membership is pending again until the
+operator repeats steps 2–4 for the new factor. Members confirmed by the
+migration itself were those with exactly one verified authenticator on file
+when it ran (`mfa_confirmed_by` says so); anyone else is pending until
+confirmed. The console is at `/admin`; it 404s for everyone else.
 
 ## 5b. Money reconciliation & recovery (run these when things go wrong)
 

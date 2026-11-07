@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { PageHead } from "@/components/ui";
-import { getAdminContext } from "@/lib/admin/guard";
+import { requireAdminRead } from "@/lib/admin/guard";
 import { listOpsCases, type OpsCaseRow } from "@/lib/admin/queries";
 import { cx } from "@/lib/format";
 
@@ -28,12 +28,12 @@ export default async function AdminCasesPage({
   searchParams: Promise<{ view?: string; kind?: string }>;
 }) {
   const { view, kind } = await searchParams;
-  const ctx = await getAdminContext();
+  const ctx = await requireAdminRead();
 
   const rows = await listOpsCases({
     status: view === "resolved" ? "resolved" : undefined,
     kind: kind === "dispute" || kind === "report" ? kind : undefined,
-    assignee: view === "mine" ? (ctx?.userId ?? undefined) : undefined,
+    assignee: view === "mine" ? ctx.userId : undefined,
   });
 
   const filters: { key: string; label: string; href: string; active: boolean }[] = [
@@ -114,7 +114,7 @@ export default async function AdminCasesPage({
               </span>
               <CaseControls
                 caseId={row.id}
-                claimedByMe={row.assignedTo === ctx?.userId}
+                claimedByMe={row.assignedTo === ctx.userId}
                 claimed={Boolean(row.assignedTo)}
                 priority={row.priority}
                 labels={row.labels}

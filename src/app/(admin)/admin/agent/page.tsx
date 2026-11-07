@@ -1,8 +1,7 @@
 import { Alert, Button, ButtonLink, KeyValueTable, ObjectRow, PageHead, TextField, TileHead } from "@/components/ui";
-import { getAdminContext } from "@/lib/admin/guard";
+import { adminReadClient, requireAdminRead } from "@/lib/admin/guard";
 import { AGENT_MEASURES, formatMeasure } from "@/lib/agent/measures";
 import { alertsToRaise, type AgentHealth } from "@/lib/agent/monitor";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 import { setAgentBetaStep, setAgentSpendLimits } from "./actions";
 import { AgentActionForm } from "./agent-admin-forms";
@@ -43,8 +42,8 @@ const HEALTH_LABEL: Record<string, string> = {
  * steps are in docs/production-runbook.md §13c.
  */
 export default async function AdminAgentPage() {
-  const context = await getAdminContext();
-  const admin = createAdminClient();
+  const context = await requireAdminRead();
+  const admin = await adminReadClient();
   const since = measureWindowStart();
   const [controls, health, steps, limits, spend, metrics] = await Promise.all([
     admin.from("agent_controls").select("id, scope, subject_id, reason, set_at").is("cleared_at", null).order("set_at", { ascending: false }),
@@ -66,7 +65,7 @@ export default async function AdminAgentPage() {
   const stepsKnown = !steps.error;
   const counts = health.data as unknown as AgentHealth | null;
   const alerts = counts ? alertsToRaise(counts) : [];
-  const canAct = context?.role === "admin";
+  const canAct = context.role === "admin";
 
   return (
     <>
