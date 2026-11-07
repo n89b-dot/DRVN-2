@@ -25,6 +25,7 @@ vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
 vi.mock("@/lib/admin/alerts", () => ({ sendAdminAlert: mocks.sendAdminAlert }));
 
 import {
+  CHARGEBACK_HOLD_REASON,
   findExistingTransfer,
   processDueTransfers,
   reconcileTransferRecords,
@@ -115,9 +116,14 @@ function fakeAdmin(options: {
   profile?: Record<string, unknown> | null;
   orderWrite?: { data?: unknown[] | null; error?: unknown };
   notificationError?: unknown;
+  /** stripe_dispute_journal rows per read (the last repeats). */
+  chargebacks?: Array<Array<{ dispute_id: string; state: string }>>;
+  chargebackError?: { message: string } | null;
 } = {}) {
   const inserts: Array<{ table: string; value: unknown }> = [];
+  const journalFilters: unknown[] = [];
   let orderReadIndex = 0;
+  let journalReadIndex = 0;
   const rpc = vi.fn(async (name: string) => {
     if (name === "claim_transfer_intents") {
       return { data: options.claimed ?? [], error: null };
@@ -156,6 +162,13 @@ function fakeAdmin(options: {
         return {
           data: configuredOrder === undefined ? defaultOrder : configuredOrder,
           error: options.orderError ?? null,
+        };
+      }
+      if (table === "stripe_dispute_journal") {
+        const reads = options.chargebacks ?? [[]];
+        return {
+          data: reads[Math.min(journalReadIndex++, reads.length - 1)],
+          error: options.chargebackError ?? null,
         };
       }
       if (table === "payments") {
@@ -201,6 +214,10 @@ function fakeAdmin(options: {
       is: vi.fn(() => query),
       not: vi.fn(() => query),
       in: vi.fn(() => query),
+      contains: vi.fn((column: string, value: unknown) => {
+        journalFilters.push({ table, column, value });
+        return query;
+      }),
       limit: vi.fn(() => query),
       maybeSingle: vi.fn(async () => result()),
       then: (resolve, reject) => Promise.resolve(result()).then(resolve, reject),
@@ -208,7 +225,7 @@ function fakeAdmin(options: {
     return query;
   });
 
-  return { admin: { rpc, from } as never, rpc, from, inserts };
+  return { admin: { rpc, from } as never, rpc, from, inserts, journalFilters };
 }
 
 function exactPage(hasMore = false) {
@@ -503,9 +520,14 @@ describe("transfer worker crash recovery", () => {
     });
     await expect(processDueTransfers(admin)).resolves.toMatchObject({ requeued: 1 });
     expect(mocks.transferCreate).not.toHaveBeenCalled();
+    // Reachable again on a backed-off reconciliation time, not left to readiness.
     expect(rpc).toHaveBeenCalledWith(
       "release_transfer_intent",
-      expect.objectContaining({ p_status: "holding" })
+      expect.objectContaining({
+        p_status: "holding",
+        p_attempts: 1,
+        p_next_attempt_at: expect.any(String),
+      })
     );
     expect(rpc).not.toHaveBeenCalledWith("prepare_transfer_dispatch", expect.any(Object));
   });
@@ -520,7 +542,11 @@ describe("transfer worker crash recovery", () => {
     expect(mocks.transferCreate).not.toHaveBeenCalled();
     expect(rpc).toHaveBeenCalledWith(
       "release_transfer_intent",
-      expect.objectContaining({ p_status: "holding" })
+      expect.objectContaining({
+        p_status: "holding",
+        p_attempts: 1,
+        p_next_attempt_at: expect.any(String),
+      })
     );
   });
 
@@ -572,6 +598,367 @@ describe("transfer worker crash recovery", () => {
       "release_transfer_intent",
       expect.objectContaining({ p_status: "failed", p_attempts: 1 })
     );
+  });
+});
+
+// 20261107130000 (readiness B9): an unresolved bank chargeback freezes the
+// payout even when an in-app close or a refund has put the order back to
+// delivered (every fixture order here is delivered, past its clearing time).
+describe("bank chargeback freeze", () => {
+  const chargeback = (state: string) => [{ dispute_id: "dp_guard", state }];
+
+  it.each(["open", "loss_pending", "recovery", "a_state_added_later"])(
+    "shelves a fresh payout while the chargeback is %s",
+    async (state) => {
+      const { admin, rpc, journalFilters } = fakeAdmin({
+        claimed: [intent()],
+        chargebacks: [chargeback(state)],
+      });
+      await expect(processDueTransfers(admin)).resolves.toMatchObject({
+        requeued: 1,
+        transferred: 0,
+      });
+      expect(journalFilters).toContainEqual({
+        table: "stripe_dispute_journal",
+        column: "order_ids",
+        value: ["order-a"],
+      });
+      expect(rpc).toHaveBeenCalledWith("release_transfer_intent", {
+        p_order: "order-a",
+        p_worker: expect.stringMatching(/^worker:/),
+        p_status: "holding",
+        p_last_error: CHARGEBACK_HOLD_REASON,
+        p_attempts: null,
+        p_next_attempt_at: null,
+      });
+      expect(rpc).not.toHaveBeenCalledWith("freeze_transfer_carry", expect.anything());
+      expect(rpc).not.toHaveBeenCalledWith("prepare_transfer_dispatch", expect.anything());
+      expect(mocks.transferCreate).not.toHaveBeenCalled();
+      expect(mocks.paymentIntentRetrieve).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(["won", "warning_closed", "lost"])(
+    "pays on the normal schedule once the chargeback is %s",
+    async (state) => {
+      const { admin, rpc } = fakeAdmin({
+        claimed: [intent()],
+        chargebacks: [chargeback(state)],
+      });
+      await expect(processDueTransfers(admin)).resolves.toMatchObject({ transferred: 1 });
+      expect(rpc).toHaveBeenCalledWith(
+        "prepare_transfer_dispatch",
+        expect.objectContaining({ p_amount_cents: 4500 })
+      );
+      expect(mocks.transferCreate).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it("is frozen by one unresolved chargeback among resolved ones", async () => {
+    const { admin } = fakeAdmin({
+      claimed: [intent()],
+      chargebacks: [
+        [
+          { dispute_id: "dp_old", state: "won" },
+          { dispute_id: "dp_new", state: "open" },
+        ],
+      ],
+    });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ requeued: 1 });
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+  });
+
+  it("never pays when the journal can't be read", async () => {
+    const { admin, rpc } = fakeAdmin({
+      claimed: [intent()],
+      chargebackError: { message: "journal unavailable" },
+    });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ failed: 1 });
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith(
+      "release_transfer_intent",
+      expect.objectContaining({ p_status: "failed", p_attempts: 1 })
+    );
+  });
+
+  it("records a transfer Stripe already made instead of sending a second one", async () => {
+    mocks.transferList.mockResolvedValue(exactPage());
+    const { admin, rpc } = fakeAdmin({
+      claimed: [frozenIntent()],
+      chargebacks: [chargeback("open")],
+      // The database records it and opens an operator case (complete_transfer_intent).
+      rpc: { complete_transfer_intent: { data: "recovery" } },
+    });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ failed: 1 });
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith(
+      "complete_transfer_intent",
+      expect.objectContaining({
+        p_operation_key: dispatch.operationKey,
+        p_transfer_reference: "tr_exact",
+      })
+    );
+    expect(rpc).not.toHaveBeenCalledWith("release_transfer_intent", expect.any(Object));
+  });
+
+  it("shelves an uncertain payout Stripe never made, keeping its frozen request", async () => {
+    const { admin, rpc } = fakeAdmin({
+      claimed: [frozenIntent()],
+      chargebacks: [chargeback("recovery")],
+    });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ requeued: 1 });
+    // It reconciled first: a possible provider effect is never skipped.
+    expect(mocks.transferList).toHaveBeenCalled();
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalledWith("prepare_transfer_dispatch", expect.anything());
+    expect(rpc).not.toHaveBeenCalledWith("record_transfer_recovery", expect.anything());
+    // Still reachable: a backed-off reconciliation time, not an open-ended
+    // shelf, because Stripe may yet complete the earlier request.
+    const calls = rpc.mock.calls as unknown as Array<[string, Record<string, unknown>]>;
+    const release = calls.find(([name]) => name === "release_transfer_intent")?.[1];
+    expect(release).toMatchObject({
+      p_status: "holding",
+      p_last_error: CHARGEBACK_HOLD_REASON,
+      p_attempts: 1,
+    });
+    const retryAt = Date.parse(String(release?.p_next_attempt_at));
+    expect(retryAt).toBeGreaterThan(Date.now());
+    expect(retryAt).toBeLessThanOrEqual(Date.now() + 2 * 60_000 + 1_000);
+  });
+
+  it("records a transfer that appeared at Stripe after an earlier empty check", async () => {
+    // First pass: nothing yet (the request is in flight), so it is shelved.
+    const first = fakeAdmin({ claimed: [frozenIntent()], chargebacks: [chargeback("recovery")] });
+    await expect(processDueTransfers(first.admin)).resolves.toMatchObject({ requeued: 1 });
+    // A later pass, claimed again during the same chargeback, finds it.
+    mocks.transferList.mockResolvedValue(exactPage());
+    const later = fakeAdmin({
+      claimed: [frozenIntent({ attempts: 1 })],
+      chargebacks: [chargeback("recovery")],
+      rpc: { complete_transfer_intent: { data: "recovery" } },
+    });
+    await expect(processDueTransfers(later.admin)).resolves.toMatchObject({ failed: 1 });
+    expect(later.rpc).toHaveBeenCalledWith(
+      "complete_transfer_intent",
+      expect.objectContaining({ p_transfer_reference: "tr_exact" })
+    );
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+  });
+
+  // The order the chargeback put into `disputed` (it stays disputed for the
+  // whole bank case), while an earlier worker's Stripe request was in flight.
+  const disputedOrder = {
+    id: "order-a",
+    status: "disputed",
+    seller_id: "seller-a",
+    total_cents: 5000,
+    platform_fee_cents: 500,
+    refunded_cents: 0,
+    transfer_reference: null,
+    delivered_at: new Date(0).toISOString(),
+  };
+
+  it("keeps a disputed order's uncertain payout reachable and records the transfer on a later pass", async () => {
+    // Pass 1: Stripe shows nothing yet. Shelved with a reconciliation time,
+    // not on the plain readiness shelf the chargeback would never release.
+    const first = fakeAdmin({
+      claimed: [frozenIntent()],
+      order: disputedOrder,
+      chargebacks: [chargeback("open")],
+    });
+    await expect(processDueTransfers(first.admin)).resolves.toMatchObject({ requeued: 1 });
+    expect(first.rpc).toHaveBeenCalledWith(
+      "release_transfer_intent",
+      expect.objectContaining({
+        p_status: "holding",
+        p_attempts: 1,
+        p_next_attempt_at: expect.any(String),
+        p_last_error: CHARGEBACK_HOLD_REASON,
+      })
+    );
+    // Pass 2, claimed again on that time, order still disputed: still nothing.
+    const second = fakeAdmin({
+      claimed: [frozenIntent({ attempts: 1 })],
+      order: disputedOrder,
+      chargebacks: [chargeback("open")],
+    });
+    await expect(processDueTransfers(second.admin)).resolves.toMatchObject({ requeued: 1 });
+    expect(second.rpc).toHaveBeenCalledWith(
+      "release_transfer_intent",
+      expect.objectContaining({ p_status: "holding", p_attempts: 2 })
+    );
+    // Pass 3: the in-flight request has completed at Stripe; it is recorded.
+    mocks.transferList.mockResolvedValue(exactPage());
+    const third = fakeAdmin({
+      claimed: [frozenIntent({ attempts: 2 })],
+      order: disputedOrder,
+      chargebacks: [chargeback("open")],
+      rpc: { complete_transfer_intent: { data: "recovery" } },
+    });
+    await expect(processDueTransfers(third.admin)).resolves.toMatchObject({ failed: 1 });
+    expect(third.rpc).toHaveBeenCalledWith(
+      "complete_transfer_intent",
+      expect.objectContaining({
+        p_operation_key: dispatch.operationKey,
+        p_transfer_reference: "tr_exact",
+      })
+    );
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+  });
+
+  it("asks an operator once a disputed order's reconciliation budget runs out", async () => {
+    const { admin, rpc } = fakeAdmin({
+      claimed: [frozenIntent({ attempts: 7 })],
+      order: disputedOrder,
+      chargebacks: [chargeback("loss_pending")],
+    });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ failed: 1 });
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith(
+      "record_transfer_recovery",
+      expect.objectContaining({
+        p_key: "transfer-unresolved:order-a",
+        p_detail: expect.stringContaining("no transfer was found after 8 checks"),
+      })
+    );
+    expect(rpc).not.toHaveBeenCalledWith("release_transfer_intent", expect.anything());
+  });
+
+  it("asks an operator once the reconciliation budget runs out during a chargeback", async () => {
+    const { admin, rpc } = fakeAdmin({
+      claimed: [frozenIntent({ attempts: 7 })],
+      chargebacks: [chargeback("open")],
+    });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ failed: 1 });
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith(
+      "record_transfer_recovery",
+      expect.objectContaining({
+        p_key: "transfer-unresolved:order-a",
+        p_detail: expect.stringContaining("bank chargeback"),
+        p_amount: 4500,
+      })
+    );
+    expect(rpc).not.toHaveBeenCalledWith("release_transfer_intent", expect.anything());
+  });
+
+  it("re-reads the journal after provider lookup and holds a chargeback that opened meanwhile", async () => {
+    const { admin, rpc } = fakeAdmin({
+      claimed: [frozenIntent()],
+      chargebacks: [[], chargeback("open")],
+    });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ requeued: 1 });
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalledWith("prepare_transfer_dispatch", expect.anything());
+  });
+
+  it("resends a frozen uncertain payout with its own key once the chargeback is won", async () => {
+    const { admin, rpc } = fakeAdmin({
+      claimed: [frozenIntent({ attempts: 1 })],
+      chargebacks: [chargeback("won")],
+    });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ transferred: 1 });
+    expect(rpc).toHaveBeenCalledWith(
+      "prepare_transfer_dispatch",
+      expect.objectContaining({ p_operation_key: dispatch.operationKey, p_amount_cents: 4500 })
+    );
+    expect(mocks.transferCreate).toHaveBeenCalledTimes(1);
+    expect(mocks.transferCreate).toHaveBeenCalledWith(expect.anything(), {
+      idempotencyKey: dispatch.operationKey,
+    });
+  });
+
+  it("calls no provider when the database refuses dispatch for a chargeback opened after the read", async () => {
+    // prepare_transfer_dispatch shelves the row itself and answers false.
+    const { admin, rpc } = fakeAdmin({
+      claimed: [intent()],
+      rpc: { prepare_transfer_dispatch: { data: false } },
+    });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ failed: 1 });
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalledWith("release_transfer_intent", expect.any(Object));
+    expect(rpc).not.toHaveBeenCalledWith("complete_transfer_intent", expect.any(Object));
+  });
+});
+
+// 20261107130000: a full refund must not strand a payout Stripe may already
+// have been called for. It is reconciled with backoff; a late transfer is
+// recorded (the database opens a transfer_after_refund case for an operator,
+// with no automatic reversal); only an exhausted budget cancels it.
+describe("refunded order with a possibly-sent payout", () => {
+  const refundedOrder = {
+    id: "order-a",
+    status: "refunded",
+    seller_id: "seller-a",
+    total_cents: 5000,
+    platform_fee_cents: 500,
+    refunded_cents: 5000,
+    transfer_reference: null,
+    delivered_at: new Date(0).toISOString(),
+  };
+
+  it("still cancels a refunded payout Stripe was never called for, at once", async () => {
+    const { admin, rpc } = fakeAdmin({ claimed: [intent()], order: refundedOrder });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ cancelled: 1 });
+    expect(rpc).toHaveBeenCalledWith(
+      "release_transfer_intent",
+      expect.objectContaining({ p_status: "cancelled", p_last_error: "order is refunded" })
+    );
+    expect(mocks.transferList).not.toHaveBeenCalled();
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+  });
+
+  it("reconciles a crashed in-flight request instead of cancelling, then records the late transfer", async () => {
+    // Pass 1, reclaimed after the crash: Stripe shows nothing yet.
+    const first = fakeAdmin({ claimed: [frozenIntent()], order: refundedOrder });
+    await expect(processDueTransfers(first.admin)).resolves.toMatchObject({ requeued: 1 });
+    expect(first.rpc).toHaveBeenCalledWith(
+      "release_transfer_intent",
+      expect.objectContaining({
+        p_status: "holding",
+        p_attempts: 1,
+        p_next_attempt_at: expect.any(String),
+      })
+    );
+    expect(first.rpc).not.toHaveBeenCalledWith(
+      "release_transfer_intent",
+      expect.objectContaining({ p_status: "cancelled" })
+    );
+    // Pass 2, claimed on that time: the request completed at Stripe.
+    mocks.transferList.mockResolvedValue(exactPage());
+    const later = fakeAdmin({
+      claimed: [frozenIntent({ attempts: 1 })],
+      order: refundedOrder,
+      rpc: { complete_transfer_intent: { data: "recovery" } },
+    });
+    await expect(processDueTransfers(later.admin)).resolves.toMatchObject({ failed: 1 });
+    expect(later.rpc).toHaveBeenCalledWith(
+      "complete_transfer_intent",
+      expect.objectContaining({
+        p_operation_key: dispatch.operationKey,
+        p_transfer_reference: "tr_exact",
+      })
+    );
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+  });
+
+  it("cancels only once the attempt budget has found no transfer", async () => {
+    const { admin, rpc } = fakeAdmin({
+      claimed: [frozenIntent({ attempts: 7 })],
+      order: refundedOrder,
+    });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ cancelled: 1 });
+    expect(mocks.transferList).toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith(
+      "release_transfer_intent",
+      expect.objectContaining({
+        p_status: "cancelled",
+        p_attempts: 8,
+        p_last_error: expect.stringContaining("no Stripe transfer found after 8 checks"),
+      })
+    );
+    expect(rpc).not.toHaveBeenCalledWith("record_transfer_recovery", expect.anything());
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
   });
 });
 

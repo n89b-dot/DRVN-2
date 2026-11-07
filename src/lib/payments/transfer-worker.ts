@@ -31,6 +31,13 @@ import { sendAdminAlert } from "@/lib/admin/alerts";
  * Partial refunds no longer cancel the seller's whole payout: the payable
  * amount is the intent minus the refund's proportional share, mirroring the
  * reversal arithmetic in refunds.ts.
+ *
+ * An unresolved bank chargeback freezes the payout whatever the order's
+ * status says (20261107130000, readiness B9): closing an in-app dispute or a
+ * refund completing can put the order back to delivered while the bank's case
+ * is still running. Both order reads below also read the provider dispute
+ * journal, and the database refuses the same payouts at readiness, admission
+ * and dispatch.
  */
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -40,6 +47,18 @@ const BATCH_SIZE = 8;
 const LEASE_SECONDS = 300;
 const TRANSFER_PAGE_SIZE = 100;
 const MAX_TRANSFER_PAGES = 10;
+
+/**
+ * Terminal provider outcomes. Any other journal state — open, loss_pending,
+ * recovery, or one added later — is an unresolved chargeback. Mirrors
+ * private.order_has_unresolved_chargeback (20261107130000); fails closed.
+ */
+const RESOLVED_CHARGEBACK_STATES = new Set(["won", "warning_closed", "lost"]);
+export const CHARGEBACK_HOLD_REASON =
+  "Payout frozen: a bank chargeback on this order is unresolved";
+
+const TRANSFER_ORDER_COLUMNS =
+  "id, status, seller_id, total_cents, platform_fee_cents, refunded_cents, transfer_reference, delivered_at";
 
 export type TransferWorkerSummary = {
   transferred: number;
@@ -173,13 +192,22 @@ async function recordFailure(
     );
     return;
   }
-  const backoffMinutes = Math.min(2 ** Math.min(attempts, 6), 120);
   await setIntent(admin, intent.order_id, workerId, {
     status: "failed",
     attempts,
-    next_attempt_at: new Date(Date.now() + backoffMinutes * 60_000).toISOString(),
+    next_attempt_at: retryAt(attempts),
     last_error: message.slice(0, 500),
   });
+}
+
+/**
+ * Bounded exponential backoff: 2, 4, 8, 16, 32, then 64 minutes for every
+ * later attempt (the exponent stops at 6, so the 120-minute ceiling is never
+ * reached). Unchanged from the worker's original failure backoff.
+ */
+function retryAt(attempts: number): string {
+  const backoffMinutes = Math.min(2 ** Math.min(attempts, 6), 120);
+  return new Date(Date.now() + backoffMinutes * 60_000).toISOString();
 }
 
 type TransferDispatch = {
@@ -355,19 +383,40 @@ async function createTransfer(dispatch: TransferDispatch): Promise<Stripe.Transf
   );
 }
 
+/**
+ * The order and whether a bank chargeback on it is unresolved. The journal,
+ * not orders.stripe_dispute_id, is the truth: provider closure leaves that id
+ * set, and a chargeback that arrives during an in-app dispute is recorded
+ * only in the journal. An unreadable journal throws (retry), never pays.
+ */
+async function readTransferOrder(admin: Admin, orderId: string, failure: string) {
+  const { data: order, error: orderError } = await admin
+    .from("orders")
+    .select(TRANSFER_ORDER_COLUMNS)
+    .eq("id", orderId)
+    .maybeSingle();
+  if (orderError) throw new Error(failure);
+  const { data: disputes, error: disputeError } = await admin
+    .from("stripe_dispute_journal")
+    .select("dispute_id, state")
+    .contains("order_ids", [orderId]);
+  if (disputeError) throw new Error("Could not read the order's bank chargebacks");
+  const chargebackUnresolved = (disputes ?? []).some(
+    (dispute) => !RESOLVED_CHARGEBACK_STATES.has(dispute.state)
+  );
+  return { order, chargebackUnresolved };
+}
+
 async function processOne(
   admin: Admin,
   intent: IntentRow,
   workerId: string
 ): Promise<keyof TransferWorkerSummary> {
-  const { data: order, error: orderError } = await admin
-    .from("orders")
-    .select(
-      "id, status, seller_id, total_cents, platform_fee_cents, refunded_cents, transfer_reference, delivered_at"
-    )
-    .eq("id", intent.order_id)
-    .maybeSingle();
-  if (orderError) throw new Error("Could not read transfer order");
+  const { order, chargebackUnresolved } = await readTransferOrder(
+    admin,
+    intent.order_id,
+    "Could not read transfer order"
+  );
 
   if (!order) {
     if (intent.provider_call_may_have_occurred) {
@@ -432,6 +481,16 @@ async function processOne(
     new Date(intent.available_at).getTime() > Date.now()
   ) {
     await setIntent(admin, intent.order_id, workerId, { status: "holding", last_error: null });
+    return "requeued";
+  }
+  // Delivered again after an in-app close or a refund, but the bank's case is
+  // still running: back on the shelf; readiness re-marks it once resolved.
+  // An uncertain row reconciles first (below) and is shelved after.
+  if (!intent.provider_call_may_have_occurred && chargebackUnresolved) {
+    await setIntent(admin, intent.order_id, workerId, {
+      status: "holding",
+      last_error: CHARGEBACK_HOLD_REASON,
+    });
     return "requeued";
   }
 
@@ -515,14 +574,8 @@ async function processOne(
     // Provider lookup may consume the rest of this owner's lease, and order
     // eligibility may change while it is in flight. Refresh the canonical
     // order before treating an absent result as permission to create.
-    const { data: currentOrder, error: currentOrderError } = await admin
-      .from("orders")
-      .select(
-        "id, status, seller_id, total_cents, platform_fee_cents, refunded_cents, transfer_reference, delivered_at"
-      )
-      .eq("id", intent.order_id)
-      .maybeSingle();
-    if (currentOrderError) throw new Error("Could not refresh transfer order");
+    const { order: currentOrder, chargebackUnresolved: currentChargebackUnresolved } =
+      await readTransferOrder(admin, intent.order_id, "Could not refresh transfer order");
     if (!currentOrder) {
       await recordOperatorRecovery(
         admin,
@@ -543,23 +596,72 @@ async function processOne(
       );
       return "failed";
     }
+    // Refunded or otherwise never payable. Stripe may still complete the
+    // earlier request, and a cancelled row is never claimed again, so it is
+    // not cancelled on one empty lookup: it is shelved on the same
+    // backed-off reconciliation time as below. A transfer that turns up is
+    // recorded with a 'transfer_after_refund' case for an operator to decide
+    // on a reversal (complete_transfer_intent; nothing is reversed
+    // automatically). Once the attempt budget has found none, it is cancelled
+    // as before. (A payout Stripe was never called for cancels at once,
+    // above.)
     if (
       ["refunded", "cancelled", "payment_failed", "pending"].includes(currentOrder.status) ||
       currentOrder.refunded_cents >= currentOrder.total_cents
     ) {
-      await setIntent(admin, intent.order_id, workerId, {
-        status: "cancelled",
-        last_error: `order is ${currentOrder.status}`,
-      });
-      return "cancelled";
-    }
-    if (
-      !["delivered", "completed"].includes(currentOrder.status) ||
-      (intent.available_at != null && new Date(intent.available_at).getTime() > Date.now())
-    ) {
+      const attempts = intent.attempts + 1;
+      if (attempts >= MAX_ATTEMPTS) {
+        await setIntent(admin, intent.order_id, workerId, {
+          status: "cancelled",
+          attempts,
+          last_error: `order is ${currentOrder.status}; no Stripe transfer found after ${attempts} checks`,
+        });
+        return "cancelled";
+      }
       await setIntent(admin, intent.order_id, workerId, {
         status: "holding",
-        last_error: null,
+        attempts,
+        next_attempt_at: retryAt(attempts),
+        last_error: `order is ${currentOrder.status}; reconciling a possible Stripe transfer`,
+      });
+      return "requeued";
+    }
+    // No transfer found, and it isn't payable now: an unresolved chargeback,
+    // a disputed or undelivered order, or a clearing time still ahead. Never
+    // create one now. But the earlier request may still be in flight at
+    // Stripe, so the row must stay reachable whatever the reason: it is
+    // shelved with its frozen payload, its uncertainty flag and a backed-off
+    // reconciliation time that claim_transfer_intents honours even while
+    // readiness refuses (20261107130000) — a plain shelf would wait on
+    // readiness, which never comes while a chargeback holds the order
+    // disputed. A transfer that turns up later is recorded, with an operator
+    // case when the order wasn't payable (complete_transfer_intent); once the
+    // attempt budget is spent an operator is asked instead. When it is
+    // payable again, the same idempotency key is used before anything is sent.
+    const notPayable = currentChargebackUnresolved
+      ? "a bank chargeback on the order is unresolved"
+      : !["delivered", "completed"].includes(currentOrder.status)
+        ? `the order is ${currentOrder.status}`
+        : intent.available_at != null && new Date(intent.available_at).getTime() > Date.now()
+          ? "its clearing time is still ahead"
+          : null;
+    if (notPayable) {
+      const attempts = intent.attempts + 1;
+      if (attempts >= MAX_ATTEMPTS) {
+        await recordOperatorRecovery(
+          admin,
+          intent,
+          workerId,
+          `Stripe may have been called for this payout, but no transfer was found after ${attempts} checks while ${notPayable}`,
+          dispatch.amountCents
+        );
+        return "failed";
+      }
+      await setIntent(admin, intent.order_id, workerId, {
+        status: "holding",
+        attempts,
+        next_attempt_at: retryAt(attempts),
+        last_error: currentChargebackUnresolved ? CHARGEBACK_HOLD_REASON : null,
       });
       return "requeued";
     }
