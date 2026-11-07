@@ -403,6 +403,121 @@ begin
   end if;
   raise notice 'PASS 8b: a disputed order''s in-flight payout stays reachable through real claims and its late transfer is recorded once';
 
+  -- 10. A full refund while a payout's Stripe request may have been sent.
+  --     A payout Stripe was never called for still cancels at once. One whose
+  --     worker crashed mid-request goes to the reconciliation shelf instead
+  --     of 'cancelled' (which nothing ever claims again); a real claim brings
+  --     it back, the transfer that request made is recorded, and a
+  --     transfer_after_refund case asks an operator about a reversal. No
+  --     reversal is booked automatically.
+  o := pg_temp.w18_order(buyer, seller, 'pi_w18_fresh_refund');
+  r := public.begin_refund_operation(
+    p_order_id => o, p_amount_cents => 10000, p_reason => 'chargeback guard: full refund',
+    p_requested_by => 'stripe:webhook', p_actor_role => 'system', p_resolve_dispute => false,
+    p_dispute_outcome => null, p_payment_reference => 'pi_w18_fresh_refund', p_external => true);
+  perform public.settle_refund_operation((r->>'operation_id')::uuid);
+  if (select status from public.transfer_intents where order_id = o) <> 'cancelled' then
+    raise exception 'FAIL 10: a full refund did not cancel a payout Stripe was never called for';
+  end if;
+
+  o := pg_temp.w18_order(buyer, seller, 'pi_w18_refund_late');
+  update public.transfer_intents
+  set status = 'processing', locked_by = 'w18-crashed', locked_at = now() - interval '10 minutes',
+      lease_expires_at = now() - interval '1 second', updated_at = now() - interval '1 year',
+      operation_key = 'transfer:' || o::text, dispatch_amount_cents = 9000, dispatch_currency = 'usd',
+      dispatch_destination = 'acct_w18_seller', dispatch_source_transaction = 'ch_pi_w18_refund_late',
+      dispatch_transfer_group = 'pi_w18_refund_late', provider_call_may_have_occurred = true
+  where order_id = o;
+  r := public.begin_refund_operation(
+    p_order_id => o, p_amount_cents => 10000, p_reason => 'chargeback guard: refund during payout',
+    p_requested_by => 'stripe:webhook', p_actor_role => 'system', p_resolve_dispute => false,
+    p_dispute_outcome => null, p_payment_reference => 'pi_w18_refund_late', p_external => true);
+  r := public.settle_refund_operation((r->>'operation_id')::uuid);
+  if (select status from public.orders where id = o) <> 'refunded' then
+    raise exception 'Fixture 10: the full refund did not settle (%)', r;
+  end if;
+  if (r->>'reversal_due_cents')::int <> 0 then
+    raise exception 'FAIL 10: a reversal was asked of a transfer nobody has recorded';
+  end if;
+  if not exists (
+    select 1 from public.transfer_intents
+    where order_id = o and status = 'holding' and provider_call_may_have_occurred
+      and locked_by is null and next_attempt_at <= now()
+      and operation_key = 'transfer:' || o::text and dispatch_amount_cents = 9000
+  ) then
+    raise exception 'FAIL 10: a full refund cancelled (or didn''t shelve) a payout Stripe may have been called for';
+  end if;
+  -- A real claim reconciles it; Stripe shows nothing yet, so the worker
+  -- shelves it with backoff.
+  if not exists (select 1 from public.claim_transfer_intents('w18-r1', 200, 300, 8) c
+                 where c.order_id = o and c.provider_call_may_have_occurred) then
+    raise exception 'FAIL 10: a refunded order''s possibly-sent payout was not reclaimed for reconciliation';
+  end if;
+  if not public.release_transfer_intent(o, 'w18-r1', 'holding',
+       'order is refunded; reconciling a possible Stripe transfer', 1, now() + interval '2 minutes') then
+    raise exception 'Fixture 10: the worker could not shelve the reconciled row';
+  end if;
+  -- The crashed request did complete at Stripe; the next due pass records it.
+  update public.transfer_intents set next_attempt_at = now() - interval '1 second' where order_id = o;
+  if not exists (select 1 from public.claim_transfer_intents('w18-r2', 200, 300, 8) c where c.order_id = o) then
+    raise exception 'FAIL 10: the backed-off reconciliation was not admitted';
+  end if;
+  v_result := public.complete_transfer_intent(o, 'w18-r2', 'transfer:' || o::text, 'tr_w18_after_refund');
+  if v_result <> 'recovery' or not exists (
+    select 1 from public.orders ord join public.transfer_intents ti on ti.order_id = ord.id
+    where ord.id = o and ord.transfer_reference = 'tr_w18_after_refund'
+      and ti.status = 'transferred' and ti.transfer_reference = 'tr_w18_after_refund'
+  ) then
+    raise exception 'FAIL 10: the late transfer on a refunded order was not recorded (%)', v_result;
+  end if;
+  if not exists (
+    select 1 from public.payment_recoveries
+    where order_id = o and kind = 'transfer_after_refund' and status = 'open'
+      and recovery_key = 'transfer-adjustment:transfer:' || o::text || ':tr_w18_after_refund'
+      and amount_cents = 9000 and detail like '%paid after the order was refunded%'
+  ) or not exists (
+    select 1 from public.admin_alert_outbox
+    where dedup_key = 'transfer-recovery:transfer-adjustment:transfer:' || o::text || ':tr_w18_after_refund'
+  ) then
+    raise exception 'FAIL 10: no transfer-paid-after-refund operator case (and alert) was opened';
+  end if;
+  if exists (select 1 from public.refund_operations where order_id = o and coalesce(reversal_due_cents, 0) > 0) then
+    raise exception 'FAIL 10: a reversal was booked automatically';
+  end if;
+
+  -- An owner still inside Stripe when the refund settles: its lease ends, so
+  -- it can't dispatch again, and the transfer it gets back is still recorded
+  -- with the same operator case.
+  o := pg_temp.w18_order(buyer, seller, 'pi_w18_refund_inflight');
+  update public.transfer_intents
+  set status = 'processing', locked_by = 'w18-inflight', locked_at = now(),
+      lease_expires_at = now() + interval '5 minutes'
+  where order_id = o;
+  if not public.prepare_transfer_dispatch(o, 'w18-inflight', 'transfer:' || o::text, 9000, 'usd',
+       'acct_w18_seller', 'ch_pi_w18_refund_inflight', 'pi_w18_refund_inflight') then
+    raise exception 'Fixture 10: the in-flight owner could not prepare';
+  end if;
+  r := public.begin_refund_operation(
+    p_order_id => o, p_amount_cents => 10000, p_reason => 'chargeback guard: refund mid-request',
+    p_requested_by => 'stripe:webhook', p_actor_role => 'system', p_resolve_dispute => false,
+    p_dispute_outcome => null, p_payment_reference => 'pi_w18_refund_inflight', p_external => true);
+  perform public.settle_refund_operation((r->>'operation_id')::uuid);
+  if public.prepare_transfer_dispatch(o, 'w18-inflight', 'transfer:' || o::text, 9000, 'usd',
+       'acct_w18_seller', 'ch_pi_w18_refund_inflight', 'pi_w18_refund_inflight') then
+    raise exception 'FAIL 10: the in-flight owner could dispatch again after the refund';
+  end if;
+  v_result := public.complete_transfer_intent(o, 'w18-inflight', 'transfer:' || o::text, 'tr_w18_inflight');
+  if v_result <> 'recovery' or not exists (
+    select 1 from public.transfer_intents
+    where order_id = o and status = 'transferred' and transfer_reference = 'tr_w18_inflight'
+  ) or not exists (
+    select 1 from public.payment_recoveries
+    where order_id = o and kind = 'transfer_after_refund' and status = 'open'
+  ) then
+    raise exception 'FAIL 10: the in-flight owner''s transfer after a refund was not recorded with a case (%)', v_result;
+  end if;
+  raise notice 'PASS 10: a full refund cancels unsent payouts at once, reconciles possibly-sent ones, and records a late transfer with an operator case, without an automatic reversal';
+
   -- 9. The predicate stays private.
   if has_function_privilege('authenticated', 'private.order_has_unresolved_chargeback(uuid)', 'execute')
      or has_function_privilege('anon', 'private.order_has_unresolved_chargeback(uuid)', 'execute')

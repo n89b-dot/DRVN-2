@@ -592,15 +592,35 @@ async function processOne(
       );
       return "failed";
     }
+    // Refunded or otherwise never payable. Stripe may still complete the
+    // earlier request, and a cancelled row is never claimed again, so it is
+    // not cancelled on one empty lookup: it is shelved on the same
+    // backed-off reconciliation time as below. A transfer that turns up is
+    // recorded with a 'transfer_after_refund' case for an operator to decide
+    // on a reversal (complete_transfer_intent; nothing is reversed
+    // automatically). Once the attempt budget has found none, it is cancelled
+    // as before. (A payout Stripe was never called for cancels at once,
+    // above.)
     if (
       ["refunded", "cancelled", "payment_failed", "pending"].includes(currentOrder.status) ||
       currentOrder.refunded_cents >= currentOrder.total_cents
     ) {
+      const attempts = intent.attempts + 1;
+      if (attempts >= MAX_ATTEMPTS) {
+        await setIntent(admin, intent.order_id, workerId, {
+          status: "cancelled",
+          attempts,
+          last_error: `order is ${currentOrder.status}; no Stripe transfer found after ${attempts} checks`,
+        });
+        return "cancelled";
+      }
       await setIntent(admin, intent.order_id, workerId, {
-        status: "cancelled",
-        last_error: `order is ${currentOrder.status}`,
+        status: "holding",
+        attempts,
+        next_attempt_at: retryAt(attempts),
+        last_error: `order is ${currentOrder.status}; reconciling a possible Stripe transfer`,
       });
-      return "cancelled";
+      return "requeued";
     }
     // No transfer found, and it isn't payable now: an unresolved chargeback,
     // a disputed or undelivered order, or a clearing time still ahead. Never

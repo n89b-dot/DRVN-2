@@ -881,6 +881,87 @@ describe("bank chargeback freeze", () => {
   });
 });
 
+// 20261107130000: a full refund must not strand a payout Stripe may already
+// have been called for. It is reconciled with backoff; a late transfer is
+// recorded (the database opens a transfer_after_refund case for an operator,
+// with no automatic reversal); only an exhausted budget cancels it.
+describe("refunded order with a possibly-sent payout", () => {
+  const refundedOrder = {
+    id: "order-a",
+    status: "refunded",
+    seller_id: "seller-a",
+    total_cents: 5000,
+    platform_fee_cents: 500,
+    refunded_cents: 5000,
+    transfer_reference: null,
+    delivered_at: new Date(0).toISOString(),
+  };
+
+  it("still cancels a refunded payout Stripe was never called for, at once", async () => {
+    const { admin, rpc } = fakeAdmin({ claimed: [intent()], order: refundedOrder });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ cancelled: 1 });
+    expect(rpc).toHaveBeenCalledWith(
+      "release_transfer_intent",
+      expect.objectContaining({ p_status: "cancelled", p_last_error: "order is refunded" })
+    );
+    expect(mocks.transferList).not.toHaveBeenCalled();
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+  });
+
+  it("reconciles a crashed in-flight request instead of cancelling, then records the late transfer", async () => {
+    // Pass 1, reclaimed after the crash: Stripe shows nothing yet.
+    const first = fakeAdmin({ claimed: [frozenIntent()], order: refundedOrder });
+    await expect(processDueTransfers(first.admin)).resolves.toMatchObject({ requeued: 1 });
+    expect(first.rpc).toHaveBeenCalledWith(
+      "release_transfer_intent",
+      expect.objectContaining({
+        p_status: "holding",
+        p_attempts: 1,
+        p_next_attempt_at: expect.any(String),
+      })
+    );
+    expect(first.rpc).not.toHaveBeenCalledWith(
+      "release_transfer_intent",
+      expect.objectContaining({ p_status: "cancelled" })
+    );
+    // Pass 2, claimed on that time: the request completed at Stripe.
+    mocks.transferList.mockResolvedValue(exactPage());
+    const later = fakeAdmin({
+      claimed: [frozenIntent({ attempts: 1 })],
+      order: refundedOrder,
+      rpc: { complete_transfer_intent: { data: "recovery" } },
+    });
+    await expect(processDueTransfers(later.admin)).resolves.toMatchObject({ failed: 1 });
+    expect(later.rpc).toHaveBeenCalledWith(
+      "complete_transfer_intent",
+      expect.objectContaining({
+        p_operation_key: dispatch.operationKey,
+        p_transfer_reference: "tr_exact",
+      })
+    );
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+  });
+
+  it("cancels only once the attempt budget has found no transfer", async () => {
+    const { admin, rpc } = fakeAdmin({
+      claimed: [frozenIntent({ attempts: 7 })],
+      order: refundedOrder,
+    });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ cancelled: 1 });
+    expect(mocks.transferList).toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith(
+      "release_transfer_intent",
+      expect.objectContaining({
+        p_status: "cancelled",
+        p_attempts: 8,
+        p_last_error: expect.stringContaining("no Stripe transfer found after 8 checks"),
+      })
+    );
+    expect(rpc).not.toHaveBeenCalledWith("record_transfer_recovery", expect.anything());
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+  });
+});
+
 type QueuedResult = { data: unknown; error: unknown };
 
 function queuedAdmin(...results: QueuedResult[]) {
