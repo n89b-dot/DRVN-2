@@ -198,6 +198,21 @@ The upload route and the media-gc job also record it from the server's own
 so a missed step heals on the first photo upload, but photo saves fail until
 then. CI's bootstrap (`scripts/prepare-ci-supabase.mjs`) sets the local one.
 
+Payments mode (20261107210000). The database refuses to put a listing live,
+or to reserve one at checkout, for a seller whose Stripe payouts aren't
+enabled, the same rule as `sellerCanPublish`. It has no way to see the app's
+`PAYMENTS_MODE`, so a stub-payments database says so with one row, and
+**production records nothing**: no row means the rule is enforced.
+
+```sql
+-- Only on a database whose app runs PAYMENTS_MODE=stub (CI, a sandbox):
+insert into public.job_config (key, value) values ('payments_mode', 'stub')
+on conflict (key) do update set value = excluded.value, updated_at = now();
+```
+
+CI's stub jobs and the SQL guard runner record it; the Stripe test lane
+doesn't. Never set it on a database that takes real payments.
+
 Confirm the nine pg_cron jobs (times are the database's UTC):
 
 | Job | Schedule | Runs |
@@ -365,6 +380,7 @@ Hosted acceptance still requires:
 - [ ] `release-gate` is the required check on `main` (§8; public repo or GitHub Pro).
 - [ ] `job_config` points at the production worker URL.
 - [ ] `job_config.media_storage_origin` is the production storage origin (§4).
+- [ ] `job_config` has **no** `payments_mode` row (a `stub` row would switch off the payouts check on publishing and checkout, §4).
 - [ ] A dispute, a refund, and a payout have each been exercised once in live
       mode with a real card and a Connect test seller before public launch.
 

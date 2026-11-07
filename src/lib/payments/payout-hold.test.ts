@@ -12,6 +12,7 @@ import {
   payoutHoldPhrase,
   readAutoConfirmDays,
   readPayoutHoldPolicy,
+  readPublicRiskControls,
   readSettlementRisk,
   returnWindowDays,
 } from "./payout-hold";
@@ -19,6 +20,7 @@ import {
 const MIGRATION = readFileSync("supabase/migrations/20261006100000_payout_hold_setting.sql", "utf8");
 // R-hold (20261107220900): the column default and payout_available_at()'s missing-row fallback.
 const FALLBACK = readFileSync("supabase/migrations/20261107220900_payout_hold_fallback_two_days.sql", "utf8");
+const BOUNDARY = readFileSync("supabase/migrations/20261107210000_listing_write_boundary.sql", "utf8");
 
 function fakeClient(result: { data: unknown; error: unknown }) {
   return {
@@ -30,6 +32,30 @@ function fakeClient(result: { data: unknown; error: unknown }) {
     },
   } as never;
 }
+
+/** A client whose only answer is the public projection, settlement_hold_policy(). */
+function projectionClient(result: { data: unknown; error: unknown }) {
+  const calls: string[] = [];
+  const client = {
+    rpc: async (name: string) => {
+      calls.push(name);
+      return result;
+    },
+    from: () => {
+      throw new Error("the public readers must not read settlement_settings directly");
+    },
+  } as never;
+  return { client, calls };
+}
+
+const POLICY_ROW = {
+  payout_hold_days: 14,
+  payout_hold_mode: "fixed",
+  receipt_release_after_days: 3,
+  auto_confirm_after_days: 21,
+  auto_confirm_notice_days: 3,
+  card_verification_on: true,
+};
 
 describe("payout hold", () => {
   it("mirrors the SQL defaults and the problem window it hard-codes", () => {
@@ -102,23 +128,46 @@ describe("payout hold", () => {
     );
   });
 
-  it("reads the owner's row, defaults when it is missing, and is null when unreadable", async () => {
+  it("reads the owner's hold through the public projection, defaults when it is missing, and is null when unreadable", async () => {
+    const read = projectionClient({ data: [POLICY_ROW], error: null });
+    await expect(readPayoutHoldPolicy(read.client)).resolves.toEqual({ mode: "fixed", holdDays: 14 });
+    expect(read.calls).toEqual(["settlement_hold_policy"]);
+    await expect(readPayoutHoldPolicy(projectionClient({ data: [], error: null }).client)).resolves.toEqual(DEFAULT_PAYOUT_HOLD);
     await expect(
-      readPayoutHoldPolicy(fakeClient({ data: [{ payout_hold_days: 14, payout_hold_mode: "fixed" }], error: null }))
-    ).resolves.toEqual({ mode: "fixed", holdDays: 14 });
-    await expect(readPayoutHoldPolicy(fakeClient({ data: [], error: null }))).resolves.toEqual(DEFAULT_PAYOUT_HOLD);
-    await expect(readPayoutHoldPolicy(fakeClient({ data: null, error: { message: "timeout" } }))).resolves.toBeNull();
+      readPayoutHoldPolicy(projectionClient({ data: null, error: { message: "timeout" } }).client)
+    ).resolves.toBeNull();
     await expect(
-      readPayoutHoldPolicy(fakeClient({ data: [{ payout_hold_days: 7, payout_hold_mode: "weekly" }], error: null }))
+      readPayoutHoldPolicy(projectionClient({ data: [{ ...POLICY_ROW, payout_hold_mode: "weekly" }], error: null }).client)
     ).resolves.toBeNull();
   });
 
   it("reads the auto-confirm period: a number when on, null when off, undefined when unreadable", async () => {
-    const client = (result: { data: unknown; error: unknown }) =>
-      ({ from: () => ({ select: () => ({ limit: async () => result }) }) }) as never;
-    expect(await readAutoConfirmDays(client({ data: [{ auto_confirm_after_days: 21 }], error: null }))).toBe(21);
-    expect(await readAutoConfirmDays(client({ data: [{ auto_confirm_after_days: null }], error: null }))).toBeNull();
-    expect(await readAutoConfirmDays(client({ data: [], error: null }))).toBeNull();
-    expect(await readAutoConfirmDays(client({ data: null, error: { message: "timeout" } }))).toBeUndefined();
+    const read = (result: { data: unknown; error: unknown }) => readAutoConfirmDays(projectionClient(result).client);
+    expect(await read({ data: [POLICY_ROW], error: null })).toBe(21);
+    expect(await read({ data: [{ ...POLICY_ROW, auto_confirm_after_days: null }], error: null })).toBeNull();
+    expect(await read({ data: [], error: null })).toBeNull();
+    expect(await read({ data: null, error: { message: "timeout" } })).toBeUndefined();
+  });
+
+  it("tells the public whether each fraud control is on, never its amount (N26)", async () => {
+    await expect(readPublicRiskControls(projectionClient({ data: [POLICY_ROW], error: null }).client)).resolves.toEqual({
+      receiptReleaseAfterDays: 3,
+      cardVerificationOn: true,
+    });
+    await expect(readPublicRiskControls(projectionClient({ data: [], error: null }).client)).resolves.toEqual({
+      receiptReleaseAfterDays: 3,
+      cardVerificationOn: false,
+    });
+    await expect(
+      readPublicRiskControls(projectionClient({ data: null, error: { message: "denied" } }).client)
+    ).resolves.toBeNull();
+    // The projection the public reads has no amount column, and the row
+    // holding the amounts is closed to visitors and members.
+    const projection = BOUNDARY.slice(BOUNDARY.indexOf("create or replace function public.settlement_hold_policy()"));
+    const columns = projection.slice(projection.indexOf("returns table ("), projection.indexOf(")\nlanguage sql"));
+    expect(columns).toContain("payout_hold_days");
+    expect(columns).not.toMatch(/cents/);
+    expect(BOUNDARY).toContain("revoke all on public.settlement_settings from anon, authenticated;");
+    expect(BOUNDARY).toContain('drop policy if exists "settlement settings are public" on public.settlement_settings;');
   });
 });

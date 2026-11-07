@@ -10,6 +10,7 @@ import { setAgentLimits } from "@/lib/capabilities/negotiation";
 import { CapabilityError, invokeCapability } from "@/lib/capabilities/types";
 import { capture } from "@/lib/analytics";
 import { reportError } from "@/lib/monitoring";
+import { PAYOUTS_NOT_READY_CODE } from "@/lib/payments/payout-readiness";
 import { revalidatePath } from "@/lib/revalidate";
 import { createClient } from "@/lib/supabase/server";
 
@@ -44,6 +45,10 @@ function agentError(code: string | undefined, fallback: string): string {
     case "AG009":
       // The database's own check on the member's agent setting (R-agentmode).
       return "Your agent is set to Off or Suggest in Settings, so it can't negotiate for you.";
+    case PAYOUTS_NOT_READY_CODE:
+      // Accepting reserves the part; the database refuses while the seller's
+      // payouts are off (20261107210000, N244).
+      return "This sale can't go ahead until the seller's payouts are set up.";
     default:
       return fallback;
   }

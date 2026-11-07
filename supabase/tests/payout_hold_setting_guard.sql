@@ -21,14 +21,18 @@ declare
   result jsonb;
 begin
   -- 1. The deployed decision (20261009100000: a fixed 2-day hold),
-  --    readable by anyone, writable by no client. The
+  --    readable by anyone through settlement_hold_policy() (the row
+  --    itself is service-role only since 20261107210000: it also holds
+  --    the fraud thresholds), writable by no client. The
   --    checks below pin the rule they test inside this rolled-back
   --    transaction, so they test the mechanism whatever is deployed.
   if (select (payout_hold_days, payout_hold_mode) from public.settlement_settings where id)
      is distinct from (2, 'fixed'::text) then
     raise exception 'FAIL 1: the deployed hold is not a fixed 2 days';
   end if;
-  if not has_table_privilege('anon', 'public.settlement_settings', 'select')
+  if not has_function_privilege('anon', 'public.settlement_hold_policy()', 'execute')
+     or has_table_privilege('anon', 'public.settlement_settings', 'select')
+     or has_table_privilege('authenticated', 'public.settlement_settings', 'select')
      or has_table_privilege('authenticated', 'public.settlement_settings', 'update')
      or has_table_privilege('anon', 'public.settlement_settings', 'insert')
      or has_table_privilege('authenticated', 'public.settlement_settings', 'delete') then
