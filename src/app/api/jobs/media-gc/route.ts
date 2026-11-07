@@ -1,8 +1,8 @@
 import { trackedWorker } from "@/lib/tracked-worker";
-import { cronAuthorized } from "@/lib/cron-auth";
 import { deleteMediaIfUnreferenced } from "@/lib/media-lifecycle";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { flushMonitoring, reportError } from "@/lib/monitoring";
+import { cronAuthorized } from "@/lib/cron-auth";
 
 /**
  * Staged-media garbage collector (migration 0029). Client uploads hit storage
