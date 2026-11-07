@@ -19,6 +19,9 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { g
 vi.mock("@/lib/revalidate", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
 vi.mock("./chat-cleanup", () => ({ afterChatCleared: mocks.after }));
+// The member's agent is Off and every beta step is closed: clearing must not care.
+vi.mock("@/lib/agent/member-mode", () => ({ loadAgentMode: async () => "off" }));
+vi.mock("@/lib/agent/beta", () => ({ agentStepOpen: async () => false, agentTabOpen: async () => false }));
 
 import { clearAgentChat } from "./clear-chat";
 
@@ -36,6 +39,13 @@ describe("clearAgentChat (N125)", () => {
     expect(mocks.rpc).toHaveBeenCalledWith("agent_clear_conversation");
     expect(mocks.after).toHaveBeenCalledWith("user-1");
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/agent");
+  });
+
+  it("clears while the member's agent is Off and the chat step is closed", async () => {
+    // The data rules promise clearing at any time; the setting and the beta
+    // only decide whether the agent answers.
+    mocks.rpc.mockResolvedValue({ data: 1, error: null });
+    await expect(run()).resolves.toEqual({ ok: "Chat cleared." });
   });
 
   it("says so when there was nothing to clear", async () => {

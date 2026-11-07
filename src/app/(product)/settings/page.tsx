@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { AgentChatPrivacy } from "./agent-chat-privacy";
 import { AgentSection } from "./agent-section";
 import { loadAnalyticsConsent } from "./analytics-consent";
 import { AnalyticsConsentForm } from "./analytics-consent-form";
@@ -39,6 +40,7 @@ export default async function SettingsPage() {
     fulfillment,
     analyticsEnabled,
     agentOpen,
+    { count: agentChatMessages },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -66,6 +68,9 @@ export default async function SettingsPage() {
     loadFulfillmentProfile(user.id),
     loadAnalyticsConsent(supabase, user.id),
     agentTabOpen(),
+    // N125: the stored agent chat, read as the member, for Clear chat under
+    // Privacy — whatever the agent's mode or beta steps say.
+    supabase.from("agent_messages").select("id", { count: "exact", head: true }).eq("owner_id", user.id),
   ]);
   // AG-7: the agent's mode and how many mandates are live, for the Agent
   // section — only while the Agent tab exists for members at all.
@@ -115,7 +120,12 @@ export default async function SettingsPage() {
           notification_prefs: profile?.notification_prefs ?? {},
         }}
         logout={logout}
-        privacySection={<AnalyticsConsentForm initialEnabled={analyticsEnabled} />}
+        privacySection={
+          <div className="grid gap-6">
+            <AnalyticsConsentForm initialEnabled={analyticsEnabled} />
+            {agentChatMessages ? <AgentChatPrivacy messages={agentChatMessages} /> : null}
+          </div>
+        }
         agentSection={agentOpen ? <AgentSection initialMode={agentMode} running={agentRunning ?? 0} /> : undefined}
         shippingSection={
           <ShippingSection

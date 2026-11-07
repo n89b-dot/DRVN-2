@@ -288,6 +288,16 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
           <Link href="/settings#agent" className="jumplink">
             Change it in Settings →
           </Link>
+          {!chatOpen && (
+            <>
+              {" "}
+              Your chat with it is under{" "}
+              <Link href="/settings#privacy" className="jumplink">
+                Settings → Privacy
+              </Link>
+              , where you can clear it.
+            </>
+          )}
         </Alert>
       )}
 
