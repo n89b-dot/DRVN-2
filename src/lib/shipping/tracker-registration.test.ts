@@ -197,10 +197,14 @@ describe("against a mocked EasyPost API", () => {
 });
 
 describe("processTrackerRegistrations", () => {
-  it("leaves the queue waiting when no tracking provider is configured", async () => {
-    const { admin, rpc } = fakeAdmin(shipped());
-    await expect(processTrackerRegistrations(admin, { provider: null })).resolves.toMatchObject({ claimed: 0, waiting: true });
-    expect(rpc).not.toHaveBeenCalled();
+  it("settles queued jobs as untracked when no tracking provider is configured, so none sit overdue", async () => {
+    const jobs = [{ id: "job-1", lease_id: "lease-1", payload: { shipment_id: "ship-1" } }];
+    const { admin, rpc, writes } = fakeAdmin(shipped(), jobs);
+    await expect(processTrackerRegistrations(admin, { provider: null })).resolves.toEqual({
+      claimed: 1, registered: 0, already: 0, skipped: 1, rejected: 0, failed: 0, untracked: true,
+    });
+    expect(rpc).toHaveBeenCalledWith("finish_remediation_job", { p_id: "job-1", p_lease: "lease-1", p_error: undefined });
+    expect(writes).toEqual([]);
   });
 
   it("registers claimed jobs once each and hands failures back to the queue's backoff", async () => {

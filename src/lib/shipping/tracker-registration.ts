@@ -22,7 +22,8 @@ import { ShippingProviderError, type ShippingProvider } from "./types";
  * checked the seller and queued a tracker_registration job in the same
  * transaction: markShipped tries once the response is sent (a few quick
  * attempts), and the money worker's shipping family claims what is left with
- * the shared remediation backoff.
+ * the shared remediation backoff. With no provider configured the worker
+ * settles queued jobs as untracked, so they never sit overdue.
  */
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -148,8 +149,8 @@ export type TrackerWorkerSummary = {
   skipped: number;
   rejected: number;
   failed: number;
-  /** No tracking provider configured: the queue is left waiting, not burned. */
-  waiting?: true;
+  /** No tracking provider configured: queued jobs were settled as untracked. */
+  untracked?: true;
 };
 
 /** The durable retry: claim queued tracker_registration jobs and register each. */
@@ -159,7 +160,9 @@ export async function processTrackerRegistrations(
 ): Promise<TrackerWorkerSummary> {
   const summary: TrackerWorkerSummary = { claimed: 0, registered: 0, already: 0, skipped: 0, rejected: 0, failed: 0 };
   const provider = opts.provider === undefined ? getTrackingProvider() : opts.provider;
-  if (!provider) return { ...summary, waiting: true };
+  // No provider: the dispatches stand untracked, exactly as before N110, and
+  // their jobs are settled (skipped) rather than left due — the job-health
+  // snapshot pages on a pending job 30 minutes overdue.
 
   const claimed = await admin.rpc("claim_remediation_jobs", {
     p_kind: "tracker_registration",
@@ -174,7 +177,7 @@ export async function processTrackerRegistrations(
       await jobHeartbeat(admin, job)();
       const shipmentId = job.payload?.shipment_id;
       // One attempt per claim: the queue's own backoff spaces the retries.
-      const outcome = shipmentId
+      const outcome = shipmentId && provider
         ? await registerShipmentTracker(admin, shipmentId, { provider, attempts: 1 })
         : "skipped";
       summary[outcome] += 1;
@@ -186,5 +189,5 @@ export async function processTrackerRegistrations(
     const finished = await admin.rpc("finish_remediation_job", { p_id: job.id, p_lease: job.lease_id, p_error: failure });
     if (finished.error) throw new Error("Tracker registration acknowledgement failed");
   }
-  return summary;
+  return provider ? summary : { ...summary, untracked: true };
 }

@@ -74,6 +74,7 @@ beforeEach(() => {
   mocks.rows.set("order_items", { data: [{ id: "item-1", listing_id: "listing-1", title: "Turbo manifold", price_cents: 50000 }], error: null });
   mocks.rows.set("profiles", { data: { display_name: "Kaito", username: "kaito" }, error: null });
   mocks.rows.set("listing_images", { data: [], error: null });
+  mocks.rows.set("offer_rounds", { data: [], error: null });
 });
 
 describe("accepted-offer hold countdown", () => {

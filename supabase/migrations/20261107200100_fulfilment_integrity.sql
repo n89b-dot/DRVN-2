@@ -20,7 +20,8 @@
 --    the seller check. The app tries it at once (after the response) and the
 --    money worker retries it with the shared remediation backoff, whether or
 --    not DRVN Shipping (labels, rates) is on. With no tracking provider
---    configured the job waits; dispatch never depends on it.
+--    configured the worker settles the job as untracked (so it never sits
+--    overdue in the job-health snapshot); dispatch never depends on it.
 --
 -- 4. N96 (Codex review of #82): a stored shipping quote is reused only for
 --    the exact provider shipment request it was rated from.
