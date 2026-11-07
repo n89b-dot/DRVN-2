@@ -42,6 +42,7 @@ jobs=(
   "search 120"
   "account-deletions 300"
   "transfers 600"
+  "agent 300"
   "saved-searches 1800"
   "saved-search-digests 3600"
   "media-gc 86400"
