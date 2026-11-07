@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { AgentHeader } from "@/components/commerce";
 import { Alert, ButtonLink, EmptyState, Foot, ObjectRow, SheetTabs, ThreadDivider, ThreadEvent, TileHead } from "@/components/ui";
 import { ApprovalActions } from "@/features/agent/approval-actions";
+import { buyerStops } from "@/features/agent/buyer-stops";
 import { StopBuyerAgent } from "@/features/agent/stop-buyer-agent";
 import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
 import { AGENT_ACCEPT_RULE, AGENT_FOOT } from "@/lib/agent/copy";
@@ -26,6 +27,7 @@ type Task = {
   scope: string;
   objective: string;
   status: string;
+  mandate_id: string | null;
   listing_id: string | null;
   offer_id: string | null;
   outcome: string | null;
@@ -106,7 +108,7 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
   const [{ data: tasks }, { data: approvals }, { data: mandates }, { data: events }] = await Promise.all([
     supabase
       .from("agent_tasks")
-      .select("id, scope, objective, status, listing_id, offer_id, outcome, updated_at, finished_at")
+      .select("id, scope, objective, status, mandate_id, listing_id, offer_id, outcome, updated_at, finished_at")
       .eq("owner_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(100),
@@ -161,10 +163,9 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
   const titleOf = (listingId: string | null) => (listingId && listingById.get(listingId)?.title) || "A listing";
   const mediaOf = (listingId: string | null) => ({ src: (listingId && cover.get(listingId)) || undefined, alt: titleOf(listingId) });
 
-  // The buyer's live mandate on a listing, for "Stop negotiating for me" on its Working row.
-  const buyerMandateByListing = new Map(
-    (mandates ?? []).filter((m) => m.scope === "buyer" && (m.status === "active" || m.status === "paused")).map((m) => [m.listing_id, m.id]),
-  );
+  // "Stop negotiating for me" on every live buyer mandate, exactly once:
+  // its Working row, its Needs you row, or a row of its own (buyer-stops.ts).
+  const stops = buyerStops(mandates ?? [], allTasks, pending);
   const needsTasks = new Set(pending.map((a) => a.task_id));
   const working = allTasks.filter((t) => !t.finished_at && !needsTasks.has(t.id));
   const done = allTasks.filter((t) => t.finished_at);
@@ -192,7 +193,7 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
         : task.scope === "buyer"
           ? "Opening an offer"
           : "Waiting for offers";
-    const buyerMandate = !task.finished_at && task.scope === "buyer" && task.listing_id ? buyerMandateByListing.get(task.listing_id) : undefined;
+    const buyerMandate = stops.onTask.get(task.id);
     return (
       <ObjectRow
         key={task.id}
@@ -258,7 +259,14 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
             mediaHref={approval.offer_id ? `/offers/${approval.offer_id}` : undefined}
             title={titleOf(task?.listing_id ?? null)}
             meta={approvalLine(approval.reason, approval.amount_cents)}
-            actions={<ApprovalActions approvalId={approval.id} offerId={approval.offer_id} amountCents={approval.amount_cents} />}
+            actions={
+              <>
+                <ApprovalActions approvalId={approval.id} offerId={approval.offer_id} amountCents={approval.amount_cents} />
+                {stops.onApproval.has(approval.id) && (
+                  <StopBuyerAgent mandateId={stops.onApproval.get(approval.id)!} offerId={approval.offer_id} compact />
+                )}
+              </>
+            }
           />
         );
       })}
@@ -266,13 +274,34 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
   );
   const listPanel = (rows: Task[], empty: string) =>
     rows.length ? <ul className="rowlist">{rows.map(taskRow)}</ul> : <p className="field__hint">{empty}</p>;
+  // Live buyer mandates with nothing in progress: still on, still stoppable.
+  const aloneRows = stops.alone.map((mandate) => (
+    <ObjectRow
+      key={mandate.id}
+      as="li"
+      mediaHref={`/listings/${mandate.listing_id}`}
+      media={mediaOf(mandate.listing_id)}
+      title={titleOf(mandate.listing_id)}
+      meta={mandate.status === "paused" ? "Negotiate for me is paused" : "Negotiate for me is on, with nothing in progress"}
+      actions={<StopBuyerAgent mandateId={mandate.id} compact />}
+    />
+  ));
+  const workingPanel =
+    working.length || aloneRows.length ? (
+      <ul className="rowlist">
+        {working.map(taskRow)}
+        {aloneRows}
+      </ul>
+    ) : (
+      <p className="field__hint">Nothing in progress.</p>
+    );
 
   const tabs = [
     ...(pending.length ? [{ key: "needs", label: "Needs you", count: pending.length, live: true, panel: needsPanel }] : []),
-    { key: "working", label: "Working", count: working.length, panel: listPanel(working, "Nothing in progress.") },
+    { key: "working", label: "Working", count: working.length + aloneRows.length, panel: workingPanel },
     { key: "done", label: "Done", count: done.length, panel: listPanel(done, "Nothing finished yet.") },
   ];
-  const nothingYet = !allTasks.length && !pending.length && !handling && !buying && !chat.length;
+  const nothingYet = !allTasks.length && !pending.length && !handling && !buying && !stops.alone.length && !chat.length;
   capture(user.id, { event: "agent_tab_viewed", props: { needs: pending.length === 0 ? "0" : pending.length === 1 ? "1" : pending.length <= 5 ? "2-5" : "6+" } });
 
   return (
