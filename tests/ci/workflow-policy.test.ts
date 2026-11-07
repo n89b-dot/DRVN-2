@@ -26,7 +26,8 @@ type Job = {
   steps?: Step[];
 };
 type Workflow = {
-  on: Record<string, unknown>;
+  // GitHub accepts `on: push`, `on: [push, pull_request]` and the mapping form.
+  on: string | string[] | Record<string, unknown>;
   permissions?: Record<string, string>;
   jobs: Record<string, Job>;
 };
@@ -57,16 +58,50 @@ function step(jobName: string, match: (s: Step) => boolean): Step {
 
 const named = (name: string) => (s: Step) => s.name === name;
 
+/** Event names from any of the three `on:` forms (scalar, list, mapping). */
+function eventNames(on: Workflow["on"]): string[] {
+  if (typeof on === "string") return [on];
+  if (Array.isArray(on)) return on.map(String);
+  if (on && typeof on === "object") return Object.keys(on);
+  throw new Error(`unrecognised on: ${JSON.stringify(on)}`);
+}
+
+// pull_request_target and workflow_run execute with the base repo's secrets
+// and a write token; neither is ever needed here.
+const FORBIDDEN_TRIGGERS = ["pull_request_target", "workflow_run"];
+
+function forbiddenTriggers(doc: Workflow): string[] {
+  return eventNames(doc.on).filter((e) => FORBIDDEN_TRIGGERS.includes(e));
+}
+
 describe("public-repository workflow hardening", () => {
   it("has workflows to check", () => {
     expect(workflows.map((w) => w.name)).toEqual(expect.arrayContaining(["ci.yml", "worker-monitor.yml"]));
   });
 
   it.each(workflows)("$name never runs fork code with repository secrets", ({ doc }) => {
-    // pull_request_target and workflow_run execute with the base repo's
-    // secrets and a write token; neither is ever needed here.
-    expect(Object.keys(doc.on)).not.toContain("pull_request_target");
-    expect(Object.keys(doc.on)).not.toContain("workflow_run");
+    expect(eventNames(doc.on).length).toBeGreaterThan(0);
+    expect(forbiddenTriggers(doc)).toEqual([]);
+  });
+
+  // Mutation coverage: the check must catch a forbidden trigger in every
+  // syntax GitHub accepts, not only the mapping form ci.yml happens to use.
+  it.each([
+    ["scalar", "on: pull_request_target\njobs: {}\n", ["pull_request_target"]],
+    ["list", "on: [push, pull_request_target]\njobs: {}\n", ["pull_request_target"]],
+    ["mapping", "on:\n  push:\n  pull_request_target:\n    types: [opened]\njobs: {}\n", ["pull_request_target"]],
+    ["scalar workflow_run", "on: workflow_run\njobs: {}\n", ["workflow_run"]],
+    ["list workflow_run", "on: [workflow_run]\njobs: {}\n", ["workflow_run"]],
+  ])("catches a forbidden trigger in %s form", (_form, source, found) => {
+    expect(forbiddenTriggers(yaml.load(source) as Workflow)).toEqual(found);
+  });
+
+  it.each([
+    ["scalar", "on: pull_request\njobs: {}\n"],
+    ["list", "on: [push, pull_request]\njobs: {}\n"],
+    ["mapping", "on:\n  push:\n    branches: [main]\n  pull_request:\njobs: {}\n"],
+  ])("accepts safe triggers in %s form", (_form, source) => {
+    expect(forbiddenTriggers(yaml.load(source) as Workflow)).toEqual([]);
   });
 
   it.each(workflows)("$name defaults the token to read-only and never grants write", ({ doc }) => {

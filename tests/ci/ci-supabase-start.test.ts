@@ -15,6 +15,7 @@ const script = path.resolve(__dirname, "../../scripts/ci-supabase-start.sh");
 //   ok   → exit 0      fail → exit 1      hang → sleep until killed
 //   tree → like npx over the CLI: this process waits on a child that ignores
 //          TERM; this process itself dies on TERM, the child does not
+//   orphan → fails at once (exit 1) but leaves behind a child that ignores TERM
 // Every call is logged, and hanging processes record their pids so the test
 // can prove they were really killed. Every start or stop first records any
 // earlier hung process still alive, so a straggler that survives into the
@@ -34,6 +35,13 @@ case "$*" in
       ok) exit 0 ;;
       fail) echo "stub start failed" >&2; exit 1 ;;
       hang) echo $$ >> "$STUB_DIR/hung.pids"; exec sleep 60 ;;
+      orphan)
+        bash -c 'trap "" TERM; echo $$ >> "$STUB_DIR/hung.pids"; while :; do sleep 1; done' >/dev/null 2>&1 &
+        # Exit only once the child has recorded its pid.
+        until [ -s "$STUB_DIR/hung.pids" ]; do sleep 0.1; done
+        echo "stub start failed, child left running" >&2
+        exit 1
+        ;;
       tree)
         echo $$ >> "$STUB_DIR/hung.pids"
         bash -c 'trap "" TERM; echo $$ >> "$STUB_DIR/hung.pids"; while :; do sleep 1; done' &
@@ -109,7 +117,10 @@ function alive(pid: number): boolean {
   }
 }
 
-describe("ci-supabase-start.sh", () => {
+// Each case blocks on a real bash run (spawnSync, itself capped at 30s). The
+// same cap here keeps a briefly paused or loaded machine from failing a case
+// on vitest's 5s default while the script is still behaving correctly.
+describe("ci-supabase-start.sh", { timeout: 30_000 }, () => {
   it("starts once, quietly, when the first attempt succeeds", () => {
     const r = run("ok");
     expect(r.code).toBe(0);
@@ -161,6 +172,19 @@ describe("ci-supabase-start.sh", () => {
     expect(hung).toHaveLength(2);
     for (const pid of hung) expect(alive(pid), `pid ${pid}`).toBe(false);
     // Neither was still running when `supabase stop` or attempt 2 began.
+    expect(r.leaked).toEqual([]);
+  });
+
+  it("reaps a TERM-ignoring child left by a leader that failed on its own, before cleanup and retry", () => {
+    const r = run("orphan,ok");
+    expect(r.code).toBe(0);
+    expect(r.starts).toHaveLength(2);
+    // Not a timeout: the leader exited 1 by itself.
+    expect(r.out).toContain("::warning::supabase start attempt 1 of 3 exited 1");
+    expect(r.out).not.toContain("exceeded");
+    const hung = readLines("hung.pids").map(Number);
+    expect(hung).toHaveLength(1);
+    expect(alive(hung[0]), `pid ${hung[0]}`).toBe(false);
     expect(r.leaked).toEqual([]);
   });
 
