@@ -11,7 +11,11 @@ import { allowAction, RATE_LIMITS, type RateLimitRule } from "@/lib/rate-limit";
 import { siteUrl } from "@/lib/site";
 import { onboardingPath, safeRedirectPath } from "@/lib/safe-redirect";
 import { DISPLAY_NAME_MAX } from "@/lib/limits";
-import { betaCommerceError, getBetaAccess, prepareBetaSignup } from "@/lib/beta-access";
+import { getBetaAccess, prepareBetaSignup } from "@/lib/beta-access";
+import { AUTH_ERROR_COPY, authErrorCode, publicAuthError } from "@/lib/auth-errors";
+import { reportError } from "@/lib/monitoring";
+import { hasRecoveryAuthorisation } from "@/lib/reauthentication";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export type AuthState = {
@@ -46,35 +50,7 @@ async function destinationForUser(userId: string, requested?: unknown): Promise<
 }
 
 /**
- * Supabase's messages ("Invalid login credentials") are written for
- * developers. Known codes get a sentence a person can act on; anything else
- * gets a neutral retry line rather than leaking provider wording.
- */
-function authErrorCopy(error: { code?: string; message: string }): string {
-  switch (error.code) {
-    case "invalid_credentials":
-      return "That email and password don't match.";
-    case "email_not_confirmed":
-      return "Confirm your email first — the link is in your inbox.";
-    case "user_already_exists":
-    case "email_exists":
-      return "There's already an account with that email. Sign in instead.";
-    case "weak_password":
-      return "Pick a stronger password — longer is better.";
-    case "over_request_rate_limit":
-    case "over_email_send_rate_limit":
-      return "Too many attempts. Wait a minute and try again.";
-    default:
-      // Older Auth servers send the message without a code.
-      if (/invalid login credentials/i.test(error.message)) {
-        return "That email and password don't match.";
-      }
-      return "That didn't go through. Try again in a moment.";
-  }
-}
-
-/**
- * App-level throttle for sign-in and password reset. Supabase's own per-IP
+ * App-level throttle for sign-in, sign-up and password reset. Supabase's own per-IP
  * limits only ever see this server's address, so without this every attempt
  * from every visitor counted against one bucket — or, for a targeted attack,
  * against nothing.
@@ -132,7 +108,8 @@ export async function login(_prev: AuthState, formData: FormData): Promise<AuthS
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    return { error: authErrorCopy(error) };
+    // N43: a banned account is told so plainly, never "try again".
+    return { error: publicAuthError(error, "sign-in") };
   }
 
   redirect(await destinationForUser(data.user.id, next));
@@ -154,6 +131,12 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   }
   if (password.length < 8) {
     return fail("Password must be at least 8 characters.", "password");
+  }
+  // N42: counted before the invitation check and before Supabase is asked,
+  // so a throttled attempt can't send a confirmation email to anyone. Same
+  // answer whether or not the address is registered.
+  if (await throttled(RATE_LIMITS.signUp, RATE_LIMITS.signUpEmailCeiling, RATE_LIMITS.signUpNetwork, email)) {
+    return fail("Too many sign-up attempts. Wait a while and try again.");
   }
 
   const prepared = await prepareBetaSignup(email, String(formData.get("invite") ?? ""));
@@ -184,7 +167,7 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
         : error.code === "user_already_exists" || error.code === "email_exists" || error.code === "email_address_invalid"
           ? "email"
           : undefined;
-    return fail(authErrorCopy(error), field);
+    return fail(publicAuthError(error, "sign-up"), field);
   }
 
   // In enforced mode, the Auth trigger is the authority: a direct Auth user
@@ -254,19 +237,47 @@ export async function completeOnboarding(
     getBetaAccess(user.id, "seller"),
   ]);
   if (buyerAccess.enforced && !buyerAccess.eligible && !sellerAccess.eligible) {
-    return { error: betaCommerceError("buyer") };
+    // Said as what it means here, with the way out beside the form (N40).
+    return {
+      error: buyerAccess.unavailable
+        ? AUTH_ERROR_COPY.unavailable
+        : "This account can't be set up: it isn't on an invitation. Sign out below and use the email your invitation was sent to.",
+    };
   }
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("profiles")
     .update({ username, display_name: displayName })
-    .eq("id", user.id);
+    .eq("id", user.id)
+    .select("id");
 
   if (error) {
     if (error.code === "23505") {
       return { error: "That username is taken." };
     }
+    reportError("[onboarding] profile update failed", { userId: user.id, error });
     return { error: "We couldn't save your username. Try again." };
+  }
+
+  // N40: an account can exist with no profile row at all: Google sign-in
+  // while invitations were enforced made an Auth user the profile trigger
+  // deliberately skipped. Updating nothing used to "succeed" and send the
+  // member on to a garage with no profile, then back here, for ever. The
+  // access check above has already passed, so the missing row is created
+  // now (members have no insert grant on profiles; the server does it).
+  if (!updated?.length) {
+    const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
+    const avatar = typeof metadata.avatar_url === "string" ? metadata.avatar_url : null;
+    const { error: insertError } = await createAdminClient()
+      .from("profiles")
+      .insert({ id: user.id, username, display_name: displayName, avatar_url: avatar });
+    if (insertError) {
+      if (insertError.code === "23505" && !/profiles_pkey/.test(insertError.message ?? "")) {
+        return { error: "That username is taken." };
+      }
+      reportError("[onboarding] missing profile could not be created", { userId: user.id, error: insertError });
+      return { error: "We couldn't save your username. Try again." };
+    }
   }
 
   // Username + display name are the account-search projection (brief §28) —
@@ -321,16 +332,31 @@ export async function updatePassword(_prev: AuthState, formData: FormData): Prom
   if (password.length < 8) return { error: "Password must be at least 8 characters." };
   if (password !== confirm) return { error: "Those passwords don't match." };
 
+  // N20: a signed-in session alone is not enough. Settings asks for the
+  // current password; this page skips that, so it accepts only a session
+  // that was opened from an emailed reset link within the last hour, read
+  // from the session's verified claims. Anyone else (a shared computer, a
+  // stolen cookie) is sent for a link to the owner's inbox.
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return { error: "This reset link has expired. Request a new one." };
+  const { data, error: claimsError } = await supabase.auth.getClaims();
+  if (claimsError || !data?.claims.sub) {
+    return { error: RESET_LINK_EXPIRED };
+  }
+  if (!hasRecoveryAuthorisation(data.claims)) {
+    return { error: RESET_LINK_REQUIRED };
   }
 
   const { error } = await supabase.auth.updateUser({ password });
-  if (error) return { error: error.message };
+  if (error) {
+    const code = authErrorCode(error);
+    if (code === "reauthentication_needed" || code === "session_expired") return { error: RESET_LINK_EXPIRED };
+    return { error: publicAuthError(error, "password reset", { userId: data.claims.sub }) };
+  }
 
   redirect("/home");
 }
+
+const RESET_LINK_EXPIRED = "This reset link has expired. Request a new one.";
+const RESET_LINK_REQUIRED =
+  "Setting a password here needs a fresh reset link from your email. Request one, or change it in Settings with your current password.";
+

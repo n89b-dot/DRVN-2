@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { authErrorCode, oauthReturnNotice, type LoginNotice } from "@/lib/auth-errors";
 import { onboardingPath, safeRedirectPath } from "@/lib/safe-redirect";
 import { siteUrl } from "@/lib/site";
 import { createClient, type SupabaseCookie } from "@/lib/supabase/server";
@@ -20,10 +21,23 @@ export async function GET(request: Request) {
   // same-origin path — never as a URL to follow.
   const next = safeRedirectPath(searchParams.get("next"), "");
   const authCookies: SupabaseCookie[] = [];
+  const failure = (message: LoginNotice) =>
+    redirectWithCookies(
+      next ? `/login?message=${message}&next=${encodeURIComponent(next)}` : `/login?message=${message}`,
+      authCookies
+    );
+
+  // N44: Google (through Supabase) reports a cancelled or refused sign-in
+  // with error parameters and no code. That is not an expired emailed link,
+  // so it gets its own notice; a banned account gets the durable one (N43).
+  const refused = oauthReturnNotice(searchParams);
+  if (refused) return failure(refused);
 
   if (code) {
     const supabase = await createClient((cookies) => authCookies.push(...cookies));
     const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (error && authErrorCode(error) === "access_blocked") return failure("access-blocked");
 
     if (!error) {
       const {
@@ -35,10 +49,12 @@ export async function GET(request: Request) {
           .from("profiles")
           .select("username")
           .eq("id", user.id)
-          .single();
+          .maybeSingle();
 
         // A first-time OAuth account still has to pick a handle; the
         // destination travels with it so onboarding can finish the journey.
+        // An account with no profile row at all goes there too (N40):
+        // onboarding is where it is either completed or signed out.
         const destination = profile?.username
           ? next || "/home"
           : onboardingPath(next);
@@ -47,8 +63,7 @@ export async function GET(request: Request) {
     }
   }
 
-  const failure = next
-    ? `/login?message=auth-error&next=${encodeURIComponent(next)}`
-    : "/login?message=auth-error";
-  return redirectWithCookies(failure, authCookies);
+  // A code that wouldn't exchange: an emailed link that was used, expired or
+  // opened in another browser.
+  return failure("auth-error");
 }

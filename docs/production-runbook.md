@@ -16,6 +16,31 @@ baselined migration history, rehearsed restore.
    deployment platform's secret store — not in the repo, not in `.env.local`.
 3. Auth settings: enable email confirmation (dev has it off for e2e), set the
    site URL to the production domain, add it to the redirect allowlist.
+4. Auth security settings (readiness N20, N41, N42). The app enforces its own
+   checks; these stop the same things being done by calling Supabase Auth
+   directly with the public key:
+   - Authentication → Providers → Email → **Secure password change: on**
+     (`secure_password_change = true` in `supabase/config.toml`). A password
+     change then needs a session under 24 hours old or one opened from an
+     emailed link. The app is stricter: Settings verifies the current
+     password, and `/login/reset` only accepts a session opened from a reset
+     link within the hour.
+   - **Secure email change: on** (`double_confirm_changes`): both addresses
+     must confirm. The app also asks for the password, or a Google sign-in
+     within ten minutes, before it requests the change or an account deletion.
+   - **Minimum password length: 8**, to match the app (config.toml still says 6
+     locally).
+   - Authentication → Rate Limits. Every sign-in and sign-up reaches Auth from
+     the app server's few addresses, so the per-IP defaults (30 sign-ins and
+     sign-ups per 5 minutes, `sign_in_sign_ups`) can lock everyone out on a busy
+     day. Raise "sign-ups and sign-ins" well above expected peak (the app
+     throttles per visitor and per email itself: `RATE_LIMITS.signIn*` and
+     `signUp*` in `src/lib/rate-limit.ts`), keep "token verifications" in step,
+     and set "emails sent per hour" to what the SMTP provider allows.
+   - Bot protection is the owner's call: Supabase Auth supports hCaptcha or
+     Cloudflare Turnstile (Authentication → Attack Protection). Turning it on
+     also blocks direct sign-up calls that bypass the app's throttle, but needs
+     a widget on the sign-up, sign-in and reset forms, so it is not on today.
 
 ## 2. Apply the schema
 

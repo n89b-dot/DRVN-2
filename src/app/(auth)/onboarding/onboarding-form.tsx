@@ -6,7 +6,7 @@ import { Button, CountedField, TextField } from "@/components/ui";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import { DISPLAY_NAME_MAX } from "@/lib/limits";
 
-import { completeOnboarding, type AuthState } from "../actions";
+import { completeOnboarding, logout, type AuthState } from "../actions";
 
 type Availability = "idle" | "checking" | "available" | "taken" | "invalid" | "unknown";
 
@@ -142,6 +142,16 @@ export function OnboardingForm({ email, next }: { email: string; next?: string }
           </div>
         )}
         </fieldset>
+      </form>
+
+      {/* The way out (N40). Onboarding has no Close, and every other page
+          sends an account without a handle back here, so an account that
+          can't finish (wrong Google account, no access) could only loop.
+          Signing out always works and lands on Login. */}
+      <form action={logout} className="authswap">
+        <Button type="submit" variant="quiet">
+          Not {email || "you"}? Sign out
+        </Button>
       </form>
     </div>
   );
