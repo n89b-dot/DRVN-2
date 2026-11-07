@@ -1020,7 +1020,7 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     layer: "primitive",
     category: "messaging",
     status: "active",
-    description: "Discussion container (`.thread`) — annotation-style rows. `live` makes it a polite `role=log`, so rows that arrive are announced.",
+    description: "Discussion container (`.thread`) — annotation-style rows. `live` (with a `label`) makes it a polite, named `role=log`, so rows that arrive are announced; keep a live thread mounted while empty so the first one is too.",
     use: "Public discussion: listing Q&A, comments, a short message preview on an order/offer page; `live` for a thread that grows while you watch (the agent chat).",
     avoid: "A person-to-person conversation — that is MessageRun/MessageBubble/ThreadEvent inside `.convthread` (/messages).",
     cssRecipe: ".thread",

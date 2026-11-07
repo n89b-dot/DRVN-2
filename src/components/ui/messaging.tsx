@@ -17,16 +17,27 @@ import { cx } from "@/lib/format";
 export function MessageThread({
   className,
   live = false,
+  label,
   children,
 }: {
   className?: string;
   /** A thread that grows while you watch (the agent's replies): a polite
-   *  live log, so a new row is announced without moving focus. */
+   *  live log, so a new row is announced without moving focus. Keep it
+   *  mounted while empty: additions are only announced in a region the
+   *  screen reader already knows. */
   live?: boolean;
-  children: ReactNode;
+  /** The log's accessible name, for a live thread. */
+  label?: string;
+  children?: ReactNode;
 }) {
   return (
-    <div className={cx("thread", className)} role={live ? "log" : undefined} aria-live={live ? "polite" : undefined} aria-relevant={live ? "additions" : undefined}>
+    <div
+      className={cx("thread", className)}
+      role={live ? "log" : undefined}
+      aria-live={live ? "polite" : undefined}
+      aria-relevant={live ? "additions" : undefined}
+      aria-label={live ? label : undefined}
+    >
       {children}
     </div>
   );
