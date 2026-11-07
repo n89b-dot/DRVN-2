@@ -8622,6 +8622,10 @@ export type Database = {
       }
       refresh_marketplace_facet_counts: { Args: never; Returns: undefined }
       refresh_search_words: { Args: never; Returns: undefined }
+      refund_gap_snapshot: {
+        Args: { p_payment_reference: string; p_refund_references: string[] }
+        Returns: Json
+      }
       reject_copyright_notice: {
         Args: { p_note: string; p_notice: string }
         Returns: undefined

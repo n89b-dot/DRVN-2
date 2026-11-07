@@ -52,12 +52,28 @@ function fakeAdmin(tables: Record<string, Rows[]>, rpcAnswers: Rows[] = []) {
       Promise.resolve(answer).then(resolve, reject);
     return builder;
   });
-  const rpc = vi.fn(async () => {
+  const snapshots: unknown[] = [];
+  const rpc = vi.fn(async (name: string, args?: { p_refund_references?: string[] }) => {
+    if (name === "refund_gap_snapshot") {
+      // One snapshot: the booked total (the queued payments answer) and the
+      // operations still booking (the queued refund_operations answer), as
+      // the database reads them in one statement.
+      const booked = tables.payments?.shift();
+      const ops = tables.refund_operations?.shift();
+      if (ops?.error || booked?.error) return { data: null, error: ops?.error ?? booked?.error };
+      const inFlight = ((ops?.data as Array<{ refund_reference: string; amount_cents: number; status: string; effects_completed_at: string | null }>) ?? [])
+        .filter((op) => (args?.p_refund_references ?? []).includes(op.refund_reference))
+        .filter((op) => op.effects_completed_at == null && ["requested", "provider_pending", "provider_succeeded", "effects_pending"].includes(op.status))
+        .reduce((sum, op) => sum + op.amount_cents, 0);
+      const bookedCents = ((booked?.data as Array<{ refunded_cents: number }>) ?? []).reduce((sum, row) => sum + row.refunded_cents, 0);
+      snapshots.push({ args, bookedCents, inFlight });
+      return { data: { payments: 1, booked_cents: bookedCents, in_flight_cents: inFlight }, error: null };
+    }
     const answer = rpcAnswers.shift();
     if (!answer) throw new Error("Unexpected RPC");
     return answer;
   });
-  return { admin: { from, rpc } as never, from, rpc, calls, upserts };
+  return { admin: { from, rpc } as never, from, rpc, calls, upserts, snapshots };
 }
 
 /** A charge.refunded event exactly as the pinned version delivers it. */
@@ -148,7 +164,7 @@ describe("charge.refunded on the pinned API version", () => {
     // (refunded_cents not booked yet) when charge.refunded lands.
     mocks.listRefunds.mockResolvedValue({ data: [refund("re_app", 3_000, "succeeded", { operation_id: "op_app" })], has_more: false });
     mocks.runRefundOperation.mockResolvedValue({ ok: true });
-    const { admin, calls } = fakeAdmin(
+    const { admin, rpc } = fakeAdmin(
       {
         payments: [{ data: [payment(0)], error: null }, { data: [payment(0)], error: null }],
         refund_operations: [
@@ -159,7 +175,7 @@ describe("charge.refunded on the pinned API version", () => {
     );
 
     await expect(applyChargeRefund(admin, chargeRefundedEvent().data.object as Stripe.Charge)).resolves.toBe("committed");
-    expect(calls.find((c) => c.table === "refund_operations")?.filters).toContainEqual(["in", "refund_reference", ["re_app"]]);
+    expect(rpc).toHaveBeenCalledWith("refund_gap_snapshot", { p_payment_reference: "pi_current", p_refund_references: ["re_app"] });
     expect(mocks.sendAdminAlert).not.toHaveBeenCalled();
   });
 
@@ -216,7 +232,7 @@ describe("charge.refunded delivered out of order", () => {
       [{ data: { action: "settle", operation_id: "op_first" }, error: null }]
     );
     await expect(dispatchStripeEvent(admin, chargeRefundedEvent())).resolves.toBe("committed");
-    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc.mock.calls.filter(([name]) => name === "record_refund_provider_event")).toHaveLength(1);
     expect(mocks.sendAdminAlert).not.toHaveBeenCalled();
   });
 
@@ -275,7 +291,7 @@ describe("charge.refunded delivered out of order", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it("retries when an in-flight refund can't be checked", async () => {
+  it("retries when the gap snapshot can't be read", async () => {
     mocks.listRefunds.mockResolvedValue({ data: [refund("re_app", 3_000, "succeeded")], has_more: false });
     const { admin } = fakeAdmin(
       {
@@ -285,8 +301,72 @@ describe("charge.refunded delivered out of order", () => {
       [{ data: { action: "committed", operation_id: "op_app" }, error: null }]
     );
     await expect(applyChargeRefund(admin, chargeRefundedEvent().data.object as Stripe.Charge)).rejects.toThrow(
-      "in-flight refund lookup failed; retry required"
+      "refund gap snapshot failed; retry required"
     );
     expect(mocks.sendAdminAlert).not.toHaveBeenCalled();
+  });
+});
+
+describe("a refund settling while the gap is measured (follow-up to #91)", () => {
+  it("opens no case when a concurrent worker books the refund between two reads", async () => {
+    // The race GPT reproduced: this (older) charge event reads the booked
+    // total as 0; a concurrent worker then books the $30 refund and completes
+    // its operation; a later operation read no longer counts it in flight. Two
+    // separate reads see the money in neither place. The snapshot RPC reads
+    // both in one statement, so it is booked there.
+    mocks.listRefunds.mockResolvedValue({ data: [refund("re_app", 3_000, "succeeded", { operation_id: "op_app" })], has_more: false });
+    const tables: Record<string, Rows[]> = {
+      payments: [
+        { data: [payment(0)], error: null }, // the lookup
+        { data: [payment(0)], error: null }, // a separate booked-total read, before the settle
+      ],
+      refund_operations: [
+        // a separate operation read, after the settle
+        { data: [{ refund_reference: "re_app", amount_cents: 3_000, status: "completed", effects_completed_at: "2026-11-07T10:00:00Z" }], error: null },
+      ],
+      payment_recoveries: [{ data: { id: "false_case" }, error: null }],
+    };
+    const upserts: unknown[] = [];
+    const from = vi.fn((table: string) => {
+      const answer = tables[table]?.shift();
+      if (!answer) throw new Error(`Unexpected query on ${table}`);
+      const builder: Record<string, unknown> = {};
+      for (const method of ["select", "eq", "in", "is"]) builder[method] = vi.fn(() => builder);
+      builder.upsert = vi.fn((value: unknown) => (upserts.push(value), builder));
+      builder.maybeSingle = vi.fn(async () => answer);
+      builder.then = (resolve: (value: Rows) => unknown, reject: (reason: unknown) => unknown) => Promise.resolve(answer).then(resolve, reject);
+      return builder;
+    });
+    const rpc = vi.fn(async (name: string) =>
+      name === "refund_gap_snapshot"
+        ? { data: { payments: 1, booked_cents: 3_000, in_flight_cents: 0 }, error: null } // one snapshot: booked
+        : { data: { action: "committed", operation_id: "op_app" }, error: null }
+    );
+
+    await expect(applyChargeRefund({ from, rpc } as never, chargeRefundedEvent().data.object as Stripe.Charge)).resolves.toBe("committed");
+    expect(upserts).toEqual([]);
+    expect(mocks.sendAdminAlert).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith("refund_gap_snapshot", { p_payment_reference: "pi_current", p_refund_references: ["re_app"] });
+  });
+
+  it("opens a case only for what the one snapshot leaves unaccounted", async () => {
+    mocks.listRefunds.mockResolvedValue({ data: [refund("re_app", 3_000, "succeeded", { operation_id: "op_app" })], has_more: false });
+    const upserts: unknown[] = [];
+    const from = vi.fn((table: string) => {
+      const builder: Record<string, unknown> = {};
+      for (const method of ["select", "eq", "in", "is"]) builder[method] = vi.fn(() => builder);
+      builder.upsert = vi.fn((value: unknown) => (upserts.push(value), builder));
+      const answer = table === "payments" ? { data: [payment(0)], error: null } : { data: { id: "case" }, error: null };
+      builder.maybeSingle = vi.fn(async () => answer);
+      builder.then = (resolve: (value: Rows) => unknown, reject: (reason: unknown) => unknown) => Promise.resolve(answer).then(resolve, reject);
+      return builder;
+    });
+    const rpc = vi.fn(async (name: string) =>
+      name === "refund_gap_snapshot"
+        ? { data: { payments: 1, booked_cents: 1_000, in_flight_cents: 500 }, error: null }
+        : { data: { action: "committed", operation_id: "op_app" }, error: null }
+    );
+    await expect(applyChargeRefund({ from, rpc } as never, chargeRefundedEvent().data.object as Stripe.Charge)).resolves.toBe("recovery_recorded");
+    expect(upserts).toEqual([expect.objectContaining({ kind: "partial_refund_unattributed", amount_cents: 1_500 })]);
   });
 });
