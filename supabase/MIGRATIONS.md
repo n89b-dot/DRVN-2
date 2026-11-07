@@ -1,5 +1,15 @@
 # Applying migrations
 
+## November 7 — Settlement correctness and reconciliation, OS-W20 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261107210100_settlement_reconciliation.sql` | not applied |
+
+Apply after every earlier migration. Restates `claim_transfer_intents` (latest 20261107130000, #72), `invoke_remediation_worker` and `private.scheduled_job_inventory()` (latest 20261107200300, #84, whose `saved-search-digests` family and `drvn-saved-search-digests` row are kept); the payment_recoveries kind check (latest 20260905174828). Admission (N114): a `blocked_unpayable` payout is admitted only when its seller has a Stripe account with payouts enabled, or its provider call may have happened (that one reconciles when its `next_attempt_at` is due); due work is served longest-due first. Readiness, payout dates, the attempt budget and the chargeback freeze are unchanged. New `admin_retry_transfer_intent(order)` (service role only, called by the console's audited "Retry payout"): resets the attempt budget of a payout that spent all eight, keeping its frozen request and provider-call flag. New `ledger_reconciliation_runs` (service role only) and the `ledger_discrepancy` recovery kind for the daily read-only reconciliation, scheduled as `drvn-ledger-reconciliation` (05:50 UTC) and added to the job inventory with the `ledgerReconciliation` family. Anything that restates the inventory or the invoker later must keep `drvn-ledger-reconciliation` and `ledger-reconciliation`. Guard: `supabase/tests/settlement_reconciliation_guard.sql`, which fails on the schema before this migration (FAIL 1).
+
+Checked on a fresh database (native PostgreSQL 17 with the CI shim and stubbed roles, `auth`, `cron` and `net`): every migration applies and every SQL guard passes except `job_inventory_health_guard.sql`, which needs real pg_cron (CI's image has it).
+
 ## November 7 — fulfilment integrity, OS-W19 / OS-W30 (not applied anywhere)
 
 | File | Applied to |

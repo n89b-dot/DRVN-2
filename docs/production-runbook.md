@@ -141,6 +141,13 @@ if any is missing or invalid.
 
 Stripe (live mode). `scripts/owner/stripe-webhooks.mjs --live` creates or
 updates both endpoints below (dry run by default; `docs/owner/README.md`).
+Both endpoints must use the API version the app pins, **2026-07-29.dahlia**
+(`src/lib/payments/stripe-api-version.ts`): an endpoint's version decides the
+shape of the events it sends. The script creates endpoints on that version and
+reports any existing endpoint on another one (Stripe can't change an
+endpoint's version; delete it and re-run). Moving the pin is a deliberate
+change: read Stripe's changelog in between, update the fixtures in
+`stripe-api-version.test.ts`, then re-create the endpoints.
 
 1. Webhook endpoint (events on **your account**) →
    `https://<domain>/api/stripe/webhook`, subscribed to exactly the events
@@ -205,6 +212,7 @@ Confirm the nine pg_cron jobs (times are the database's UTC):
 | `drvn-saved-search-worker` | `*/30 * * * *` | `invoke_remediation_worker('saved-searches')` → `/api/jobs/saved-searches` |
 | `drvn-saved-search-digests` | `41 * * * *` | `invoke_remediation_worker('saved-search-digests')` → `/api/jobs/saved-search-digests` (20261107200300) |
 | `drvn-listing-import-sweep` | `37 3 * * *` | `invoke_remediation_worker('listing-imports')` → `/api/jobs/listing-imports` (20261004150000) |
+| `drvn-ledger-reconciliation` | `50 5 * * *` | `invoke_remediation_worker('ledger-reconciliation')` → `/api/jobs/ledger-reconciliation` (20261107210100): read-only Stripe ↔ ledger comparison; discrepancies open `ledger_discrepancy` cases in Admin → Payments |
 
 `select jobname, schedule from cron.job order by 1;` must return exactly
 these. Without the `job_config` rows the SQL jobs still run, but every HTTP
