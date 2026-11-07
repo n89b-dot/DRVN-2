@@ -445,10 +445,17 @@ per saved search per day. Each alerting search has its own email window
 separate from the in-app cursor, so a digest carries every part published
 since the last one. From 08:00 London the first run of the day admits each
 search's window into `saved_search_email_digests` (unique per search per
-day); the later runs retry sends. A member with "Saved-search matches" or
-"Saved-search emails" off is not mailed, and neither is an unconfirmed
-address, a suspended or closing account, or a search whose alert went off. A
-digest not sent on its day expires; records are kept 90 days. Sending goes
+day). Each run admits and sends in batches until nothing is left or its
+four minutes are up; the later runs retry sends, hourly at most, all day. A
+window is cut on publishing transaction ids (`listings.published_xact`, the
+snapshot xmin when it closes; 20261107200350), so a part whose publication
+was still committing goes in the next digest. A long-open transaction holds
+xmin back: matches wait, they are never dropped. A member with
+"Saved-search matches" or "Saved-search emails" off is not mailed, and
+neither is an unconfirmed address, a suspended or closing account, or a
+search whose alert went off (turning it off skips its unsent digests). A
+digest still unsent at the end of its day is carried: its window goes back
+into the next day's digest. Records are kept 90 days. Sending goes
 through `src/lib/email/send.ts`, selected by `EMAIL_PROVIDER` and sent from
 `EMAIL_FROM`. No provider is chosen yet (R-email): until one is, digests are
 recorded and nothing is sent, and the route logs and returns `provider: null`.

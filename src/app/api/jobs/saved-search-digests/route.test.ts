@@ -9,18 +9,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * drive them correctly.
  */
 
-type Listing = { id: string; title: string; price_cents: number; published_at: string; seller_id: string };
+type Listing = { id: string; title: string; price_cents: number; published_at: string; published_xact: number; seller_id: string };
 type Search = { id: string; user_id: string; name: string; params: Record<string, string>; alert: boolean; last_checked_at: string | null; last_matched_at: string | null };
 type Digest = {
   id: string; saved_search_id: string; digest_day: string; window_start: string; window_end: string; search_name: string;
   href: string; match_count: number; items: unknown; status: string; attempts: number; next_attempt_at: number; skip_reason: string | null;
+  window_start_xact: number; window_end_xact: number;
 };
+type Cursor = { through: string; xact: number };
 
 const db = vi.hoisted(() => {
   const state = {
     listings: [] as Listing[],
     searches: [] as Search[],
-    cursors: new Map<string, string>(),
+    cursors: new Map<string, Cursor>(),
+    // Transaction ids: the next to hand out, and publications begun but not
+    // yet committed (their rows are invisible until they commit).
+    xact: { next: 100 },
+    inflight: [] as Listing[],
     digests: [] as Digest[],
     prefs: {} as Record<string, Record<string, boolean>>,
     failNext: {} as Record<string, number>,
@@ -31,26 +37,52 @@ const db = vi.hoisted(() => {
   };
   const now = () => new Date().toISOString();
   const day = (iso: string) => iso.slice(0, 10);
+  // The oldest transaction still running: pg_snapshot_xmin(pg_current_snapshot()).
+  const xmin = () => Math.min(state.xact.next, ...state.inflight.map((l) => l.published_xact));
+  const today = () => day(now());
+  const unsentBefore = (id: string) =>
+    state.digests.some((d) => d.saved_search_id === id && ["pending", "sending"].includes(d.status) && d.digest_day < today());
   const wants = (user: string) => state.prefs[user]?.saved_searches !== false && state.prefs[user]?.saved_search_emails !== false;
   const rpcs: Record<string, (args: Record<string, unknown>) => unknown> = {
-    saved_search_digest_sweep: () => ({ expired: 0, pruned: 0 }),
-    saved_search_digests_due: () =>
+    saved_search_digest_sweep: () => {
+      let carried = 0;
+      for (const d of state.digests) {
+        if (!["pending", "sending"].includes(d.status) || d.next_attempt_at > Date.now() || d.digest_day >= today()) continue;
+        const cursor = state.cursors.get(d.saved_search_id);
+        d.status = "skipped";
+        if (cursor?.through === d.window_end) {
+          state.cursors.set(d.saved_search_id, { through: d.window_start, xact: d.window_start_xact });
+          d.skip_reason = "carried"; carried += 1;
+        } else d.skip_reason = "expired";
+      }
+      return { carried, expired: 0, pruned: 0 };
+    },
+    saved_search_digests_due: (a) =>
       state.searches
-        .filter((s) => s.alert && (!state.cursors.has(s.id) || day(state.cursors.get(s.id)!) < day(now())))
-        .map((s) => ({ saved_search_id: s.id, user_id: s.user_id, params: s.params, checked_through: state.cursors.get(s.id) ?? null, window_end: now() })),
+        .filter((s) => s.alert && (!state.cursors.has(s.id) || day(state.cursors.get(s.id)!.through) < today()) && !unsentBefore(s.id))
+        .slice(0, a.p_limit as number)
+        .map((s) => ({
+          saved_search_id: s.id, user_id: s.user_id, params: s.params,
+          checked_through: state.cursors.get(s.id)?.through ?? null, checked_xact: state.cursors.get(s.id)?.xact ?? null,
+          window_end: now(), window_xact: xmin(),
+        })),
     admit_saved_search_digest: (a) => {
       const search = state.searches.find((s) => s.id === a.p_saved_search_id);
       if (!search) return "gone";
       if (!search.alert) return "alert_off";
-      const through = state.cursors.get(search.id);
+      const cursor = state.cursors.get(search.id);
       const expected = (a.p_expected_through as string | undefined) ?? null;
-      if (through === undefined) {
+      const next = { through: a.p_window_end as string, xact: a.p_window_xact as number };
+      if (next.xact > xmin()) throw new Error("a window closed on unfinished transactions");
+      if (cursor === undefined) {
         if (expected) return "stale";
-        state.cursors.set(search.id, a.p_window_end as string);
+        state.cursors.set(search.id, next);
         return "baseline";
       }
-      if (expected !== through || (a.p_window_end as string) <= through) return "stale";
-      if (day(through) >= day(now())) return "already_today";
+      const through = cursor.through;
+      if (expected !== through || next.through <= through || next.xact < cursor.xact) return "stale";
+      if (day(through) >= today()) return "already_today";
+      if (unsentBefore(search.id)) return "blocked";
       let written = false;
       if ((a.p_match_count as number) > 0 && wants(search.user_id)) {
         if (state.digests.some((d) => d.saved_search_id === search.id && d.digest_day === day(now()))) return "already_today";
@@ -58,15 +90,17 @@ const db = vi.hoisted(() => {
           id: `digest-${state.digests.length + 1}`, saved_search_id: search.id, digest_day: day(now()), window_start: through,
           window_end: a.p_window_end as string, search_name: search.name, href: a.p_href as string, match_count: a.p_match_count as number,
           items: a.p_items, status: "pending", attempts: 0, next_attempt_at: Date.now(), skip_reason: null,
+          window_start_xact: cursor.xact, window_end_xact: next.xact,
         });
         written = true;
       }
-      state.cursors.set(search.id, a.p_window_end as string);
+      state.cursors.set(search.id, next);
       return a.p_match_count === 0 ? "empty" : written ? "admitted" : "muted";
     },
-    claim_saved_search_digests: () => {
+    claim_saved_search_digests: (a) => {
       const out = [];
       for (const d of state.digests) {
+        if (out.length >= (a.p_limit as number)) break;
         if (!["pending", "sending"].includes(d.status) || d.next_attempt_at > Date.now() || d.digest_day !== day(now())) continue;
         const search = state.searches.find((s) => s.id === d.saved_search_id)!;
         const reason = !search.alert ? "alert_off" : !wants(search.user_id) ? "opted_out" : null;
@@ -80,7 +114,7 @@ const db = vi.hoisted(() => {
       const d = state.digests.find((x) => x.id === a.p_id);
       if (!d || d.status !== "sending" || d.attempts !== a.p_attempt) return "stale";
       if (a.p_outcome === "sent") d.status = "sent";
-      else if (a.p_outcome === "retry" && d.attempts < 5) { d.status = "pending"; d.next_attempt_at = Date.now() + 600_000 * 2 ** (d.attempts - 1); }
+      else if (a.p_outcome === "retry") { d.status = "pending"; d.next_attempt_at = Date.now() + Math.min(600_000 * 2 ** (d.attempts - 1), 3_600_000); }
       else d.status = "failed";
       return d.status;
     },
@@ -90,7 +124,7 @@ const db = vi.hoisted(() => {
     if (state.failNext[name]) { state.failNext[name] -= 1; return { data: null, error: { code: "08006" } }; }
     return { data: rpcs[name](args), error: null };
   };
-  return { ...state, rpc };
+  return { ...state, rpc, xmin };
 });
 
 vi.mock("@/lib/tracked-worker", () => ({ trackedWorker: (_family: string, _request: Request, run: () => Promise<Response>) => run() }));
@@ -104,16 +138,20 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({
   }),
   rpc: db.rpc,
 }) }));
+// Only committed rows are visible, as to a real query; filters as PostgREST applies them.
 vi.mock("@/lib/marketplace/query", () => ({ listingRowsQuery: () => {
-  const window = { after: "", through: "", seller: "" };
+  const filters: ((l: Listing) => boolean)[] = [];
+  const field = (l: Listing, column: string) => (l as unknown as Record<string, string | number>)[column];
   const query = {
-    gt: (_column: string, value: string) => { window.after = value; return query; },
-    lte: (_column: string, value: string) => { window.through = value; return query; },
-    neq: (_column: string, value: string) => { window.seller = value; return query; },
+    gt: (column: string, value: string | number) => { filters.push((l) => field(l, column) > value); return query; },
+    gte: (column: string, value: string | number) => { filters.push((l) => field(l, column) >= value); return query; },
+    lt: (column: string, value: string | number) => { filters.push((l) => field(l, column) < value); return query; },
+    lte: (column: string, value: string | number) => { filters.push((l) => field(l, column) <= value); return query; },
+    neq: (column: string, value: string) => { filters.push((l) => field(l, column) !== value); return query; },
     order: () => query,
     limit: async (n: number) => {
       const rows = db.listings
-        .filter((l) => l.published_at > window.after && l.published_at <= window.through && l.seller_id !== window.seller)
+        .filter((l) => filters.every((keep) => keep(l)))
         .sort((a, b) => b.published_at.localeCompare(a.published_at));
       return { data: rows.slice(0, n), count: rows.length, error: null };
     },
@@ -129,9 +167,21 @@ const runInApp = () => inApp(request("saved-searches"));
 const runDigests = () => digests(request("saved-search-digests"));
 const at = (iso: string) => vi.setSystemTime(new Date(iso));
 let listingCount = 0;
+/** A publication that commits at once: the transaction's start time and id. */
 const publish = (iso: string, title = `Part ${listingCount + 1}`) => {
+  db.listings.push(begin(iso, title));
+  db.inflight.pop();
+};
+/** A publication begun (stamped with its start time and id) but not committed. */
+const begin = (iso: string, title = `Part ${listingCount + 1}`): Listing => {
   listingCount += 1;
-  db.listings.push({ id: `listing-${listingCount}`, title, price_cents: 12_500, published_at: new Date(iso).toISOString(), seller_id: "seller" });
+  const listing = { id: `listing-${listingCount}`, title, price_cents: 12_500, published_at: new Date(iso).toISOString(), published_xact: db.xact.next++, seller_id: "seller" };
+  db.inflight.push(listing);
+  return listing;
+};
+const commit = (listing: Listing) => {
+  db.inflight.splice(db.inflight.indexOf(listing), 1);
+  db.listings.push(listing);
 };
 const digestsFor = (id: string) => db.digests.filter((d) => d.saved_search_id === id);
 const reliable = () => { db.send.mockResolvedValue({ status: "sent", providerId: "provider-id" }); db.transport = { name: "test", send: db.send }; };
@@ -141,7 +191,7 @@ beforeEach(() => {
   process.env.CRON_SECRET = "test-worker-only";
   process.env.NEXT_PUBLIC_SITE_URL = "https://drvn.example";
   listingCount = 0;
-  db.listings.length = 0; db.digests.length = 0; db.calls.length = 0; db.cursors.clear();
+  db.listings.length = 0; db.digests.length = 0; db.calls.length = 0; db.cursors.clear(); db.inflight.length = 0; db.xact.next = 100;
   for (const key of Object.keys(db.prefs)) delete db.prefs[key];
   for (const key of Object.keys(db.failNext)) delete db.failNext[key];
   db.deliver.mockReset().mockResolvedValue("delivered");
@@ -153,7 +203,7 @@ beforeEach(() => {
     id: "search", user_id: "member", name: "E46 coilovers", params: { _version: "2", q: "coilovers" },
     alert: true, last_checked_at: "2026-11-08T05:00:00.000Z", last_matched_at: null,
   });
-  db.cursors.set("search", "2026-11-07T08:41:00.000Z");
+  db.cursors.set("search", { through: "2026-11-07T08:41:00.000Z", xact: 50 });
 });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
@@ -205,7 +255,7 @@ describe("accumulation across in-app runs", () => {
     at("2026-11-08T08:41:00Z");
     expect((await runDigests()).status).toBe(200);
     expect(db.digests).toHaveLength(0);
-    expect(db.cursors.get("search")).toBe("2026-11-08T08:41:00.000Z");
+    expect(db.cursors.get("search")?.through).toBe("2026-11-08T08:41:00.000Z");
     expect(db.send).not.toHaveBeenCalled();
   });
 });
@@ -223,7 +273,7 @@ describe("preference opt-out", () => {
     expect(db.send).not.toHaveBeenCalled();
     expect(db.deliver).toHaveBeenCalledOnce();
     // The window moved, so turning email back on does not mail the backlog.
-    expect(db.cursors.get("search")).toBe("2026-11-08T08:41:00.000Z");
+    expect(db.cursors.get("search")?.through).toBe("2026-11-08T08:41:00.000Z");
   });
 
   it("opting out between admission and sending stops the email", async () => {
@@ -246,7 +296,7 @@ describe("crash and retry", () => {
     at("2026-11-08T08:41:00Z");
     expect((await runDigests()).status).toBe(503);
     expect(db.digests).toHaveLength(0);
-    expect(db.cursors.get("search")).toBe("2026-11-07T08:41:00.000Z");
+    expect(db.cursors.get("search")?.through).toBe("2026-11-07T08:41:00.000Z");
 
     publish("2026-11-08T09:00:00Z");
     at("2026-11-08T09:41:00Z");
@@ -316,3 +366,58 @@ describe("no email provider", () => {
     expect(info).toHaveBeenCalledWith(expect.stringContaining("no email provider configured"), expect.anything());
   });
 });
+
+describe("windows survive in-flight publications (follow-up)", () => {
+  it("a part whose publication was still committing when the window closed is in the next digest", async () => {
+    reliable();
+    publish("2026-11-08T07:00:00Z", "Committed part");
+    // Stamped 08:40:59 by a transaction that commits after today's match query.
+    const late = begin("2026-11-08T08:40:59Z", "Late commit");
+    at("2026-11-08T08:41:00Z"); await runDigests();
+    commit(late);
+    expect(digestsFor("search")[0]).toMatchObject({ match_count: 1 });
+
+    at("2026-11-09T08:41:00Z"); await runDigests();
+    expect(digestsFor("search")[1]).toMatchObject({ digest_day: "2026-11-09", match_count: 1 });
+    expect(db.send.mock.calls[1][0].subject).toBe("New match for E46 coilovers: Late commit");
+  });
+});
+
+describe("a busy day drains fully (follow-up)", () => {
+  const many = (n: number) => {
+    db.searches.splice(0, db.searches.length, ...Array.from({ length: n }, (_, i) => ({
+      id: `search-${i}`, user_id: `member-${i}`, name: `Search ${i}`, params: { _version: "2", q: "coilovers" },
+      alert: true, last_checked_at: "2026-11-08T05:00:00.000Z", last_matched_at: null,
+    })));
+    db.cursors.clear();
+    for (let i = 0; i < n; i += 1) db.cursors.set(`search-${i}`, { through: "2026-11-07T08:41:00.000Z", xact: 50 });
+  };
+
+  it("one run admits and sends every due digest, not one batch of each", async () => {
+    reliable();
+    many(450);
+    publish("2026-11-08T07:00:00Z");
+    at("2026-11-08T08:41:00Z");
+    const body = await (await runDigests()).json();
+    expect(body).toMatchObject({ admitted: 450, sent: { sent: 450 } });
+    expect(db.send).toHaveBeenCalledTimes(450);
+    expect(db.digests.every((d) => d.status === "sent")).toBe(true);
+  });
+
+  it("a digest not sent on its day is carried into the next day's, never dropped", async () => {
+    db.transport = { name: "test", send: db.send };
+    db.send.mockResolvedValue({ status: "retry", reason: "provider down" });
+    publish("2026-11-08T07:00:00Z", "Day one part");
+    for (let hour = 8; hour <= 23; hour += 1) { at(`2026-11-08T${String(hour).padStart(2, "0")}:41:00Z`); await runDigests(); }
+    expect(digestsFor("search")[0].status).toBe("pending");
+
+    db.send.mockResolvedValue({ status: "sent", providerId: "provider-id" });
+    publish("2026-11-09T07:00:00Z", "Day two part");
+    at("2026-11-09T08:41:00Z"); await runDigests();
+    const [first, second] = digestsFor("search");
+    expect(first).toMatchObject({ status: "skipped", skip_reason: "carried" });
+    expect(second).toMatchObject({ status: "sent", match_count: 2, window_start: "2026-11-07T08:41:00.000Z", window_start_xact: 50 });
+    expect(db.send.mock.lastCall![0].subject).toBe("2 new parts match E46 coilovers");
+  });
+});
+

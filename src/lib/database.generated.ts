@@ -2523,6 +2523,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -2562,6 +2563,7 @@ export type Database = {
           part_number_compact?: string | null
           price_cents: number
           published_at?: string | null
+          published_xact?: number | null
           removed_at?: string | null
           removed_reason?: string | null
           reserved_until?: string | null
@@ -2601,6 +2603,7 @@ export type Database = {
           part_number_compact?: string | null
           price_cents?: number
           published_at?: string | null
+          published_xact?: number | null
           removed_at?: string | null
           removed_reason?: string | null
           reserved_until?: string | null
@@ -5021,16 +5024,19 @@ export type Database = {
       saved_search_email_cursors: {
         Row: {
           checked_through: string
+          checked_xact: number
           saved_search_id: string
           updated_at: string
         }
         Insert: {
           checked_through: string
+          checked_xact: number
           saved_search_id: string
           updated_at?: string
         }
         Update: {
           checked_through?: string
+          checked_xact?: number
           saved_search_id?: string
           updated_at?: string
         }
@@ -5063,7 +5069,9 @@ export type Database = {
           status: string
           updated_at: string
           window_end: string
+          window_end_xact: number | null
           window_start: string
+          window_start_xact: number | null
         }
         Insert: {
           attempts?: number
@@ -5083,7 +5091,9 @@ export type Database = {
           status?: string
           updated_at?: string
           window_end: string
+          window_end_xact?: number | null
           window_start: string
+          window_start_xact?: number | null
         }
         Update: {
           attempts?: number
@@ -5103,7 +5113,9 @@ export type Database = {
           status?: string
           updated_at?: string
           window_end?: string
+          window_end_xact?: number | null
           window_start?: string
+          window_start_xact?: number | null
         }
         Relationships: [
           {
@@ -6275,6 +6287,7 @@ export type Database = {
           p_match_count: number
           p_saved_search_id: string
           p_window_end: string
+          p_window_xact: number
         }
         Returns: string
       }
@@ -7234,6 +7247,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7319,6 +7333,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7399,6 +7414,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7483,6 +7499,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7546,6 +7563,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -8107,10 +8125,12 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: {
           checked_through: string
+          checked_xact: number
           params: Json
           saved_search_id: string
           user_id: string
           window_end: string
+          window_xact: number
         }[]
       }
       search_car_ids: { Args: { p_query: string }; Returns: string[] }
