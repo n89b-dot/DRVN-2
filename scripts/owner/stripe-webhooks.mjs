@@ -34,6 +34,10 @@
 import { fileURLToPath } from "node:url";
 
 export const WEBHOOK_PATH = "/api/stripe/webhook";
+/** The API version the app pins (STRIPE_API_VERSION in
+ *  src/lib/payments/stripe.ts, N539); kept equal by
+ *  src/lib/payments/stripe-api-version.test.ts. */
+export const STRIPE_API_VERSION = "2026-07-29.dahlia";
 export const LABEL_KEY = "drvn_endpoint";
 
 /**
@@ -197,7 +201,7 @@ export function planEndpoints({ existing, url, apiVersion, adopt = {} }) {
     if (match.metadata?.[LABEL_KEY] !== role) changes.metadata = { [LABEL_KEY]: role };
     if (match.description !== spec.description) changes.description = spec.description;
     if (apiVersion && match.api_version && match.api_version !== apiVersion) {
-      notes.push(`${role}: ${match.id} sends API version ${match.api_version}; the app's SDK uses ${apiVersion}. The version can't be changed on an existing endpoint — to align it, delete the endpoint and re-run (you'll get a new secret).`);
+      notes.push(`${role}: ${match.id} sends API version ${match.api_version}; the app pins ${apiVersion}. The version can't be changed on an existing endpoint — to align it, delete the endpoint and re-run (you'll get a new secret).`);
     }
     actions.push(
       Object.keys(changes).length
@@ -268,8 +272,8 @@ async function main() {
   let apiVersion = null;
   if (key) {
     const { default: Stripe } = await import("stripe");
-    stripe = new Stripe(key, { timeout: 20_000, maxNetworkRetries: 2 });
-    apiVersion = Stripe.API_VERSION;
+    stripe = new Stripe(key, { apiVersion: STRIPE_API_VERSION, timeout: 20_000, maxNetworkRetries: 2 });
+    apiVersion = STRIPE_API_VERSION;
   }
   console.log(`Stripe ${mode ? `${mode} mode` : "(no key: offline preview)"} · endpoint ${url}${options.apply ? "" : " · DRY RUN"}`);
 
