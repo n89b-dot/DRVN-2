@@ -65,6 +65,14 @@ describe("the one job inventory", () => {
     expect([...REQUIRED_JOBS].sort()).toEqual([...JOB_NAMES].sort());
   });
 
+  it("is the table the production runbook tells an operator to check (R76)", () => {
+    const runbook = readFileSync(resolve(__dirname, "..", "..", "docs", "production-runbook.md"), "utf8");
+    const rows = [...runbook.matchAll(/^\| `(drvn-[a-z-]+)` \| `([^`]+)` \|/gm)].map((match) => `${match[1]} ${match[2]}`);
+    expect(rows.sort()).toEqual(JOB_INVENTORY.map((entry) => `${entry.job} ${entry.schedule}`).sort());
+    const count = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"][JOB_INVENTORY.length];
+    expect(runbook).toContain(`Confirm the ${count} pg_cron jobs`);
+  });
+
   it("gives each job a budget of more than one interval", () => {
     for (const entry of JOB_INVENTORY) {
       const every = /^\*\/(\d+) \* \* \* \*$/.exec(entry.schedule);

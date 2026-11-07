@@ -80,8 +80,8 @@ runbook: `docs/production-runbook.md` §13.
   `drvn-agent-worker` pg_cron job every 5 minutes through
   `invoke_remediation_worker('agent')`, and gives `worker_health_snapshot` an
   `agent` family on a 30-minute budget; the runbook's §4 table lists all
-  eighteen jobs. Before that migration is applied the route runs only when
-  called by hand.
+  twenty jobs (`private.scheduled_job_inventory()`, mirrored in
+  `src/lib/job-inventory.ts`).
 - **Kill switches** (`/admin/agent`, `admin_set_agent_control`): all, buyer
   side, seller side, one member's agent, one mandate, one listing, one
   account. Seeded with `all` on. Existing offers and orders are never touched.
