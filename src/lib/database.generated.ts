@@ -5975,7 +5975,10 @@ export type Database = {
       activity_post_search_text: { Args: { body: Json }; Returns: string }
       activity_post_visible: { Args: { p_post_id: string }; Returns: boolean }
       actor_name: { Args: { p_id: string }; Returns: string }
-      admin_cancel_seller_carry_payout: { Args: { p_id: string }; Returns: Json }
+      admin_cancel_seller_carry_payout: {
+        Args: { p_id: string }
+        Returns: Json
+      }
       admin_open_agent_chat: {
         Args: {
           p_case: string
