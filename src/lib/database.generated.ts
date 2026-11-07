@@ -7917,6 +7917,14 @@ export type Database = {
       }
       refresh_marketplace_facet_counts: { Args: never; Returns: undefined }
       refresh_search_words: { Args: never; Returns: undefined }
+      release_cart_checkout: {
+        Args: {
+          p_buyer: string
+          p_idempotency_key: string
+          p_reference?: string
+        }
+        Returns: Json
+      }
       release_expired_reservations: { Args: never; Returns: Json }
       release_media_claim: {
         Args: { p_bucket: string; p_path: string; p_token: string }

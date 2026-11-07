@@ -27,7 +27,7 @@ import { markNotificationsReadForPage } from "@/lib/notifications-read";
 
 import { ReviewForm } from "../review-form";
 import { UNPROVEN_BUYER_REVIEW_MESSAGE } from "@/features/commerce/review-refusal";
-import { nextAction } from "../next-action";
+import { finishCheckoutHref, nextAction } from "../next-action";
 import { OrderPipeline, StatusChip } from "@/components/commerce";
 import {
   AcceptRefundButton,
@@ -432,7 +432,7 @@ export default async function OrderDetailPage({
             </p>
           )}
           {canFinishCheckout && (
-            <ButtonLink href={`/orders/${id}/checkout`} variant="live" className="mt-2">
+            <ButtonLink href={finishCheckoutHref(order)} variant="live" className="mt-2">
               Finish checkout
             </ButtonLink>
           )}
