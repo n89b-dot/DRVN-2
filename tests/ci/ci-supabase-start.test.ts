@@ -13,10 +13,20 @@ const script = path.resolve(__dirname, "../../scripts/ci-supabase-start.sh");
 
 // Each `start` call takes the next behaviour from STUB_PLAN:
 //   ok   → exit 0      fail → exit 1      hang → sleep until killed
-// Every call is logged, and a hanging call records its pid so the test can
-// prove the bounded attempt was really killed.
+//   tree → like npx over the CLI: this process waits on a child that ignores
+//          TERM; this process itself dies on TERM, the child does not
+//   orphan → fails at once (exit 1) but leaves behind a child that ignores TERM
+// Every call is logged, and hanging processes record their pids so the test
+// can prove they were really killed. Every start or stop first records any
+// earlier hung process still alive, so a straggler that survives into the
+// cleanup or the next attempt is caught at that moment, not only at the end.
 const npxStub = `#!/usr/bin/env bash
 echo "$*" >> "$STUB_DIR/calls.log"
+if [ -f "$STUB_DIR/hung.pids" ]; then
+  while read -r p; do
+    if kill -0 "$p" 2>/dev/null; then echo "$p during: $*" >> "$STUB_DIR/leaked.log"; fi
+  done < "$STUB_DIR/hung.pids"
+fi
 case "$*" in
   *" start "*)
     n=$(grep -c ' start ' "$STUB_DIR/calls.log")
@@ -25,12 +35,29 @@ case "$*" in
       ok) exit 0 ;;
       fail) echo "stub start failed" >&2; exit 1 ;;
       hang) echo $$ >> "$STUB_DIR/hung.pids"; exec sleep 60 ;;
+      orphan)
+        bash -c 'trap "" TERM; echo $$ >> "$STUB_DIR/hung.pids"; while :; do sleep 1; done' >/dev/null 2>&1 &
+        # Exit only once the child has recorded its pid.
+        until [ -s "$STUB_DIR/hung.pids" ]; do sleep 0.1; done
+        echo "stub start failed, child left running" >&2
+        exit 1
+        ;;
+      tree)
+        echo $$ >> "$STUB_DIR/hung.pids"
+        bash -c 'trap "" TERM; echo $$ >> "$STUB_DIR/hung.pids"; while :; do sleep 1; done' &
+        wait
+        ;;
     esac
     ;;
 esac
 exit 0
 `;
+// STUB_DOCKER=hang models a wedged Docker daemon: \`docker ps\` never answers.
 const dockerStub = `#!/usr/bin/env bash
+if [ "\${STUB_DOCKER:-}" = hang ]; then
+  echo $$ >> "$STUB_DIR/docker.pids"
+  exec sleep 60
+fi
 echo "drvn_db  Exited (1)  supabase/postgres"
 `;
 
@@ -71,8 +98,14 @@ function run(plan: string, env: Record<string, string> = {}) {
     out: `${result.stdout}${result.stderr}`,
     starts: calls.filter((c) => c.includes(" start ")),
     stops: calls.filter((c) => c.includes(" stop ")),
+    leaked: readLines("leaked.log"),
     summary: fs.existsSync(summary) ? fs.readFileSync(summary, "utf8") : "",
   };
+}
+
+function readLines(file: string): string[] {
+  const full = path.join(dir, file);
+  return fs.existsSync(full) ? fs.readFileSync(full, "utf8").trim().split("\n").filter(Boolean) : [];
 }
 
 function alive(pid: number): boolean {
@@ -84,7 +117,10 @@ function alive(pid: number): boolean {
   }
 }
 
-describe("ci-supabase-start.sh", () => {
+// Each case blocks on a real bash run (spawnSync, itself capped at 30s). The
+// same cap here keeps a briefly paused or loaded machine from failing a case
+// on vitest's 5s default while the script is still behaving correctly.
+describe("ci-supabase-start.sh", { timeout: 30_000 }, () => {
   it("starts once, quietly, when the first attempt succeeds", () => {
     const r = run("ok");
     expect(r.code).toBe(0);
@@ -122,6 +158,47 @@ describe("ci-supabase-start.sh", () => {
     const hung = fs.readFileSync(path.join(dir, "hung.pids"), "utf8").trim().split("\n").map(Number);
     expect(hung).toHaveLength(1);
     expect(alive(hung[0])).toBe(false);
+    expect(r.leaked).toEqual([]);
+  });
+
+  it("kills the whole process tree, including a child that ignores TERM, before cleanup and retry", () => {
+    const r = run("tree,ok");
+    expect(r.code).toBe(0);
+    expect(r.starts).toHaveLength(2);
+    expect(r.out).toContain("with exit 124");
+    expect(r.out).toContain("::warning::supabase start attempt 1 of 3 exceeded 2s and was killed");
+    const hung = readLines("hung.pids").map(Number);
+    // The npx stand-in and its TERM-ignoring child.
+    expect(hung).toHaveLength(2);
+    for (const pid of hung) expect(alive(pid), `pid ${pid}`).toBe(false);
+    // Neither was still running when `supabase stop` or attempt 2 began.
+    expect(r.leaked).toEqual([]);
+  });
+
+  it("reaps a TERM-ignoring child left by a leader that failed on its own, before cleanup and retry", () => {
+    const r = run("orphan,ok");
+    expect(r.code).toBe(0);
+    expect(r.starts).toHaveLength(2);
+    // Not a timeout: the leader exited 1 by itself.
+    expect(r.out).toContain("::warning::supabase start attempt 1 of 3 exited 1");
+    expect(r.out).not.toContain("exceeded");
+    const hung = readLines("hung.pids").map(Number);
+    expect(hung).toHaveLength(1);
+    expect(alive(hung[0]), `pid ${hung[0]}`).toBe(false);
+    expect(r.leaked).toEqual([]);
+  });
+
+  it("bounds diagnostics against a wedged Docker daemon and still cleans up and retries", () => {
+    const started = Date.now();
+    const r = run("fail,ok", { STUB_DOCKER: "hang", SUPABASE_START_DIAG_TIMEOUT: "1" });
+    expect(Date.now() - started).toBeLessThan(15_000);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("::warning::docker ps did not answer within 1s; continuing to cleanup");
+    expect(r.stops).toHaveLength(1);
+    expect(r.starts).toHaveLength(2);
+    const docker = readLines("docker.pids").map(Number);
+    expect(docker).toHaveLength(1);
+    expect(alive(docker[0])).toBe(false);
   });
 
   it("fails the step with every attempt named when no attempt succeeds", () => {
