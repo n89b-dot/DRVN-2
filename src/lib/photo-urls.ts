@@ -1,0 +1,116 @@
+/**
+ * Member photos are private objects since 20261108160000 (N455): a private
+ * car's photos, a draft listing's photos and a private car's post photos used
+ * to be readable by anyone holding their public URL, though the pages that
+ * showed them were not.
+ *
+ * The database keeps every photo in its one canonical spelling,
+ * `<origin>/storage/v1/object/public/<bucket>/<path>`, which stays the
+ * object's identity for the reference checks, cleanup, takedowns and the
+ * storage report (20261107203000). Only the app sees another spelling: a
+ * signed URL, minted after the row was read under the reader's own row
+ * policies, so a photo reaches exactly the people who can see the row it
+ * belongs to. src/lib/supabase/photo-signing.ts signs on the way out of the
+ * database and turns signed URLs back into canonical ones on the way in.
+ *
+ * These are the pure rules (no server-only import, so they can be tested).
+ */
+
+/** The buckets whose objects are read through signed URLs. Avatars stay public. */
+export const SIGNED_PHOTO_BUCKETS = ["car-images", "listing-images", "activity-images"] as const;
+
+/** One signing window: URLs minted inside it are reused until it ends. */
+export const SIGNING_WINDOW_SECONDS = 3600;
+
+const BUCKETS = SIGNED_PHOTO_BUCKETS.join("|");
+const PATH = "[^\"'\\s\\\\?#<>]+";
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** The storage origin photo URLs are minted on, or null when unconfigured. */
+export function storageOrigin(env: Record<string, string | undefined> = process.env): string | null {
+  try {
+    return env.NEXT_PUBLIC_SUPABASE_URL ? new URL(env.NEXT_PUBLIC_SUPABASE_URL).origin : null;
+  } catch {
+    return null;
+  }
+}
+
+function publicPattern(origin: string, flags = "g"): RegExp {
+  return new RegExp(`${escapeRegExp(origin)}/storage/v1/object/public/(${BUCKETS})/(${PATH})`, flags);
+}
+
+function signedPattern(origin: string, flags = "g"): RegExp {
+  return new RegExp(`${escapeRegExp(origin)}/storage/v1/object/sign/(${BUCKETS})/(${PATH})\\?token=[A-Za-z0-9._~-]+`, flags);
+}
+
+/** A decoded object path is safe to name: no empty, `.` or `..` segment, no control characters, \ ? # %. */
+function safePath(raw: string): string | null {
+  let path: string;
+  try {
+    path = decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
+  if (path.length < 3 || path.length > 512 || path.indexOf("/") < 1 || path.endsWith("/") || path.includes("//")) return null;
+  if (path.split("/").some((segment) => segment === "." || segment === "..")) return null;
+  return /[\u0000-\u001f\u007f-\u009f\\?#%]/.test(path) ? null : path;
+}
+
+/**
+ * The canonical spelling of a member photo URL: a signed URL for one of our
+ * signed photo buckets becomes the public-route URL the database stores.
+ * Anything else comes back unchanged.
+ */
+export function canonicalPhotoUrl<T>(value: T, origin: string | null = storageOrigin()): T {
+  if (typeof value !== "string" || !origin) return value;
+  const match = signedPattern(origin, "").exec(value);
+  if (!match || match.index !== 0 || match[0].length !== value.length) return value;
+  const path = safePath(match[2]);
+  return (path ? `${origin}/storage/v1/object/public/${match[1]}/${path}` : value) as T;
+}
+
+/** Every signed photo URL in a text (a request body, a query string) back to its canonical spelling. */
+export function canonicalizePhotoUrlsInText(text: string, origin: string | null = storageOrigin()): string {
+  if (!origin || !text.includes("/storage/v1/object/sign/")) return text;
+  return text.replace(signedPattern(origin), (whole, bucket: string, raw: string) => {
+    const path = safePath(raw);
+    return path ? `${origin}/storage/v1/object/public/${bucket}/${path}` : whole;
+  });
+}
+
+/** The distinct canonical photo URLs a text (a database response) contains, in a signed bucket. */
+export function canonicalPhotoUrlsInText(text: string, origin: string | null = storageOrigin()): string[] {
+  if (!origin || !text.includes("/storage/v1/object/public/")) return [];
+  const found = new Set<string>();
+  for (const match of text.matchAll(publicPattern(origin))) {
+    if (safePath(match[2])) found.add(match[0]);
+  }
+  return [...found];
+}
+
+/** Replaces each canonical photo URL in a text with its signed spelling, where one was minted. */
+export function replacePhotoUrlsInText(text: string, signed: ReadonlyMap<string, string>, origin: string | null = storageOrigin()): string {
+  if (!origin || !signed.size) return text;
+  return text.replace(publicPattern(origin), (whole) => signed.get(whole) ?? whole);
+}
+
+/** (bucket, path) of a canonical photo URL in a signed bucket, or null. */
+export function signedPhotoObject(url: string, origin: string | null = storageOrigin()): { bucket: string; path: string } | null {
+  if (!origin) return null;
+  const match = publicPattern(origin, "").exec(url);
+  if (!match || match.index !== 0 || match[0].length !== url.length) return null;
+  const path = safePath(match[2]);
+  return path ? { bucket: match[1], path } : null;
+}
+
+/**
+ * The window a URL is minted in and how long to make it last: to the end of
+ * the next window, so a page rendered at the end of one window still shows
+ * its photos for at least an hour.
+ */
+export function signingWindow(nowMs: number): { window: number; expiresIn: number } {
+  const now = Math.floor(nowMs / 1000);
+  const window = Math.floor(now / SIGNING_WINDOW_SECONDS);
+  return { window, expiresIn: (window + 2) * SIGNING_WINDOW_SECONDS - now };
+}
