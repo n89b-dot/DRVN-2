@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRVN · First Light</title>
+<meta name="description" content="DRVN is the parts marketplace for modified cars. Buy from people who drive what you drive, and sell what comes off yours.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+<link rel="stylesheet" href="first-light.css">
+<link rel="preload" as="image" href="../assets/c18-hero-pass.jpg">
+<meta name="color-scheme" content="light dark">
+<script>(function(d){d.classList.add('js');try{var t=(localStorage.getItem('fl-theme')||'').replace(/"/g,'');if((t==='dark'||t==='light')&&!d.hasAttribute('data-theme'))d.setAttribute('data-theme',t);}catch(e){}})(document.documentElement);</script>
+<script src="first-light.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="sky" aria-hidden="true"><div class="sky__mist"></div><div class="sky__sun"></div></div>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="nav nav--over" data-nav>
+  <div class="nav__in wrap">
+    <a class="mark" href="index.html" aria-label="DRVN, home">
+      <svg class="mark__sun" viewBox="0 0 30 20" aria-hidden="true"><defs><clipPath id="hz"><rect x="0" y="0" width="30" height="14.5"/></clipPath></defs><g clip-path="url(#hz)"><circle class="mark__disc" cx="15" cy="14.5" r="4.5"/></g><line x1="1" y1="14.5" x2="29" y2="14.5"/></svg>
+      <span class="mark__word">DRVN</span>
+    </a>
+    <nav class="nav__links" aria-label="Primary">
+      <a href="explore.html">Explore</a>
+      <a href="market.html">Marketplace</a>
+      <a href="garage.html">Garage</a>
+      <a href="sell.html">Sell</a>
+    </nav>
+    <div class="nav__tools">
+      <form class="search" action="market.html" role="search">
+        <label class="sr" for="q">Search parts</label>
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5"/></svg>
+        <input id="q" name="q" type="search" placeholder="Search parts" autocomplete="off">
+      </form>
+      <button class="themeswitch" type="button" data-theme-toggle aria-pressed="false" aria-label="Night mode"><span class="themeswitch__dot" aria-hidden="true"></span><span class="themeswitch__dawn" aria-hidden="true">Dawn</span><span class="themeswitch__night" aria-hidden="true">Night</span></button>
+      <p class="clock" aria-hidden="true"><span class="clock__time" data-clock>05:12</span><span class="clock__phase" data-phase>blue hour</span></p>
+      <button class="iconbtn bag" type="button" data-bag-open aria-label="Bag, 0 items">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 7h12l-1 10H5L4 7z"/><path d="M7.5 7V5.5a2.5 2.5 0 015 0V7"/></svg>
+        <span class="bag__n" data-bag-count>0</span>
+      </button>
+      <a class="nav__signin" href="home.html">Sign in</a>
+      <button class="menu" type="button" aria-expanded="false" aria-controls="menu" data-menu><span class="menu__bars" aria-hidden="true"></span>Menu</button>
+    </div>
+  </div>
+  <div class="nav__sheet" id="menu" hidden>
+    <ul>
+      <li><a href="explore.html">Explore</a></li>
+      <li><a href="market.html">Marketplace</a></li>
+      <li><a href="garage.html">Garage</a></li>
+      <li><a href="sell.html">Sell</a></li>
+      <li><a href="home.html">Sign in</a></li>
+    </ul>
+    <form class="search" action="market.html" role="search">
+      <label class="sr" for="q-m">Search parts</label>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5"/></svg>
+      <input id="q-m" name="q" type="search" placeholder="Search parts" autocomplete="off">
+    </form>
+    <button class="themeswitch themeswitch--sheet" type="button" data-theme-toggle aria-pressed="false" aria-label="Night mode"><span class="themeswitch__dot" aria-hidden="true"></span><span class="themeswitch__dawn" aria-hidden="true">Dawn</span><span class="themeswitch__night" aria-hidden="true">Night</span></button>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="hero" data-hero aria-labelledby="hero-title">
+    <div class="hero__media" aria-hidden="true">
+      <div class="hero__set hero__set--dawn">
+        <img class="hero__poster" src="../assets/c18-hero-pass.jpg" alt="" fetchpriority="high">
+        <video class="hero__video" data-video muted playsinline preload="none" poster="../assets/c18-hero-pass.jpg"><source src="../assets/c18-motion-dawn.mp4" type="video/mp4"></video>
+        <video class="hero__video" data-video muted playsinline preload="none"><source src="../assets/c18-motion-dawn.mp4" type="video/mp4"></video>
+      </div>
+      <div class="hero__set hero__set--night">
+        <img class="hero__poster" src="../assets/c18-hero-night.jpg" alt="" loading="lazy">
+        <video class="hero__video" data-video-night muted playsinline preload="none" poster="../assets/c18-hero-night.jpg"><source src="../assets/c18-motion-night.mp4" type="video/mp4"></video>
+        <video class="hero__video" data-video-night muted playsinline preload="none"><source src="../assets/c18-motion-night.mp4" type="video/mp4"></video>
+      </div>
+      <div class="hero__haze"></div>
+      <canvas class="hero__fog" data-fog></canvas>
+    </div>
+    <div class="hero__scrim" aria-hidden="true"></div>
+    <div class="hero__body wrap">
+      <p class="label hero__eyebrow" data-emerge>The parts marketplace for modified cars</p>
+      <h1 id="hero-title" class="hero__title"><span class="w" data-emerge>Ready</span> <span class="w" data-emerge>before</span> <em><span class="w" data-emerge>first</span> <span class="w" data-emerge>light.</span></em></h1>
+      <p class="hero__lead" data-emerge>DRVN is where people with modified cars buy and sell parts. Find what fits yours. Sell what came off it.</p>
+      <div class="hero__actions" data-emerge>
+        <a class="btn btn--sun" href="market.html">Shop parts</a>
+        <a class="btn btn--frost" href="sell.html">Sell your parts</a>
+      </div>
+    </div>
+    <div class="hero__foot wrap label">
+      <p><a class="link" href="car.html">Theo’s 964</a>, Flagstaff Road</p>
+      <p>34°F, fog in the valley</p>
+    </div>
+  </section>
+
+  <section class="section wrap" aria-labelledby="pick-title">
+    <div class="cols picker">
+      <div class="picker__text" data-reveal>
+        <p class="label"><span data-at>05:20</span> · Your car</p>
+        <h2 id="pick-title" class="h1" style="margin-top:16px">What do you <em>drive?</em></h2>
+        <p class="lead" style="margin-top:24px">Tell us once and every part on DRVN answers the only question that matters: will it go on my car?</p>
+        <form class="picker__form" action="market.html">
+          <label class="picker__line" for="car">I drive a</label>
+          <span class="select select--serif">
+            <select id="car" name="fits" data-picker>
+              <optgroup label="Porsche">
+                <option value="964" selected>911 (964)</option>
+                <option value="g">911 Carrera 3.2</option>
+                <option value="993">911 (993)</option>
+              </optgroup>
+              <optgroup label="Honda">
+                <option value="dc2">Integra Type R (DC2)</option>
+              </optgroup>
+              <optgroup label="BMW">
+                <option value="e30">3 Series (E30)</option>
+                <option value="e46">M3 (E46)</option>
+              </optgroup>
+              <optgroup label="Mazda">
+                <option value="na">MX-5 Miata (NA)</option>
+              </optgroup>
+              <optgroup label="Volkswagen">
+                <option value="mk7">Golf R (Mk7)</option>
+              </optgroup>
+            </select>
+          </span>
+          <div class="picker__go">
+            <button class="btn btn--sun" type="submit" data-picker-go>Show parts for the 911 (964)</button>
+            <a class="arrow" href="market.html"><span>Or browse everything</span></a>
+          </div>
+        </form>
+        <div class="picker__club">
+          <p class="label">Cars in the 5:30 club</p>
+          <ul class="carlinks">
+            <li><a href="market.html?fits=964">964<small data-carcount="964">9</small></a></li>
+            <li><a href="market.html?fits=dc2">Integra DC2<small data-carcount="dc2">6</small></a></li>
+            <li><a href="market.html?fits=e30">E30<small data-carcount="e30">6</small></a></li>
+            <li><a href="market.html?fits=na">NA Miata<small data-carcount="na">4</small></a></li>
+            <li><a href="market.html?fits=993">993<small data-carcount="993">4</small></a></li>
+          </ul>
+        </div>
+      </div>
+      <figure class="picker__photo" data-reveal style="--d:120ms">
+        <div class="photo ratio-34"><img src="../assets/c18-garage-door.jpg" class="crop-cover" alt="A car under a fitted cover in a garage at dawn, the door half raised onto a foggy driveway and a stripe of apricot light on the floor" loading="lazy"></div>
+        <figcaption class="caption">Every car looks the same under a cover. The parts don’t.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section section--tight wrap" aria-labelledby="fresh-title">
+    <div class="section__head" data-reveal>
+      <div>
+        <p class="label"><span data-at>05:31</span> · New</p>
+        <h2 id="fresh-title" class="h2">Listed this <em>morning</em></h2>
+        <p class="lead">Fresh from garages along the Front Range. Most of it went up before the coffee was ready.</p>
+      </div>
+      <a class="arrow" href="market.html"><span>All parts</span></a>
+    </div>
+    <div class="grid" data-list="fresh"></div>
+    <noscript><p class="lead">Turn on JavaScript to see this morning’s listings, or <a class="link" href="market.html">open the marketplace</a>.</p></noscript>
+  </section>
+
+  <section class="section wrap" aria-labelledby="club-title">
+    <div class="section__head" data-reveal>
+      <div>
+        <p class="label"><span data-at>05:44</span> · Community</p>
+        <h2 id="club-title" class="h2">From the <em>5:30 club</em></h2>
+        <p class="lead">Saturdays, half past five, bottom of Flagstaff Road. Whoever’s there goes. This is what they’ve been doing to their cars.</p>
+      </div>
+    </div>
+    <div class="cols club">
+      <article class="post post--wide" data-reveal>
+        <figure class="post__photo photo ratio-169"><img src="../assets/c18-lay-by.jpg" alt="A dark green Integra Type R and a grey BMW E30 parked at a wet lay-by above a sea of cloud at sunrise" loading="lazy"></figure>
+        <div class="post__body">
+          <div class="post__who"><span class="avatar" aria-hidden="true">J</span><span><span class="post__name">Jules Ferreira</span><span class="post__handle">@jules.dc2 · Fort Collins</span></span></div>
+          <p class="post__time label">Sat 11 Oct · 06:02</p>
+          <p class="post__text">Lay-by above Nederland. The cloud sat in the valley the whole way up, and Sam’s E30 found the only dry patch.</p>
+          <p class="post__links"><span>On: <a class="link" href="market.html?fits=dc2">Integra Type R (DC2)</a></span><span>Listed: <a class="link" href="market.html?fits=dc2">B18C header, $420</a></span></p>
+        </div>
+      </article>
+      <article class="post post--a" data-reveal>
+        <figure class="post__photo photo ratio-34"><img src="../assets/c18-road.jpg" alt="Flagstaff Road, empty and wet with dew, winding into fog under a pale apricot sky" loading="lazy"></figure>
+        <div class="post__body">
+          <div class="post__who"><span class="avatar" aria-hidden="true">T</span><span><span class="post__name">Theo Lindqvist</span><span class="post__handle">@theo.964 · Boulder</span></span></div>
+          <p class="post__time label">Sat 4 Oct · 05:41</p>
+          <p class="post__text">First run on the Bilsteins. Flagstaff, third hairpin, nobody up yet. The car feels older now, in the best way. The KWs are listed.</p>
+          <p class="post__links"><span>On: <a class="link" href="car.html">1991 911 Carrera 2</a></span><span>Listed: <a class="link" href="part.html">KW Clubsport, $2,150</a></span></p>
+        </div>
+      </article>
+      <article class="post post--b" data-reveal style="--d:120ms">
+        <figure class="post__photo photo ratio-45"><img src="../assets/c18-dew.jpg" alt="Macro of dew beads on a silver bonnet, the low sun glinting on the horizon" loading="lazy"></figure>
+        <div class="post__body">
+          <div class="post__who"><span class="avatar" aria-hidden="true">S</span><span><span class="post__name">Sam Whitaker</span><span class="post__handle">@e30.sam · Denver</span></span></div>
+          <p class="post__time label">Sun 12 Oct · 05:26</p>
+          <p class="post__text">Left it out overnight on purpose. Dew sits differently on paint you’ve just had corrected.</p>
+          <p class="post__links"><span>On: <a class="link" href="market.html?fits=e30">1989 E30 325is</a></span><span>Listed: <a class="link" href="market.html?fits=e30">BBS RS 15", $2,600</a></span></p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="section band" aria-labelledby="buy-title">
+    <div class="wrap cols">
+      <div class="buying__head" data-reveal>
+        <p class="label"><span data-at>06:02</span> · Buying</p>
+        <h2 id="buy-title" class="h2" style="margin-top:16px">We hold the money. <em>You open the box.</em></h2>
+        <p class="lead" style="margin-top:24px">Every order on DRVN has buyer protection. Nobody gets paid until the part has arrived and you’ve had time to look at it.</p>
+      </div>
+      <ol class="steps">
+        <li class="step" data-reveal><p class="step__when">First</p><h3>Find what fits</h3><p>Filter by your car. Every listing says what it fits and, where it matters, which car it came off.</p></li>
+        <li class="step" data-reveal style="--d:90ms"><p class="step__when">Then</p><h3>Pay into the hold</h3><p>Your payment sits with DRVN, not the seller. Shipping and tax are shown before you commit.</p></li>
+        <li class="step" data-reveal style="--d:180ms"><p class="step__when">When it lands</p><h3>Open the box</h3><p>Check it against the listing. If it isn’t as described, tell us and the money stays where it is.</p></li>
+        <li class="step" data-reveal style="--d:270ms"><p class="step__when">Two days later</p><h3>The seller is paid</h3><p>The money moves two days after delivery. Not a minute before.</p></li>
+      </ol>
+      <p class="buying__note" data-reveal>No account needed to browse, filter or ask a seller a question. You make one when you buy.</p>
+    </div>
+  </section>
+
+  <section class="section wrap" aria-labelledby="sell-title">
+    <div class="cols sellsplit">
+      <div class="sellsplit__text" data-reveal>
+        <p class="label"><span data-at>06:18</span> · Selling</p>
+        <h2 id="sell-title" class="h2" style="margin-top:16px">What comes off the car <em>shouldn’t sit in the garage.</em></h2>
+        <p class="lead" style="margin-top:24px">List a part in about the time it takes the oil to warm. Say which car it came off and we’ll put it in front of people who drive one.</p>
+        <ul class="terms">
+          <li>No listing fee. 6% when it sells, nothing before.</li>
+          <li>Paid to your bank two days after delivery.</li>
+          <li>Your store lives on your garage profile, next to the car.</li>
+        </ul>
+        <div style="margin-top:32px;display:flex;gap:12px;flex-wrap:wrap">
+          <a class="btn btn--sun" href="sell.html">Sell your parts</a>
+          <a class="btn btn--quiet" href="garage.html#p-parts">See Theo’s store</a>
+        </div>
+      </div>
+      <figure class="sellsplit__photo" data-reveal style="--d:120ms">
+        <div class="photo ratio-45"><img src="../assets/c18-bench.jpg" alt="KW coilovers and a short-shift kit half-wrapped in brown paper on an oak bench by a fogged window, a thermos beside them" loading="lazy"></div>
+        <figcaption class="caption">What came off Theo’s 964 this month. Both listed before six.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot wrap" aria-labelledby="foot-title">
+  <h2 id="foot-title" class="foot__line">See you at the bottom of Flagstaff, <em>5:30.</em></h2>
+  <div class="foot__cols">
+    <div>
+      <a class="mark" href="index.html" aria-label="DRVN, home">
+        <svg class="mark__sun" viewBox="0 0 30 20" aria-hidden="true"><g clip-path="url(#hz)"><circle class="mark__disc" cx="15" cy="14.5" r="4.5"/></g><line x1="1" y1="14.5" x2="29" y2="14.5"/></svg>
+        <span class="mark__word">DRVN</span>
+      </a>
+      <p class="prose" style="margin-top:16px;max-width:32ch">The parts marketplace for modified cars. Made in Boulder, mostly before breakfast.</p>
+    </div>
+    <div><h2 class="label">Buy</h2><ul><li><a href="market.html">Marketplace</a></li><li><a href="market.html?fits=964">Parts for the 964</a></li><li><a href="part.html">Buyer protection</a></li></ul></div>
+    <div><h2 class="label">Sell</h2><ul><li><a href="sell.html">List a part</a></li><li><a href="home.html">Your home</a></li><li><a href="sell.html">Fees and payouts</a></li></ul></div>
+    <div><h2 class="label">Club</h2><ul><li><a href="explore.html">Explore</a></li><li><a href="garage.html">Theo’s garage</a></li><li><a href="car.html">Theo’s 964</a></li></ul></div>
+  </div>
+  <div class="foot__base"><p>© 2026 DRVN</p><p>Boulder, Colorado · <span class="price" data-clock>06:40</span></p></div>
+</footer>
+</body>
+</html>

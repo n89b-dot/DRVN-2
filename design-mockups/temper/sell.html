@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sell your parts — DRVN</title>
+<meta name="description" content="List a part in four minutes. Paid two days after delivery.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Martian+Mono:wght@300..500&display=swap">
+<link rel="stylesheet" href="temper.css">
+</head>
+<body data-page="sell">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav" data-solid>
+  <div class="wrap nav__in">
+    <a class="mark" href="index.html" data-heat aria-label="DRVN, home"><span class="mark__word">DRVN</span><span class="band mark__tab" aria-hidden="true"></span></a>
+    <nav class="nav__links" aria-label="Primary">
+      <a class="nav__link" href="market.html" data-heat>Marketplace<span class="band" aria-hidden="true"></span></a>
+      <a class="nav__link" href="garage.html" data-heat>Garage<span class="band" aria-hidden="true"></span></a>
+      <a class="nav__link" href="sell.html" aria-current="page" data-heat>Sell<span class="band" aria-hidden="true"></span></a>
+    </nav>
+    <div class="nav__tools">
+      <form class="search" role="search" data-heat>
+        <span class="search__glyph" aria-hidden="true"></span>
+        <label class="sr-only" for="q-nav">Search parts</label>
+        <input id="q-nav" type="search" name="q" placeholder="Search parts, cars, sellers" autocomplete="off">
+        <span class="band" aria-hidden="true"></span>
+      </form>
+      <button class="cart" type="button" data-heat aria-label="Cart">Cart <span class="cart__count num">0</span></button>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="menu" data-heat>Menu</button>
+    </div>
+  </div>
+</header>
+<div class="menu" id="menu" hidden>
+  <nav class="menu__links" aria-label="Mobile">
+    <a href="market.html" data-heat>Marketplace<span class="band" aria-hidden="true"></span></a>
+    <a href="garage.html" data-heat>Garage<span class="band" aria-hidden="true"></span></a>
+    <a href="sell.html" data-heat>Sell<span class="band" aria-hidden="true"></span></a>
+  </nav>
+  <form class="search" role="search" data-heat>
+    <span class="search__glyph" aria-hidden="true"></span>
+    <label class="sr-only" for="q-menu">Search parts</label>
+    <input id="q-menu" type="search" name="q" placeholder="Search parts, cars, sellers" autocomplete="off">
+    <span class="band" aria-hidden="true"></span>
+  </form>
+</div>
+
+<main id="main" class="page-top">
+  <div class="wrap">
+    <header class="mhead">
+      <div>
+        <p class="label" style="margin-bottom:var(--s-4)">Sell · lists to your store on your profile</p>
+        <h1 class="display t-d1">Sell what came off.</h1>
+        <p>Four minutes, one good photo, and the car it came off. Buyers filter by fitment, so tell them what it bolts to.</p>
+      </div>
+    </header>
+
+    <div class="grid12 sell">
+      <form class="sell__form" data-sell novalidate>
+        <div class="field">
+          <span class="field__label" id="photos-label">Photos</span>
+          <label class="drop" data-heat>
+            <input type="file" name="photos" accept="image/*" multiple aria-labelledby="photos-label">
+            <strong>Add photos</strong>
+            <p>Daylight or one hard light. Show the welds, the flanges, the part numbers.</p>
+          </label>
+          <div class="previews" data-previews></div>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="s-title">What is it?</label>
+          <div class="ctl" data-heat><input id="s-title" name="title" required maxlength="80" placeholder="Garrett G35-1050 with Ti downpipe flange"></div>
+        </div>
+
+        <div class="sell__two">
+          <div class="field">
+            <label class="field__label" for="s-cat">Category</label>
+            <div class="ctl ctl--select" data-heat>
+              <select id="s-cat" name="cat">
+                <option value="exhaust">Exhaust</option>
+                <option value="boost">Forced induction</option>
+                <option value="wheels">Wheels &amp; hardware</option>
+                <option value="chassis">Suspension &amp; chassis</option>
+                <option value="brakes">Brakes</option>
+                <option value="aero">Aero &amp; body</option>
+                <option value="interior">Interior</option>
+                <option value="electronics">Engine management</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label class="field__label" for="s-cond">Condition</label>
+            <div class="ctl ctl--select" data-heat>
+              <select id="s-cond" name="cond">
+                <option value="used-good">Used, good</option>
+                <option value="used-excellent">Used, excellent</option>
+                <option value="new">New</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="s-from">Came off</label>
+          <div class="ctl ctl--select" data-heat>
+            <select id="s-from" name="from">
+              <option value="ink">Ink, 2017 GT-R</option>
+              <option value="other">Another car</option>
+              <option value="new">Never fitted</option>
+            </select>
+          </div>
+          <span class="field__hint">Shown on the listing as supporting detail. Buyers like knowing where a part has been.</span>
+        </div>
+
+        <fieldset class="field" style="border:0;margin:0;padding:0">
+          <legend class="field__label" style="padding:0;margin-bottom:var(--s-2)">Fits</legend>
+          <div class="fits" data-fits></div>
+        </fieldset>
+
+        <div class="field">
+          <label class="field__label" for="s-price">Price</label>
+          <div class="ctl ctl--prefix" data-heat><span aria-hidden="true">$</span><input id="s-price" name="price" type="number" inputmode="decimal" min="1" step="1" required placeholder="1420"></div>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="s-desc">Tell buyers what they need to know</label>
+          <div class="ctl" data-heat><textarea id="s-desc" name="desc" maxlength="1200" placeholder="Miles, why it came off, anything that’s been rebuilt or repaired."></textarea></div>
+        </div>
+
+        <div><button class="btn btn--primary" type="submit" data-heat><span>Save draft</span><span class="btn__arrow" aria-hidden="true">→</span><span class="band" aria-hidden="true"></span></button></div>
+      </form>
+
+      <aside class="sell__side" aria-label="Preview and payout">
+        <p class="label">How it will look</p>
+        <div data-preview></div>
+        <div class="panel payout" data-payout>
+          <p class="label">Your payout</p>
+          <dl class="rows">
+            <div><dt>Sale price</dt><dd class="num" data-p="sale">$0</dd></div>
+            <div><dt>DRVN fee, 6%</dt><dd class="num" data-p="fee">−$0</dd></div>
+            <div><dt>Shipping</dt><dd>Buyer pays, label provided</dd></div>
+          </dl>
+          <div class="drawer__total"><span class="muted">You receive</span><span class="price payout__total num" data-p="net">$0</span></div>
+          <p class="buy__note">Paid two days after delivery. No listing fee, no fee if it doesn’t sell.</p>
+        </div>
+        <div class="notice" data-note tabindex="-1" role="status" data-heat hidden>
+          <span class="band" aria-hidden="true"></span>
+          <p data-note-title></p>
+          <p class="muted">Saved on this device. Publish from your store when the photos are right.</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="grid12 foot__top">
+      <div class="foot__brand">
+        <a class="mark" href="index.html" data-heat aria-label="DRVN, home"><span class="mark__word">DRVN</span><span class="band mark__tab" aria-hidden="true"></span></a>
+        <p>The parts marketplace for modified cars. Built in garages, paid when it lands.</p>
+      </div>
+      <div class="foot__cols">
+        <nav class="foot__col" aria-label="Marketplace"><span class="label">Marketplace</span><a href="market.html">Browse parts</a><a href="market.html?sort=hot">Hottest</a><a href="market.html?sort=new">Just listed</a></nav>
+        <nav class="foot__col" aria-label="Garage"><span class="label">Garage</span><a href="garage.html">Ink, @ada.fab</a><a href="garage.html#store">Ada’s store</a><a href="garage.html#posts">Build posts</a></nav>
+        <nav class="foot__col" aria-label="Selling"><span class="label">Sell</span><a href="sell.html">List a part</a><a href="sell.html">Fees and payouts</a><a href="part.html">Buyer protection</a></nav>
+      </div>
+    </div>
+    <div class="foot__base"><span class="label">© 2026 DRVN · Portland, OR</span><span class="label">Prices in USD</span></div>
+  </div>
+</footer>
+
+<script src="temper.js"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "num": 17,
+  "name": "Temper",
+  "slug": "temper",
+  "family": "material",
+  "thesis": "Every surface is heat-tinted titanium: colour only appears where energy has been.",
+  "hero_asset": "c17-hero-exhaust.jpg",
+  "accent_hex": "#2F5DC0",
+  "thumb_fallback_hex": "#0C0D0F",
+  "pages": {
+    "index.html": "Front door: live titanium exhaust hero, hot right now (demand as heat), car picker, buyer protection, Ink featured build with parts that came off it, sell CTA",
+    "market.html": "Browse: working filters (fits my car, search, category, price, condition), sort incl. Hottest, demand-tempered listing grid",
+    "part.html": "Listing detail: gallery with heat-haze video, fitment check verdict, seller and car, buyer protection, Buy now checkout drawer",
+    "garage.html": "Ada's GT-R 'Ink': build timeline with linked/sold parts, ARIA tabs for build/store/posts, follow",
+    "sell.html": "List a part: photo preview, came-off car, fitment, live payout calculator, draft save"
+  },
+  "showpiece": "Real-time procedural titanium exhaust (lathe tip + tube mid-pipe + weld bead) with a thin-film oxide shader whose colour is driven by a weld-hot heat field, a cursor torch that spreads and cools, and scroll."
+}

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your garage · DRVN</title>
+  <meta name="description" content="The cars you drive. Pick one and every page on DRVN talks to it.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@300..800&family=Funnel+Sans:wght@300..800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="one-question.css">
+  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }</script>
+  <script src="one-question.js" defer></script>
+  <script type="module" src="one-question-particles.js"></script>
+</head>
+<body data-page="garage">
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav" data-nav>
+    <a class="wordmark" href="index.html" aria-label="DRVN, home">DRVN<i class="wordmark__caret" aria-hidden="true"></i></a>
+    <nav class="nav__links" aria-label="Main">
+      <a href="market.html">Marketplace</a>
+      <a href="garage.html" aria-current="page">Garage</a>
+      <a href="sell.html">Sell</a>
+    </nav>
+    <div class="nav__right">
+      <div class="carchip" data-carchip>
+        <button class="carchip__btn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="carpop"><span class="carchip__k">Your car</span><span class="carchip__v" data-carchip-label>What do you drive?</span><span class="carchip__c">change</span></button>
+        <div class="carpop" id="carpop" role="dialog" aria-labelledby="carpop-q"></div>
+      </div>
+      <button class="cartbtn" type="button" data-cart aria-label="Cart, 0 items"><span class="cartbtn__label">Cart</span><span class="cartbtn__n">0</span></button>
+      <button class="menubtn" type="button" aria-expanded="false" aria-controls="mnav">Menu</button>
+    </div>
+  </header>
+  <nav class="mnav" id="mnav" aria-label="Mobile">
+    <a href="market.html">Marketplace</a>
+    <a href="garage.html" aria-current="page">Garage</a>
+    <a href="sell.html">Sell your parts</a>
+  </nav>
+
+  <main id="main">
+    <div class="wrap">
+      <header class="pagehead">
+        <p class="eyebrow">Garage</p>
+        <h1 class="h1">Your garage</h1>
+        <p class="lead">The cars you’ve answered with. Pick one and every page on DRVN talks to it: what fits, what doesn’t, who else drives one.</p>
+      </header>
+      <div data-g-wrap hidden>
+        <div class="tabs" role="tablist" aria-label="Your cars" data-g-tabs></div>
+        <div class="garage">
+          <div class="gstage">
+            <div class="stage" data-stage="garage" data-frame="0.5,0.42,0.78" data-frame-sm="0.5,0.4,0.86" aria-hidden="true"></div>
+            <div class="gstage__plate" data-g-plate></div>
+          </div>
+          <div data-g-panels></div>
+        </div>
+        <section class="addcar" data-g-add aria-labelledby="add-h1">
+          <h2 class="addcar__q" id="add-h1">Drive something else too?</h2>
+          <form class="addcar__row" novalidate>
+            <div class="field"><label for="g-in1">Type a car</label><input id="g-in1" type="text" autocomplete="off" spellcheck="false" maxlength="34" placeholder="e.g. RX-7, or anything else" aria-describedby="g-m1"></div>
+            <button class="btn btn--primary" type="submit">Add to garage</button>
+          </form>
+          <p class="addcar__match" id="g-m1" data-g-match aria-live="polite"></p>
+          <div class="addcar__quick" data-g-quick></div>
+        </section>
+      </div>
+      <div class="garage-empty" data-g-empty hidden>
+        <section class="addcar" data-g-add aria-labelledby="add-h2">
+          <h2 class="addcar__q" id="add-h2">Nothing in here yet. What do you drive?</h2>
+          <form class="addcar__row" novalidate>
+            <div class="field"><label for="g-in2">Type a car</label><input id="g-in2" type="text" autocomplete="off" spellcheck="false" maxlength="34" placeholder="e.g. RX-7, or anything else" aria-describedby="g-m2"></div>
+            <button class="btn btn--primary" type="submit">Add to garage</button>
+          </form>
+          <p class="addcar__match" id="g-m2" data-g-match aria-live="polite"></p>
+          <div class="addcar__quick" data-g-quick></div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <footer class="footer">
+    <div class="wrap">
+      <p class="footer__q"><a href="index.html">What do you drive?</a></p>
+      <div class="footer__grid">
+        <div><h3>DRVN</h3><p>The parts marketplace for modified cars, with the car in the middle. Built by people who still have a box of old intake parts in the garage.</p></div>
+        <div><h3>Buy</h3><ul><li><a href="market.html">Marketplace</a></li><li><a href="part.html?id=bc-br-e46">Buyer protection</a></li><li><a href="market.html?fit=fits">Parts that fit</a></li></ul></div>
+        <div><h3>Sell</h3><ul><li><a href="sell.html">List a part</a></li><li><a href="garage.html">Your garage</a></li></ul></div>
+        <div><h3>Prices</h3><ul><li><span class="dim">All prices in USD</span></li><li><span class="dim">Ships within the US</span></li></ul></div>
+      </div>
+      <div class="footer__base"><span>© 2026 DRVN</span><span>Concept 19 · One Question</span></div>
+    </div>
+  </footer>
+</body>
+</html>

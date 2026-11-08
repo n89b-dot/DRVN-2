@@ -41,6 +41,13 @@ Format matters only loosely — one line per entry, keep the section headers.
 15 · Glance [family: era-media] — void-black OLED bento widgets (superellipse 24px tiles, separation by surface tone, no borders/shadows), ONE signal red #FF2D1A for live/urgent chips only, Inter 700 giant numerals + mono microtext/key-values, bracketed mono buttons, cosmic orbital imagery + Higgsfield Earth-drift video backdrop, live-activity capsules with ticking countdowns, notification-center-as-commerce, iOS-spring motion; based on a user-supplied reference image
 16 · Livesheet [family: hybrid era-media×artifact — commissioned Glance×Werkbank cross] — warm drafting paper #EFEDE6 + tone-separated 20px tiles (no borders/shadows), IBM Plex Sans/Mono, ONE signal red #F03A20 for live states only, signature = LIVE DIMENSIONS (drafting leader lines/rules whose measured values tick in real time), offers as work-orders, device-spring motion + rule draw-ins, Higgsfield dolly-video car hero under live callouts
 
+17 · Temper [family: material] — graphite #0C0D0F + titanium greys, achromatic at rest; colour ONLY from a thin-film oxide interference function (straw→gold→bronze→plum→violet→cobalt→teal) driven by heat = hover/focus/demand, with a ~1.3s cooling afterglow; Archivo wdth 125 thin display + Martian Mono microdata; procedural Three.js titanium exhaust tip with thin-film ShaderMaterial and cursor "torch"; greyscale photos re-colour where the pointer has been; Higgsfield heat-shimmer video
+18 · First Light [family: emotion] — dawn mist #DCE2E6 → morning #F3EEE6 token interpolation driven by scroll ("scroll is sunrise"), nav clock 05:12→06:40, ONE apricot accent #E8955A, Instrument Serif + Instrument Sans, horizon-led editorial pacing, raw-WebGL fog shader over a crossfaded Higgsfield dawn video (pointer clears fog like breath on glass, sun-rim lighting, burns off on scroll), fog-dissolve reveals
+19 · One Question [family: interaction] — full-bleed ultramarine field #0632B4 matched to the product-photo paper sweep + white only (no second colour), Funnel Display at ~11vw; the site is one question ("What do you drive?") and the answer re-forms every page (fit verdicts, car chip in nav, ?car= param); Three.js 48,000-point car morphing between RX-7/E46/EK9/964 point clouds sampled from Higgsfield SAM-3D meshes, curl-noise travel, burst-on-submit
+20 · Flake [family: material] — primer grey #DEDEDA + ink, Archivo wide (wdth 112) display, NO fixed accent: the active car's paint (Midnight Purple LP2 / World Rally Blue 02C / Championship White NH-0 / Soul Red 46V) drives buttons, dots, chip and a GLSL metallic-flake paint shader (base coat, hashed flake micro-normals, clear-coat Fresnel, procedural softbox, pointer light), paint-code lookup, pointer-tracked sparkle on cards, pill controls, 700ms paint tweens
+21 · Teardown [family: interaction] — cool studio grey #E6E8EA + cobalt #1F3FFF (money/live only), Geist + Geist Mono microlabels, 3px corners, background-removed photographic part cutouts on soft contact shadows; signature = 420vh scroll DISASSEMBLY (parts leave the car one by one, projected price tags, knolled 4×2 end-state), raycast hover, reserve drawer; real image-to-3D GLB wheel viewer (drag to turn)
+22 · Rolling [family: emotion] — sky grey #EDEFF0 + tarmac ink + road-marking yellow #F7C948 (speed/primary only), Familjen Grotesk with italics for moving words/numbers, 4px corners; signature = the ROLLING SHOT: velocity-driven 14-tap directional-blur road plate that pans forever, sharp car cutout that squats under throttle, GLB wheels spinning at road speed, live mph speedo from scroll velocity, three road plates crossfading
+
 ## Generator tally
 <!-- The next batch must draw from the LOWEST rows. "artifact" (any thesis
      compressible to "the product as a [noun]") gets at most one slot per
@@ -48,10 +55,10 @@ Format matters only loosely — one line per entry, keep the section headers.
 | Family | Count |
 |---|---|
 | artifact | 8 |
-| emotion | 1 |
+| emotion | 3 |
 | subculture | 1 |
-| material | 1 |
-| interaction | 1 |
+| material | 3 |
+| interaction | 3 |
 | era-media | 2 |
 | anti-metaphor | 1 |
 | hybrid (commissioned) | 1 |
@@ -74,7 +81,13 @@ DRVN is a marketplace for parts from modified cars: "the home for your modified 
 
 IMPORTANT (clarified 07.2026): provenance/trust-context (what car a part came off, seller credibility, fitment, pairing history) is a SUPPORTING FEATURE — a differentiator worth featuring where it naturally appears, but NOT the mission and NOT the design headline. Concepts must NOT be built around provenance/documentation as their central thesis. Design for the marketplace experience and enthusiast culture first; let trust context appear as well-placed detail, the way ratings appear on any good marketplace without being its identity.
 
+- 2026-10-18 batch (20–22) note: a parallel session was building 17–19 (Temper / First Light / One Question) in this same checkout at the same time and had not recorded them here. A frost-wipe "Cold Start" concept was built and then retired from this batch because First Light already owns "part the fog with the cursor, warm up on scroll". Record every batch here before building the next one.
+
 ## Notes
+- 2026-10-25: five unbuilt theses proposed for Neil to evaluate (A OEM+ [subculture], B Lock-up [subculture], C Field [anti-metaphor], D Try-on [interaction], E Flatbed [era-media]). Not concepts yet; do not count them in the tally until one is built.
+- 17–19 (2026-10-18): five pages each (index, market, part, garage, sell); Higgsfield gpt_image_2_5 stills, Kling 3.0 Turbo videos (10 credits each), SAM-3D car meshes (1 credit each) sampled to Float32 point clouds (c19-pts-*.bin); assets prefixed c17-/c18-/c19-. Published as artifacts: Temper https://claude.ai/artifact/NzUHCt4XNj4AcwFvYUWans · First Light https://claude.ai/artifact/7hZjX6HhrL4nGowV5Qo6zf · One Question https://claude.ai/artifact/Cdx8kJbQ14t2MvFDstk8ed
+- After 17–22 the tally is level at 3 for emotion/material/interaction; next batches should draw from subculture and anti-metaphor (1 each).
+- 20–22 (2026-10-18): single long landing pages, one per concept; Higgsfield gpt_image_2_5 stills at 2k, background removal for cutouts, Meshy image-to-3D for the wheel GLB (30 credits). Assets prefixed flake-/teardown-/rolling- in design-mockups/assets.
 - Batches 04–08 were dashboard-focused; 06–08 also carry marketing home pages; 09–11 are image-led showcase flows.
 - Werkbank (04) is the most-developed concept: 12+ pages, dark mode, mobile menu, purchase flow, settings; extensions must follow its token-only rule.
 - Imagery grammar per concept lives in the genimg scripts; assets are shared in design-mockups/assets/ with c<N>- prefixes.

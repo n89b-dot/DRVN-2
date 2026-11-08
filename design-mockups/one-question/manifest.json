@@ -1,0 +1,18 @@
+{
+  "num": 19,
+  "name": "One Question",
+  "slug": "one-question",
+  "family": "interaction",
+  "thesis": "The whole site is one question — what do you drive? — and everything after is the answer.",
+  "hero_asset": "c19-coilover.jpg",
+  "accent_hex": "#FFFFFF",
+  "thumb_fallback_hex": "#0632B4",
+  "pages": {
+    "index.html": "The question and the living answer: particle car, parts that fit, how buying works, your people, sell CTA",
+    "market.html": "Marketplace for your car: fit, category, price and condition filters, sort, live re-sort on car change",
+    "part.html": "The coilover: turntable video, fit verdict for your car, came-off car, buyer protection, Buy now checkout sheet",
+    "garage.html": "Your garage: ARIA tabs of the cars you've answered with, particle preview, make primary, saved parts, add a car",
+    "sell.html": "Sell flow, one question at a time: what came off your car, price, review, listed"
+  },
+  "showpiece": "Three.js GPU particle car (48k points per car) that re-draws itself nose-to-tail along curl-field paths as you type your car, loosens into a cloud for unknown cars, and flares on submit while the answer flies into the nav chip."
+}

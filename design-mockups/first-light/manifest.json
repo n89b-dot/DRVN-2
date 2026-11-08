@@ -1,0 +1,21 @@
+{
+  "num": 18,
+  "name": "First Light",
+  "slug": "first-light",
+  "family": "emotion",
+  "thesis": "Scroll is sunrise.",
+  "hero_asset": "c18-hero-pass.jpg",
+  "accent_hex": "#E8955A",
+  "thumb_fallback_hex": "#DCE2E6",
+  "pages": {
+    "index.html": "Front door: dawn film under WebGL fog, car picker, listed this morning, the 5:30 club, buyer protection, sell, footer at full sun",
+    "explore.html": "Explore: this morning's feed in the order it happened (builds, listed parts, people to follow, trending), working All/Builds/Parts/Near me filters, rail clock, 5:30 club RSVP",
+    "market.html": "Marketplace: fits-my-car, category, price and condition filters, sort, live result count, listings that resolve out of mist",
+    "part.html": "Listing detail for the KW Clubsport coilovers: gallery, fitment check, seller and the car it came off, buyer protection, checkout drawer",
+    "home.html": "Signed-in home for Theo: post box (photo + car/part + text, adds to feed), Following/For you/Local ARIA tabs, store snapshot with offer and order actions, his garage, parts for his cars",
+    "garage.html": "Theo's profile garage: header with follow, Cars tab (964 featured, Golf R daily, MX-5 project with update and parts counts), Parts tab (his store)",
+    "car.html": "Theo's 1991 964: hero, follow, build log with dawn timestamps, parts on the car, store tab (ARIA tabs)",
+    "sell.html": "Sell flow: photos, part details, fits, price with live payout after the 6% fee, listed state"
+  },
+  "showpiece": "Raw-WebGL fog over the dawn film (domain-warped fbm drifting right to left, a pointer breath trail, silver-lined edges and light shafts toward the sun on the ridge) that burns off with scroll while the headline condenses out of it."
+}

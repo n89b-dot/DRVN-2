@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DRVN · What do you drive?</title>
+  <meta name="description" content="DRVN is the parts marketplace for modified cars. Tell us what you drive and every part tells you whether it fits.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@300..800&family=Funnel+Sans:wght@300..800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="one-question.css">
+  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }</script>
+  <script src="one-question.js" defer></script>
+  <script type="module" src="one-question-particles.js"></script>
+</head>
+<body data-page="index">
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav" data-nav>
+    <a class="wordmark" href="index.html" aria-label="DRVN, home">DRVN<i class="wordmark__caret" aria-hidden="true"></i></a>
+    <nav class="nav__links" aria-label="Main">
+      <a href="market.html">Marketplace</a>
+      <a href="garage.html">Garage</a>
+      <a href="sell.html">Sell</a>
+    </nav>
+    <div class="nav__right">
+      <div class="carchip is-hidden" data-carchip>
+        <button class="carchip__btn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="carpop"><span class="carchip__k">Your car</span><span class="carchip__v" data-carchip-label>What do you drive?</span><span class="carchip__c">change</span></button>
+        <div class="carpop" id="carpop" role="dialog" aria-labelledby="carpop-q"></div>
+      </div>
+      <button class="cartbtn" type="button" data-cart aria-label="Cart, 0 items"><span class="cartbtn__label">Cart</span><span class="cartbtn__n">0</span></button>
+      <button class="menubtn" type="button" aria-expanded="false" aria-controls="mnav">Menu</button>
+    </div>
+  </header>
+  <nav class="mnav" id="mnav" aria-label="Mobile">
+    <a href="market.html">Marketplace</a>
+    <a href="garage.html">Garage</a>
+    <a href="sell.html">Sell your parts</a>
+  </nav>
+
+  <main id="main">
+    <section class="hero" data-hero aria-labelledby="q">
+      <div class="hero__floor" aria-hidden="true"></div>
+      <div class="stage" data-stage="hero" data-frame="0.71,0.6,0.54" data-frame-sm="0.5,0.45,0.9" aria-hidden="true"></div>
+      <div class="hero__inner">
+        <form class="ask" data-ask novalidate>
+          <h1 class="q" id="q"><label for="answer"><span class="q__line">What do</span> <span class="q__line">you drive?</span></label></h1>
+          <div class="ans" data-ans>
+            <input id="answer" class="ans__input" type="text" name="car" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="34" placeholder="Type your car, e.g. RX-7" aria-describedby="answer-note">
+            <div class="ans__ghost" aria-hidden="true"><span class="ans__pre"></span><i class="ans__caret"></i><span class="ans__post"></span><span class="ans__sfx"></span><span class="ans__idle"></span></div>
+          </div>
+          <div class="match" data-match></div>
+          <div class="hero__actions">
+            <button class="btn btn--primary" type="submit" data-submit>Show me parts <span class="btn__arrow" aria-hidden="true">→</span></button>
+            <button class="tlink tlink--quiet" type="button" data-browse>Just browsing</button>
+          </div>
+          <p class="hero__note" id="answer-note"><span><strong>DRVN is the parts marketplace for modified cars.</strong> Tell us yours and every part tells you whether it fits.</span> <a class="tlink" href="sell.html">Sell your parts <span class="btn__arrow" aria-hidden="true">→</span></a></p>
+        </form>
+      </div>
+      <a class="hero__scroll" href="#answer">Or just look around<i aria-hidden="true"></i></a>
+    </section>
+
+    <p class="sr-only" aria-live="polite" data-live></p>
+
+    <section class="section" id="answer" aria-labelledby="answer-h">
+      <div class="wrap">
+        <div class="section__head">
+          <div>
+            <p class="eyebrow" data-a-eyebrow>On DRVN this week</p>
+            <h2 class="h1" id="answer-h" tabindex="-1" data-a-title>Parts on DRVN this week</h2>
+            <p class="lead" data-a-lead>Fresh off members’ cars.</p>
+          </div>
+          <div class="section__aside">
+            <p class="count-line" data-a-count></p>
+            <a class="tlink" href="market.html" data-a-all>See the whole marketplace <span class="btn__arrow" aria-hidden="true">→</span></a>
+          </div>
+        </div>
+        <div class="grid" data-a-grid></div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="how-h">
+      <div class="wrap">
+        <div class="section__head">
+          <div>
+            <p class="eyebrow">How buying works</p>
+            <h2 class="h2" id="how-h">Buy like you know the seller.<br><span class="dim">Because now you do.</span></h2>
+          </div>
+        </div>
+        <div class="how">
+          <div class="how__step reveal">
+            <span class="how__when">Before you buy</span>
+            <h3 class="h3">Filtered to your <span data-carword="car">car</span>.</h3>
+            <p>Every listing is checked against what you drive: fits, fits with an adapter, or doesn’t. No forum archaeology at 1am.</p>
+          </div>
+          <div class="how__step reveal" style="--d:90ms">
+            <span class="how__when">When you pay</span>
+            <h3 class="h3">Your money waits with us.</h3>
+            <p>Pay at checkout and we hold it. The seller can see it’s there; they can’t touch it until the part is in your hands.</p>
+          </div>
+          <div class="how__step reveal" style="--d:180ms">
+            <span class="how__when">2 days after delivery</span>
+            <h3 class="h3">Then the seller gets paid.</h3>
+            <p>Two days to open the box, offer it up, and tell us if it isn’t as described. If it is, it’s theirs. If it isn’t, it’s yours back.</p>
+          </div>
+        </div>
+        <div class="protect-banner reveal">
+          <p><strong>Buyer protection on every order.</strong>Included, not an add-on. And you don’t need an account to buy: just an email for tracking.</p>
+          <a class="btn btn--ghost" href="part.html?id=bc-br-e46">See a listing <span class="btn__arrow" aria-hidden="true">→</span></a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="people-h">
+      <div class="wrap">
+        <div class="section__head">
+          <div>
+            <p class="eyebrow">Your people</p>
+            <h2 class="h2" id="people-h" data-people-title>Everyone here has an answer</h2>
+            <p class="lead" data-people-lead>Members keep a garage of their cars and sell the parts that come off.</p>
+          </div>
+          <div class="section__aside"><a class="tlink" href="garage.html">Start your garage <span class="btn__arrow" aria-hidden="true">→</span></a></div>
+        </div>
+        <div class="people" data-people></div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="sell-h">
+      <div class="wrap sellcta">
+        <div>
+          <p class="eyebrow">Selling</p>
+          <h2 class="h1" id="sell-h" data-sell-title>Took something off your car?</h2>
+          <p class="lead" data-sell-lead>Someone with the same car is hunting for it right now.</p>
+          <div class="hero__actions">
+            <a class="btn btn--primary" href="sell.html">Sell your parts <span class="btn__arrow" aria-hidden="true">→</span></a>
+            <span class="dim" style="font-size:var(--fs-sm)">Paid 2 days after delivery. 5% fee, nothing up front.</span>
+          </div>
+        </div>
+        <div class="sellcta__img reveal"><img src="../assets/c19-steering.jpg" alt="A deep-dish suede steering wheel with a quick release, the kind of thing that comes off one car and makes another" loading="lazy" width="896" height="1120"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <p class="footer__q"><a href="#q">What do you drive?</a></p>
+      <div class="footer__grid">
+        <div><h3>DRVN</h3><p>The parts marketplace for modified cars, with the car in the middle. Built by people who still have a box of old intake parts in the garage.</p></div>
+        <div><h3>Buy</h3><ul><li><a href="market.html">Marketplace</a></li><li><a href="part.html?id=bc-br-e46">Buyer protection</a></li><li><a href="market.html?fit=fits">Parts that fit</a></li></ul></div>
+        <div><h3>Sell</h3><ul><li><a href="sell.html">List a part</a></li><li><a href="garage.html">Your garage</a></li></ul></div>
+        <div><h3>Prices</h3><ul><li><span class="dim">All prices in USD</span></li><li><span class="dim">Ships within the US</span></li></ul></div>
+      </div>
+      <div class="footer__base"><span>© 2026 DRVN</span><span>Concept 19 · One Question</span></div>
+    </div>
+  </footer>
+</body>
+</html>

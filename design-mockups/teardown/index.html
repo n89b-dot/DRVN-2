@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRVN · Teardown</title>
+<meta name="description" content="Concept: pull the car apart. Scroll disassembles a build into the parts coming off it, and every part that comes off is for sale.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="teardown.css">
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="mark" href="#top">DRVN</a>
+    <nav class="nav__links" aria-label="Primary">
+      <a href="#teardowns">Explore</a>
+      <a href="#stage">Marketplace</a>
+      <a href="#start">Selling</a>
+    </nav>
+    <div class="nav__right">
+      <a class="btn btn--ghost btn--sm" href="#start">Sign in</a>
+      <a class="btn btn--ink btn--sm" href="#start">Sell a part</a>
+      <button class="btn btn--ghost btn--sm nav__menu" id="menuBtn" aria-expanded="false">Menu</button>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="stage" id="stage" aria-label="A Toyota Supra being taken apart as you scroll">
+    <div class="stage__pin" id="pin">
+      <div class="stage__floor" aria-hidden="true"></div>
+      <div class="stage__fallback"><img src="../assets/teardown-cut-car.png" alt="A white Toyota Supra in side profile"></div>
+      <canvas id="scene" aria-hidden="true"></canvas>
+
+      <div class="tags" id="tags" aria-hidden="true"></div>
+
+      <div class="hud">
+        <div class="hud__top">
+          <div class="hud__car"><span class="mono">Teardown in progress</span><b>1997 Toyota Supra RZ</b><span style="font-size:13px;color:var(--ink-2)">@danbrookes · started 3 October</span></div>
+          <div class="hud__count"><span class="mono">Parts off</span><b class="num"><span id="offCount">0</span> of 8</b><div class="hud__bar"><i id="offBar"></i></div></div>
+        </div>
+
+        <div class="hud__title" id="title">
+          <h1 aria-live="polite">
+            <span class="is-on">Pull it apart.</span>
+            <span>Everything that comes off</span>
+            <span>is for sale.</span>
+          </h1>
+          <p id="titleP">DRVN is where modified cars get taken apart in public. Follow a teardown and buy the parts the moment they come off.</p>
+          <div class="hud__cta">
+            <a class="btn btn--ink" href="#teardowns">Follow a teardown</a>
+            <a class="btn btn--ghost" href="#start">Start your own</a>
+          </div>
+        </div>
+
+        <div class="tag tag--total" id="total"><span class="mono">Listed so far</span><b id="totalLabel">0 parts</b><span class="price" id="totalPrice">£0</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="teardowns" aria-labelledby="tH">
+    <div class="wrap">
+      <div class="head reveal">
+        <div>
+          <h2 id="tH">Teardowns in progress</h2>
+          <p class="lede">Three builds coming apart this week. Follow one and you hear the moment a part is listed, before it reaches the marketplace.</p>
+        </div>
+        <a class="btn btn--ghost" href="#stage">All teardowns</a>
+      </div>
+      <div class="tears reveal" id="tears"></div>
+    </div>
+  </section>
+
+  <section class="section" id="angles" aria-labelledby="aH">
+    <div class="wrap viewer">
+      <div class="viewer__stage reveal" id="viewer">
+        <img src="../assets/teardown-src-wheel.png" alt="A bronze forged wheel">
+        <canvas id="wheel"></canvas>
+        <span class="mono viewer__hint" id="hint">Drag to turn</span>
+      </div>
+      <div class="reveal">
+        <h2 id="aH">Every part, from every angle.</h2>
+        <p class="lede">Photograph a part from a few sides and DRVN builds the model. Buyers turn it in their hands before they ask a single question.</p>
+        <div class="viewer__spec">
+          <div><span class="mono">Part</span><span>Volk TE37 18×10 ET25</span></div>
+          <div><span class="mono">Off</span><span>1997 Toyota Supra RZ</span></div>
+          <div><span class="mono">Condition</span><span>Used, two light kerb marks</span></div>
+          <div><span class="mono">Price, set of four</span><span class="price">£2,800</span></div>
+        </div>
+        <div style="margin-top:28px;display:flex;gap:10px"><button class="btn btn--cobalt" data-open="wheel">Reserve the set</button><a class="btn btn--ghost" href="#stage">Back to the teardown</a></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="start" aria-labelledby="sH">
+    <div class="wrap">
+      <div class="start reveal">
+        <div>
+          <h2 id="sH">Start a teardown.</h2>
+          <p>Name the car and what is coming off it. Your followers get told as each part is listed, and the listings inherit the car's fitment so you never type it twice.</p>
+        </div>
+        <form id="startForm">
+          <div class="field"><label for="sCar">Car</label><input id="sCar" type="text" placeholder="1999 Nissan Skyline GT-R R34"></div>
+          <div class="field"><label for="sWhat">What is coming off first</label><input id="sWhat" type="text" placeholder="Wheels, coilovers, the turbo"></div>
+          <div class="field"><label for="sWhen">When</label><select id="sWhen"><option>This weekend</option><option>Over the next month</option><option>Already off, in boxes</option></select></div>
+          <button class="btn btn--cobalt btn--block" id="startBtn" type="submit">Open the garage</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="mark" href="#top">DRVN</a>
+    <nav aria-label="Footer"><a href="#teardowns">Explore</a><a href="#stage">Marketplace</a><a href="#start">Selling</a><a href="#top">Help</a></nav>
+    <span>The home for your car and its build.</span>
+  </div>
+</footer>
+
+<div class="drawer" id="drawer" hidden>
+  <div class="drawer__scrim" data-close></div>
+  <aside class="drawer__panel" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+    <div class="drawer__top"><span class="mono" id="dOff">Off the Supra</span><button class="drawer__close" data-close aria-label="Close">×</button></div>
+    <div class="drawer__img"><img id="dImg" src="" alt=""></div>
+    <h3 id="dTitle"></h3>
+    <div class="price" id="dPrice"></div>
+    <div class="kv">
+      <div><span class="mono">Fits</span><span id="dFits"></span></div>
+      <div><span class="mono">Condition</span><span id="dCond"></span></div>
+      <div><span class="mono">Came off</span><span id="dWhen"></span></div>
+      <div><span class="mono">Ships from</span><span>Leeds, UK · 2 days</span></div>
+    </div>
+    <button class="btn btn--cobalt btn--block drawer__buy" id="dBuy">Reserve for 24 hours</button>
+    <div class="drawer__done" id="dDone"></div>
+  </aside>
+</div>
+
+<script type="module" src="teardown.js"></script>
+</body>
+</html>

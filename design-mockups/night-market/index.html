@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0E131B">
+<title>DRVN · The parts marketplace for modified cars</title>
+<meta name="description" content="Night Market: DRVN in First Light's night palette. A static design mockup.">
+<script>try { if (localStorage.getItem('nm-auth') === '"in"') document.documentElement.dataset.auth = 'in'; } catch (e) {}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap">
+<link rel="stylesheet" href="night-market.css">
+<script src="night-market.js" defer></script>
+</head>
+<body data-page="landing" data-nav="landing">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3 4h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.2"/><circle cx="9.5" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></symbol>
+  <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6.5 3.5h11v17l-5.5-4-5.5 4z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6z"/><path d="m8.8 12 2.2 2.2 4.4-4.4"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24"><path d="M5.5 16.5H4a1 1 0 0 1-1-1v-3l2-4.5a2 2 0 0 1 1.8-1.2h10.4a2 2 0 0 1 1.8 1.2l2 4.5v3a1 1 0 0 1-1 1h-1.5M10 16.5h4M3.5 12h17"/><circle cx="7.8" cy="16.5" r="2"/><circle cx="16.2" cy="16.5" r="2"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></symbol>
+  <symbol id="i-zoom" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4h11l-2 4 2 4H5"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-all" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></symbol>
+  <symbol id="i-perf" viewBox="0 0 24 24"><path d="M4.6 17.5a8 8 0 1 1 14.8 0"/><path d="m12 13.5 4-4.5"/><circle cx="12" cy="13.5" r="1.3"/><path d="M12 6.5v1.5M6.8 9l1 1M17.2 9l-1 1"/></symbol>
+  <symbol id="i-engine" viewBox="0 0 24 24"><path d="M3.5 10v6M3.5 13h2.5M6 9.5h3V7h6v2.5h2l2 2.5h1.5v4H19l-2 2.5H9L6 16z"/><path d="M10 7V5.5h4V7"/></symbol>
+  <symbol id="i-body" viewBox="0 0 24 24"><path d="M3 15.5v-2.5l2.5-1 2.8-3.4A2 2 0 0 1 9.9 8h5.4a2 2 0 0 1 1.5.7L19.5 12l1.5.6v2.9a1 1 0 0 1-1 1h-1.5M5.5 16.5H4a1 1 0 0 1-1-1M10 16.5h4M5.5 12h14"/><circle cx="7.8" cy="16.5" r="2"/><circle cx="16.2" cy="16.5" r="2"/></symbol>
+  <symbol id="i-seat" viewBox="0 0 24 24"><path d="M8.2 3.5h2.6a1.2 1.2 0 0 1 1.2 1.4L11 12.5h5.5a2 2 0 0 1 2 2v1.5H9.6a2 2 0 0 1-2-1.7L6.4 5.8a2 2 0 0 1 1.8-2.3z"/><path d="M10 16l-1.5 4.5M16.5 16l1.5 4.5"/></symbol>
+  <symbol id="i-brake" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M15.2 4.7a8 8 0 0 1 4.1 4.4l-2.7 1.1a5 5 0 0 0-2.5-2.7z"/></symbol>
+  <symbol id="i-wheel" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2"/><path d="M12 3.5V10M12 14v6.5M3.9 9.4l6.2 2M13.9 12.6l6.2 2M6.8 18.9l4-5.3M13.2 10.4l4-5.3"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11 12 4l8 7v8.5a1 1 0 0 1-1 1h-4.5V15h-5v5.5H5a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></symbol>
+  <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5 8h14l-1 12.5H6z"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/></symbol>
+  <symbol id="i-garage" viewBox="0 0 24 24"><path d="M3.5 20V9L12 4l8.5 5v11"/><path d="M7 20v-7h10v7M7 16.5h10"/></symbol>
+  <symbol id="i-agent" viewBox="0 0 24 24"><rect x="4.5" y="7" width="15" height="12" rx="3"/><path d="M12 7V4M9 12.5v1M15 12.5v1M9.5 16.5h5"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1 1 0 0 1 0 1.4l-7 7a1 1 0 0 1-1.4 0z"/><circle cx="8" cy="8" r="1.5"/></symbol>
+  <symbol id="i-comment" viewBox="0 0 24 24"><path d="M4.5 19 5.7 15.3A7.2 7.2 0 1 1 8.8 18z"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4 18 18M6 18l1.6-1.6M16.4 7.6 18 6"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 19.5s-7.5-4.4-7.5-9.8A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.4c0 5.4-7.5 9.8-7.5 9.8z"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s6.5-5.8 6.5-11a6.5 6.5 0 0 0-13 0c0 5.2 6.5 11 6.5 11z"/><circle cx="12" cy="10" r="2.3"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V4m0 0L8 8m4-4 4 4M5 13v6.5h14V13"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3.8 2.5 5.2 5.6.7-4.1 3.9 1 5.6-5-2.7-5 2.7 1-5.6-4.1-3.9 5.6-.7z"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3.5L9 5.5h6L16.5 8H20v11H4z"/><circle cx="12" cy="13.2" r="3.2"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4.5h4.5v15H14M10 8l-4 4 4 4M6 12h9"/></symbol>
+</svg>
+<a class="skip" href="#main">Skip to content</a>
+<div class="sky" aria-hidden="true"></div>
+
+<header class="hdr hdr--out">
+  <div class="wrap hdr__in">
+    <a class="brand" href="index.html" aria-label="DRVN, builds and parts. Home"><span class="brand__mark">DRVN<span>.</span></span><span class="brand__tag">Builds and parts</span></a>
+    <form class="hsearch" action="marketplace.html" method="get" role="search">
+      <label class="sr" for="hq">Search DRVN</label>
+      <svg class="ico" aria-hidden="true"><use href="#i-search"/></svg>
+      <input id="hq" name="q" type="search" placeholder="Search DRVN" autocomplete="off">
+    </form>
+    <nav class="hnav" aria-label="Main">
+      <a href="explore.html" data-navkey="explore">Explore</a>
+      <a href="marketplace.html" data-navkey="marketplace">Marketplace</a>
+    </nav>
+    <div class="htools">
+      <button class="iconbtn" type="button" data-open="cart" data-cart-label aria-label="Cart, 0 items"><svg class="ico" aria-hidden="true"><use href="#i-cart"/></svg><span class="badge" data-cart-count hidden>0</span></button>
+      <a class="hsignin" href="home.html">Sign in</a>
+      <a class="btn btn--sun btn--sm hjoin" href="#" data-soon="Joining isn't part of this mockup. Sign in to see the member side.">Join DRVN</a>
+      <button class="iconbtn hmenu" type="button" data-open="menu" aria-label="Menu"><svg class="ico" aria-hidden="true"><use href="#i-menu"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<aside class="side" aria-label="Member navigation">
+  <a class="brand" href="index.html" aria-label="DRVN home"><span class="brand__mark">DRVN<span>.</span></span></a>
+  <nav class="snav" aria-label="Main">
+    <a href="home.html" data-navkey="home"><svg class="ico" aria-hidden="true"><use href="#i-home"/></svg><span>Home</span></a>
+    <a href="explore.html" data-navkey="explore"><svg class="ico" aria-hidden="true"><use href="#i-compass"/></svg><span>Explore</span></a>
+    <a href="marketplace.html" data-navkey="marketplace"><svg class="ico" aria-hidden="true"><use href="#i-bag"/></svg><span>Marketplace</span></a>
+    <a href="garage.html" data-navkey="garage"><svg class="ico" aria-hidden="true"><use href="#i-garage"/></svg><span>Garage</span></a>
+    <a href="#" data-soon="The agent isn't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-agent"/></svg><span>Agent</span></a>
+    <a href="#" data-soon="Selling (orders, offers and payouts) isn't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg><span>Selling</span></a>
+    <a href="#" data-soon="Messages aren't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-comment"/></svg><span>Messages</span><span class="snav__n"><span class="sr">unread: </span>1</span></a>
+    <span class="snav__sep" aria-hidden="true"></span>
+    <a href="profile.html" data-navkey="profile"><svg class="ico" aria-hidden="true"><use href="#i-user"/></svg><span>Profile</span></a>
+    <a href="settings.html" data-navkey="settings"><svg class="ico" aria-hidden="true"><use href="#i-settings"/></svg><span>Settings</span></a>
+  </nav>
+  <div class="side__foot">
+    <a class="btn btn--sun btn--sm" href="#" data-soon="The sell flow isn't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg>List a part</a>
+    <a class="me" href="profile.html"><img class="av" src="img/av-marisol.jpg" alt=""><span><b>Marisol Vega</b><span>@apexmarisol</span></span></a>
+  </div>
+</aside>
+
+<header class="topbar">
+  <div class="wrap topbar__in">
+    <a class="brand" href="index.html" aria-label="DRVN home"><span class="brand__mark">DRVN<span>.</span></span></a>
+    <form class="hsearch" action="marketplace.html" method="get" role="search">
+      <label class="sr" for="tq">Search DRVN</label>
+      <svg class="ico" aria-hidden="true"><use href="#i-search"/></svg>
+      <input id="tq" name="q" type="search" placeholder="Search DRVN" autocomplete="off">
+    </form>
+    <div class="topbar__tools">
+      <a class="btn btn--sun btn--sm" href="home.html#compose"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg>Post</a>
+      <button class="iconbtn" type="button" data-open="cart" data-cart-label aria-label="Cart, 0 items"><svg class="ico" aria-hidden="true"><use href="#i-cart"/></svg><span class="badge" data-cart-count hidden>0</span></button>
+      <button class="iconbtn" type="button" data-open="notifs" aria-label="Notifications, 2 unread"><svg class="ico" aria-hidden="true"><use href="#i-bell"/></svg><span class="badge">2</span></button>
+      <button class="iconbtn tb-saved" type="button" data-open="savedDlg" aria-label="Saved"><svg class="ico" aria-hidden="true"><use href="#i-bookmark"/></svg></button>
+      <button class="iconbtn hmenu" type="button" data-open="menu" aria-label="Menu"><svg class="ico" aria-hidden="true"><use href="#i-menu"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="hero" data-hero aria-labelledby="heroTitle">
+    <div class="hero__media" aria-hidden="true">
+      <img class="hero__poster" src="img/hero-night.jpg" alt="" width="2688" height="1520" fetchpriority="high">
+      <video class="hero__video" data-film muted playsinline preload="none" poster="img/hero-night.jpg"><source src="img/hero-night.mp4" type="video/mp4"></video>
+      <video class="hero__video" data-film muted playsinline preload="none"><source src="img/hero-night.mp4" type="video/mp4"></video>
+      <div class="hero__haze"></div>
+      <canvas class="hero__fog" data-fog></canvas>
+    </div>
+    <div class="hero__scrim" aria-hidden="true"></div>
+    <div class="hero__body wrap">
+      <p class="label hero__eyebrow" data-emerge>Buy and sell parts off modified cars</p>
+      <h1 class="hero__title" id="heroTitle"><span class="w" data-emerge>The</span> <span class="w" data-emerge>parts</span> <span class="w" data-emerge>marketplace</span> <em><span class="w" data-emerge>for</span> <span class="w" data-emerge>modified</span> <span class="w" data-emerge>cars.</span></em></h1>
+      <p class="hero__lead" data-emerge>Sell what comes off your car. Shop parts off cars like yours, each one shown with the car it came from.</p>
+      <div class="hero__actions" data-emerge>
+        <a class="btn btn--sun" href="#drive">Shop parts for my car</a>
+        <a class="btn btn--glass" href="#sell">Sell my parts</a>
+      </div>
+    </div>
+    <div class="strip" aria-labelledby="stripH">
+      <div class="wrap">
+        <p class="label" id="stripH">For sale now, off members' cars</p>
+        <ul id="strip"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="ld wrap" id="drive" aria-labelledby="driveH">
+    <div class="ld-cols pick">
+      <div class="pick__text">
+        <p class="label">Your car</p>
+        <h2 class="ld-h2" id="driveH">What do you <em>drive?</em></h2>
+        <p class="ld-lead">Tell us once and every part on DRVN answers the only question that matters: will it go on my car? You'll see the ones that fit, and the ones that came off a car like yours.</p>
+        <form class="pick__form" id="pickForm">
+          <div class="pick__line">
+            <label for="pickCar">I drive a</label>
+            <span class="pick__sel"><select id="pickCar" aria-describedby="pickNote"></select></span>
+          </div>
+          <div class="pick__go">
+            <button class="btn btn--sun" type="submit" id="pickGo">Show parts</button>
+            <a class="qlink" href="marketplace.html">Or browse everything</a>
+          </div>
+          <p class="pick__note" id="pickNote" aria-live="polite"></p>
+        </form>
+        <div class="club">
+          <p class="label">Cars with the most parts on DRVN</p>
+          <ul class="carlinks" id="carlinks"></ul>
+        </div>
+      </div>
+      <figure class="pick__photo">
+        <div class="ld-photo"><img id="pickImg" src="img/cars/lucille-e46-m3.jpg" alt="" width="1400" height="932"></div>
+        <figcaption class="ld-cap" id="pickCap"></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="ld ld--tight wrap" aria-labelledby="freshH">
+    <div class="ld-head">
+      <div>
+        <p class="label">New</p>
+        <h2 class="ld-h2" id="freshH">Listed <em>tonight</em></h2>
+        <p class="ld-lead">Fresh off members' cars. Every part shows the car it came from, and who fitted it.</p>
+      </div>
+      <a class="qlink" href="marketplace.html">All parts</a>
+    </div>
+    <div class="grid" id="fresh" data-flush></div>
+  </section>
+
+  <section class="ld" aria-labelledby="upgH">
+    <div class="wrap ld-cols upg">
+      <figure class="upg__photo">
+        <div class="ld-photo"><img src="img/cars/landing-rx7.jpg" alt="A red modified Mazda RX-7 in a workshop at dusk. Laid out on a mat in front of it are the parts that came off: two wheels, an intake, a rear wing, an exhaust, a pair of coilovers and a steering wheel." width="2000" height="1131"></div>
+        <figcaption class="ld-cap">Everything that came off one RX-7: wheels, intake, wing, exhaust, coilovers and the steering wheel. Each one is exactly what someone else's car needs.</figcaption>
+      </figure>
+      <div class="upg__text">
+        <p class="label">Selling and buying</p>
+        <h2 class="ld-h2" id="upgH">Every upgrade leaves <em>a part behind.</em></h2>
+        <p class="ld-lead">Modified cars keep changing. The part you took off is exactly what someone else's car needs.</p>
+        <div class="seqs">
+          <section class="seq" aria-labelledby="seqSell">
+            <h3 class="label" id="seqSell">Selling — turn what came off into money</h3>
+            <ol>
+              <li><span>Fit the new part.</span></li>
+              <li><span>List the old one in a minute. Add your car once and every part you sell carries it, so buyers see where it came from.</span></li>
+              <li><span>People who follow your car see the part first.</span></li>
+              <li><span><strong>Get paid two days after it's delivered.</strong> <strong>Free to list, 10% when it sells.</strong></span></li>
+            </ol>
+          </section>
+          <section class="seq" aria-labelledby="seqBuy">
+            <h3 class="label" id="seqBuy">Buying — find parts off cars like yours</h3>
+            <ol>
+              <li><span>Tell us what you drive.</span></li>
+              <li><span>Browse parts that came off the same car, or one like it.</span></li>
+              <li><span>See the car each part came off, and the person who fitted it.</span></li>
+              <li><span><strong>Pay through DRVN.</strong> The seller isn't paid until it arrives, and you don't need an account to buy.</span></li>
+            </ol>
+          </section>
+        </div>
+        <div class="ld-acts"><a class="btn btn--sun" href="#sell">Sell my parts</a><a class="btn btn--quiet" href="marketplace.html">Shop parts</a></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ld wrap" aria-labelledby="storyH">
+    <div class="ld-head">
+      <div>
+        <p class="label">From the garages</p>
+        <h2 class="ld-h2" id="storyH">Every part comes <em>with its car.</em></h2>
+        <p class="ld-lead">See what it was fitted to, who fitted it and what else they've changed, before you buy.</p>
+      </div>
+      <a class="qlink" href="explore.html">See what everyone's building</a>
+    </div>
+    <div class="ld-cols stories">
+      <article class="story story--wide">
+        <figure class="story__photo"><div class="ld-photo"><img src="img/posts/lucille-e46-dyno.jpg" alt="The silver E46 M3, Lucille, strapped to a dyno in a workshop while a technician watches the laptop" width="1400" height="1044"></div></figure>
+        <div class="story__body">
+          <div class="story__who"><img class="av" src="img/av-marisol.jpg" alt="" width="36" height="36"><span><a class="story__name qlink" href="profile.html">Marisol Vega</a><span class="story__handle">@apexmarisol · Austin, TX</span></span></div>
+          <p class="label story__time">Aug 2026 · Update</p>
+          <h3 class="story__title">Lucille on the rollers — baseline before headers</h3>
+          <p class="story__text">Numbers first, mods second. Baseline dyno day for the E46, a week before the brakes came off for the enduro.</p>
+          <p class="story__on">On <a class="qlink" href="profile.html?tab=garage">Lucille, 2003 BMW M3</a></p>
+          <a class="row row--link offpart" href="listing.html?id=big-brake-kit"><span class="row__thumb row__thumb--sq"><img src="img/brakes.jpg" alt=""></span><span><span class="row__meta">Came off it</span><span class="row__title">Big brake kit — 355mm rotors, 4-pot calipers</span></span><span class="row__price">$1,450</span></a>
+        </div>
+      </article>
+      <article class="story story--a">
+        <figure class="story__photo"><div class="ld-photo"><div class="compare"><img src="img/posts/kaito-s15-before.jpg" alt="Before: the white S15 Silvia on stock wheels at stock height" width="1400" height="1044"><img class="compare__after" src="img/posts/kaito-s15-after.jpg" alt="After: the same car lowered on bronze wheels" width="1400" height="1044"><span class="compare__line" aria-hidden="true"></span><span class="compare__tag compare__tag--b" aria-hidden="true">Before</span><span class="compare__tag compare__tag--a" aria-hidden="true">After</span><input type="range" min="0" max="100" value="50" aria-label="Before and after, Shirayuki's coilovers: slide to compare"></div></div></figure>
+        <div class="story__body">
+          <div class="story__who"><img class="av" src="img/av-kaito.jpg" alt="" width="36" height="36"><span><a class="story__name qlink" href="explore.html?type=builders">Kaito Nakamura</a><span class="story__handle">1 car · 3 updates</span></span></div>
+          <p class="label story__time">1mo ago · Update</p>
+          <h3 class="story__title">Coilovers in — Shirayuki finally sits right</h3>
+          <p class="story__text">HKS Hipermax in, alignment done, wheel gap gone. Drag the line to see the difference.</p>
+          <p class="story__on">On <a class="qlink" href="explore.html?type=builds">Shirayuki, 1999 Nissan Silvia</a></p>
+          <div class="row offpart offpart--soon"><span class="row__thumb row__thumb--sq"><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg></span><span><span class="row__meta">Came off it</span><span class="row__title">Factory springs and dampers — not listed yet</span></span><button class="btn btn--quiet btn--sm followbtn" type="button" data-follow="kaito" aria-pressed="false">Follow</button></div>
+        </div>
+      </article>
+      <article class="story story--b">
+        <figure class="story__photo"><div class="ld-photo"><img src="img/posts/felix-gt3-pit.jpg" alt="Rear three-quarter view of Felix's yellow 992 GT3, Signal, in the pit lane" width="1400" height="1050"></div></figure>
+        <div class="story__body">
+          <div class="story__who"><img class="av" src="img/av-felix.jpg" alt="" width="36" height="36"><span><a class="story__name qlink" href="explore.html?type=builders">Felix Brandt</a><span class="story__handle">Cologne, DE · 7 sold</span></span></div>
+          <p class="label story__time">1mo ago · Update</p>
+          <h3 class="story__title">Chasing the Cup car — lap day notes</h3>
+          <p class="story__text">Signal's third track day: new PB and a masterclass from a 992 Cup up ahead.</p>
+          <p class="story__on">On <a class="qlink" href="explore.html?type=builds">Signal, 2022 Porsche 911 GT3</a></p>
+          <div class="rows">
+            <a class="row row--link offpart" href="listing.html?id=gt3-seats"><span class="row__thumb row__thumb--sq"><img src="img/seats-gt3.jpg" alt=""></span><span><span class="row__meta">Came off it</span><span class="row__title">992 GT3 full bucket seats, carbon (pair)</span></span><span class="row__price">$11,500</span></a>
+            <a class="row row--link offpart" href="listing.html?id=gt3-wheels"><span class="row__thumb row__thumb--sq"><img src="img/wheels-gt3.jpg" alt=""></span><span><span class="row__meta">Came off it</span><span class="row__title">Centre-lock wheels with Cup 2 tyres</span></span><span class="row__price">$5,200</span></a>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="ld hold" aria-labelledby="holdH">
+    <div class="wrap ld-cols">
+      <div class="hold__head">
+        <p class="label">Buying</p>
+        <h2 class="ld-h2" id="holdH">We hold the money. <em>You open the box.</em></h2>
+        <p class="ld-lead">Every order goes through DRVN, with payments by Stripe and buyer protection built in. Nobody is paid until the part has arrived and you've had time to look at it.</p>
+        <p class="hold__link"><a class="tlink" href="listing.html#protH">How buyer protection works</a></p>
+      </div>
+      <ol class="hold__steps">
+        <li class="hstep"><p class="hstep__when">First</p><h3>Find what fits</h3><p>Filter by your car. Every listing shows the car it came off, and its condition is recorded at sale.</p></li>
+        <li class="hstep"><p class="hstep__when">Then</p><h3>Pay into the hold</h3><p>Payments by Stripe. Your money sits with DRVN, not the seller. No account needed to buy.</p></li>
+        <li class="hstep"><p class="hstep__when">When it lands</p><h3>Open the box</h3><p>You have 30 days after delivery to report a problem: it never arrived, arrived damaged, isn't as described, or is the wrong item.</p></li>
+        <li class="hstep"><p class="hstep__when">Two days after delivery</p><h3>The seller is paid</h3><p>Unless you've reported a problem. Not a minute before.</p></li>
+      </ol>
+      <ul class="hold__facts" aria-label="Every order">
+        <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Payments by Stripe</li>
+        <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Seller paid after delivery</li>
+        <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>30-day problem window</li>
+        <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Condition recorded at sale</li>
+        <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>No account needed to buy</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="ld wrap" id="sell" aria-labelledby="sellH">
+    <div class="ld-cols closer">
+      <div class="closer__text">
+        <p class="label">Selling</p>
+        <h2 class="ld-h2" id="sellH">What comes off the car <em>shouldn't sit in the garage.</em></h2>
+        <p class="ld-lead">List it in a minute. Say which car it came off, and it goes in front of the people who follow that car, and the people who drive one.</p>
+        <ul class="terms">
+          <li>Free to list, 10% when it sells. Nothing before.</li>
+          <li>Paid two days after it's delivered.</li>
+          <li>Your store lives on your profile, next to the car.</li>
+        </ul>
+        <div class="shelf2">
+          <h3 class="label">What's on the shelf in your garage? Recently sold:</h3>
+          <dl class="ledger">
+            <div><dt><span class="label">Sold</span></dt><dd class="ledger__what"><b>E46 M3 front sport seats, black leather, pair</b><small>Off a 2003 BMW M3</small></dd><dd class="ledger__price">$950</dd></div>
+            <div><dt><span class="label">Sold</span></dt><dd class="ledger__what"><b>Rays bronze 17x9 +22 square set, tires included</b><small>Off a 1999 Nissan Silvia</small></dd><dd class="ledger__price">$1,680</dd></div>
+            <div><dt><span class="label">Sold</span></dt><dd class="ledger__what"><b>Thule roof box + rack, fits most wagons</b><small>Off a 1996 Volvo 850R</small></dd><dd class="ledger__price">$220</dd></div>
+          </dl>
+        </div>
+        <div class="ld-acts"><a class="btn btn--sun" href="garage.html">Sell my parts</a><a class="btn btn--quiet" href="#drive">Shop parts for my car</a></div>
+      </div>
+      <figure class="closer__photo">
+        <div class="ld-photo"><img src="img/posts/lucille-marisol-post-brakes.jpg" alt="A new brake rotor and caliper on Lucille's front hub, wheel off, gloves and brake cleaner on the floor" width="1400" height="932"></div>
+        <figcaption class="ld-cap">New rotors on Lucille before the enduro. The big kit that came off went up the same evening.</figcaption>
+      </figure>
+    </div>
+  </section>
+</main>
+
+<footer class="ftr">
+  <div class="wrap ftr__in">
+    <p class="label">DRVN — The parts marketplace for modified cars</p>
+    <nav class="ftr__links label" aria-label="Footer">
+      <a href="explore.html">Explore</a>
+      <a href="marketplace.html">Marketplace</a>
+      <a href="home.html" class="only-out">Sign in</a>
+      <a href="#" data-soon="Terms aren't part of this mockup.">Terms</a>
+      <a href="#" data-soon="The privacy policy isn't part of this mockup.">Privacy</a>
+      <a href="#" data-soon="Free to list, 10% when it sells.">Fees</a>
+      <a href="listing.html#protH">Protection</a>
+    </nav>
+  </div>
+</footer>
+
+<dialog class="dlg dlg--drawer" id="cart" aria-labelledby="cartTitle">
+  <div class="dlg__panel">
+    <div class="dlg__head drawer__head">
+      <h2 id="cartTitle">Your cart <span class="tnum" id="cartTitleN"></span></h2>
+      <button class="iconbtn" type="button" data-close aria-label="Close cart"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button>
+    </div>
+    <div class="drawer__body" id="cartBody"></div>
+    <div class="drawer__foot" id="cartFoot" hidden>
+      <dl class="sums">
+        <div><dt>Items</dt><dd id="cartSub"></dd></div>
+        <div><dt>Shipping</dt><dd id="cartShip"></dd></div>
+        <div class="sums__total"><dt>Total</dt><dd id="cartTotal"></dd></div>
+      </dl>
+      <p class="hint">Any applicable tax and your selected delivery are confirmed at checkout. Payment is held until each part arrives.</p>
+      <button class="btn btn--sun btn--block" type="button" id="checkout">Checkout</button>
+    </div>
+  </div>
+</dialog>
+
+<nav class="tabbar" aria-label="Main">
+  <a href="explore.html" data-navkey="explore"><svg class="ico" aria-hidden="true"><use href="#i-compass"/></svg>Explore</a>
+  <a href="marketplace.html" data-navkey="marketplace"><svg class="ico" aria-hidden="true"><use href="#i-bag"/></svg>Marketplace</a>
+  <a href="home.html" data-navkey="home"><svg class="ico" aria-hidden="true"><use href="#i-home"/></svg>Home</a>
+  <a href="garage.html" data-navkey="garage"><svg class="ico" aria-hidden="true"><use href="#i-garage"/></svg>Garage</a>
+  <a href="#" data-soon="The agent isn't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-agent"/></svg>Agent</a>
+</nav>
+
+<dialog class="dlg dlg--drawer" id="savedDlg" aria-labelledby="savedH">
+  <div class="dlg__panel">
+    <div class="dlg__head drawer__head"><h2 id="savedH">Saved</h2><button class="iconbtn" type="button" data-close aria-label="Close saved"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    <div class="drawer__body" id="savedBody"></div>
+  </div>
+</dialog>
+
+<dialog class="dlg dlg--drawer" id="notifs" aria-labelledby="notifH">
+  <div class="dlg__panel">
+    <div class="dlg__head drawer__head"><h2 id="notifH">Notifications</h2><button class="iconbtn" type="button" data-close aria-label="Close notifications"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    <div class="drawer__body">
+      <p class="label" style="margin:16px 0 4px">New</p>
+      <div class="rows">
+        <a class="row row--link" href="listing.html#qaH"><img class="av" src="img/av-kaito.jpg" alt=""><span><span class="row__title">Kaito Nakamura asked about your big brake kit</span><span class="row__sub">“Are the rotors two-piece?”</span><span class="row__meta">2 weeks ago</span></span><span class="pill pill--ok">New</span></a>
+        <a class="row row--link" href="listing.html#qaH"><span class="av av--initials">TE</span><span><span class="row__title">Tommy Eriksen asked if the kit clears 18in wheels</span><span class="row__sub">On the big brake kit</span><span class="row__meta">5 days ago</span></span><span class="pill pill--ok">New</span></a>
+      </div>
+      <p class="label" style="margin:24px 0 4px">Earlier</p>
+      <div class="rows">
+        <a class="row row--link" href="profile.html?tab=reviews"><span class="av av--initials">TE</span><span><span class="row__title">Tommy Eriksen left you a 5-star review</span><span class="row__sub">“Arrived exactly as described.”</span><span class="row__meta">Sep 2026</span></span></a>
+        <a class="row row--link" href="settings.html#payments"><img class="av" src="img/av-marisol.jpg" alt=""><span><span class="row__title">E46 M3 front sport seats: paid out</span><span class="row__sub">$950 sale, paid two days after delivery</span><span class="row__meta">Sep 2026</span></span></a>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="dlg dlg--light" id="lightbox" aria-labelledby="lbCap">
+  <div class="dlg__panel">
+    <div class="dlg__head">
+      <p id="lbCap"></p>
+      <button class="iconbtn" type="button" data-close aria-label="Close photo"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button>
+    </div>
+    <img id="lbImg" src="" alt="">
+  </div>
+</dialog>
+
+<dialog class="dlg dlg--drawer" id="menu" aria-label="Menu">
+  <div class="dlg__panel">
+    <div class="dlg__head drawer__head">
+      <a class="brand" href="index.html"><span class="brand__mark">DRVN<span>.</span></span><span class="brand__tag">Builds and parts</span></a>
+      <button class="iconbtn" type="button" data-close aria-label="Close menu"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button>
+    </div>
+    <div class="menu__body only-out">
+      <form class="hsearch" action="marketplace.html" method="get" role="search">
+        <label class="sr" for="mq">Search DRVN</label>
+        <svg class="ico" aria-hidden="true"><use href="#i-search"/></svg>
+        <input id="mq" name="q" type="search" placeholder="Search DRVN" autocomplete="off">
+      </form>
+      <nav class="menu__nav" aria-label="Main">
+        <a href="index.html" data-navkey="landing">Home <svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <a href="explore.html" data-navkey="explore">Explore <svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <a href="marketplace.html" data-navkey="marketplace">Marketplace <svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      </nav>
+      <div class="menu__acts">
+        <a class="btn btn--sun" href="#" data-soon="Joining isn't part of this mockup.">Join DRVN</a>
+        <a class="btn btn--quiet" href="home.html">Sign in</a>
+      </div>
+    </div>
+    <div class="menu__body only-in">
+      <form class="hsearch" action="marketplace.html" method="get" role="search">
+        <label class="sr" for="mq2">Search DRVN</label>
+        <svg class="ico" aria-hidden="true"><use href="#i-search"/></svg>
+        <input id="mq2" name="q" type="search" placeholder="Search DRVN" autocomplete="off">
+      </form>
+      <nav class="snav" aria-label="Main">
+        <a href="home.html" data-navkey="home"><svg class="ico" aria-hidden="true"><use href="#i-home"/></svg><span>Home</span></a>
+        <a href="explore.html" data-navkey="explore"><svg class="ico" aria-hidden="true"><use href="#i-compass"/></svg><span>Explore</span></a>
+        <a href="marketplace.html" data-navkey="marketplace"><svg class="ico" aria-hidden="true"><use href="#i-bag"/></svg><span>Marketplace</span></a>
+        <a href="garage.html" data-navkey="garage"><svg class="ico" aria-hidden="true"><use href="#i-garage"/></svg><span>Garage</span></a>
+        <a href="#" data-soon="The agent isn't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-agent"/></svg><span>Agent</span></a>
+        <a href="#" data-soon="Selling (orders, offers and payouts) isn't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg><span>Selling</span></a>
+        <a href="#" data-soon="Messages aren't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-comment"/></svg><span>Messages</span><span class="snav__n"><span class="sr">unread: </span>1</span></a>
+        <button type="button" data-open="savedDlg"><svg class="ico" aria-hidden="true"><use href="#i-bookmark"/></svg><span>Saved</span></button>
+        <span class="snav__sep" aria-hidden="true"></span>
+        <a href="profile.html" data-navkey="profile"><svg class="ico" aria-hidden="true"><use href="#i-user"/></svg><span>Profile</span></a>
+        <a href="settings.html" data-navkey="settings"><svg class="ico" aria-hidden="true"><use href="#i-settings"/></svg><span>Settings</span></a>
+        <button type="button" data-logout><svg class="ico" aria-hidden="true"><use href="#i-logout"/></svg><span>Log out</span></button>
+      </nav>
+      <a class="btn btn--sun" href="#" data-soon="The sell flow isn't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg>List a part</a>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" popover="manual" role="status" aria-live="polite"></div>
+</body>
+</html>

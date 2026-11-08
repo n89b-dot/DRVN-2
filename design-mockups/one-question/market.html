@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Marketplace · DRVN</title>
+  <meta name="description" content="Parts for your car, checked for fit. Filter by fit, category, price and condition.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@300..800&family=Funnel+Sans:wght@300..800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="one-question.css">
+  <script src="one-question.js" defer></script>
+</head>
+<body data-page="market">
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav" data-nav>
+    <a class="wordmark" href="index.html" aria-label="DRVN, home">DRVN<i class="wordmark__caret" aria-hidden="true"></i></a>
+    <nav class="nav__links" aria-label="Main">
+      <a href="market.html" aria-current="page">Marketplace</a>
+      <a href="garage.html">Garage</a>
+      <a href="sell.html">Sell</a>
+    </nav>
+    <div class="nav__right">
+      <div class="carchip" data-carchip>
+        <button class="carchip__btn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="carpop"><span class="carchip__k">Your car</span><span class="carchip__v" data-carchip-label>What do you drive?</span><span class="carchip__c">change</span></button>
+        <div class="carpop" id="carpop" role="dialog" aria-labelledby="carpop-q"></div>
+      </div>
+      <button class="cartbtn" type="button" data-cart aria-label="Cart, 0 items"><span class="cartbtn__label">Cart</span><span class="cartbtn__n">0</span></button>
+      <button class="menubtn" type="button" aria-expanded="false" aria-controls="mnav">Menu</button>
+    </div>
+  </header>
+  <nav class="mnav" id="mnav" aria-label="Mobile">
+    <a href="market.html" aria-current="page">Marketplace</a>
+    <a href="garage.html">Garage</a>
+    <a href="sell.html">Sell your parts</a>
+  </nav>
+
+  <main id="main">
+    <div class="wrap">
+      <header class="pagehead">
+        <div class="pagehead__row">
+          <div>
+            <p class="eyebrow">Marketplace</p>
+            <h1 class="h1" data-m-title>Every part on DRVN</h1>
+            <p class="lead" data-m-lead>Tell us your car and every part will say whether it fits.</p>
+          </div>
+          <div class="tally" data-m-tally></div>
+        </div>
+      </header>
+      <div class="market">
+        <details class="filters" data-filters open>
+          <summary class="filters__summary">Filters<span data-m-sumn></span></summary>
+          <div class="filters__body">
+            <fieldset class="fgroup">
+              <legend>Fit</legend>
+              <div class="seg" role="radiogroup" aria-label="Fit" data-m-fit></div>
+              <p class="dim" style="font-size:var(--fs-xs);margin:var(--s-2) 0 0" data-m-fit-hint></p>
+            </fieldset>
+            <div class="fgroup">
+              <span class="fgroup__label" id="cat-l">Category</span>
+              <ul class="cats" aria-labelledby="cat-l" data-m-cats></ul>
+            </div>
+            <div class="fgroup range">
+              <label class="fgroup__label" for="m-max">Price</label>
+              <output for="m-max" data-m-maxout>Any price</output>
+              <input id="m-max" type="range" min="0" max="4000" step="50" value="4000" data-m-max>
+              <div class="range__ends" data-m-ends></div>
+            </div>
+            <fieldset class="fgroup">
+              <legend>Condition</legend>
+              <div class="checks">
+                <label class="check"><input type="checkbox" value="New" data-cond><span class="check__box" aria-hidden="true"></span>New<span class="seg__n"></span></label>
+                <label class="check"><input type="checkbox" value="Like new" data-cond><span class="check__box" aria-hidden="true"></span>Like new<span class="seg__n"></span></label>
+                <label class="check"><input type="checkbox" value="Used" data-cond><span class="check__box" aria-hidden="true"></span>Used<span class="seg__n"></span></label>
+              </div>
+            </fieldset>
+          </div>
+        </details>
+        <section aria-label="Results">
+          <div class="resultbar">
+            <p class="resultbar__count" data-m-count></p>
+            <label class="select"><span class="sr-only">Sort by</span>
+              <select data-m-sort>
+                <option value="fit">Best fit first</option>
+                <option value="new">Newest</option>
+                <option value="low">Price, low to high</option>
+                <option value="high">Price, high to low</option>
+              </select>
+            </label>
+          </div>
+          <p class="sr-only" aria-live="polite" data-live></p>
+          <div class="grid" data-m-grid></div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <footer class="footer">
+    <div class="wrap">
+      <p class="footer__q"><a href="index.html">What do you drive?</a></p>
+      <div class="footer__grid">
+        <div><h3>DRVN</h3><p>The parts marketplace for modified cars, with the car in the middle. Built by people who still have a box of old intake parts in the garage.</p></div>
+        <div><h3>Buy</h3><ul><li><a href="market.html">Marketplace</a></li><li><a href="part.html?id=bc-br-e46">Buyer protection</a></li><li><a href="market.html?fit=fits">Parts that fit</a></li></ul></div>
+        <div><h3>Sell</h3><ul><li><a href="sell.html">List a part</a></li><li><a href="garage.html">Your garage</a></li></ul></div>
+        <div><h3>Prices</h3><ul><li><span class="dim">All prices in USD</span></li><li><span class="dim">Ships within the US</span></li></ul></div>
+      </div>
+      <div class="footer__base"><span>© 2026 DRVN</span><span>Concept 19 · One Question</span></div>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRVN · Rolling</title>
+<meta name="description" content="Concept: built to be driven. The page is a rolling shot, the car stays sharp while the world streaks past, and scroll speed is the throttle.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="rolling.css">
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }</script>
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a class="mark" href="#top">DRVN</a>
+    <nav class="nav__links" aria-label="Primary">
+      <a href="#driven">Explore</a>
+      <a href="#parts">Marketplace</a>
+      <a href="#sell">Selling</a>
+    </nav>
+    <div class="nav__right">
+      <a class="btn btn--glass btn--sm" href="#sell">Sign in</a>
+      <a class="btn btn--marking btn--sm" href="#sell">Sell a part</a>
+      <button class="btn btn--glass btn--sm nav__menu" id="menuBtn" aria-expanded="false">Menu</button>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero" id="hero" aria-labelledby="h1">
+    <div class="hero__fallback" aria-hidden="true"><img src="../assets/rolling-road-mountain.png" alt=""><img src="../assets/teardown-cut-car.png" alt=""></div>
+    <canvas id="shot" aria-label="A white Toyota Supra in a rolling shot. Scrolling speeds the car up."></canvas>
+    <div class="hero__scrim" aria-hidden="true"></div>
+
+    <div class="plates" role="group" aria-label="Where the drive is">
+      <button data-plate="mountain" aria-pressed="true">Mountain</button>
+      <button data-plate="industrial" aria-pressed="false">Estate</button>
+      <button data-plate="coast" aria-pressed="false">Coast</button>
+    </div>
+
+    <div class="hero__copy">
+      <div>
+        <h1 id="h1">Built to be <em>driven.</em></h1>
+        <p>DRVN is the marketplace for parts off modified cars, and the place their builds get shown off on the road. Every part names the car it came off.</p>
+        <div class="hero__cta">
+          <a class="btn btn--marking" href="#parts">Shop the parts</a>
+          <a class="btn btn--glass" href="#driven">Show your build</a>
+        </div>
+      </div>
+    </div>
+    <div class="speedo" aria-live="off"><small>Right now</small><b class="num" id="mph">31</b><span>mph · scroll is the throttle</span></div>
+  </section>
+
+  <section class="section" id="driven" aria-labelledby="dH">
+    <div class="wrap">
+      <div class="head reveal">
+        <div>
+          <h2 id="dH">Driven this week</h2>
+          <p class="lede">Builds that left the garage. Miles are logged from the drive, and a car that gets driven sells its parts faster.</p>
+        </div>
+        <a class="btn btn--ghost" href="#parts">All builds</a>
+      </div>
+      <div class="driven reveal" id="drivenGrid"></div>
+    </div>
+  </section>
+
+  <section class="section" id="parts" aria-labelledby="pH" style="padding-top:0">
+    <div class="wrap">
+      <div class="head reveal">
+        <div>
+          <h2 id="pH">Parts off cars that get used</h2>
+          <p class="lede">Taken off to make room for the next thing. Each listing names the car and how far it went.</p>
+        </div>
+        <a class="btn btn--ghost" href="#parts">Open the marketplace</a>
+      </div>
+      <div class="rail reveal" id="rail"></div>
+    </div>
+  </section>
+
+  <section class="section" id="sell" aria-labelledby="sH">
+    <div class="wrap pull">
+      <div class="pull__photo reveal"><img src="../assets/rolling-road-coast.png" alt="An empty coastal road in hazy daylight" loading="lazy"></div>
+      <div class="reveal">
+        <h2 id="sH">Take it off. List it. Drive.</h2>
+        <p class="lede">Name the car it came off and the listing gets its fitment and its followers. Then go and use the car.</p>
+        <form id="sellForm">
+          <div class="field__row">
+            <div class="field"><label for="sCar">Came off</label><input id="sCar" type="text" placeholder="1997 Toyota Supra RZ"></div>
+            <div class="field"><label for="sPart">Part</label><input id="sPart" type="text" placeholder="HKS Hi-Power muffler"></div>
+          </div>
+          <div class="field__row">
+            <div class="field"><label for="sPrice">Price</label><input id="sPrice" type="text" inputmode="decimal" placeholder="£560"></div>
+            <div class="field"><label for="sCond">Condition</label><select id="sCond"><option>Used, fitted</option><option>New, unopened</option><option>Needs work</option></select></div>
+          </div>
+          <button class="btn btn--tarmac btn--block" type="submit" id="sellBtn">Publish listing</button>
+          <div class="pull__done" id="sellDone" aria-live="polite"></div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="mark" href="#top">DRVN</a>
+    <nav aria-label="Footer"><a href="#driven">Explore</a><a href="#parts">Marketplace</a><a href="#sell">Selling</a><a href="#top">Help</a></nav>
+    <span>The home for your car and its build.</span>
+  </div>
+</footer>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet__scrim" data-close></div>
+  <aside class="sheet__panel" role="dialog" aria-modal="true" aria-labelledby="shTitle">
+    <div class="sheet__top"><span class="label" id="shOff">Off the Supra</span><button class="sheet__close" data-close aria-label="Close">×</button></div>
+    <div class="sheet__img"><img id="shImg" src="" alt=""></div>
+    <h3 id="shTitle"></h3>
+    <div class="sheet__price num" id="shPrice"></div>
+    <div class="kv">
+      <div><span class="label">Fits</span><span id="shFits"></span></div>
+      <div><span class="label">Condition</span><span id="shCond"></span></div>
+      <div><span class="label">Miles on it</span><span id="shMiles"></span></div>
+      <div><span class="label">Ships from</span><span id="shShips"></span></div>
+    </div>
+    <button class="btn btn--marking btn--block sheet__buy" id="shBuy">Buy now</button>
+    <div class="sheet__done" id="shDone"></div>
+  </aside>
+</div>
+
+<script type="module" src="rolling.js"></script>
+</body>
+</html>

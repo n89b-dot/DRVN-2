@@ -1,0 +1,14 @@
+{
+  "num": 20,
+  "name": "Flake",
+  "slug": "flake",
+  "family": "material",
+  "thesis": "The paint is the interface.",
+  "hero_asset": "flake-car-purple.png",
+  "accent_hex": "#3A2367",
+  "thumb_fallback_hex": "#DEDEDA",
+  "pages": {
+    "index.html": "landing: paint shader hero, paint-code lookup, builds in this paint, parts rail, live listing preview, buy sheet"
+  },
+  "showpiece": "A WebGL door skin with a custom GLSL metallic-flake paint shader: base coat with angle colour shift, hashed micro-normal flake sparkle, clear-coat Fresnel reflecting a procedural studio softbox, and the pointer as the light. Choosing a paint tweens the shader and re-tints the whole page."
+}

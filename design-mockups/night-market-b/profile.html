@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en" data-auth="in">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marisol Vega · DRVN</title>
+<meta name="description" content="Marisol Vega’s public profile: her cars, updates and the parts for sale off them.">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+<link rel="stylesheet" href="night-market-b.css">
+<script>(function(d){d.classList.add('js');try{if(localStorage.getItem('nmb-auth')==='in')d.setAttribute('data-auth','in');}catch(e){}})(document.documentElement);</script>
+<script src="night-market-b.js" defer></script>
+</head>
+<body data-member="true">
+<a class="skip" href="#main">Skip to content</a>
+<div class="sky" aria-hidden="true"><div class="sky__mist"></div><div class="sky__sun"></div></div>
+<div class="grain" aria-hidden="true"></div>
+<header class="nav" data-nav>
+  <div class="nav__in wrap">
+    <a class="mark" href="home.html" aria-label="DRVN, home"><svg class="mark__sun" viewBox="0 0 30 20" aria-hidden="true"><defs><clipPath id="hz"><rect x="0" y="0" width="30" height="14.5"/></clipPath></defs><g clip-path="url(#hz)"><circle class="mark__disc" cx="15" cy="14.5" r="4.5"/></g><line x1="1" y1="14.5" x2="29" y2="14.5"/></svg><span class="mark__word">DRVN</span></a>
+    <nav class="nav__links" aria-label="Primary">
+      <a class="auth-in" href="home.html">Home</a>
+      <a href="explore.html">Explore</a>
+      <a href="marketplace.html">Marketplace</a>
+      <a class="auth-in" href="garage.html">Garage</a>
+    </nav>
+    <div class="nav__tools">
+      <form class="search" action="marketplace.html" role="search">
+        <label class="sr" for="q">Search DRVN</label>
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5"/></svg>
+        <input id="q" name="q" type="search" placeholder="Search parts and cars" autocomplete="off">
+      </form>
+      <p class="clock" aria-hidden="true"><span class="clock__time" data-clock>04:20</span><span class="clock__phase" data-phase>night</span></p>
+      <a class="btn btn--sun btn--sm auth-in nav__post" href="home.html#compose">Post</a>
+      <button class="iconbtn bag" type="button" data-cart-open aria-label="Cart, 0 items"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M3 4h2l1.6 8.4h8.2L16.5 6H6"/><circle cx="8" cy="15.5" r="1"/><circle cx="14" cy="15.5" r="1"/></svg><span class="bag__n" data-cart-count>0</span></button>
+      <a class="nav__signin auth-out" href="home.html" data-signin>Sign in</a>
+      <a class="btn btn--sun btn--sm auth-out nav__join" href="home.html" data-signin>Join DRVN</a>
+      <div class="me auth-in">
+        <button class="me__btn" type="button" aria-expanded="false" aria-controls="meMenu" data-me><img class="av" src="img/av-marisol.jpg" alt="" width="36" height="36"><span class="sr">Marisol Vega, account menu</span></button>
+        <div class="me__menu" id="meMenu" hidden>
+          <p class="me__who"><b>Marisol Vega</b><span>@apexmarisol</span></p>
+          <a href="profile.html">Your public profile</a>
+          <a href="garage.html">Garage</a>
+          <a href="#" data-soon="Selling (orders, offers and payouts) isn't part of this mockup.">Selling</a>
+          <a href="#" data-soon="Messages aren't part of this mockup.">Messages <span class="me__n">1</span></a>
+          <a href="#" data-soon="The Agent isn't part of this mockup.">Agent</a>
+          <a href="settings.html">Settings</a>
+          <button type="button" data-logout>Log out</button>
+        </div>
+      </div>
+      <button class="menu" type="button" aria-expanded="false" aria-controls="menu" data-menu><span class="menu__bars" aria-hidden="true"></span>Menu</button>
+    </div>
+  </div>
+  <div class="nav__sheet" id="menu" hidden>
+    <ul><li class="auth-in"><a href="home.html">Home</a></li><li><a href="explore.html">Explore</a></li><li><a href="marketplace.html">Marketplace</a></li><li class="auth-in"><a href="garage.html">Garage</a></li>
+      <li class="auth-in"><a href="profile.html">Profile</a></li>
+      <li class="auth-in"><a href="settings.html">Settings</a></li>
+      <li class="auth-out"><a href="home.html" data-signin>Sign in</a></li>
+    </ul>
+    <form class="search" action="marketplace.html" role="search">
+      <label class="sr" for="q-m">Search DRVN</label>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5"/></svg>
+      <input id="q-m" name="q" type="search" placeholder="Search parts and cars" autocomplete="off">
+    </form>
+  </div>
+</header>
+<main id="main">
+  <div class="banner" aria-hidden="true"><img src="img/cars/lucille-gallery.jpg" alt=""><div class="ghero__mist"></div></div>
+  <div class="wrap">
+    <header class="profile">
+      <img class="av avatar--xl" src="img/av-marisol.jpg" alt="Marisol Vega" width="128" height="128">
+      <div data-reveal>
+        <p class="label"><span data-at>04:22</span> · Public profile</p>
+        <h1 class="h1">Marisol <em>Vega</em></h1>
+        <p class="profile__line">@apexmarisol · Austin, TX · Track days at COTA</p>
+        <p class="profile__bio">Chasing tenths at COTA. The M3 eats consumables so I don’t have to.</p>
+        <p class="pstats"><span><b>2</b>cars</span><span><b>4</b>updates</span><span><b>1</b>sold on DRVN</span><span id="pFollowers">1 follower</span></p>
+      </div>
+      <div class="follow" data-reveal style="--d:120ms">
+        <button class="btn btn--sun" type="button" id="pFollow" data-follow="marisol" aria-pressed="false">Follow</button>
+        <a class="btn btn--quiet" id="pEdit" href="settings.html#profile" hidden>Edit profile</a>
+        <button class="btn btn--quiet" type="button" id="pStore">Shop her parts</button>
+        <button class="btn btn--quiet btn--icon" type="button" id="pShare" aria-label="Copy profile link"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M8 12l4-4M7 9.5l-1.5 1.5a2.5 2.5 0 0 0 3.5 3.5L10.5 13M13 10.5l1.5-1.5A2.5 2.5 0 0 0 11 5.5L9.5 7"/></svg></button>
+      </div>
+    </header>
+    <div class="tabs" role="tablist" aria-label="Marisol’s profile" id="ptabs">
+      <button type="button" class="tab" role="tab" data-tab="overview" id="t-overview" aria-controls="p-overview" aria-selected="true">Overview</button>
+      <button type="button" class="tab" role="tab" data-tab="garage" id="t-garage" aria-controls="p-garage" aria-selected="false" tabindex="-1">Garage<sup>2</sup></button>
+      <button type="button" class="tab" role="tab" data-tab="updates" id="t-updates" aria-controls="p-updates" aria-selected="false" tabindex="-1">Updates<sup>4</sup></button>
+      <button type="button" class="tab" role="tab" data-tab="parts" id="t-parts" aria-controls="p-parts" aria-selected="false" tabindex="-1">Parts<sup>3</sup></button>
+      <button type="button" class="tab" role="tab" data-tab="reviews" id="t-reviews" aria-controls="p-reviews" aria-selected="false" tabindex="-1">Reviews</button>
+    </div>
+    <section class="panel" role="tabpanel" id="p-overview" aria-labelledby="t-overview">
+      <div class="pover">
+        <div><h2 class="label gover__h">Latest updates</h2><div class="feed" id="pLatest"></div></div>
+        <aside class="aside">
+          <section class="aside__block" aria-labelledby="poG"><h2 id="poG" class="label">Garage</h2><ul class="rows" id="pOverGarage"></ul></section>
+          <section class="aside__block" aria-labelledby="poP"><h2 id="poP" class="label">Parts for sale · 3</h2><ul class="rows" id="pOverParts"></ul></section>
+          <section class="aside__block" aria-labelledby="poS"><h2 id="poS" class="label">Store note</h2><p class="hint">Ships from Austin within 3 working days. Pickup at COTA on track weekends.</p></section>
+        </aside>
+      </div>
+    </section>
+    <section class="panel" role="tabpanel" id="p-garage" aria-labelledby="t-garage" hidden><div class="feed feed--2" id="pGarage"></div></section>
+    <section class="panel" role="tabpanel" id="p-updates" aria-labelledby="t-updates" hidden><div class="feed" id="pUpdates"></div></section>
+    <section class="panel" role="tabpanel" id="p-parts" aria-labelledby="t-parts" hidden><p class="lead" style="margin-bottom:40px">The Parts tab is Marisol’s store. Everything here came off one of her cars.</p><div class="grid grid--3" id="pParts"></div></section>
+    <section class="panel" role="tabpanel" id="p-reviews" aria-labelledby="t-reviews" hidden><div class="empty empty--left"><p class="h3">No reviews <em>yet.</em></p><p>Buyers can rate Marisol after a completed trade. She has 1 sale so far.</p></div></section>
+  </div>
+</main>
+<footer class="foot wrap" aria-labelledby="foot-title">
+  <h2 id="foot-title" class="foot__line">Every part you list <em>carries its car with it.</em></h2>
+  <div class="foot__cols">
+    <div>
+      <a class="mark" href="index.html" aria-label="DRVN, home"><svg class="mark__sun" viewBox="0 0 30 20" aria-hidden="true"><g clip-path="url(#hz)"><circle class="mark__disc" cx="15" cy="14.5" r="4.5"/></g><line x1="1" y1="14.5" x2="29" y2="14.5"/></svg><span class="mark__word">DRVN</span></a>
+      <p class="prose" style="margin-top:16px;max-width:32ch">The parts marketplace for modified cars. Sell what comes off yours; buy what came off cars like it.</p>
+    </div>
+    <div><h2 class="label">Buy</h2><ul><li><a href="marketplace.html">Marketplace</a></li><li><a href="listing.html">Buyer protection</a></li><li><a href="explore.html">Explore builds</a></li></ul></div>
+    <div><h2 class="label">Sell</h2><ul><li><a href="home.html" data-signin>Sell my parts</a></li><li><a href="settings.html#payments">Fees and payouts</a></li><li><a href="garage.html" data-signin>Your garage</a></li></ul></div>
+    <div><h2 class="label">DRVN</h2><ul><li><a href="#" data-soon="Terms aren't part of this mockup.">Terms</a></li><li><a href="#" data-soon="Privacy isn't part of this mockup.">Privacy</a></li><li><a href="#" data-soon="Help isn't part of this mockup.">Help</a></li></ul></div>
+  </div>
+  <div class="foot__base"><p>© 2026 DRVN · Payments by Stripe</p><p>Austin, TX · <span class="price" data-clock>05:10</span></p></div>
+</footer>
+<dialog class="drawer" id="cart" aria-labelledby="cartTitle">
+  <div class="drawer__in">
+    <div class="drawer__head"><h2 id="cartTitle">Your <em>cart</em><span id="cartN"></span></h2><button type="button" class="iconbtn" data-close aria-label="Close cart"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg></button></div>
+    <div class="drawer__body" id="cartBody"></div>
+    <div class="drawer__foot" id="cartFoot" hidden>
+      <dl class="sum"><div><dt>Items</dt><dd id="cartSub">$0</dd></div><div><dt>Shipping</dt><dd id="cartShip">$0</dd></div><div class="total"><dt>Total before tax</dt><dd id="cartTotal" class="price">$0</dd></div></dl>
+      <p class="hold"><b>Held until it arrives.</b> Each seller is paid two days after delivery. Report a problem within 30 days and the seller has 3 days to respond.</p>
+      <button type="button" class="btn btn--sun btn--block" id="checkout">Checkout</button>
+    </div>
+  </div>
+</dialog>
+</body>
+</html>

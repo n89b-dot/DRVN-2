@@ -1,0 +1,423 @@
+<title>DRVN Theses 23–27</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Fragment+Mono&family=Albert+Sans:wght@300;500;700&family=Azeret+Mono:wght@400;500&family=DM+Serif+Display&family=DM+Sans:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=DM+Mono:wght@400;500&family=Atkinson+Hyperlegible+Next:wght@400;700&family=Barlow+Semi+Condensed:wght@400;600&family=Red+Hat+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a reading index of five plates. Each plate pairs the argument (left) with a specimen
+   panel (right) drawn in that concept's own palette and type, so the direction can be judged by eye. */
+:root{
+  --paper:#F2F2EF; --sheet:#FAFAF8; --ink:#17181A; --ink-2:#55585E; --ink-3:#7C7F85; --rule:#DCDCD8;
+  --font-ui:'Onest',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-label:'Fragment Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+
+  /* Specimen palettes: fixed per concept, readable on either host theme because each panel sets its own ground. */
+  --t23-silver:#E4E9EE; --t23-steel:#8FA3B8; --t23-deep:#3E5166; --t23-ink:#19212B; --t23-up:#58B07A; --t23-glow:#FFFFFF;
+  --t24-suede:#3B3C3E; --t24-dove:#8D8C88; --t24-brushed:#57585A; --t24-thread:#A9C7DA; --t24-ink:#F1EFEA;
+  --t25-green:#14352A; --t25-deep:#0D241C; --t25-bone:#EFE9D8; --t25-brass:#C9A15A; --t25-moss:#9DB3A6;
+  --t26-white:#FFFFFF; --t26-ink:#111111; --t26-grey:#6B6B6B; --t26-hair:#D9D9D9;
+  --t27-black:#0E1012; --t27-led:#F4F7FA; --t27-bay:#E9EDF0; --t27-amber:#F0A23A; --t27-steel:#5D656D;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#121315; --sheet:#18191C; --ink:#ECECE8; --ink-2:#A3A6AC; --ink-3:#7E8188; --rule:#2B2D31; color-scheme:dark;
+}}
+:root[data-theme="dark"]{ --paper:#121315; --sheet:#18191C; --ink:#ECECE8; --ink-2:#A3A6AC; --ink-3:#7E8188; --rule:#2B2D31; color-scheme:dark; }
+
+*{box-sizing:border-box}
+body{background:var(--paper); color:var(--ink); font-family:var(--font-ui); font-size:16px; line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); padding-block:0 96px;}
+.wrap{max-width:1180px; margin:0 auto}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--ink); outline-offset:3px}
+.label{font-family:var(--font-label); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3)}
+
+/* Masthead */
+.mast{padding-block:56px 40px; border-bottom:1px solid var(--rule); display:grid; gap:28px}
+.mast h1{font-size:clamp(34px,5vw,60px); line-height:1.04; font-weight:500; letter-spacing:-.02em; margin:0; text-wrap:balance; max-width:16ch}
+.mast p{margin:0; color:var(--ink-2); max-width:62ch; font-size:17px}
+.mast .meta{display:flex; flex-wrap:wrap; gap:8px 24px}
+.toc{list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:1px; background:var(--rule); border:1px solid var(--rule)}
+.toc a{display:grid; gap:4px; padding:14px 16px 16px; background:var(--sheet); text-decoration:none; height:100%; transition:background .2s}
+.toc a:hover{background:var(--paper)}
+.toc b{font-weight:600; font-size:17px}
+.toc span{font-size:13px; color:var(--ink-2); line-height:1.4}
+@media (max-width:860px){ .toc{grid-template-columns:1fr 1fr} }
+@media (max-width:460px){ .toc{grid-template-columns:1fr} }
+
+/* Plate */
+.plate{padding-block:72px 8px; border-bottom:1px solid var(--rule); scroll-margin-top:16px}
+.plate__head{display:grid; gap:14px; margin-bottom:36px}
+.plate__tags{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+.chip{font-family:var(--font-label); font-size:11px; letter-spacing:.06em; text-transform:uppercase; padding:4px 9px; border:1px solid var(--rule); border-radius:999px; color:var(--ink-2)}
+.plate__name{font-size:clamp(40px,6vw,76px); line-height:1; margin:0; letter-spacing:-.02em; font-weight:500}
+#t23 .plate__name{font-family:'Albert Sans',sans-serif; font-weight:300}
+#t24 .plate__name{font-family:'DM Serif Display',serif; font-weight:400}
+#t25 .plate__name{font-family:'Newsreader',serif; font-weight:400}
+#t26 .plate__name{font-family:'Atkinson Hyperlegible Next',sans-serif; font-weight:700}
+#t27 .plate__name{font-family:'Barlow Semi Condensed',sans-serif; font-weight:600; text-transform:uppercase}
+.plate__thesis{font-size:clamp(20px,2.4vw,28px); line-height:1.3; margin:0; max-width:30ch; text-wrap:balance}
+.plate__body{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.05fr); gap:48px; align-items:start; padding-bottom:64px}
+@media (max-width:900px){ .plate__body{grid-template-columns:1fr; gap:32px} }
+.prose{display:grid; gap:28px; min-width:0}
+.prose h3{margin:0 0 8px; font-size:12px; font-family:var(--font-label); font-weight:400; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3)}
+.prose p{margin:0; max-width:62ch; color:var(--ink)}
+.prose dl{margin:0; display:grid; gap:14px}
+.prose dl div{display:grid; grid-template-columns:118px minmax(0,1fr); gap:16px; padding-top:14px; border-top:1px solid var(--rule)}
+.prose dt{font-weight:600; font-size:14px}
+.prose dd{margin:0; color:var(--ink-2); font-size:15px; line-height:1.55}
+@media (max-width:460px){ .prose dl div{grid-template-columns:1fr; gap:4px} }
+.risk p{color:var(--ink-2)}
+
+/* Specimen panel */
+.spec{position:sticky; top:16px; border-radius:6px; overflow:hidden; display:grid; min-width:0}
+@media (max-width:900px){ .spec{position:static} }
+.spec__img{display:block; width:100%; max-width:100%; aspect-ratio:16/9; object-fit:cover}
+.spec__inner{padding:24px; display:grid; gap:22px}
+.swatches{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px}
+.sw{display:grid; gap:6px; font-family:var(--font-label); font-size:10px; letter-spacing:.04em; line-height:1.3}
+.sw i{display:block; height:40px; border-radius:3px}
+.specimen-type{display:grid; gap:4px}
+
+/* 23 Tuning Shop */
+.s23{background:linear-gradient(180deg,var(--t23-silver),var(--t23-steel)); color:var(--t23-ink)}
+.s23 .f-display{font-family:'Albert Sans',sans-serif; font-weight:300; font-size:40px; line-height:1; letter-spacing:-.01em}
+.s23 .f-body{font-family:'Albert Sans',sans-serif; font-size:14px}
+.s23 .sw{color:var(--t23-ink)}
+.stats{display:grid; gap:10px; padding:16px; border-radius:4px; background:color-mix(in srgb,var(--t23-glow) 55%,transparent); box-shadow:0 0 0 2px var(--t23-glow)}
+.stat{display:grid; grid-template-columns:96px minmax(0,1fr) 72px; gap:12px; align-items:center; font-family:'Azeret Mono',monospace; font-size:12px}
+.bar{height:8px; border-radius:2px; background:color-mix(in srgb,var(--t23-deep) 18%,transparent); position:relative; overflow:hidden}
+.bar b{position:absolute; inset:0 auto 0 0; background:var(--t23-deep)}
+.bar u{position:absolute; inset:0 auto 0 0; background:var(--t23-up); text-decoration:none}
+.stat em{font-style:normal; color:var(--t23-deep); text-align:right}
+.stat em.up{color:var(--t23-ink); font-weight:500}
+
+/* 24 Nap */
+.s24{background:var(--t24-suede); color:var(--t24-ink)}
+.s24 .f-display{font-family:'DM Serif Display',serif; font-size:40px; line-height:1.05}
+.s24 .f-body{font-family:'DM Sans',sans-serif; font-size:14px; color:var(--t24-dove)}
+.s24 .sw{color:var(--t24-ink)}
+.seam{height:0; border-top:2px dashed var(--t24-thread); position:relative; margin-block:4px}
+.seam::after{content:""; position:absolute; inset:5px 0 auto; border-top:1px solid color-mix(in srgb,var(--t24-ink) 10%,transparent)}
+.pad{display:flex; gap:12px; align-items:center; font-family:'DM Sans',sans-serif; font-size:13px}
+.pad span{padding:10px 18px; border-radius:999px; background:var(--t24-brushed); box-shadow:inset 0 1px 0 color-mix(in srgb,var(--t24-ink) 14%,transparent), inset 0 -2px 4px color-mix(in srgb,var(--t24-suede) 70%,transparent)}
+
+/* 25 The Errand */
+.s25{background:var(--t25-green); color:var(--t25-bone)}
+.s25 .f-display{font-family:'Newsreader',serif; font-size:40px; line-height:1.05}
+.s25 .f-display i{color:var(--t25-brass)}
+.s25 .f-body{font-family:'Newsreader',serif; font-size:16px; color:var(--t25-moss)}
+.s25 .sw{color:var(--t25-bone)}
+.errand{display:grid; gap:8px; padding:16px; border-radius:4px; background:var(--t25-deep); font-family:'DM Mono',monospace; font-size:12px; color:var(--t25-moss)}
+.errand .brief{color:var(--t25-bone); font-size:13px}
+.errand .row{display:flex; justify-content:space-between; gap:12px}
+.errand .on{color:var(--t25-brass)}
+.track{height:2px; background:color-mix(in srgb,var(--t25-moss) 25%,transparent); position:relative}
+.track::after{content:""; position:absolute; inset:0 38% 0 0; background:var(--t25-brass)}
+
+/* 26 Plain Sentences */
+.s26{background:var(--t26-white); color:var(--t26-ink); border:1px solid var(--rule)}
+.s26 .spec__inner{gap:26px; padding:32px 28px}
+.s26 .sentence{font-family:'Atkinson Hyperlegible Next',sans-serif; font-size:clamp(20px,2.2vw,26px); line-height:1.45; margin:0}
+.s26 .w{text-decoration:underline dotted; text-decoration-thickness:2px; text-underline-offset:5px; text-decoration-color:var(--t26-grey)}
+.s26 .w.on{background:var(--t26-ink); color:var(--t26-white); text-decoration:none; padding:0 4px; border-radius:2px}
+.s26 .thumb{display:inline-block; width:1.4em; height:.9em; border-radius:2px; vertical-align:-.05em; background:var(--t26-hair)}
+.s26 .ask{font-family:'Atkinson Hyperlegible Next',sans-serif; font-size:15px; color:var(--t26-grey); border-top:1px solid var(--t26-hair); padding-top:18px; margin:0}
+.s26 .blank{color:var(--t26-ink); border-bottom:2px solid var(--t26-ink); padding:0 2px}
+.s26 .sw{color:var(--t26-ink)}
+
+/* 27 Swirl Finder */
+.s27{background:var(--t27-black); color:var(--t27-led)}
+.s27 .f-display{font-family:'Barlow Semi Condensed',sans-serif; font-weight:600; font-size:42px; line-height:1; text-transform:uppercase; letter-spacing:.01em}
+.s27 .f-body{font-family:'Barlow Semi Condensed',sans-serif; font-size:16px; color:var(--t27-bay); opacity:.8}
+.s27 .sw{color:var(--t27-led)}
+.reading{display:grid; gap:8px; padding:16px; border-radius:4px; background:var(--t27-bay); color:var(--t27-black); font-family:'Red Hat Mono',monospace; font-size:12px}
+.reading .row{display:flex; justify-content:space-between; gap:12px; border-bottom:1px solid color-mix(in srgb,var(--t27-steel) 30%,transparent); padding-bottom:6px}
+.reading .row:last-child{border:0; padding:0}
+.reading .flag{color:var(--t27-black); background:var(--t27-amber); padding:0 6px; border-radius:2px}
+
+/* Closing */
+.close{padding-block:64px 0; display:grid; gap:18px}
+.close h2{margin:0; font-size:28px; font-weight:500; letter-spacing:-.01em}
+.close p{margin:0; max-width:64ch; color:var(--ink-2)}
+.close table{border-collapse:collapse; width:100%; font-size:14px; min-width:640px}
+.close th,.close td{text-align:left; padding:10px 12px 10px 0; border-top:1px solid var(--rule); vertical-align:top}
+.close th{font-family:var(--font-label); font-weight:400; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3)}
+.tablewrap{overflow-x:auto}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important; scroll-behavior:auto!important} }
+html{scroll-behavior:smooth}
+</style>
+
+<div class="wrap">
+  <header class="mast">
+    <div class="meta"><span class="label">DRVN design exploration</span><span class="label">Theses 23–27 · not built</span><span class="label">October 2026</span></div>
+    <h1>Five more directions, written down before any code.</h1>
+    <p>Each thesis below is one idea strong enough to shape a whole website. The left column says what I was thinking and how it would look on the page. The panel on the right is drawn in that direction's own colours and type, with a mood image where a picture helps, so you can judge the feel at a glance.</p>
+    <p>All five are chosen to avoid the 22 concepts that already exist. Each one answers a different kind of question: what the audience already knows (a game menu), what the car is made of (its interior), how people actually ask for parts (an errand), what a listing needs and nothing more (a sentence), and how one car subculture judges condition (detailing).</p>
+    <ol class="toc">
+      <li><a href="#t23"><span class="label">23 · era-media</span><b>Tuning Shop</b><span>Shop like the upgrade menu in a racing game.</span></a></li>
+      <li><a href="#t24"><span class="label">24 · material</span><b>Nap</b><span>The site is upholstered in suede you can brush.</span></a></li>
+      <li><a href="#t25"><span class="label">25 · interaction</span><b>The Errand</b><span>Send DRVN out for a part. The site is what comes back.</span></a></li>
+      <li><a href="#t26"><span class="label">26 · anti-metaphor</span><b>Plain Sentences</b><span>Every listing is one sentence; every word is a filter.</span></a></li>
+      <li><a href="#t27"><span class="label">27 · subculture</span><b>Swirl Finder</b><span>Inspect every part under a detailer's light.</span></a></li>
+    </ol>
+  </header>
+
+  <!-- 23 -->
+  <section class="plate" id="t23" aria-labelledby="t23-name">
+    <div class="plate__head">
+      <div class="plate__tags"><span class="label">Thesis 23</span><span class="chip">era-media</span><span class="chip">3D turntable</span></div>
+      <h2 class="plate__name" id="t23-name">Tuning Shop</h2>
+      <p class="plate__thesis">Shop for parts the way you first learned them: pick your car, then upgrade it.</p>
+    </div>
+    <div class="plate__body">
+      <div class="prose">
+        <div>
+          <h3>What I was thinking</h3>
+          <p>A lot of people who modify cars learned the names of parts from the tuning menus in Gran Turismo, Need for Speed and Forza. That menu already works the way DRVN works: choose your car, browse by category, see what a part does before you buy it. Borrowing that grammar makes "fits my car" feel like the fun part instead of a filter, because everything you see is already for your car. I would take the calm late-90s console style (soft gradients, slow transitions, a car on a turntable), never the neon or the logos.</p>
+        </div>
+        <div>
+          <h3>How it would look on the page</h3>
+          <dl>
+            <div><dt>Front door</dt><dd>A real-time 3D car on a slow turntable over a glossy silver-blue floor, with a short vertical menu beside it: Shop parts, Sell parts, My garage. The car is whatever you drive, or a rotating pick if you haven't said.</dd></div>
+            <div><dt>Shopping</dt><dd>Categories as a horizontal rail (Suspension, Wheels, Exhaust, Intake, Interior, Weight). A soft white selection glow glides between tiles, and the whole menu works with arrow keys.</dd></div>
+            <div><dt>Signature</dt><dd>Stat bars on every listing. Hovering a part shows a ghost bar for the change it makes to your car, using only facts from the listing: ride height drop, weight saved, wheel width. DRVN never invents horsepower.</dd></div>
+            <div><dt>Showpiece</dt><dd>Hover a wheel listing and the wheels on the turntable car swap to it. Built from a Higgsfield 3D model of the car with the wheel meshes separated.</dd></div>
+            <div><dt>Type and colour</dt><dd>Albert Sans in light weights for menus, Azeret Mono for numbers. Silver to steel-blue gradients, one green used only for positive changes.</dd></div>
+          </dl>
+        </div>
+        <div class="risk">
+          <h3>Where it could go wrong</h3>
+          <p>It could read as a toy or as a copy of a specific game. It needs restraint and its own identity, and every stat must come from listing data. Parts with no measurable effect, like a gear knob, need a dignified way to sit in the same menus.</p>
+        </div>
+      </div>
+      <aside class="spec s23" aria-label="Tuning Shop specimen">
+        <img class="spec__img" src="img/t23-turntable.jpg" alt="A silver R34 on a turntable in a pale silver-blue studio">
+        <div class="spec__inner">
+          <div class="specimen-type"><div class="f-display">Suspension · Stage 2</div><div class="f-body">KW Variant 3 coilovers for your E46 M3, 11k miles, $1,450</div></div>
+          <div class="stats" aria-hidden="true">
+            <div class="stat"><span>Ride height</span><span class="bar"><u style="width:72%"></u><b style="width:58%"></b></span><em class="up">−30 mm</em></div>
+            <div class="stat"><span>Unsprung kg</span><span class="bar"><b style="width:46%"></b></span><em>±0</em></div>
+            <div class="stat"><span>Adjustment</span><span class="bar"><u style="width:90%"></u><b style="width:20%"></b></span><em class="up">16 clicks</em></div>
+          </div>
+          <div class="swatches">
+            <div class="sw"><i style="background:var(--t23-silver)"></i>Silver</div>
+            <div class="sw"><i style="background:var(--t23-steel)"></i>Steel</div>
+            <div class="sw"><i style="background:var(--t23-deep)"></i>Deep steel</div>
+            <div class="sw"><i style="background:var(--t23-ink)"></i>Ink</div>
+            <div class="sw"><i style="background:var(--t23-up)"></i>Upgrade</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 24 -->
+  <section class="plate" id="t24" aria-labelledby="t24-name">
+    <div class="plate__head">
+      <div class="plate__tags"><span class="label">Thesis 24</span><span class="chip">material</span><span class="chip">fibre shader</span></div>
+      <h2 class="plate__name" id="t24-name">Nap</h2>
+      <p class="plate__thesis">The site is upholstered: every surface is suede you can brush with your cursor.</p>
+    </div>
+    <div class="plate__body">
+      <div class="prose">
+        <div>
+          <h3>What I was thinking</h3>
+          <p>Temper and Flake looked at the outside of the car, the metal and the paint. Nobody has designed from the inside, the material your hands touch on every drive: the Alcantara steering wheel, the seat bolsters, the contrast stitching. Suede has one property that makes a great interface. Brush the nap and it changes shade, and the mark stays until you brush it back. That gives the site touch and memory without adding any gadgets.</p>
+        </div>
+        <div>
+          <h3>How it would look on the page</h3>
+          <dl>
+            <div><dt>Front door</dt><dd>The whole page is a soft anthracite suede drawn by a fibre shader. Moving the cursor brushes a lighter trail through the nap that slowly relaxes. The headline is pressed into the suede like a logo embossed on a headrest.</dd></div>
+            <div><dt>Structure</dt><dd>Sections are joined by real stitched seams, not lines or cards. Listing panels are gently padded, and buttons are soft pads that press in.</dd></div>
+            <div><dt>Signature</dt><dd>One thread colour, a pale ice blue, is the only accent. It marks seams, the selected filter and the price you're about to pay.</dd></div>
+            <div><dt>Showpiece</dt><dd>A 3D suede steering wheel in the hero that turns as you scroll, its stitching catching the light. Product photos sit on suede-coloured grounds so parts look as if they're laid on a seat.</dd></div>
+            <div><dt>Type and colour</dt><dd>DM Serif Display for quiet, tailored headlines and DM Sans for everything else. Anthracite, dove grey and the thread blue. It's a mid-grey site, which none of the 22 is.</dd></div>
+          </dl>
+        </div>
+        <div class="risk">
+          <h3>Where it could go wrong</h3>
+          <p>Skeuomorphism can turn kitsch fast. No stock leather photos, no luxury-brand clichés, and the texture has to stay subtle enough that text keeps strong contrast on a mid-grey ground. It must still feel like a fast marketplace and not a car configurator.</p>
+        </div>
+      </div>
+      <aside class="spec s24" aria-label="Nap specimen">
+        <img class="spec__img" src="img/t24-suede.jpg" alt="Macro of brushed anthracite suede with ice-blue stitching">
+        <div class="spec__inner">
+          <div class="specimen-type"><div class="f-display">Parts that came out of the cabin.</div><div class="f-body">Bucket seats, wheels, shift knobs and trim, listed by the people who fitted them.</div></div>
+          <div class="seam" aria-hidden="true"></div>
+          <div class="pad" aria-hidden="true"><span>Shop interior</span><span>Sell yours</span></div>
+          <div class="swatches">
+            <div class="sw"><i style="background:var(--t24-suede); box-shadow:inset 0 0 0 1px var(--t24-dove)"></i>Anthracite</div>
+            <div class="sw"><i style="background:var(--t24-brushed)"></i>Brushed</div>
+            <div class="sw"><i style="background:var(--t24-dove)"></i>Dove</div>
+            <div class="sw"><i style="background:var(--t24-thread)"></i>Thread</div>
+            <div class="sw"><i style="background:var(--t24-ink)"></i>Chalk</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 25 -->
+  <section class="plate" id="t25" aria-labelledby="t25-name">
+    <div class="plate__head">
+      <div class="plate__tags"><span class="label">Thesis 25</span><span class="chip">interaction</span><span class="chip">uses the DRVN agent</span></div>
+      <h2 class="plate__name" id="t25-name">The Errand</h2>
+      <p class="plate__thesis">Tell DRVN what you're after and send it off. The site is what comes back.</p>
+    </div>
+    <div class="plate__body">
+      <div class="prose">
+        <div>
+          <h3>What I was thinking</h3>
+          <p>Marketplaces are built for browsing. What enthusiasts actually do is ask a friend who knows: "keep an eye out for KW V3s for my E46, under a grand." That is an errand, with three beats: the brief, the hunt and the report. DRVN now has an agent for every member, so this concept puts the errand at the front door. Every result is still an ordinary listing you can buy yourself, and the agent reports while you decide.</p>
+        </div>
+        <div>
+          <h3>How it would look on the page</h3>
+          <dl>
+            <div><dt>Front door</dt><dd>One brief field on a deep racing-green page ("Find me…") with three example errands underneath. Browsing it yourself is always one click away.</dd></div>
+            <div><dt>While it works</dt><dd>A sent errand becomes a live card that ticks through what it's doing: listings checked, how many fit, how many are under budget, a question asked to a seller. Open errands sit in a rail like tabs.</dd></div>
+            <div><dt>The report</dt><dd>It comes back as a short written page set like a magazine brief: three picks with the reason for each, one it rejected and why, and Buy or Make offer on each.</dd></div>
+            <div><dt>Showpiece</dt><dd>A 3D deck of listing photos riffles past at speed while the agent reads, and the good ones are pulled out and laid down on the report. You can see it read everything for you.</dd></div>
+            <div><dt>Type and colour</dt><dd>Newsreader for the report voice and DM Mono for live status lines. Racing green, bone and a brass light that means "found".</dd></div>
+          </dl>
+        </div>
+        <div class="risk">
+          <h3>Where it could go wrong</h3>
+          <p>It must never look like a chat app with bubbles. That's concept 13's territory and the wrong feel anyway. The agent never sets prices or buys anything without you. If the errand comes back empty, the page has to make that useful (alerts, nearest matches) instead of feeling like a failed search.</p>
+        </div>
+      </div>
+      <aside class="spec s25" aria-label="The Errand specimen">
+        <img class="spec__img" src="img/t25-errand.jpg" alt="Printed part photographs fanned out on green leather, one pulled aside">
+        <div class="spec__inner">
+          <div class="specimen-type"><div class="f-display">Three good options, <i>one to skip.</i></div><div class="f-body">Back from your errand for E46 coilovers, 41 minutes after you sent it.</div></div>
+          <div class="errand" aria-hidden="true">
+            <div class="brief">“KW V3s or similar for my E46 M3, under $1,000, not rusted.”</div>
+            <div class="track"></div>
+            <div class="row"><span>Listings checked</span><span>214</span></div>
+            <div class="row"><span>Fit an E46 M3</span><span>11</span></div>
+            <div class="row"><span>Under $1,000</span><span class="on">3 found</span></div>
+            <div class="row"><span>Asked @kade.e46 about the top mounts</span><span>waiting</span></div>
+          </div>
+          <div class="swatches">
+            <div class="sw"><i style="background:var(--t25-green); box-shadow:inset 0 0 0 1px var(--t25-moss)"></i>Racing green</div>
+            <div class="sw"><i style="background:var(--t25-deep)"></i>Deep</div>
+            <div class="sw"><i style="background:var(--t25-bone)"></i>Bone</div>
+            <div class="sw"><i style="background:var(--t25-moss)"></i>Moss</div>
+            <div class="sw"><i style="background:var(--t25-brass)"></i>Brass</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 26 -->
+  <section class="plate" id="t26" aria-labelledby="t26-name">
+    <div class="plate__head">
+      <div class="plate__tags"><span class="label">Thesis 26</span><span class="chip">anti-metaphor</span><span class="chip">typography only</span></div>
+      <h2 class="plate__name" id="t26-name">Plain Sentences</h2>
+      <p class="plate__thesis">Every listing is one honest sentence, and every word in it is a filter.</p>
+    </div>
+    <div class="plate__body">
+      <div class="prose">
+        <div>
+          <h3>What I was thinking</h3>
+          <p>Remove every metaphor and ask what a buyer needs: the part, the car it fits or came off, its condition, the price and where it is. That's one sentence. Set every listing as a large, readable sentence and let any word in it be tapped to pivot: tap "964" for everything for 964s, tap "Boulder" for what's nearby. Nothing on the page is decoration. It's the most legible and accessible of the five, and a real test of whether typography alone can carry a marketplace.</p>
+        </div>
+        <div>
+          <h3>How it would look on the page</h3>
+          <dl>
+            <div><dt>Front door</dt><dd>White page, black type, no hero image. The search is itself a sentence with blanks: "Show me [coilovers] for a [964] under [$2,500] near [Boulder]." Each blank opens a short list.</dd></div>
+            <div><dt>Listings</dt><dd>Big sentences (around 28px) with generous spacing. Words you can filter by have a dotted underline, and the active filter is shown in reverse, white on black.</dd></div>
+            <div><dt>Photos</dt><dd>A small photo sits inside the sentence at text height and opens large on hover or tap. Photos exist to sell the part, not to decorate the page.</dd></div>
+            <div><dt>Showpiece</dt><dd>Changing any word reflows every sentence with a smooth word-by-word morph, so you see the market rearrange itself. Inline photos develop from a fine halftone into the full image as they enter, done in a light WebGL shader.</dd></div>
+            <div><dt>Type and colour</dt><dd>Atkinson Hyperlegible Next, a face designed for legibility, so the typeface itself makes the argument. Black, white and one grey. No accent colour at all.</dd></div>
+          </dl>
+        </div>
+        <div class="risk">
+          <h3>Where it could go wrong</h3>
+          <p>It could look unfinished, like a text file, if spacing and rhythm aren't exact. Some parts sell on their looks, wheels most of all, so the photo-on-hover pattern has to be quick and generous. It is also the least car-flavoured of the five on purpose.</p>
+        </div>
+      </div>
+      <aside class="spec s26" aria-label="Plain Sentences specimen">
+        <div class="spec__inner">
+          <p class="sentence"><span class="thumb" aria-hidden="true"></span> <span class="w">KW Clubsport coilovers</span>, off a <span class="w on">1991 964</span>, <span class="w">9,000 miles</span>, <b>$2,150</b>, in <span class="w">Boulder</span>.</p>
+          <p class="sentence"><span class="thumb" aria-hidden="true"></span> <span class="w">Fuchs 16" wheels</span>, set of four, refinished, fit a <span class="w on">964</span>, <b>$3,900</b>, in <span class="w">Denver</span>.</p>
+          <p class="ask">Show me <span class="blank">coilovers</span> for a <span class="blank">964</span> under <span class="blank">$2,500</span> near <span class="blank">Boulder</span>.</p>
+          <div class="swatches">
+            <div class="sw"><i style="background:var(--t26-white); box-shadow:inset 0 0 0 1px var(--t26-hair)"></i>White</div>
+            <div class="sw"><i style="background:var(--t26-ink)"></i>Ink</div>
+            <div class="sw"><i style="background:var(--t26-grey)"></i>Grey</div>
+            <div class="sw"><i style="background:var(--t26-hair)"></i>Hairline</div>
+            <div class="sw"><i style="background:linear-gradient(90deg,var(--t26-ink) 50%,var(--t26-white) 50%); box-shadow:inset 0 0 0 1px var(--t26-hair)"></i>Reverse</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 27 -->
+  <section class="plate" id="t27" aria-labelledby="t27-name">
+    <div class="plate__head">
+      <div class="plate__tags"><span class="label">Thesis 27</span><span class="chip">subculture</span><span class="chip">torch shader</span></div>
+      <h2 class="plate__name" id="t27-name">Swirl Finder</h2>
+      <p class="plate__thesis">Detailers show you the truth under a hard light, and so does this marketplace.</p>
+    </div>
+    <div class="plate__body">
+      <div class="prose">
+        <div>
+          <h3>What I was thinking</h3>
+          <p>Detailing has its own vernacular: the hexagon LED ceiling, the swirl-finder torch, 50/50 correction shots, paint-depth readings in microns. Its core value is honesty about condition, which is exactly what makes buying used parts scary. So I'd borrow the culture's ritual: inspect it under the light before you buy. It's a real, visible community on Instagram and YouTube, and its look is instantly recognisable without being racing graphics.</p>
+        </div>
+        <div>
+          <h3>How it would look on the page</h3>
+          <dl>
+            <div><dt>Front door</dt><dd>A dark studio ceiling of hexagon LED lights, reflected in a black bonnet that fills the hero. The reflections slide as you scroll, as if you're walking under the lights.</dd></div>
+            <div><dt>Listings</dt><dd>The body of the site is a bright, clean inspection bay: cool white surfaces, precise condensed type, and condition readings set like gauge results.</dd></div>
+            <div><dt>Signature</dt><dd>Your cursor is the inspection torch. Over a listing photo it rakes a beam that reveals a second photo layer of real wear (curb rash, scratches, swirl marks), each pinned with the seller's note.</dd></div>
+            <div><dt>Showpiece</dt><dd>The torch is a WebGL lighting shader working from a normal map of each photo, so the light actually skims the surface. A 50/50 slider shows the seller's before and after clean on every part.</dd></div>
+            <div><dt>Type and colour</dt><dd>Barlow Semi Condensed with Red Hat Mono readings. Studio black, LED white, bay white and one amber used only to flag wear.</dd></div>
+          </dl>
+        </div>
+        <div class="risk">
+          <h3>Where it could go wrong</h3>
+          <p>It only works if sellers upload a condition photo, so the sell flow has to ask for one and make it easy. The dark hero has to stay clearly different from Temper: cool white LED light instead of heat colour, and the dark part is only the ceiling, not the whole site.</p>
+        </div>
+      </div>
+      <aside class="spec s27" aria-label="Swirl Finder specimen">
+        <img class="spec__img" src="img/t27-hex.jpg" alt="Hexagon LED ceiling reflected in a black bonnet, a torch beam revealing swirl marks">
+        <div class="spec__inner">
+          <div class="specimen-type"><div class="f-display">Inspected under the light.</div><div class="f-body">Every part shows its wear before you pay for it.</div></div>
+          <div class="reading" aria-hidden="true">
+            <div class="row"><span>Volk TE37, 18×9.5 +22, set of 4</span><span>$1,650</span></div>
+            <div class="row"><span>Curb rash</span><span class="flag">2 of 4 wheels · light</span></div>
+            <div class="row"><span>Finish</span><span>Bronze, original, no refinish</span></div>
+            <div class="row"><span>Inspected by seller</span><span>4 photos · torch</span></div>
+          </div>
+          <div class="swatches">
+            <div class="sw"><i style="background:var(--t27-black); box-shadow:inset 0 0 0 1px var(--t27-steel)"></i>Studio</div>
+            <div class="sw"><i style="background:var(--t27-steel)"></i>Steel</div>
+            <div class="sw"><i style="background:var(--t27-bay)"></i>Bay</div>
+            <div class="sw"><i style="background:var(--t27-led)"></i>LED</div>
+            <div class="sw"><i style="background:var(--t27-amber)"></i>Wear flag</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="close" aria-labelledby="close-h">
+    <h2 id="close-h">Side by side</h2>
+    <p>If I had to build two first, I would build The Errand and Tuning Shop. They are the most specific to DRVN: one leans on the agent you've just built, and the other on a mental model your audience already has. Plain Sentences is the most useful as a control, because it shows how much the other four depend on their idea rather than their styling.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Thesis</th><th>Kind of idea</th><th>Ground</th><th>3D or shader</th><th>Closest existing concept</th></tr></thead>
+        <tbody>
+          <tr><td>23 Tuning Shop</td><td>A medium the audience grew up with</td><td>Silver-blue gradient</td><td>3D turntable car, live wheel swap</td><td>One Question (car first), but menu-driven</td></tr>
+          <tr><td>24 Nap</td><td>The material inside the car</td><td>Mid-grey suede</td><td>Fibre shader, 3D steering wheel</td><td>Billet (material), but soft and tactile</td></tr>
+          <tr><td>25 The Errand</td><td>How people ask for parts</td><td>Racing green</td><td>3D riffling photo deck</td><td>Counter (conversation), but no chat</td></tr>
+          <tr><td>26 Plain Sentences</td><td>Content only, no metaphor</td><td>White</td><td>Halftone develop on photos</td><td>Monograph (white), but text-led</td></tr>
+          <tr><td>27 Swirl Finder</td><td>A real car subculture</td><td>Dark ceiling, bright bay</td><td>Raking-torch lighting shader</td><td>Temper (dark), but cool LED light</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

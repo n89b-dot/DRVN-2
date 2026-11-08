@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en" data-auth="in">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0E131B">
+<title>Home · DRVN</title>
+<meta name="description" content="Night Market: DRVN in First Light's night palette. A static design mockup.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap">
+<link rel="stylesheet" href="night-market.css">
+<script src="night-market.js" defer></script>
+</head>
+<body data-page="home" data-nav="home" data-auth="in">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3 4h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.2"/><circle cx="9.5" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></symbol>
+  <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6.5 3.5h11v17l-5.5-4-5.5 4z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6z"/><path d="m8.8 12 2.2 2.2 4.4-4.4"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24"><path d="M5.5 16.5H4a1 1 0 0 1-1-1v-3l2-4.5a2 2 0 0 1 1.8-1.2h10.4a2 2 0 0 1 1.8 1.2l2 4.5v3a1 1 0 0 1-1 1h-1.5M10 16.5h4M3.5 12h17"/><circle cx="7.8" cy="16.5" r="2"/><circle cx="16.2" cy="16.5" r="2"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></symbol>
+  <symbol id="i-zoom" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4h11l-2 4 2 4H5"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-all" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></symbol>
+  <symbol id="i-perf" viewBox="0 0 24 24"><path d="M4.6 17.5a8 8 0 1 1 14.8 0"/><path d="m12 13.5 4-4.5"/><circle cx="12" cy="13.5" r="1.3"/><path d="M12 6.5v1.5M6.8 9l1 1M17.2 9l-1 1"/></symbol>
+  <symbol id="i-engine" viewBox="0 0 24 24"><path d="M3.5 10v6M3.5 13h2.5M6 9.5h3V7h6v2.5h2l2 2.5h1.5v4H19l-2 2.5H9L6 16z"/><path d="M10 7V5.5h4V7"/></symbol>
+  <symbol id="i-body" viewBox="0 0 24 24"><path d="M3 15.5v-2.5l2.5-1 2.8-3.4A2 2 0 0 1 9.9 8h5.4a2 2 0 0 1 1.5.7L19.5 12l1.5.6v2.9a1 1 0 0 1-1 1h-1.5M5.5 16.5H4a1 1 0 0 1-1-1M10 16.5h4M5.5 12h14"/><circle cx="7.8" cy="16.5" r="2"/><circle cx="16.2" cy="16.5" r="2"/></symbol>
+  <symbol id="i-seat" viewBox="0 0 24 24"><path d="M8.2 3.5h2.6a1.2 1.2 0 0 1 1.2 1.4L11 12.5h5.5a2 2 0 0 1 2 2v1.5H9.6a2 2 0 0 1-2-1.7L6.4 5.8a2 2 0 0 1 1.8-2.3z"/><path d="M10 16l-1.5 4.5M16.5 16l1.5 4.5"/></symbol>
+  <symbol id="i-brake" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M15.2 4.7a8 8 0 0 1 4.1 4.4l-2.7 1.1a5 5 0 0 0-2.5-2.7z"/></symbol>
+  <symbol id="i-wheel" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2"/><path d="M12 3.5V10M12 14v6.5M3.9 9.4l6.2 2M13.9 12.6l6.2 2M6.8 18.9l4-5.3M13.2 10.4l4-5.3"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11 12 4l8 7v8.5a1 1 0 0 1-1 1h-4.5V15h-5v5.5H5a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></symbol>
+  <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5 8h14l-1 12.5H6z"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/></symbol>
+  <symbol id="i-garage" viewBox="0 0 24 24"><path d="M3.5 20V9L12 4l8.5 5v11"/><path d="M7 20v-7h10v7M7 16.5h10"/></symbol>
+  <symbol id="i-agent" viewBox="0 0 24 24"><rect x="4.5" y="7" width="15" height="12" rx="3"/><path d="M12 7V4M9 12.5v1M15 12.5v1M9.5 16.5h5"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1 1 0 0 1 0 1.4l-7 7a1 1 0 0 1-1.4 0z"/><circle cx="8" cy="8" r="1.5"/></symbol>
+  <symbol id="i-comment" viewBox="0 0 24 24"><path d="M4.5 19 5.7 15.3A7.2 7.2 0 1 1 8.8 18z"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4 18 18M6 18l1.6-1.6M16.4 7.6 18 6"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 19.5s-7.5-4.4-7.5-9.8A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.4c0 5.4-7.5 9.8-7.5 9.8z"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s6.5-5.8 6.5-11a6.5 6.5 0 0 0-13 0c0 5.2 6.5 11 6.5 11z"/><circle cx="12" cy="10" r="2.3"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V4m0 0L8 8m4-4 4 4M5 13v6.5h14V13"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3.8 2.5 5.2 5.6.7-4.1 3.9 1 5.6-5-2.7-5 2.7 1-5.6-4.1-3.9 5.6-.7z"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3.5L9 5.5h6L16.5 8H20v11H4z"/><circle cx="12" cy="13.2" r="3.2"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4.5h4.5v15H14M10 8l-4 4 4 4M6 12h9"/></symbol>
+</svg>
+<a class="skip" href="#main">Skip to content</a>
+<div class="sky" aria-hidden="true"></div>
+
+<header class="hdr hdr--out">
+  <div class="wrap hdr__in">
+    <a class="brand" href="index.html" aria-label="DRVN, builds and parts. Home"><span class="brand__mark">DRVN<span>.</span></span><span class="brand__tag">Builds and parts</span></a>
+    <form class="hsearch" action="marketplace.html" method="get" role="search">
+      <label class="sr" for="hq">Search DRVN</label>
+      <svg class="ico" aria-hidden="true"><use href="#i-search"/></svg>
+      <input id="hq" name="q" type="search" placeholder="Search DRVN" autocomplete="off">
+    </form>
+    <nav class="hnav" aria-label="Main">
+      <a href="explore.html" data-navkey="explore">Explore</a>
+      <a href="marketplace.html" data-navkey="marketplace">Marketplace</a>
+    </nav>
+    <div class="htools">
+      <button class="iconbtn" type="button" data-open="cart" data-cart-label aria-label="Cart, 0 items"><svg class="ico" aria-hidden="true"><use href="#i-cart"/></svg><span class="badge" data-cart-count hidden>0</span></button>
+      <a class="hsignin" href="home.html">Sign in</a>
+      <a class="btn btn--sun btn--sm hjoin" href="#" data-soon="Joining isn't part of this mockup. Sign in to see the member side.">Join DRVN</a>
+      <button class="iconbtn hmenu" type="button" data-open="menu" aria-label="Menu"><svg class="ico" aria-hidden="true"><use href="#i-menu"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<aside class="side" aria-label="Member navigation">
+  <a class="brand" href="index.html" aria-label="DRVN home"><span class="brand__mark">DRVN<span>.</span></span></a>
+  <nav class="snav" aria-label="Main">
+    <a href="home.html" data-navkey="home"><svg class="ico" aria-hidden="true"><use href="#i-home"/></svg><span>Home</span></a>
+    <a href="explore.html" data-navkey="explore"><svg class="ico" aria-hidden="true"><use href="#i-compass"/></svg><span>Explore</span></a>
+    <a href="marketplace.html" data-navkey="marketplace"><svg class="ico" aria-hidden="true"><use href="#i-bag"/></svg><span>Marketplace</span></a>
+    <a href="garage.html" data-navkey="garage"><svg class="ico" aria-hidden="true"><use href="#i-garage"/></svg><span>Garage</span></a>
+    <a href="#" data-soon="The agent isn't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-agent"/></svg><span>Agent</span></a>
+    <a href="#" data-soon="Selling (orders, offers and payouts) isn't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg><span>Selling</span></a>
+    <a href="#" data-soon="Messages aren't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-comment"/></svg><span>Messages</span><span class="snav__n"><span class="sr">unread: </span>1</span></a>
+    <span class="snav__sep" aria-hidden="true"></span>
+    <a href="profile.html" data-navkey="profile"><svg class="ico" aria-hidden="true"><use href="#i-user"/></svg><span>Profile</span></a>
+    <a href="settings.html" data-navkey="settings"><svg class="ico" aria-hidden="true"><use href="#i-settings"/></svg><span>Settings</span></a>
+  </nav>
+  <div class="side__foot">
+    <a class="btn btn--sun btn--sm" href="#" data-soon="The sell flow isn't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg>List a part</a>
+    <a class="me" href="profile.html"><img class="av" src="img/av-marisol.jpg" alt=""><span><b>Marisol Vega</b><span>@apexmarisol</span></span></a>
+  </div>
+</aside>
+
+<header class="topbar">
+  <div class="wrap topbar__in">
+    <a class="brand" href="index.html" aria-label="DRVN home"><span class="brand__mark">DRVN<span>.</span></span></a>
+    <form class="hsearch" action="marketplace.html" method="get" role="search">
+      <label class="sr" for="tq">Search DRVN</label>
+      <svg class="ico" aria-hidden="true"><use href="#i-search"/></svg>
+      <input id="tq" name="q" type="search" placeholder="Search DRVN" autocomplete="off">
+    </form>
+    <div class="topbar__tools">
+      <a class="btn btn--sun btn--sm" href="home.html#compose"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg>Post</a>
+      <button class="iconbtn" type="button" data-open="cart" data-cart-label aria-label="Cart, 0 items"><svg class="ico" aria-hidden="true"><use href="#i-cart"/></svg><span class="badge" data-cart-count hidden>0</span></button>
+      <button class="iconbtn" type="button" data-open="notifs" aria-label="Notifications, 2 unread"><svg class="ico" aria-hidden="true"><use href="#i-bell"/></svg><span class="badge">2</span></button>
+      <button class="iconbtn tb-saved" type="button" data-open="savedDlg" aria-label="Saved"><svg class="ico" aria-hidden="true"><use href="#i-bookmark"/></svg></button>
+      <button class="iconbtn hmenu" type="button" data-open="menu" aria-label="Menu"><svg class="ico" aria-hidden="true"><use href="#i-menu"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+  <div class="hhead">
+    <h1 id="greet">Evening, Marisol.</h1>
+    <div class="seg" role="tablist" aria-label="Feed" id="htabs">
+      <button type="button" role="tab" data-tab="following" aria-controls="hfeed" aria-selected="false" tabindex="-1">Following</button>
+      <button type="button" role="tab" data-tab="foryou" aria-controls="hfeed" aria-selected="true">For you</button>
+    </div>
+  </div>
+  <div class="hlayout">
+    <div class="hmain">
+      <form class="panel composer" id="composer" novalidate aria-labelledby="compH">
+        <h2 id="compH">Post an update</h2>
+        <div class="composer__row">
+          <img class="av" src="img/av-marisol.jpg" alt="">
+          <div class="field"><label class="sr" for="cText">What's new with your build?</label><textarea class="ctl" id="cText" rows="3" maxlength="1000" placeholder="What's new with your build?" aria-describedby="cErr cHint"></textarea></div>
+        </div>
+        <div class="composer__preview" id="cPreview"></div>
+        <div class="field" id="cTagWrap" hidden><label class="field__label" for="cTag">Tag a part you're selling</label><select class="ctl" id="cTag"><option value="">No part</option></select></div>
+        <div class="composer__tools">
+          <label class="sr" for="cCar">Which car</label>
+          <select class="ctl" id="cCar"><option value="nimbus">Nimbus · 2022 BMW M4</option><option value="lucille">Lucille · 2003 BMW M3</option></select>
+          <span class="btn btn--quiet btn--sm filebtn"><svg class="ico" aria-hidden="true"><use href="#i-camera"/></svg><span id="cPhotoN">Add photos</span><input type="file" id="cPhotos" accept="image/*" multiple aria-label="Add photos"></span>
+          <button class="btn btn--quiet btn--sm" type="button" id="cTagBtn" aria-expanded="false" aria-controls="cTagWrap"><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg>Tag a part</button>
+          <button class="btn btn--sun btn--sm" type="submit">Post</button>
+        </div>
+        <p class="ferr" id="cErr" role="alert" hidden></p>
+        <p class="composer__hint" id="cHint"><span>Every post needs a photo.</span><a class="qlink" href="#" data-soon="The long-form update editor isn't part of this mockup.">Write a full update</a></p>
+      </form>
+      <div class="hfeed" id="hfeed" role="tabpanel" aria-label="Feed"></div>
+    </div>
+    <aside class="hrail" aria-label="Your garage and suggestions">
+      <section class="panel" aria-labelledby="rgH">
+        <div class="panel__head"><h2 id="rgH">Your garage</h2><span class="pill">2 cars</span></div>
+        <div class="rows" id="railGarage"></div>
+        <p class="panel__more"><a class="qlink" href="garage.html">Manage the garage</a></p>
+      </section>
+      <section class="panel" aria-labelledby="rwH">
+        <div class="panel__head"><h2 id="rwH">Parts people are watching</h2></div>
+        <div class="rows" id="railWatch"></div>
+        <p class="panel__more"><a class="qlink" href="marketplace.html">Browse the marketplace</a></p>
+      </section>
+      <section class="panel" aria-labelledby="rbH">
+        <div class="panel__head"><h2 id="rbH">Builders to follow</h2></div>
+        <div class="rows" id="railBuilders"></div>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<footer class="ftr">
+  <div class="wrap ftr__in">
+    <p class="label">DRVN — Home</p>
+    <nav class="ftr__links label" aria-label="Footer">
+      <a href="explore.html">Explore</a>
+      <a href="marketplace.html">Marketplace</a>
+      <a href="garage.html">Garage</a>
+    </nav>
+  </div>
+</footer>
+
+<dialog class="dlg dlg--drawer" id="cart" aria-labelledby="cartTitle">
+  <div class="dlg__panel">
+    <div class="dlg__head drawer__head">
+      <h2 id="cartTitle">Your cart <span class="tnum" id="cartTitleN"></span></h2>
+      <button class="iconbtn" type="button" data-close aria-label="Close cart"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button>
+    </div>
+    <div class="drawer__body" id="cartBody"></div>
+    <div class="drawer__foot" id="cartFoot" hidden>
+      <dl class="sums">
+        <div><dt>Items</dt><dd id="cartSub"></dd></div>
+        <div><dt>Shipping</dt><dd id="cartShip"></dd></div>
+        <div class="sums__total"><dt>Total</dt><dd id="cartTotal"></dd></div>
+      </dl>
+      <p class="hint">Any applicable tax and your selected delivery are confirmed at checkout. Payment is held until each part arrives.</p>
+      <button class="btn btn--sun btn--block" type="button" id="checkout">Checkout</button>
+    </div>
+  </div>
+</dialog>
+
+<nav class="tabbar" aria-label="Main">
+  <a href="explore.html" data-navkey="explore"><svg class="ico" aria-hidden="true"><use href="#i-compass"/></svg>Explore</a>
+  <a href="marketplace.html" data-navkey="marketplace"><svg class="ico" aria-hidden="true"><use href="#i-bag"/></svg>Marketplace</a>
+  <a href="home.html" data-navkey="home"><svg class="ico" aria-hidden="true"><use href="#i-home"/></svg>Home</a>
+  <a href="garage.html" data-navkey="garage"><svg class="ico" aria-hidden="true"><use href="#i-garage"/></svg>Garage</a>
+  <a href="#" data-soon="The agent isn't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-agent"/></svg>Agent</a>
+</nav>
+
+<dialog class="dlg dlg--drawer" id="savedDlg" aria-labelledby="savedH">
+  <div class="dlg__panel">
+    <div class="dlg__head drawer__head"><h2 id="savedH">Saved</h2><button class="iconbtn" type="button" data-close aria-label="Close saved"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    <div class="drawer__body" id="savedBody"></div>
+  </div>
+</dialog>
+
+<dialog class="dlg dlg--drawer" id="notifs" aria-labelledby="notifH">
+  <div class="dlg__panel">
+    <div class="dlg__head drawer__head"><h2 id="notifH">Notifications</h2><button class="iconbtn" type="button" data-close aria-label="Close notifications"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    <div class="drawer__body">
+      <p class="label" style="margin:16px 0 4px">New</p>
+      <div class="rows">
+        <a class="row row--link" href="listing.html#qaH"><img class="av" src="img/av-kaito.jpg" alt=""><span><span class="row__title">Kaito Nakamura asked about your big brake kit</span><span class="row__sub">“Are the rotors two-piece?”</span><span class="row__meta">2 weeks ago</span></span><span class="pill pill--ok">New</span></a>
+        <a class="row row--link" href="listing.html#qaH"><span class="av av--initials">TE</span><span><span class="row__title">Tommy Eriksen asked if the kit clears 18in wheels</span><span class="row__sub">On the big brake kit</span><span class="row__meta">5 days ago</span></span><span class="pill pill--ok">New</span></a>
+      </div>
+      <p class="label" style="margin:24px 0 4px">Earlier</p>
+      <div class="rows">
+        <a class="row row--link" href="profile.html?tab=reviews"><span class="av av--initials">TE</span><span><span class="row__title">Tommy Eriksen left you a 5-star review</span><span class="row__sub">“Arrived exactly as described.”</span><span class="row__meta">Sep 2026</span></span></a>
+        <a class="row row--link" href="settings.html#payments"><img class="av" src="img/av-marisol.jpg" alt=""><span><span class="row__title">E46 M3 front sport seats: paid out</span><span class="row__sub">$950 sale, paid two days after delivery</span><span class="row__meta">Sep 2026</span></span></a>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="dlg dlg--light" id="lightbox" aria-labelledby="lbCap">
+  <div class="dlg__panel">
+    <div class="dlg__head">
+      <p id="lbCap"></p>
+      <button class="iconbtn" type="button" data-close aria-label="Close photo"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button>
+    </div>
+    <img id="lbImg" src="" alt="">
+  </div>
+</dialog>
+
+<dialog class="dlg dlg--drawer" id="menu" aria-label="Menu">
+  <div class="dlg__panel">
+    <div class="dlg__head drawer__head">
+      <a class="brand" href="index.html"><span class="brand__mark">DRVN<span>.</span></span><span class="brand__tag">Builds and parts</span></a>
+      <button class="iconbtn" type="button" data-close aria-label="Close menu"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button>
+    </div>
+    <div class="menu__body only-out">
+      <form class="hsearch" action="marketplace.html" method="get" role="search">
+        <label class="sr" for="mq">Search DRVN</label>
+        <svg class="ico" aria-hidden="true"><use href="#i-search"/></svg>
+        <input id="mq" name="q" type="search" placeholder="Search DRVN" autocomplete="off">
+      </form>
+      <nav class="menu__nav" aria-label="Main">
+        <a href="index.html" data-navkey="landing">Home <svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <a href="explore.html" data-navkey="explore">Explore <svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <a href="marketplace.html" data-navkey="marketplace">Marketplace <svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      </nav>
+      <div class="menu__acts">
+        <a class="btn btn--sun" href="#" data-soon="Joining isn't part of this mockup.">Join DRVN</a>
+        <a class="btn btn--quiet" href="home.html">Sign in</a>
+      </div>
+    </div>
+    <div class="menu__body only-in">
+      <form class="hsearch" action="marketplace.html" method="get" role="search">
+        <label class="sr" for="mq2">Search DRVN</label>
+        <svg class="ico" aria-hidden="true"><use href="#i-search"/></svg>
+        <input id="mq2" name="q" type="search" placeholder="Search DRVN" autocomplete="off">
+      </form>
+      <nav class="snav" aria-label="Main">
+        <a href="home.html" data-navkey="home"><svg class="ico" aria-hidden="true"><use href="#i-home"/></svg><span>Home</span></a>
+        <a href="explore.html" data-navkey="explore"><svg class="ico" aria-hidden="true"><use href="#i-compass"/></svg><span>Explore</span></a>
+        <a href="marketplace.html" data-navkey="marketplace"><svg class="ico" aria-hidden="true"><use href="#i-bag"/></svg><span>Marketplace</span></a>
+        <a href="garage.html" data-navkey="garage"><svg class="ico" aria-hidden="true"><use href="#i-garage"/></svg><span>Garage</span></a>
+        <a href="#" data-soon="The agent isn't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-agent"/></svg><span>Agent</span></a>
+        <a href="#" data-soon="Selling (orders, offers and payouts) isn't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg><span>Selling</span></a>
+        <a href="#" data-soon="Messages aren't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-comment"/></svg><span>Messages</span><span class="snav__n"><span class="sr">unread: </span>1</span></a>
+        <button type="button" data-open="savedDlg"><svg class="ico" aria-hidden="true"><use href="#i-bookmark"/></svg><span>Saved</span></button>
+        <span class="snav__sep" aria-hidden="true"></span>
+        <a href="profile.html" data-navkey="profile"><svg class="ico" aria-hidden="true"><use href="#i-user"/></svg><span>Profile</span></a>
+        <a href="settings.html" data-navkey="settings"><svg class="ico" aria-hidden="true"><use href="#i-settings"/></svg><span>Settings</span></a>
+        <button type="button" data-logout><svg class="ico" aria-hidden="true"><use href="#i-logout"/></svg><span>Log out</span></button>
+      </nav>
+      <a class="btn btn--sun" href="#" data-soon="The sell flow isn't part of this mockup."><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg>List a part</a>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" popover="manual" role="status" aria-live="polite"></div>
+</body>
+</html>

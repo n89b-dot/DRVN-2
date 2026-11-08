@@ -1,0 +1,14 @@
+{
+  "num": 22,
+  "name": "Rolling",
+  "slug": "rolling",
+  "family": "emotion",
+  "thesis": "Built to be driven.",
+  "hero_asset": "rolling-road-mountain.png",
+  "accent_hex": "#F7C948",
+  "thumb_fallback_hex": "#CFD4D7",
+  "pages": {
+    "index.html": "landing: rolling-shot hero with velocity blur, 3D wheels and live speedo, driven this week, parts rail, sell form, buy sheet"
+  },
+  "showpiece": "The rolling shot: a shader-blurred road plate that pans continuously and streaks with your scroll velocity, a sharp Supra cutout that squats under throttle, and the real GLB wheel mesh placed on both hubs spinning at road speed. A live mph readout turns scroll speed into feedback; three plates crossfade."
+}

@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRVN — Parts off real builds</title>
+<meta name="description" content="DRVN is the parts marketplace for modified cars. Buy what comes off real builds, sell what comes off yours. Payment held until delivery.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Martian+Mono:wght@300..500&display=swap">
+<link rel="stylesheet" href="temper.css">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body data-page="index">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <div class="wrap nav__in">
+    <a class="mark" href="index.html" data-heat aria-label="DRVN, home"><span class="mark__word">DRVN</span><span class="band mark__tab" aria-hidden="true"></span></a>
+    <nav class="nav__links" aria-label="Primary">
+      <a class="nav__link" href="market.html" data-heat>Marketplace<span class="band" aria-hidden="true"></span></a>
+      <a class="nav__link" href="garage.html" data-heat>Garage<span class="band" aria-hidden="true"></span></a>
+      <a class="nav__link" href="sell.html" data-heat>Sell<span class="band" aria-hidden="true"></span></a>
+    </nav>
+    <div class="nav__tools">
+      <form class="search" role="search" data-heat>
+        <span class="search__glyph" aria-hidden="true"></span>
+        <label class="sr-only" for="q-nav">Search parts</label>
+        <input id="q-nav" type="search" name="q" placeholder="Search parts, cars, sellers" autocomplete="off">
+        <span class="band" aria-hidden="true"></span>
+      </form>
+      <button class="cart" type="button" data-heat aria-label="Cart">Cart <span class="cart__count num">0</span></button>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="menu" data-heat>Menu</button>
+    </div>
+  </div>
+</header>
+<div class="menu" id="menu" hidden>
+  <nav class="menu__links" aria-label="Mobile">
+    <a href="market.html" data-heat>Marketplace<span class="band" aria-hidden="true"></span></a>
+    <a href="garage.html" data-heat>Garage<span class="band" aria-hidden="true"></span></a>
+    <a href="sell.html" data-heat>Sell<span class="band" aria-hidden="true"></span></a>
+  </nav>
+  <form class="search" role="search" data-heat>
+    <span class="search__glyph" aria-hidden="true"></span>
+    <label class="sr-only" for="q-menu">Search parts</label>
+    <input id="q-menu" type="search" name="q" placeholder="Search parts, cars, sellers" autocomplete="off">
+    <span class="band" aria-hidden="true"></span>
+  </form>
+</div>
+
+<main id="main">
+
+  <!-- HERO -->
+  <section class="hero" data-hero aria-labelledby="hero-title">
+    <div class="hero__stage" aria-hidden="true">
+      <img class="hero__poster" src="../assets/c17-hero-exhaust.jpg" alt="" fetchpriority="high">
+      <canvas class="hero__canvas"></canvas>
+      <div class="hero__fade"></div>
+    </div>
+    <div class="wrap hero__content">
+      <div class="hero__copy">
+        <p class="label" style="margin-bottom:var(--s-5)">The parts marketplace for modified cars</p>
+        <h1 class="display t-hero hero__title" id="hero-title"><span>Off one car.</span><span class="indent">Onto the next.</span></h1>
+        <p class="lede hero__lede"><strong>DRVN is where modified cars trade parts.</strong> Buy what comes off real builds, sell what comes off yours. Every payment is held until the part arrives.</p>
+        <div class="hero__actions">
+          <a class="btn btn--primary" href="market.html" data-heat><span>Shop parts</span><span class="btn__arrow" aria-hidden="true">→</span><span class="band" aria-hidden="true"></span></a>
+          <a class="btn btn--ghost" href="sell.html" data-heat><span>Sell your parts</span></a>
+        </div>
+      </div>
+      <div class="hero__foot">
+        <ul class="hero__facts">
+          <li class="label">No account needed to buy</li>
+          <li class="label">Paid at delivery + 2 days</li>
+          <li class="label">Fitment checked per car</li>
+        </ul>
+        <div class="hero__hint">
+          <p class="label"><span class="hint-fine">Run a cursor along the pipe — titanium keeps the heat</span><span class="hint-touch">Drag across the pipe — titanium keeps the heat</span></p>
+          <a class="textlink" href="part.html" data-heat>Ada’s 4″ Ti tips, $640<span aria-hidden="true">→</span><span class="band" aria-hidden="true"></span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOT RIGHT NOW -->
+  <section class="section" aria-labelledby="hot-title">
+    <div class="wrap">
+      <div class="grid12 sh" data-reveal>
+        <h2 class="display t-d1 sh__title" id="hot-title">Hot right now</h2>
+        <div class="sh__aside">
+          <p>Demand is heat. The more people watching a part, the further its edge tempers — straw, then gold, then blue.</p>
+          <div class="scale" aria-hidden="true">
+            <span class="band" data-scale></span>
+            <div class="scale__ends"><span class="label">Few watching</span><span class="label">Everyone</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="hot__grid" data-hot data-reveal></div>
+      <div class="hot__more">
+        <a class="textlink" href="market.html?sort=hot" data-heat>All parts, hottest first<span aria-hidden="true">→</span><span class="band" aria-hidden="true"></span></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- CAR PICKER -->
+  <section class="section picker" aria-labelledby="picker-title">
+    <div class="wrap grid12">
+      <div class="picker__intro" data-reveal>
+        <h2 class="display t-d2" id="picker-title">What do you drive?</h2>
+        <p>Pick it once. Every listing then tells you whether it bolts on, needs an adaptor, or belongs on someone else’s car.</p>
+      </div>
+      <div class="picker__list">
+        <div role="radiogroup" aria-labelledby="picker-title" data-picker></div>
+        <div class="picker__result" data-picker-result aria-live="polite"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW BUYING WORKS -->
+  <section class="section how" aria-labelledby="how-title">
+    <div class="wrap grid12">
+      <div class="how__head" data-reveal>
+        <h2 class="display t-d2" id="how-title">Paid when it lands.</h2>
+        <p>Buyer protection is the default, not an add-on. Your money sits with DRVN from checkout until two days after the part is on your doorstep.</p>
+      </div>
+      <div class="how__steps">
+        <span class="band how__line" data-trail aria-hidden="true"></span>
+        <ol class="how__grid">
+          <li class="how__step">
+            <span class="label">Day 0</span>
+            <h3>You pay. We hold it.</h3>
+            <p>Card or Apple Pay, with or without an account. The seller sees the order, not the money.</p>
+          </li>
+          <li class="how__step">
+            <span class="label">In transit</span>
+            <h3>It ships tracked.</h3>
+            <p>Sellers have two days to ship. You can follow it from their bench to yours.</p>
+          </li>
+          <li class="how__step">
+            <span class="label">Delivered</span>
+            <h3>Check it over.</h3>
+            <p>Not as described? Tell us within 48 hours and the payment stays put while we sort it.</p>
+          </li>
+          <li class="how__step">
+            <span class="label">Delivered + 2 days</span>
+            <h3>The seller is paid.</h3>
+            <p>Not a day sooner. That’s the whole deal, both ways.</p>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURED BUILD -->
+  <section class="build" aria-labelledby="build-title">
+    <div class="ph build__media" data-heat>
+      <img class="ph__base" src="../assets/c17-car-rear.jpg" alt="Rear three-quarter view of Ada Okafor’s dark gunmetal 2017 Nissan GT-R in a black studio, burnt titanium quad tips over a wet floor" loading="lazy">
+      <img class="ph__heat" src="../assets/c17-car-rear.jpg" alt="" aria-hidden="true" loading="lazy">
+      <div class="build__scrim"></div>
+    </div>
+    <div class="build__over">
+      <div class="wrap build__over-in">
+        <div>
+          <p class="label">Featured build · @ada.fab</p>
+          <h2 class="display build__name" id="build-title">Ink.</h2>
+          <p class="build__spec"><strong>2017 Nissan GT-R, 742 whp on E85.</strong> Single-turbo conversion and a titanium exhaust Ada welded herself in Portland.</p>
+        </div>
+        <a class="btn btn--ghost" href="garage.html" data-heat style="--btn-bg:var(--c-canvas)"><span>Open Ink’s garage</span><span class="btn__arrow" aria-hidden="true">→</span></a>
+      </div>
+    </div>
+  </section>
+  <section class="came" aria-labelledby="came-title">
+    <div class="wrap grid12">
+      <div class="came__head" data-reveal>
+        <h3 class="display t-d3" id="came-title">What came off it</h3>
+        <p>Every part Ada pulled on the way to 742. Some went to other GT-Rs. Some are still waiting for the next car.</p>
+      </div>
+      <ul class="came__list">
+        <li><a class="crow" href="part.html?id=g35-turbo" data-heat data-heat-floor="0.52">
+          <span class="crow__name">Garrett G35-1050 turbo<small>Replaced by a Precision 8685, 2025</small></span>
+          <span class="crow__state label">57 watching</span>
+          <span class="crow__price price">$1,420</span>
+          <span class="band" aria-hidden="true"></span></a></li>
+        <li><a class="crow" href="part.html?id=nismo-muffler" data-heat data-heat-floor="0.26">
+          <span class="crow__name">Nismo titanium muffler<small>Off when she built her own 3.5″ system, 2024</small></span>
+          <span class="crow__state label">24 watching</span>
+          <span class="crow__price price">$1,950</span>
+          <span class="band" aria-hidden="true"></span></a></li>
+        <li><a class="crow" href="part.html" data-heat data-heat-floor="0.42">
+          <span class="crow__name">Ti 4″ double-wall tips, pair<small>Swapped for quad 3.5s, 2026</small></span>
+          <span class="crow__state label">41 watching</span>
+          <span class="crow__price price">$640</span>
+          <span class="band" aria-hidden="true"></span></a></li>
+        <li><div class="crow is-sold">
+          <span class="crow__name">Stock IHI twin turbos, pair<small>Went to a GT-R in Tulsa, 2023</small></span>
+          <span class="crow__state label">Sold</span>
+          <span class="crow__price price">$780</span>
+          <span class="band" aria-hidden="true"></span></div></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SELL -->
+  <section class="section" aria-labelledby="sell-title">
+    <div class="wrap grid12">
+      <div class="sellcta__copy" data-reveal>
+        <h2 class="display t-d2" id="sell-title">Something cooling on your bench?</h2>
+        <p>List a part in four minutes. Say which car it came off — buyers search by it. You’re paid two days after it’s delivered, every time.</p>
+        <div><a class="btn btn--primary" href="sell.html" data-heat><span>Sell your parts</span><span class="btn__arrow" aria-hidden="true">→</span><span class="band" aria-hidden="true"></span></a></div>
+        <ul class="sellcta__terms">
+          <li class="label">No listing fee</li>
+          <li class="label">6% when it sells</li>
+          <li class="label">Your store lives on your profile</li>
+        </ul>
+      </div>
+      <figure class="sellcta__media" data-reveal>
+        <div class="ph ph--whole" data-heat data-heat-view data-heat-max="1">
+          <video class="ph__base vfade" src="../assets/c17-motion-shimmer.mp4" poster="../assets/c17-hero-exhaust.jpg" muted autoplay loop playsinline aria-label="Heat haze rising off a burnt titanium exhaust tip"></video>
+        </div>
+        <figcaption class="label">Ada’s tips, still hot off the dyno</figcaption>
+      </figure>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="grid12 foot__top">
+      <div class="foot__brand">
+        <a class="mark" href="index.html" data-heat aria-label="DRVN, home"><span class="mark__word">DRVN</span><span class="band mark__tab" aria-hidden="true"></span></a>
+        <p>The parts marketplace for modified cars. Built in garages, paid when it lands.</p>
+      </div>
+      <div class="foot__cols">
+        <nav class="foot__col" aria-label="Marketplace"><span class="label">Marketplace</span><a href="market.html">Browse parts</a><a href="market.html?sort=hot">Hottest</a><a href="market.html?sort=new">Just listed</a></nav>
+        <nav class="foot__col" aria-label="Garage"><span class="label">Garage</span><a href="garage.html">Ink, @ada.fab</a><a href="garage.html#store">Ada’s store</a><a href="garage.html#posts">Build posts</a></nav>
+        <nav class="foot__col" aria-label="Selling"><span class="label">Sell</span><a href="sell.html">List a part</a><a href="sell.html">Fees and payouts</a><a href="part.html">Buyer protection</a></nav>
+      </div>
+    </div>
+    <div class="foot__base"><span class="label">© 2026 DRVN · Portland, OR</span><span class="label">Prices in USD</span></div>
+  </div>
+</footer>
+
+<script src="temper.js"></script>
+<script type="module" src="temper-hero.js"></script>
+</body>
+</html>

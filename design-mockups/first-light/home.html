@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home · DRVN</title>
+<meta name="description" content="Theo’s home: following, for you, local, his garage and his store.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+<link rel="stylesheet" href="first-light.css">
+<meta name="color-scheme" content="light dark">
+<script>(function(d){d.classList.add('js');try{var t=(localStorage.getItem('fl-theme')||'').replace(/"/g,'');if((t==='dark'||t==='light')&&!d.hasAttribute('data-theme'))d.setAttribute('data-theme',t);}catch(e){}})(document.documentElement);</script>
+<script src="first-light.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="sky" aria-hidden="true"><div class="sky__mist"></div><div class="sky__sun"></div></div>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="nav" data-nav>
+  <div class="nav__in wrap">
+    <a class="mark" href="index.html" aria-label="DRVN, home">
+      <svg class="mark__sun" viewBox="0 0 30 20" aria-hidden="true"><defs><clipPath id="hz"><rect x="0" y="0" width="30" height="14.5"/></clipPath></defs><g clip-path="url(#hz)"><circle class="mark__disc" cx="15" cy="14.5" r="4.5"/></g><line x1="1" y1="14.5" x2="29" y2="14.5"/></svg>
+      <span class="mark__word">DRVN</span>
+    </a>
+    <nav class="nav__links" aria-label="Primary">
+      <a href="explore.html">Explore</a>
+      <a href="market.html">Marketplace</a>
+      <a href="garage.html">Garage</a>
+      <a href="sell.html">Sell</a>
+    </nav>
+    <div class="nav__tools">
+      <form class="search" action="market.html" role="search">
+        <label class="sr" for="q">Search parts</label>
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5"/></svg>
+        <input id="q" name="q" type="search" placeholder="Search parts" autocomplete="off">
+      </form>
+      <button class="themeswitch" type="button" data-theme-toggle aria-pressed="false" aria-label="Night mode"><span class="themeswitch__dot" aria-hidden="true"></span><span class="themeswitch__dawn" aria-hidden="true">Dawn</span><span class="themeswitch__night" aria-hidden="true">Night</span></button>
+      <p class="clock" aria-hidden="true"><span class="clock__time" data-clock>05:12</span><span class="clock__phase" data-phase>blue hour</span></p>
+      <button class="iconbtn bag" type="button" data-bag-open aria-label="Bag, 0 items">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4 7h12l-1 10H5L4 7z"/><path d="M7.5 7V5.5a2.5 2.5 0 015 0V7"/></svg>
+        <span class="bag__n" data-bag-count>0</span>
+      </button>
+      <a class="nav__me" href="home.html" aria-current="page" aria-label="Theo, your home"><span class="avatar" aria-hidden="true">T</span></a>
+      <button class="menu" type="button" aria-expanded="false" aria-controls="menu" data-menu><span class="menu__bars" aria-hidden="true"></span>Menu</button>
+    </div>
+  </div>
+  <div class="nav__sheet" id="menu" hidden>
+    <ul>
+      <li><a href="explore.html">Explore</a></li>
+      <li><a href="market.html">Marketplace</a></li>
+      <li><a href="garage.html">Garage</a></li>
+      <li><a href="sell.html">Sell</a></li>
+      <li><a href="home.html" aria-current="page">Your home</a></li>
+    </ul>
+    <form class="search" action="market.html" role="search">
+      <label class="sr" for="q-m">Search parts</label>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5"/></svg>
+      <input id="q-m" name="q" type="search" placeholder="Search parts" autocomplete="off">
+    </form>
+    <button class="themeswitch themeswitch--sheet" type="button" data-theme-toggle aria-pressed="false" aria-label="Night mode"><span class="themeswitch__dot" aria-hidden="true"></span><span class="themeswitch__dawn" aria-hidden="true">Dawn</span><span class="themeswitch__night" aria-hidden="true">Night</span></button>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+  <header class="greet" data-reveal>
+    <p class="label"><span data-at>05:12</span> · Saturday 25 October · 34°F in Boulder</p>
+    <h1 class="h1">Morning, <em>Theo.</em></h1>
+    <p class="lead">Fog on the Flatirons and two things waiting for you: <a class="link" href="#offer">an offer on the KWs</a> and <a class="link" href="#order">a pair of lid struts to post</a>.</p>
+  </header>
+  <div class="home">
+    <div>
+      <form class="composer" data-composer novalidate aria-labelledby="composer-title">
+        <h2 id="composer-title" class="sr">Post an update</h2>
+        <div class="composer__top">
+          <span class="avatar" aria-hidden="true">T</span>
+          <div><label class="sr" for="c-text">What did you do this morning?</label><textarea id="c-text" name="text" rows="2" placeholder="What did you do this morning?"></textarea></div>
+        </div>
+        <fieldset class="composer__photos">
+          <legend class="label">A photo from this morning</legend>
+          <label class="ptile"><input type="radio" name="photo" value="../assets/c18-golf.jpg" data-shape="wide" data-alt="Theo’s Golf R on the frosted gravel driveway at dawn"><img src="../assets/c18-golf.jpg" alt=""><span class="sr">Golf R on the frosted driveway</span></label>
+          <label class="ptile"><input type="radio" name="photo" value="../assets/c18-miata.jpg" data-shape="tall" data-alt="The red MX-5 in a misty car park at blue hour"><img src="../assets/c18-miata.jpg" alt=""><span class="sr">The MX-5 in the misty car park</span></label>
+          <label class="ptile"><input type="radio" name="photo" value="../assets/c18-garage-door.jpg" data-shape="wide" data-alt="The garage door half open at dawn, the 964 under its cover"><img src="../assets/c18-garage-door.jpg" alt=""><span class="sr">The garage at dawn</span></label>
+          <label class="ptile"><input type="radio" name="photo" value="../assets/c18-dew.jpg" data-shape="tall" data-alt="Dew on the front lid at sunrise"><img src="../assets/c18-dew.jpg" alt=""><span class="sr">Dew on the front lid</span></label>
+          <label class="ptile"><input type="radio" name="photo" value="../assets/c18-road.jpg" data-shape="tall" data-alt="Flagstaff Road wet and empty, winding into fog"><img src="../assets/c18-road.jpg" alt=""><span class="sr">Flagstaff Road in fog</span></label>
+          <label class="ptile ptile--upload"><input type="file" name="upload" accept="image/*"><span data-upload-label>Upload</span></label>
+        </fieldset>
+        <div class="composer__row">
+          <div class="field">
+            <label for="c-about">Which car or part is this about?</label>
+            <select id="c-about" name="about">
+              <option value="">Choose</option>
+              <optgroup label="Your cars">
+                <option value="964" data-href="car.html">1991 911 Carrera 2</option>
+                <option value="mk7" data-href="garage.html">2015 Golf R, the daily</option>
+                <option value="na" data-href="garage.html">1991 MX-5, the project</option>
+              </optgroup>
+              <optgroup label="Your parts for sale">
+                <option value="kw" data-href="part.html">KW Clubsport coilovers</option>
+                <option value="is20" data-href="part.html">IS20 turbo</option>
+                <option value="fuchs" data-href="part.html">Fuchs 16" set</option>
+              </optgroup>
+            </select>
+          </div>
+          <button type="submit" class="btn btn--sun">Post</button>
+        </div>
+        <p class="composer__msg" data-composer-msg aria-live="polite"></p>
+      </form>
+
+      <div class="tabs" role="tablist" aria-label="Your feed">
+        <button type="button" class="tab" role="tab" id="t-following" aria-controls="p-following" aria-selected="true" tabindex="0">Following</button>
+        <button type="button" class="tab" role="tab" id="t-foryou" aria-controls="p-foryou" aria-selected="false" tabindex="-1">For you</button>
+        <button type="button" class="tab" role="tab" id="t-local" aria-controls="p-local" aria-selected="false" tabindex="-1">Local</button>
+      </div>
+      <section class="panel" id="p-following" role="tabpanel" aria-labelledby="t-following" tabindex="0">
+        <p class="feed__count">Jules, Sam and Ana, since 05:00.</p>
+        <div class="feed" data-feed="following"></div>
+      </section>
+      <section class="panel" id="p-foryou" role="tabpanel" aria-labelledby="t-foryou" tabindex="0" hidden>
+        <p class="feed__count">Parts that fit the 964, the Golf and the MX-5, and what the club is looking at.</p>
+        <div class="feed" data-feed="foryou"></div>
+      </section>
+      <section class="panel" id="p-local" role="tabpanel" aria-labelledby="t-local" tabindex="0" hidden>
+        <p class="feed__count">Within 25 miles of Boulder.</p>
+        <div class="feed" data-feed="local"></div>
+      </section>
+    </div>
+
+    <aside class="aside" aria-label="Your store and garage">
+      <section class="aside__block" aria-labelledby="store-title" data-reveal>
+        <h2 id="store-title" class="label">Your store this morning <a href="garage.html#p-parts">Open store</a></h2>
+        <dl class="kpis">
+          <div><dt>For sale</dt><dd>5</dd></div>
+          <div><dt>Looked at today</dt><dd>212</dd></div>
+          <div><dt>Paid out, Oct</dt><dd>$1,180</dd></div>
+        </dl>
+        <ul class="todo">
+          <li id="offer" data-todo-row>
+            <b>An offer on the KW Clubsports</b>
+            <p>$1,950 from @mara.s2k at 04:52. Your price is $2,150.</p>
+            <div class="todo__actions">
+              <button type="button" class="btn btn--sun btn--sm" data-todo="Accepted at {t}. Mara has 24 hours to pay, and the money is held until delivery.">Accept</button>
+              <button type="button" class="btn btn--quiet btn--sm" data-todo="Countered at $2,050 at {t}. We’ll tell you when Mara replies.">Counter at $2,050</button>
+            </div>
+            <p class="todo__state" data-todo-state aria-live="polite"></p>
+          </li>
+          <li id="order" data-todo-row>
+            <b>Post the lid struts to Kenji</b>
+            <p>Sold yesterday for $60. Ship by Monday; the label is ready to print.</p>
+            <div class="todo__actions">
+              <button type="button" class="btn btn--quiet btn--sm" data-todo="Marked as shipped at {t}. You’re paid two days after Kenji has them.">Mark as shipped</button>
+            </div>
+            <p class="todo__state" data-todo-state aria-live="polite"></p>
+          </li>
+        </ul>
+      </section>
+
+      <section class="aside__block" aria-labelledby="mycars-title" data-reveal>
+        <h2 id="mycars-title" class="label">Your garage <a href="garage.html">Open garage</a></h2>
+        <ul class="rows">
+          <li><a class="rowlink" href="car.html"><span class="photo"><img data-src-night="../assets/c18-hero-night.jpg" src="../assets/c18-hero-pass.jpg" alt="" class="crop-car"></span><span><strong>1991 911 Carrera 2</strong><span>14 updates · 9 parts fitted</span></span></a></li>
+          <li><a class="rowlink" href="garage.html"><span class="photo"><img src="../assets/c18-golf.jpg" alt=""></span><span><strong>2015 Golf R</strong><span>The daily · 3 updates</span></span></a></li>
+          <li><a class="rowlink" href="garage.html"><span class="photo"><img src="../assets/c18-miata.jpg" alt=""></span><span><strong>1991 MX-5</strong><span>The project · since Thursday</span></span></a></li>
+        </ul>
+      </section>
+
+      <section class="aside__block" aria-labelledby="fits-title" data-reveal>
+        <h2 id="fits-title" class="label">Parts for your cars <a href="market.html?fits=964">See all</a></h2>
+        <ul class="rows">
+          <li><a class="rowlink" href="part.html"><span class="photo"><b>Bilstein B6</b></span><span><strong>Bilstein B6 dampers, rear</strong><span>Fits your 964 · New</span></span><span class="price">$420</span></a></li>
+          <li><a class="rowlink" href="part.html"><span class="photo"><b>Ducktail</b></span><span><strong>RS-style ducktail decklid</strong><span>Fits your 964 · New</span></span><span class="price">$1,480</span></a></li>
+          <li><a class="rowlink" href="part.html"><span class="photo"><b>Winter set</b></span><span><strong>Golf R winter wheels</strong><span>Fits your Golf R · Used</span></span><span class="price">$720</span></a></li>
+          <li><a class="rowlink" href="part.html"><span class="photo"><b>NA hardtop</b></span><span><strong>Factory hardtop, Classic Red</strong><span>Fits your MX-5 · Used</span></span><span class="price">$1,350</span></a></li>
+        </ul>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<footer class="foot wrap" aria-labelledby="foot-title">
+  <h2 id="foot-title" class="foot__line">See you at the bottom of Flagstaff, <em>5:30.</em></h2>
+  <div class="foot__cols">
+    <div>
+      <a class="mark" href="index.html" aria-label="DRVN, home">
+        <svg class="mark__sun" viewBox="0 0 30 20" aria-hidden="true"><g clip-path="url(#hz)"><circle class="mark__disc" cx="15" cy="14.5" r="4.5"/></g><line x1="1" y1="14.5" x2="29" y2="14.5"/></svg>
+        <span class="mark__word">DRVN</span>
+      </a>
+      <p class="prose" style="margin-top:16px;max-width:32ch">The parts marketplace for modified cars. Made in Boulder, mostly before breakfast.</p>
+    </div>
+    <div><h2 class="label">Buy</h2><ul><li><a href="market.html">Marketplace</a></li><li><a href="market.html?fits=964">Parts for the 964</a></li><li><a href="part.html">Buyer protection</a></li></ul></div>
+    <div><h2 class="label">Sell</h2><ul><li><a href="sell.html">List a part</a></li><li><a href="home.html">Your home</a></li><li><a href="sell.html">Fees and payouts</a></li></ul></div>
+    <div><h2 class="label">Club</h2><ul><li><a href="explore.html">Explore</a></li><li><a href="garage.html">Theo’s garage</a></li><li><a href="car.html">Theo’s 964</a></li></ul></div>
+  </div>
+  <div class="foot__base"><p>© 2026 DRVN</p><p>Boulder, Colorado · <span class="price" data-clock>06:40</span></p></div>
+</footer>
+</body>
+</html>

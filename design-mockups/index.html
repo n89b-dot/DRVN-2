@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DRVN — Sixteen Concepts</title>
+<title>DRVN — Twenty-two Concepts</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..600&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -49,8 +49,15 @@
   .c12:hover{border-color:#35507E;} .c12 .thumb{background-color:#C8CBD1;}
   .c13:hover{border-color:#B0562F;} .c13 .thumb{background-color:#EDE7DD;}
   .c16:hover{border-color:#F03A20;} .c16 .thumb{background-color:#EFEDE6;}
+  .c20:hover{border-color:#3A2367;} .c20 .thumb{background-color:#DEDEDA;}
+  .c21:hover{border-color:#1F3FFF;} .c21 .thumb{background-color:#E6E8EA;}
+  .c22:hover{border-color:#F7C948;} .c22 .thumb{background-color:#CFD4D7;}
   .c15:hover{border-color:#FF2D1A;} .c15 .thumb{background-color:#0A0A0B;}
   .c14:hover{border-color:#D62828;} .c14 .thumb{background-color:#F2EFE9;}
+  .c17:hover{border-color:#2F5DC0;} .c17 .thumb{background-color:#0C0D0F;}
+  .c18:hover{border-color:#E8955A;} .c18 .thumb{background-color:#DCE2E6;}
+  .c19:hover{border-color:#FFFFFF;} .c19 .thumb{background-color:#0632B4;}
+  .series p { color:var(--dim); font-size:14px; }
   .series { margin:72px 0 28px; display:flex; align-items:baseline; gap:16px; border-bottom:1px solid var(--line); padding-bottom:16px; }
   .series h2 { font-family:'Fraunces',serif; font-weight:340; font-size:clamp(24px,3vw,36px); letter-spacing:-.01em; }
   .cards--two { grid-template-columns:repeat(2,1fr); max-width:880px; }
@@ -62,10 +69,119 @@
 <div class="wrap">
   <header>
     <div class="mark">DRVN</div>
-    <div class="meta">Design Exploration · 16 Concepts · 07.2026</div>
+    <div class="meta">Design Exploration · 22 Concepts · 10.2026</div>
   </header>
-  <h1>Sixteen theses on the<br><em>build-aware marketplace.</em></h1>
+  <h1>Twenty-two theses on the<br><em>build-aware marketplace.</em></h1>
   <p class="sub">DRVN is the home for your modified car — show off the build, buy and sell the parts behind it. Each concept below is a complete, clickable answer to the same question: what should buying and selling the parts behind a build feel like?</p>
+  <div class="series">
+    <h2>Flake, Teardown, Rolling.</h2>
+    <p>October 2026 · a second shader and 3D batch · paint shader, scroll disassembly, rolling shot · Higgsfield imagery, cutouts and image-to-3D</p>
+  </div>
+  <div class="cards">
+    <div class="card c20">
+      <a class="card__main" href="flake/index.html">
+        <div class="thumb" style="background-image:url('assets/flake-car-purple.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 20 · MATERIAL</div>
+          <div class="name">Flake</div>
+          <div class="thesis">"The paint is the interface." A GLSL metallic-flake paint shader lit by your pointer; pick a paint and the whole page takes the colour.</div>
+          <div class="tags"><span class="tag">Primer / Paint</span><span class="tag">Archivo wide</span><span class="tag">Paint shader</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="flake/index.html">Prototype</a>
+        <a href="flake/BRIEF.md">Brief</a>
+      </div>
+    </div>
+    <div class="card c21">
+      <a class="card__main" href="teardown/index.html">
+        <div class="thumb" style="background-image:url('assets/teardown-cut-car.png');background-size:contain;background-repeat:no-repeat"></div>
+        <div class="body">
+          <div class="num">CONCEPT 21 · INTERACTION</div>
+          <div class="name">Teardown</div>
+          <div class="thesis">"Pull the car apart." Scroll takes a Supra to pieces one part at a time, prices attach as they detach, and a real image-to-3D wheel turns in your hand.</div>
+          <div class="tags"><span class="tag">Studio / Cobalt</span><span class="tag">Geist</span><span class="tag">Scroll disassembly · GLB</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="teardown/index.html">Prototype</a>
+        <a href="teardown/BRIEF.md">Brief</a>
+      </div>
+    </div>
+    <div class="card c22">
+      <a class="card__main" href="rolling/index.html">
+        <div class="thumb" style="background-image:url('assets/rolling-road-mountain.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 22 · EMOTION</div>
+          <div class="name">Rolling</div>
+          <div class="thesis">"Built to be driven." The page is a rolling shot: the world streaks with your scroll speed, the car stays sharp, the 3D wheels spin at road speed.</div>
+          <div class="tags"><span class="tag">Sky / Tarmac / Marking</span><span class="tag">Familjen Grotesk</span><span class="tag">Velocity shader</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="rolling/index.html">Prototype</a>
+        <a href="rolling/BRIEF.md">Brief</a>
+      </div>
+    </div>
+  </div>
+  <div class="series">
+    <h2>The shader series.</h2>
+    <p>October 2026 · real-time 3D and shaders · Higgsfield imagery, video and 3D</p>
+  </div>
+  <div class="cards">
+    <div class="card c17">
+      <a class="card__main" href="temper/index.html">
+        <div class="thumb" style="background-image:url('assets/c17-hero-exhaust.jpg')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 17 · MATERIAL</div>
+          <div class="name">Temper</div>
+          <div class="thesis">"Colour only appears where energy has been." Heat-tinted titanium — a live thin-film shader on a 3D exhaust; every hover leaves a cooling afterglow.</div>
+          <div class="tags"><span class="tag">Graphite / Oxide</span><span class="tag">Archivo Expanded</span><span class="tag">Thin-film shader</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="temper/index.html">Prototype</a>
+        <a href="temper/BRIEF.md">Brief</a>
+        <a href="temper/part.html">The part</a>
+      </div>
+    </div>
+    <div class="card c18">
+      <a class="card__main" href="first-light/index.html">
+        <div class="thumb" style="background-image:url('assets/c18-hero-pass.jpg')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 18 · EMOTION</div>
+          <div class="name">First Light</div>
+          <div class="thesis">"Scroll is sunrise." The hour before a drive — fog you can part with the cursor, burning off as the page warms from blue hour to full sun.</div>
+          <div class="tags"><span class="tag">Mist / Apricot</span><span class="tag">Instrument Serif</span><span class="tag">Fog shader</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="first-light/index.html">Prototype</a>
+        <a href="first-light/BRIEF.md">Brief</a>
+        <a href="first-light/garage.html">The garage</a>
+      </div>
+    </div>
+    <div class="card c19">
+      <a class="card__main" href="one-question/index.html">
+        <div class="thumb" style="background-image:url('assets/c19-coilover.jpg')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 19 · INTERACTION</div>
+          <div class="name">One Question</div>
+          <div class="thesis">"What do you drive?" A 48,000-point car that redraws itself as you type — then the whole site re-forms around your answer.</div>
+          <div class="tags"><span class="tag">Ultramarine / White</span><span class="tag">Funnel Display</span><span class="tag">Particle morph</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="one-question/index.html">Prototype</a>
+        <a href="one-question/BRIEF.md">Brief</a>
+        <a href="one-question/market.html">Your parts</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="series">
+    <h2>The first series.</h2>
+  </div>
   <div class="cards">
     <div class="card c1">
       <a class="card__main" href="the-registry/index.html">

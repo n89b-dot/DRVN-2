@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sell your parts · DRVN</title>
+  <meta name="description" content="List what came off your car. Paid 2 days after delivery.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@300..800&family=Funnel+Sans:wght@300..800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="one-question.css">
+  <script src="one-question.js" defer></script>
+</head>
+<body data-page="sell">
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav" data-nav>
+    <a class="wordmark" href="index.html" aria-label="DRVN, home">DRVN<i class="wordmark__caret" aria-hidden="true"></i></a>
+    <nav class="nav__links" aria-label="Main">
+      <a href="market.html">Marketplace</a>
+      <a href="garage.html">Garage</a>
+      <a href="sell.html" aria-current="page">Sell</a>
+    </nav>
+    <div class="nav__right">
+      <div class="carchip" data-carchip>
+        <button class="carchip__btn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="carpop"><span class="carchip__k">Your car</span><span class="carchip__v" data-carchip-label>What do you drive?</span><span class="carchip__c">change</span></button>
+        <div class="carpop" id="carpop" role="dialog" aria-labelledby="carpop-q"></div>
+      </div>
+      <button class="cartbtn" type="button" data-cart aria-label="Cart, 0 items"><span class="cartbtn__label">Cart</span><span class="cartbtn__n">0</span></button>
+      <button class="menubtn" type="button" aria-expanded="false" aria-controls="mnav">Menu</button>
+    </div>
+  </header>
+  <nav class="mnav" id="mnav" aria-label="Mobile">
+    <a href="market.html">Marketplace</a>
+    <a href="garage.html">Garage</a>
+    <a href="sell.html" aria-current="page">Sell your parts</a>
+  </nav>
+
+  <main id="main">
+    <div class="wrap flow" data-flow>
+      <div class="flow__progress" aria-hidden="true"><span data-flow-n>1 of 3</span><span class="flow__bar"><i data-flow-bar></i></span></div>
+
+      <section class="flow__step" data-step="car" hidden>
+        <form data-f-car novalidate>
+          <h1 class="flow__q"><label for="sell-car">What did it come off?</label></h1>
+          <input class="flow__input" id="sell-car" type="text" autocomplete="off" spellcheck="false" maxlength="34" placeholder="Your car, e.g. E46 M3" aria-describedby="sell-car-hint">
+          <p class="flow__hint" id="sell-car-hint" data-car-hint aria-live="polite">It helps buyers trust what they’re getting.</p>
+          <div class="flow__nav"><button class="btn btn--primary" type="submit">Next <span class="btn__arrow" aria-hidden="true">→</span></button><span class="kbd">or press Enter</span></div>
+        </form>
+      </section>
+
+      <section class="flow__step" data-step="what" hidden>
+        <form data-f-what novalidate>
+          <h1 class="flow__q"><label for="sell-what">What came off your <span data-carname>car</span>?</label></h1>
+          <div class="flow__opts" data-what-opts>
+            <button class="btn btn--ghost btn--sm" type="button" data-opt="Coilovers, ">Coilovers</button>
+            <button class="btn btn--ghost btn--sm" type="button" data-opt="Wheels, set of four, ">Wheels</button>
+            <button class="btn btn--ghost btn--sm" type="button" data-opt="Exhaust, ">Exhaust</button>
+            <button class="btn btn--ghost btn--sm" type="button" data-opt="Intake, ">Intake</button>
+            <button class="btn btn--ghost btn--sm" type="button" data-opt="Bucket seat, ">Seat</button>
+            <button class="btn btn--ghost btn--sm" type="button" data-opt="Tail lights, pair, ">Lights</button>
+          </div>
+          <input class="flow__input" id="sell-what" type="text" autocomplete="off" maxlength="70" placeholder="e.g. BC coilovers, 8k miles" aria-describedby="sell-what-hint">
+          <p class="flow__hint" id="sell-what-hint" data-what-hint aria-live="polite">A few words. Photos come after.</p>
+          <div class="flow__nav"><button class="btn btn--primary" type="submit">Next <span class="btn__arrow" aria-hidden="true">→</span></button><button class="tlink tlink--quiet" type="button" data-back>Back</button><span class="kbd">or press Enter</span></div>
+        </form>
+      </section>
+
+      <section class="flow__step" data-step="price" hidden>
+        <form data-f-price novalidate>
+          <h1 class="flow__q"><label for="sell-price">What do you want for it?</label></h1>
+          <div class="flow__money"><span aria-hidden="true">$</span><input class="flow__input" id="sell-price" type="text" inputmode="numeric" autocomplete="off" maxlength="7" placeholder="850" aria-describedby="sell-price-hint"></div>
+          <p class="flow__hint" id="sell-price-hint" data-price-hint aria-live="polite"></p>
+          <div class="flow__nav"><button class="btn btn--primary" type="submit">Next <span class="btn__arrow" aria-hidden="true">→</span></button><button class="tlink tlink--quiet" type="button" data-back>Back</button><span class="kbd">or press Enter</span></div>
+        </form>
+      </section>
+
+      <section class="flow__step" data-step="review" hidden>
+        <form data-f-review novalidate>
+          <h1 class="flow__q">Look right?</h1>
+          <div class="flow__summary">
+            <div><b data-r-what></b><br><span>Came off your <span data-carname>car</span> · buyers will see that</span></div>
+            <div class="num" data-r-price></div>
+          </div>
+          <p class="flow__hint" data-r-net></p>
+          <div class="flow__nav"><button class="btn btn--primary" type="submit">List it <span class="btn__arrow" aria-hidden="true">→</span></button><button class="tlink tlink--quiet" type="button" data-back>Back</button></div>
+        </form>
+      </section>
+
+      <section class="flow__step" data-step="done" hidden>
+        <h1 class="flow__q">Listed.</h1>
+        <p class="lead" data-done-line>Buyers will see exactly which car it came off.</p>
+        <div class="flow__nav" style="margin-top:var(--s-6)"><a class="btn btn--primary" href="market.html">See the marketplace <span class="btn__arrow" aria-hidden="true">→</span></a><button class="tlink" type="button" data-again>List another</button></div>
+      </section>
+    </div>
+  </main>
+  <footer class="footer">
+    <div class="wrap">
+      <p class="footer__q"><a href="index.html">What do you drive?</a></p>
+      <div class="footer__grid">
+        <div><h3>DRVN</h3><p>The parts marketplace for modified cars, with the car in the middle. Built by people who still have a box of old intake parts in the garage.</p></div>
+        <div><h3>Buy</h3><ul><li><a href="market.html">Marketplace</a></li><li><a href="part.html?id=bc-br-e46">Buyer protection</a></li><li><a href="market.html?fit=fits">Parts that fit</a></li></ul></div>
+        <div><h3>Sell</h3><ul><li><a href="sell.html">List a part</a></li><li><a href="garage.html">Your garage</a></li></ul></div>
+        <div><h3>Prices</h3><ul><li><span class="dim">All prices in USD</span></li><li><span class="dim">Ships within the US</span></li></ul></div>
+      </div>
+      <div class="footer__base"><span>© 2026 DRVN</span><span>Concept 19 · One Question</span></div>
+    </div>
+  </footer>
+</body>
+</html>

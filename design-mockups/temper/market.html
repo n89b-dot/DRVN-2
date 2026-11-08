@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marketplace — DRVN</title>
+<meta name="description" content="Browse parts off modified cars. Filter by the car it fits, category, price and condition.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Martian+Mono:wght@300..500&display=swap">
+<link rel="stylesheet" href="temper.css">
+</head>
+<body data-page="market">
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav" data-solid>
+  <div class="wrap nav__in">
+    <a class="mark" href="index.html" data-heat aria-label="DRVN, home"><span class="mark__word">DRVN</span><span class="band mark__tab" aria-hidden="true"></span></a>
+    <nav class="nav__links" aria-label="Primary">
+      <a class="nav__link" href="market.html" aria-current="page" data-heat>Marketplace<span class="band" aria-hidden="true"></span></a>
+      <a class="nav__link" href="garage.html" data-heat>Garage<span class="band" aria-hidden="true"></span></a>
+      <a class="nav__link" href="sell.html" data-heat>Sell<span class="band" aria-hidden="true"></span></a>
+    </nav>
+    <div class="nav__tools">
+      <form class="search" role="search" data-heat>
+        <span class="search__glyph" aria-hidden="true"></span>
+        <label class="sr-only" for="q-nav">Search parts</label>
+        <input id="q-nav" type="search" name="q" placeholder="Search parts, cars, sellers" autocomplete="off">
+        <span class="band" aria-hidden="true"></span>
+      </form>
+      <button class="cart" type="button" data-heat aria-label="Cart">Cart <span class="cart__count num">0</span></button>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="menu" data-heat>Menu</button>
+    </div>
+  </div>
+</header>
+<div class="menu" id="menu" hidden>
+  <nav class="menu__links" aria-label="Mobile">
+    <a href="market.html" data-heat>Marketplace<span class="band" aria-hidden="true"></span></a>
+    <a href="garage.html" data-heat>Garage<span class="band" aria-hidden="true"></span></a>
+    <a href="sell.html" data-heat>Sell<span class="band" aria-hidden="true"></span></a>
+  </nav>
+  <form class="search" role="search" data-heat>
+    <span class="search__glyph" aria-hidden="true"></span>
+    <label class="sr-only" for="q-menu">Search parts</label>
+    <input id="q-menu" type="search" name="q" placeholder="Search parts, cars, sellers" autocomplete="off">
+    <span class="band" aria-hidden="true"></span>
+  </form>
+</div>
+
+<main id="main" class="page-top">
+  <div class="wrap">
+    <header class="mhead">
+      <div>
+        <h1 class="display t-d1">Marketplace</h1>
+        <p>Parts off real builds, from people who fitted them. Every order is held until it arrives — no account needed to buy.</p>
+      </div>
+      <button class="btn btn--ghost btn--sm rail__toggle" type="button" aria-expanded="false" aria-controls="filters" data-heat><span>Filters</span></button>
+    </header>
+
+    <div class="mkt">
+      <aside class="rail" id="filters" data-open="false" aria-label="Filters">
+        <form data-filters>
+          <div style="display:grid;gap:var(--s-6)">
+            <div class="field">
+              <label class="label" for="f-q">Search</label>
+              <div class="ctl" data-heat><input id="f-q" type="search" data-q placeholder="Turbo, tips, R35…" autocomplete="off"></div>
+            </div>
+            <div class="field">
+              <label class="label" for="f-fits">Fits my car</label>
+              <div class="ctl ctl--select" data-heat><select id="f-fits" name="fits"></select></div>
+              <span class="field__hint">Universal parts always show.</span>
+            </div>
+            <fieldset>
+              <legend class="label">Category</legend>
+              <div data-cats></div>
+            </fieldset>
+            <fieldset>
+              <legend class="label">Price</legend>
+              <div class="rail__price">
+                <div class="ctl ctl--prefix" data-heat><span aria-hidden="true">$</span><label class="sr-only" for="f-min">Minimum price</label><input id="f-min" name="min" type="number" inputmode="numeric" min="0" step="50" placeholder="Min"></div>
+                <div class="ctl ctl--prefix" data-heat><span aria-hidden="true">$</span><label class="sr-only" for="f-max">Maximum price</label><input id="f-max" name="max" type="number" inputmode="numeric" min="0" step="50" placeholder="Max"></div>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend class="label">Condition</legend>
+              <label class="check" data-heat><input type="checkbox" name="cond" value="new"><span class="check__box" aria-hidden="true"></span>New</label>
+              <label class="check" data-heat><input type="checkbox" name="cond" value="used-excellent"><span class="check__box" aria-hidden="true"></span>Used, excellent</label>
+              <label class="check" data-heat><input type="checkbox" name="cond" value="used-good"><span class="check__box" aria-hidden="true"></span>Used, good</label>
+            </fieldset>
+            <div><button class="btn btn--ghost btn--sm" type="button" data-reset data-heat><span>Clear filters</span></button></div>
+          </div>
+        </form>
+      </aside>
+
+      <section aria-label="Results">
+        <div class="tbar">
+          <p class="tbar__count" data-count aria-live="polite"></p>
+          <div class="tbar__sort">
+            <label class="label" for="f-sort">Sort</label>
+            <div class="ctl ctl--select" data-heat>
+              <select id="f-sort" data-sort>
+                <option value="hot">Hottest — most watched</option>
+                <option value="new">Just listed</option>
+                <option value="low">Price, low to high</option>
+                <option value="high">Price, high to low</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="mgrid" data-grid></div>
+        <div class="empty" data-empty hidden>
+          <h2 class="display t-d3">Nothing fits that yet.</h2>
+          <p>Loosen a filter, or check back — parts come off cars every weekend.</p>
+          <button class="btn btn--ghost" type="button" data-reset data-heat><span>Clear filters</span></button>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="grid12 foot__top">
+      <div class="foot__brand">
+        <a class="mark" href="index.html" data-heat aria-label="DRVN, home"><span class="mark__word">DRVN</span><span class="band mark__tab" aria-hidden="true"></span></a>
+        <p>The parts marketplace for modified cars. Built in garages, paid when it lands.</p>
+      </div>
+      <div class="foot__cols">
+        <nav class="foot__col" aria-label="Marketplace"><span class="label">Marketplace</span><a href="market.html">Browse parts</a><a href="market.html?sort=hot">Hottest</a><a href="market.html?sort=new">Just listed</a></nav>
+        <nav class="foot__col" aria-label="Garage"><span class="label">Garage</span><a href="garage.html">Ink, @ada.fab</a><a href="garage.html#store">Ada’s store</a><a href="garage.html#posts">Build posts</a></nav>
+        <nav class="foot__col" aria-label="Selling"><span class="label">Sell</span><a href="sell.html">List a part</a><a href="sell.html">Fees and payouts</a><a href="part.html">Buyer protection</a></nav>
+      </div>
+    </div>
+    <div class="foot__base"><span class="label">© 2026 DRVN · Portland, OR</span><span class="label">Prices in USD</span></div>
+  </div>
+</footer>
+
+<script src="temper.js"></script>
+</body>
+</html>

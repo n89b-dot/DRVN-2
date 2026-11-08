@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRVN · Flake</title>
+<meta name="description" content="Concept: the paint is the interface. A marketplace for parts from modified cars where the colour of the car you are looking at becomes the colour of the page.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="flake.css">
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="mark" href="#top" aria-label="DRVN home"><i aria-hidden="true"></i>DRVN</a>
+    <nav class="nav__links" aria-label="Primary">
+      <a href="#builds">Explore</a>
+      <a href="#parts">Marketplace</a>
+      <a href="#sell">Selling</a>
+    </nav>
+    <div class="nav__right">
+      <a class="btn btn--ghost btn--sm" href="#sell">Sign in</a>
+      <a class="btn btn--paint btn--sm" href="#sell">Sell a part</a>
+      <button class="btn btn--ghost btn--sm nav__menu" id="menuBtn" aria-expanded="false" aria-controls="menu">Menu</button>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero" aria-labelledby="h1">
+    <div class="hero__copy">
+      <h1 id="h1">Every part came off a car. <em>Start with the colour.</em></h1>
+      <p>DRVN is the marketplace for parts from modified cars. Pick the paint, see the builds wearing it, and buy what has come off them.</p>
+      <div class="hero__cta">
+        <a class="btn btn--paint" href="#parts">Browse the marketplace</a>
+        <a class="btn btn--ghost" href="#builds">See the builds</a>
+      </div>
+    </div>
+
+    <div class="hero__panel" id="panel">
+      <div class="hero__fallback" aria-hidden="true"></div>
+      <canvas id="paint" aria-label="A painted body panel. Move the pointer to move the light."></canvas>
+
+      <div class="hero__chip" aria-live="polite">
+        <small>Now showing</small>
+        <b id="chipName">Midnight Purple</b>
+        <span id="chipMeta">Nissan LP2 · 1 build, 14 parts listed</span>
+      </div>
+
+      <div class="swatches" role="group" aria-label="Choose a paint">
+        <button class="swatch" data-paint="lp2" aria-pressed="true" style="--c:#2F1B52;--c-shift:#1E4E86;--c-hi:#B39CF2"><i aria-hidden="true"></i><span><b>Midnight Purple</b><small>NISSAN LP2</small></span></button>
+        <button class="swatch" data-paint="02c" aria-pressed="false" style="--c:#1848B0;--c-shift:#1B2F78;--c-hi:#7FB2FF"><i aria-hidden="true"></i><span><b>World Rally Blue</b><small>SUBARU 02C</small></span></button>
+        <button class="swatch" data-paint="nh0" aria-pressed="false" style="--c:#ECEBE3;--c-shift:#C9CDC6;--c-hi:#FFFFFF"><i aria-hidden="true"></i><span><b>Championship White</b><small>HONDA NH-0</small></span></button>
+        <button class="swatch" data-paint="46v" aria-pressed="false" style="--c:#A4101C;--c-shift:#5A0A14;--c-hi:#FF6B6B"><i aria-hidden="true"></i><span><b>Soul Red Crystal</b><small>MAZDA 46V</small></span></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" aria-label="Current paint">
+    <div class="wrap">
+      <div class="band__cell"><small>Paint</small><b><span class="sw" aria-hidden="true"></span><span id="bandName">Midnight Purple</span></b></div>
+      <div class="band__cell"><small>Builds wearing it</small><b class="num" id="bandBuilds">1</b></div>
+      <div class="band__cell"><small>Parts listed</small><b class="num" id="bandParts">14</b></div>
+      <div class="band__cell">
+        <form class="code" id="codeForm">
+          <label for="codeInput">Know your code?</label>
+          <input id="codeInput" type="text" placeholder="LP2" autocomplete="off" spellcheck="false" maxlength="6">
+          <button class="btn btn--paint btn--sm" type="submit">Find</button>
+        </form>
+        <div class="code__hint" id="codeHint"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="builds" aria-labelledby="buildsH">
+    <div class="wrap">
+      <div class="head reveal">
+        <div>
+          <h2 id="buildsH">Builds wearing this paint</h2>
+          <p class="lede">A build is a car and everything that has been bolted to it. Follow one and you hear when a part comes off.</p>
+        </div>
+        <a class="btn btn--ghost" href="#parts">All builds</a>
+      </div>
+      <div class="builds reveal" id="buildGrid"></div>
+    </div>
+  </section>
+
+  <section class="section section--tight" id="parts" aria-labelledby="partsH">
+    <div class="wrap">
+      <div class="head reveal">
+        <div>
+          <h2 id="partsH">Parts off <span id="partsCar">the R34</span></h2>
+          <p class="lede">Each listing names the car it came off, so fitment is a fact and not a guess.</p>
+        </div>
+        <a class="btn btn--ghost" href="#parts">Open the marketplace</a>
+      </div>
+      <div class="rail reveal" id="rail"></div>
+    </div>
+  </section>
+
+  <section class="section" id="sell" aria-labelledby="sellH">
+    <div class="wrap sell">
+      <div class="sell__photo reveal"><img src="../assets/flake-part-wing.png" alt="A carbon fibre GT wing resting on a studio floor" loading="lazy"></div>
+      <div class="reveal">
+        <h2 id="sellH">List a part in the time it takes to find the box.</h2>
+        <p class="lede">Tell us the car it came off and the listing inherits its paint, its fitment and its followers.</p>
+        <form class="form" id="sellForm">
+          <div class="field__row">
+            <div class="field"><label for="sellCar">Came off</label>
+              <select id="sellCar">
+                <option value="lp2">Nissan Skyline GT-R R34</option>
+                <option value="02c">Subaru Impreza 22B</option>
+                <option value="nh0">Honda Civic Type R EK9</option>
+                <option value="46v">Mazda RX-7 FD3S</option>
+              </select>
+            </div>
+            <div class="field"><label for="sellPart">Part</label><input id="sellPart" type="text" value="Nismo R-tune front bumper"></div>
+          </div>
+          <div class="field__row">
+            <div class="field"><label for="sellPrice">Price</label><input id="sellPrice" type="text" inputmode="decimal" value="1,850"></div>
+            <div class="field"><label for="sellCond">Condition</label>
+              <select id="sellCond"><option>Used, fitted</option><option>New, unopened</option><option>Needs work</option></select>
+            </div>
+          </div>
+          <div class="preview" aria-live="polite">
+            <i aria-hidden="true"></i>
+            <div><b id="pvName">Nismo R-tune front bumper</b><span id="pvMeta">Off a Nissan Skyline GT-R R34 in Midnight Purple · Used, fitted</span></div>
+            <div class="part__price num" id="pvPrice">£1,850</div>
+          </div>
+          <button class="btn btn--paint btn--block" type="submit" id="sellBtn">Publish listing</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="mark" href="#top"><i aria-hidden="true"></i>DRVN</a>
+    <nav aria-label="Footer"><a href="#builds">Explore</a><a href="#parts">Marketplace</a><a href="#sell">Selling</a><a href="#top">Help</a></nav>
+    <span>The home for your car and its build.</span>
+  </div>
+</footer>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet__scrim" data-close></div>
+  <aside class="sheet__panel" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div class="sheet__top"><span class="part__from"><i aria-hidden="true"></i><span id="sheetFrom">Off the R34</span></span><button class="sheet__close" data-close aria-label="Close">×</button></div>
+    <div class="sheet__img"><img id="sheetImg" src="" alt=""></div>
+    <h3 id="sheetTitle"></h3>
+    <div class="sheet__price num" id="sheetPrice"></div>
+    <div class="kv">
+      <div><small>Fits</small><span id="sheetFits"></span></div>
+      <div><small>Condition</small><span id="sheetCond"></span></div>
+      <div><small>Seller</small><span id="sheetSeller"></span></div>
+      <div><small>Ships from</small><span id="sheetShips"></span></div>
+    </div>
+    <div class="sheet__from"><i aria-hidden="true"></i><span id="sheetCar"></span></div>
+    <button class="btn btn--paint btn--block sheet__buy" id="buyBtn">Buy now</button>
+    <div class="sheet__done" id="sheetDone"></div>
+  </aside>
+</div>
+
+<script type="module" src="flake.js"></script>
+</body>
+</html>

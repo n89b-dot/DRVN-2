@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRVN · The parts marketplace for modified cars</title>
+<meta name="description" content="Sell what comes off your car. Shop parts off cars like yours, each one shown with the car it came from.">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+<link rel="stylesheet" href="night-market-b.css">
+<script>(function(d){d.classList.add('js');try{if(localStorage.getItem('nmb-auth')==='in')d.setAttribute('data-auth','in');}catch(e){}})(document.documentElement);</script>
+<script src="night-market-b.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="sky" aria-hidden="true"><div class="sky__mist"></div><div class="sky__sun"></div></div>
+<div class="grain" aria-hidden="true"></div>
+<header class="nav nav--over" data-nav>
+  <div class="nav__in wrap">
+    <a class="mark" href="index.html" aria-label="DRVN, home"><svg class="mark__sun" viewBox="0 0 30 20" aria-hidden="true"><defs><clipPath id="hz"><rect x="0" y="0" width="30" height="14.5"/></clipPath></defs><g clip-path="url(#hz)"><circle class="mark__disc" cx="15" cy="14.5" r="4.5"/></g><line x1="1" y1="14.5" x2="29" y2="14.5"/></svg><span class="mark__word">DRVN</span></a>
+    <nav class="nav__links" aria-label="Primary">
+      <a class="auth-in" href="home.html">Home</a>
+      <a href="explore.html">Explore</a>
+      <a href="marketplace.html">Marketplace</a>
+      <a class="auth-in" href="garage.html">Garage</a>
+    </nav>
+    <div class="nav__tools">
+      <form class="search" action="marketplace.html" role="search">
+        <label class="sr" for="q">Search DRVN</label>
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5"/></svg>
+        <input id="q" name="q" type="search" placeholder="Search parts and cars" autocomplete="off">
+      </form>
+      <p class="clock" aria-hidden="true"><span class="clock__time" data-clock>04:20</span><span class="clock__phase" data-phase>night</span></p>
+      <a class="btn btn--sun btn--sm auth-in nav__post" href="home.html#compose">Post</a>
+      <button class="iconbtn bag" type="button" data-cart-open aria-label="Cart, 0 items"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M3 4h2l1.6 8.4h8.2L16.5 6H6"/><circle cx="8" cy="15.5" r="1"/><circle cx="14" cy="15.5" r="1"/></svg><span class="bag__n" data-cart-count>0</span></button>
+      <a class="nav__signin auth-out" href="home.html" data-signin>Sign in</a>
+      <a class="btn btn--sun btn--sm auth-out nav__join" href="home.html" data-signin>Join DRVN</a>
+      <div class="me auth-in">
+        <button class="me__btn" type="button" aria-expanded="false" aria-controls="meMenu" data-me><img class="av" src="img/av-marisol.jpg" alt="" width="36" height="36"><span class="sr">Marisol Vega, account menu</span></button>
+        <div class="me__menu" id="meMenu" hidden>
+          <p class="me__who"><b>Marisol Vega</b><span>@apexmarisol</span></p>
+          <a href="profile.html">Your public profile</a>
+          <a href="garage.html">Garage</a>
+          <a href="#" data-soon="Selling (orders, offers and payouts) isn't part of this mockup.">Selling</a>
+          <a href="#" data-soon="Messages aren't part of this mockup.">Messages <span class="me__n">1</span></a>
+          <a href="#" data-soon="The Agent isn't part of this mockup.">Agent</a>
+          <a href="settings.html">Settings</a>
+          <button type="button" data-logout>Log out</button>
+        </div>
+      </div>
+      <button class="menu" type="button" aria-expanded="false" aria-controls="menu" data-menu><span class="menu__bars" aria-hidden="true"></span>Menu</button>
+    </div>
+  </div>
+  <div class="nav__sheet" id="menu" hidden>
+    <ul><li class="auth-in"><a href="home.html">Home</a></li><li><a href="explore.html">Explore</a></li><li><a href="marketplace.html">Marketplace</a></li><li class="auth-in"><a href="garage.html">Garage</a></li>
+      <li class="auth-in"><a href="profile.html">Profile</a></li>
+      <li class="auth-in"><a href="settings.html">Settings</a></li>
+      <li class="auth-out"><a href="home.html" data-signin>Sign in</a></li>
+    </ul>
+    <form class="search" action="marketplace.html" role="search">
+      <label class="sr" for="q-m">Search DRVN</label>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5"/></svg>
+      <input id="q-m" name="q" type="search" placeholder="Search parts and cars" autocomplete="off">
+    </form>
+  </div>
+</header>
+<main id="main">
+  <section class="hero" data-hero aria-labelledby="hero-title">
+    <div class="hero__media" aria-hidden="true">
+      <div class="hero__set hero__set--night">
+        <img class="hero__poster" src="img/hero-night.jpg" alt="" fetchpriority="high">
+        <video class="hero__video" data-video-night muted playsinline preload="none" poster="img/hero-night.jpg"><source src="img/hero-night.mp4" type="video/mp4"></video>
+        <video class="hero__video" data-video-night muted playsinline preload="none"><source src="img/hero-night.mp4" type="video/mp4"></video>
+      </div>
+      <div class="hero__haze"></div>
+      <canvas class="hero__fog" data-fog></canvas>
+    </div>
+    <div class="hero__scrim" aria-hidden="true"></div>
+    <div class="hero__body wrap">
+      <p class="label hero__eyebrow" data-emerge>Buy and sell parts off modified cars</p>
+      <h1 id="hero-title" class="hero__title"><span><span class="w" data-emerge>The</span> <span class="w" data-emerge>parts</span> <span class="w" data-emerge>marketplace</span></span> <em><span class="w" data-emerge>for</span> <span class="w" data-emerge>modified</span> <span class="w" data-emerge>cars.</span></em></h1>
+      <p class="hero__lead" data-emerge>Sell what comes off your car. Shop parts off cars like yours, each one shown with the car it came from.</p>
+      <div class="hero__actions" data-emerge>
+        <a class="btn btn--sun" href="marketplace.html">Shop parts for my car</a>
+        <a class="btn btn--frost" href="home.html" data-signin>Sell my parts</a>
+      </div>
+    </div>
+    <div class="hero__foot wrap label"><p>04:20 · fog in the valley</p><p>No account needed to buy</p></div>
+  </section>
+
+  <section class="section section--tight wrap" aria-labelledby="fresh-title">
+    <div class="section__head" data-reveal>
+      <div><p class="label"><span data-at>04:24</span> · For sale now</p><h2 id="fresh-title" class="h2">Off members’ cars, <em>tonight.</em></h2>
+        <p class="lead">Each part shows the car it came off and the person who fitted it.</p></div>
+      <a class="arrow" href="marketplace.html"><span>All parts</span></a>
+    </div>
+    <div class="grid" data-list="fresh"></div>
+  </section>
+
+  <section class="section wrap" aria-labelledby="pick-title">
+    <div class="cols picker">
+      <div class="picker__text" data-reveal>
+        <p class="label"><span data-at>04:30</span> · Your car</p>
+        <h2 id="pick-title" class="h1" style="margin-top:16px">What do you <em>drive?</em></h2>
+        <p class="lead" style="margin-top:24px">Pick your car and see the parts that fit it, or came off one like it.</p>
+        <form class="picker__form picker__form--two" id="picker">
+          <div class="field"><label for="pMake">Make <span class="hint">(optional)</span></label><select id="pMake" name="make"><option value="">Any make</option></select></div>
+          <div class="field"><label for="pModel">Model <span class="hint">(optional)</span></label><select id="pModel" name="fits"></select></div>
+          <div class="picker__go"><button class="btn btn--sun" type="submit" id="pGo">Show parts</button><a class="arrow" href="marketplace.html"><span>Or browse everything</span></a></div>
+        </form>
+      </div>
+      <div class="picker__tiles" data-tiles></div>
+    </div>
+  </section>
+
+  <section class="section band" aria-labelledby="loop-title">
+    <div class="wrap cols">
+      <div class="buying__head" data-reveal>
+        <p class="label"><span data-at>04:41</span> · How it works</p>
+        <h2 id="loop-title" class="h2" style="margin-top:16px">Every upgrade <em>leaves a part behind.</em></h2>
+        <p class="lead" style="margin-top:24px">Modified cars keep changing. The part you took off is exactly what someone else’s car needs.</p>
+      </div>
+      <div class="loops">
+        <div class="loop" data-reveal><p class="label">Selling</p><h3 class="h3">Turn what came off <em>into money.</em></h3>
+          <ol class="loop__steps"><li>Fit the new part.</li><li>List the old one in a minute. Add your car once and every part you sell carries it, so buyers see where it came from.</li><li>People who follow your car see the part first.</li><li>Get paid two days after it’s delivered. Free to list, 10% when it sells.</li></ol>
+          <a class="btn btn--quiet btn--sm" href="home.html" data-signin>Sell my parts</a></div>
+        <div class="loop" data-reveal style="--d:120ms"><p class="label">Buying</p><h3 class="h3">Find parts off <em>cars like yours.</em></h3>
+          <ol class="loop__steps"><li>Tell us what you drive.</li><li>Browse parts that came off the same car, or one like it.</li><li>See the car each part came off, and the person who fitted it.</li><li>Pay through DRVN. The seller isn’t paid until it arrives, and you don’t need an account to buy.</li></ol>
+          <a class="btn btn--quiet btn--sm" href="marketplace.html">Shop parts</a></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--tight wrap" aria-labelledby="withcar-title">
+    <div class="section__head" data-reveal>
+      <div><p class="label"><span data-at>04:50</span> · The car comes too</p><h2 id="withcar-title" class="h2">Every part comes <em>with its car.</em></h2>
+        <p class="lead">See what it was fitted to, who fitted it, and what else they’ve changed, before you buy.</p></div>
+    </div>
+    <div class="grid grid--3" data-withcar></div>
+  </section>
+
+  <section class="section wrap" aria-labelledby="built-title">
+    <div class="cols sellsplit">
+      <div class="sellsplit__text" data-reveal>
+        <p class="label"><span data-at>04:56</span> · Buyer protection</p>
+        <h2 id="built-title" class="h2" style="margin-top:16px">Built for car parts, <em>not everything.</em></h2>
+        <ul class="terms">
+          <li><span><b>Shop by your car.</b> Filter everything by make and model.</span></li>
+          <li><span><b>See the car it came off.</b> The car, the owner, and what else they’ve changed.</span></li>
+          <li><span><b>Paid only on delivery.</b> The seller is paid after the part arrives, and you have 30 days to report a problem.</span></li>
+          <li><span><b>Buyers who know cars.</b> Your listing reaches the people who follow your car.</span></li>
+        </ul>
+        <p class="hint" style="margin-top:24px">Payments by Stripe · Seller paid after delivery · 30-day problem window · Condition recorded at sale</p>
+      </div>
+      <div class="sellers" data-sellers></div>
+    </div>
+  </section>
+
+  <section class="section wrap" aria-labelledby="shelf-title">
+    <div class="cols shelf">
+      <figure class="shelf__car" data-reveal><img src="img/car-lucille.webp" alt="Lucille, Marisol’s silver E46 M3, cut out against the night" loading="lazy"></figure>
+      <div class="shelf__text" data-reveal style="--d:120ms">
+        <p class="label"><span data-at>05:04</span> · Sell</p>
+        <h2 id="shelf-title" class="h2" style="margin-top:16px">What’s on the shelf <em>in your garage?</em></h2>
+        <p class="lead" style="margin-top:20px">This is what came off Lucille, Marisol’s E46 M3. Every part carries the car with it.</p>
+        <ul class="shelfrows" data-shelf></ul>
+        <div style="margin-top:32px;display:flex;gap:12px;flex-wrap:wrap"><a class="btn btn--sun" href="home.html" data-signin>Sell my parts</a><a class="btn btn--quiet" href="marketplace.html">Shop parts for my car</a></div>
+      </div>
+    </div>
+  </section>
+</main>
+<footer class="foot wrap" aria-labelledby="foot-title">
+  <h2 id="foot-title" class="foot__line">Every part you list <em>carries its car with it.</em></h2>
+  <div class="foot__cols">
+    <div>
+      <a class="mark" href="index.html" aria-label="DRVN, home"><svg class="mark__sun" viewBox="0 0 30 20" aria-hidden="true"><g clip-path="url(#hz)"><circle class="mark__disc" cx="15" cy="14.5" r="4.5"/></g><line x1="1" y1="14.5" x2="29" y2="14.5"/></svg><span class="mark__word">DRVN</span></a>
+      <p class="prose" style="margin-top:16px;max-width:32ch">The parts marketplace for modified cars. Sell what comes off yours; buy what came off cars like it.</p>
+    </div>
+    <div><h2 class="label">Buy</h2><ul><li><a href="marketplace.html">Marketplace</a></li><li><a href="listing.html">Buyer protection</a></li><li><a href="explore.html">Explore builds</a></li></ul></div>
+    <div><h2 class="label">Sell</h2><ul><li><a href="home.html" data-signin>Sell my parts</a></li><li><a href="settings.html#payments">Fees and payouts</a></li><li><a href="garage.html" data-signin>Your garage</a></li></ul></div>
+    <div><h2 class="label">DRVN</h2><ul><li><a href="#" data-soon="Terms aren't part of this mockup.">Terms</a></li><li><a href="#" data-soon="Privacy isn't part of this mockup.">Privacy</a></li><li><a href="#" data-soon="Help isn't part of this mockup.">Help</a></li></ul></div>
+  </div>
+  <div class="foot__base"><p>© 2026 DRVN · Payments by Stripe</p><p>Austin, TX · <span class="price" data-clock>05:10</span></p></div>
+</footer>
+<dialog class="drawer" id="cart" aria-labelledby="cartTitle">
+  <div class="drawer__in">
+    <div class="drawer__head"><h2 id="cartTitle">Your <em>cart</em><span id="cartN"></span></h2><button type="button" class="iconbtn" data-close aria-label="Close cart"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg></button></div>
+    <div class="drawer__body" id="cartBody"></div>
+    <div class="drawer__foot" id="cartFoot" hidden>
+      <dl class="sum"><div><dt>Items</dt><dd id="cartSub">$0</dd></div><div><dt>Shipping</dt><dd id="cartShip">$0</dd></div><div class="total"><dt>Total before tax</dt><dd id="cartTotal" class="price">$0</dd></div></dl>
+      <p class="hold"><b>Held until it arrives.</b> Each seller is paid two days after delivery. Report a problem within 30 days and the seller has 3 days to respond.</p>
+      <button type="button" class="btn btn--sun btn--block" id="checkout">Checkout</button>
+    </div>
+  </div>
+</dialog>
+</body>
+</html>

@@ -167,6 +167,96 @@
       "source": "/werkbank/",
       "destination": "/werkbank/index.html",
       "type": 301
+    },
+    {
+      "source": "/temper",
+      "destination": "/temper/index.html",
+      "type": 301
+    },
+    {
+      "source": "/temper/",
+      "destination": "/temper/index.html",
+      "type": 301
+    },
+    {
+      "source": "/first-light",
+      "destination": "/first-light/index.html",
+      "type": 301
+    },
+    {
+      "source": "/first-light/",
+      "destination": "/first-light/index.html",
+      "type": 301
+    },
+    {
+      "source": "/one-question",
+      "destination": "/one-question/index.html",
+      "type": 301
+    },
+    {
+      "source": "/one-question/",
+      "destination": "/one-question/index.html",
+      "type": 301
+    },
+    {
+      "source": "/flake",
+      "destination": "/flake/index.html",
+      "type": 301
+    },
+    {
+      "source": "/flake/",
+      "destination": "/flake/index.html",
+      "type": 301
+    },
+    {
+      "source": "/teardown",
+      "destination": "/teardown/index.html",
+      "type": 301
+    },
+    {
+      "source": "/teardown/",
+      "destination": "/teardown/index.html",
+      "type": 301
+    },
+    {
+      "source": "/rolling",
+      "destination": "/rolling/index.html",
+      "type": 301
+    },
+    {
+      "source": "/rolling/",
+      "destination": "/rolling/index.html",
+      "type": 301
+    },
+    {
+      "source": "/night-market",
+      "destination": "/night-market/index.html",
+      "type": 301
+    },
+    {
+      "source": "/night-market/",
+      "destination": "/night-market/index.html",
+      "type": 301
+    },
+    {
+      "source": "/night-market-b",
+      "destination": "/night-market-b/index.html",
+      "type": 301
+    },
+    {
+      "source": "/night-market-b/",
+      "destination": "/night-market-b/index.html",
+      "type": 301
+    },
+    {
+      "source": "/theses",
+      "destination": "/theses/index.html",
+      "type": 301
+    },
+    {
+      "source": "/theses/",
+      "destination": "/theses/index.html",
+      "type": 301
     }
   ]
 }

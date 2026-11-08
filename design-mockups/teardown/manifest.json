@@ -1,0 +1,14 @@
+{
+  "num": 21,
+  "name": "Teardown",
+  "slug": "teardown",
+  "family": "interaction",
+  "thesis": "Pull the car apart. Everything that comes off is for sale.",
+  "hero_asset": "teardown-cut-car.png",
+  "accent_hex": "#1F3FFF",
+  "thumb_fallback_hex": "#E6E8EA",
+  "pages": {
+    "index.html": "landing: scroll-driven disassembly stage with projected price tags, teardowns in progress, real 3D wheel viewer, start-a-teardown form, reserve drawer"
+  },
+  "showpiece": "A 420vh sticky stage: scrolling pulls eight photographic part cutouts out of a Supra one by one along their own vectors, HTML price tags are projected from 3D each frame, and the last stretch of scroll knolls everything into a laid-out grid. Hover raycasts to a part; click opens the listing. Plus a real GLB wheel mesh (image-to-3D) you can drag to turn."
+}
