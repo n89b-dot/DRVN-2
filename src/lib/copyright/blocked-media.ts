@@ -46,7 +46,10 @@ export async function blockedMediaKeys(now: number = Date.now()): Promise<Set<st
   if (cached && now - cached.at < BLOCKED_MEDIA_TTL_MS) return cached.keys;
   loading ??= load()
     .then((keys) => {
-      cached = { keys, at: Date.now() };
+      // Aged from the caller's clock, the same one the check above reads: a
+      // read that resolved late must not make the list look fresher than it
+      // is (and the tests' clock is the caller's).
+      cached = { keys, at: now };
       return keys;
     })
     .catch((error) => {
