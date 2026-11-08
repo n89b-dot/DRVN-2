@@ -32,4 +32,11 @@ describe("the production runbook's environment tables", () => {
     const missing = [...read].filter((name) => !NOT_CONFIGURATION.has(name) && !new RegExp(`\\b${name}\\b`).test(runbook));
     expect(missing).toEqual([]);
   });
+
+  it("N540: tells the operator the sandbox payment override must never be on a hosted deployment", () => {
+    const row = runbook.split("\n").find((line) => line.startsWith("| `PAYMENTS_MODE` |")) ?? "";
+    expect(row).toMatch(/PAYMENTS_ALLOW_STUB_IN_PRODUCTION/);
+    expect(row).toMatch(/refuses to boot/);
+    expect(row).toMatch(/N540/);
+  });
 });
