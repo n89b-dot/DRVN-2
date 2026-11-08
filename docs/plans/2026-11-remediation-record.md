@@ -22,14 +22,14 @@ Status words: **merged** (on `main`, CI green) · **open** (PR up, merged by han
 | B3 release-candidate script | OS-W37 R-rcconfig | #172 | `1ffd7bc` | merged |
 | B4 production target | (prep for D4) | — | — | owner: waits for the production project |
 | C1 deletion proof on staging | B7 N418 N439 N442 | — | — | owner: waits for D3 |
-| C2 transfer recovery | N499 | #176 | | open: already fixed by #91; adds N499 tests, corrects the crosswalk |
-| C3 deploy gating | N528 | #175 | | open, with D2 |
-| C4 private-car and draft photos | OS-W38 N455 | #178 (#177 closed, branch deleted) | | open; migration applied after merge (order below); the account export links photos for seven days |
-| C5 18+ backfill prompt | OS-W38 N686 | #174 | | open; `20261108150000` applied to shared dev and staging |
+| C2 transfer recovery | N499 | #176 | `c7dad28` | merged: already fixed by #91; adds N499 tests, corrects the crosswalk |
+| C3 deploy gating | N528 | #175 | `c55bf60` | merged, with D2 |
+| C4 private-car and draft photos | OS-W38 N455 | #178 (#177 closed, branch deleted) | `3698591` | merged; `20261108160000` applied after the merge to shared dev then staging (below); the account export links photos for seven days |
+| C5 18+ backfill prompt | OS-W38 N686 | #174 | `7e9ed2c` | merged; `20261108150000` applied to shared dev and staging |
 | C6 Supabase Auth settings | N451 N441 N662 | — | — | owner (rows ready in `docs/release-evidence/infrastructure.md`, #175) |
-| C7 stub-override boot assertion | OS-W38 N540 | #173 | | open |
-| C8 infrastructure evidence file | OS-W39 N224 | #175 | | open |
-| D2 deploy pipeline | OS-W39 N634 N528 | #175 | | open; touches `.github/workflows/` |
+| C7 stub-override boot assertion | OS-W38 N540 | #173 | `80dbc11` | merged |
+| C8 infrastructure evidence file | OS-W39 N224 | #175 | `c55bf60` | merged |
+| D2 deploy pipeline | OS-W39 N634 N528 | #175 | `c55bf60` | merged (the workflow file merged without extra token scope) |
 | D1, D3–D7, D-mail | | | | owner |
 | E1–E7 | | | | owner |
 | F1–F6 | | | | owner and counsel |
@@ -45,9 +45,12 @@ Status words: **merged** (on `main`, CI green) · **open** (PR up, merged by han
 | `20261107220520_deletion_storage_message_photos.sql` | #149 | 2026-11-08 | 2026-11-08 |
 | `20261108140000_chargeback_holds_deletion.sql` | #166 | already applied | 2026-11-08 (runner, `--pr 166`) |
 | `20261108150000_age_confirmation_returning_members.sql` | #174 | 2026-11-08 (runner, `--pr 174`) | 2026-11-08 (runner, `--pr 174`) |
-| `20261108160000_member_photos_private.sql` | #178 | after merge (see order) | after merge |
+| `20261108160000_member_photos_private.sql` | #178 | 2026-11-08, after the merge (runner, `--pr 178`) | 2026-11-08 (runner, `--pr 178`) |
+| `20261108180000_deletion_late_holds_and_previews.sql` | #181 | 2026-11-08 (runner, `--pr 181`) | 2026-11-08 (runner, `--pr 181`) |
 
-`private.username_audit` holds no rows on either project after `220500`. **C4's order is the reverse of the usual rule:** merge #178, update the shared checkout to merged `main`, restart the :3005 dev server (`launchctl kickstart -k` its launchd agent), and only then apply `20261108160000` to shared dev and staging. Applied first, every car, listing and post photo stops loading.
+`private.username_audit` holds no rows on either project after `220500`.
+
+**C4's order was the reverse of the usual rule, and was followed:** #178 merged (`3698591`); then the shared checkout, whose `main` had two local commits (#67's, preserved on `origin/docs/readiness-2026-11-03`; its HEAD before was `a99ee54`) and was 436 commits behind, was moved with `git reset --keep origin/main` (local modifications kept). One untracked file in the way, an older draft of `docs/plans/2026-11-blockers-resolution.md` identical to commit `d5a7b78`'s copy, was moved aside to the executor's scratchpad. `npm ci` ran, the :3005 dev server was restarted (`cc.drvn2.dev`), and a public car page was checked to carry `/object/sign/car-images/` URLs. Only then was `20261108160000` applied to shared dev; a signed photo loaded (200), and an uncached object's public URL answered 400. A previously cached one still answered 200 from Supabase's CDN, the known TTL caveat. Staging came next; its `--status` lists nothing missing.
 
 ### Early merges while `main` had no protection
 

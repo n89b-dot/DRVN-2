@@ -36,7 +36,7 @@ TLS. Details: "Recording without running" below.
 
 | File | Applied to |
 |---|---|
-| `20261108160000_member_photos_private.sql` | not applied |
+| `20261108160000_member_photos_private.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
 
 **Order matters, and it is the reverse of the usual rule.** Merge the PR and deploy the app that signs photos (`src/lib/supabase/photo-signing.ts`) *first*, then apply this file. Applied before that app, every car, listing and post photo stops loading, because the old app hands out public-route URLs that the private buckets refuse. On shared dev: merge, update the main checkout to merged `main`, restart the dev server on :3005 (`launchctl kickstart -k` the dev-server agent), then apply to shared dev and staging with the runner and fill both cells.
 
