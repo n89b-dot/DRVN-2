@@ -72,10 +72,13 @@ function sellerAgentReason(
   return `Gave ground ${dollars(lastOwn - amount)} from ${dollars(lastOwn)}: ${STYLE_STEP[mandate.style]}.`;
 }
 
-/** `incoming`: the viewer is the listing's seller. */
+/**
+ * `incoming`: the viewer is the listing's seller. `endedReason`: the offer
+ * row's ended_reason — why DRVN, not a party, ended it (N77, 20261107220700).
+ */
 export function offerHistoryFromRounds(
   rounds: OfferRound[],
-  { incoming, mandate }: { incoming: boolean; mandate?: HistoryMandate | null },
+  { incoming, mandate, endedReason }: { incoming: boolean; mandate?: HistoryMandate | null; endedReason?: string | null },
 ): OfferHistoryEntry[] {
   const viewerRole = incoming ? "seller" : "buyer";
   const otherName = incoming ? "Buyer" : "Seller";
@@ -121,6 +124,12 @@ export function offerHistoryFromRounds(
         case "decline":
           return entry(`${who} declined`);
         case "withdraw":
+          // A withdrawal DRVN recorded is the seller withdrawing the listing
+          // (withdraw_listing), never the buyer withdrawing the offer.
+          if (round.actor_role === "system") {
+            if (endedReason !== "listing_withdrawn") return entry("The offer ended");
+            return entry(incoming ? "You withdrew the listing, so the offer ended" : "The seller withdrew this listing, so the offer ended");
+          }
           return entry(`${who} withdrew the offer`);
         case "expire":
           return entry("Offer expired unanswered");

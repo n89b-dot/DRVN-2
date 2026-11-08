@@ -29,7 +29,6 @@ declare
   c text;
   r jsonb;
 begin
-  update public.beta_access_config set enforced = false where singleton = true;
   insert into auth.users(id, email) values (seller, 'admin-measure-seller@drvn.test'), (buyer, 'admin-measure-buyer@drvn.test');
 
   -- 1. Beta steps.

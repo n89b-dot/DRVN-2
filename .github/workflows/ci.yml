@@ -37,6 +37,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
+          # On a pull request HEAD is the merge commit; depth 2 brings its
+          # base parent (HEAD^1), which tests/ci/test-ids.test.ts diffs against.
+          fetch-depth: 2
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -59,8 +62,15 @@ jobs:
       - name: Lint
         run: npm run lint -- --max-warnings 0
 
+      # tests/ci/pr-resolves.test.ts and tests/ci/test-ids.test.ts read the
+      # PR's title and description (docs/ids.md). Passed through env, never
+      # interpolated into the script. Empty on a push, where those checks skip.
       - name: Tests
         run: npm test
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_DIFF_BASE: HEAD^1
 
       - name: Independent monitor contract
         run: npm run test:monitor
@@ -74,6 +84,18 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_placeholder
           SUPABASE_SECRET_KEY: sb_secret_placeholder
           NEXT_PUBLIC_SITE_URL: https://example.com
+
+      # JUnit for the Intelligence OS: every job's files share the prefix
+      # test-results-<sha>- (docs/ids.md). Kept on red runs too.
+      - name: Retain JUnit results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-results-${{ github.sha }}-verify
+          path: |
+            test-results/vitest.xml
+          if-no-files-found: warn
+          retention-days: 30
 
   # RR-23: no credential in the code or its history — two lanes.
   #
@@ -286,6 +308,18 @@ jobs:
           PGPASSWORD: postgres
         run: bash scripts/test-sql-guards.sh
 
+      # JUnit for the Intelligence OS: every job's files share the prefix
+      # test-results-<sha>- (docs/ids.md). Kept on red runs too.
+      - name: Retain JUnit results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-results-${{ github.sha }}-sql-guard
+          path: |
+            test-results/sql-guards.xml
+          if-no-files-found: warn
+          retention-days: 30
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22.22.0
@@ -403,6 +437,20 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      # JUnit for the Intelligence OS: every job's files share the prefix
+      # test-results-<sha>- (docs/ids.md). Kept on red runs too.
+      - name: Retain JUnit results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-results-${{ github.sha }}-e2e
+          path: |
+            test-results/operations.xml
+            test-results/playwright.xml
+            test-results/playwright-diagnostic.xml
+          if-no-files-found: warn
+          retention-days: 30
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
@@ -483,6 +531,18 @@ jobs:
         name: Stripe test-mode integration
         run: npm run test:stripe
 
+      # JUnit for the Intelligence OS: every job's files share the prefix
+      # test-results-<sha>- (docs/ids.md). Kept on red runs too.
+      - name: Retain JUnit results
+        if: always() && steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-results-${{ github.sha }}-stripe-integration
+          path: |
+            test-results/stripe.xml
+          if-no-files-found: warn
+          retention-days: 30
+
   release-gate:
     if: always()
     runs-on: ubuntu-24.04
@@ -490,6 +550,7 @@ jobs:
     needs: [verify, secrets, secrets-full, sql-guard, e2e, stripe-integration]
     steps:
       - name: Require executed verification
+        id: require
         env:
           VERIFY: ${{ needs.verify.result }}
           SECRETS: ${{ needs.secrets.result }}
@@ -502,15 +563,21 @@ jobs:
           STRIPE_RAN: ${{ needs.stripe-integration.outputs.ran }}
         # Every requirement is checked and named, so a red gate says which
         # suite it is waiting on rather than failing on the first bare test.
+        # Each outcome is also kept for the per-commit record below.
         run: |
           failed=0
+          : > "$RUNNER_TEMP/requirements.jsonl"
           require() {
             if [ "$2" = "$3" ]; then
               echo "ok: $1"
+              ok=true
             else
               echo "::error title=release-gate::$1 is '${2:-unset}', needs '$3'"
               failed=1
+              ok=false
             fi
+            jq -cn --arg name "$1" --arg value "${2:-unset}" --arg needs "$3" --argjson ok "$ok" \
+              '{($name): {value: $value, needs: $needs, ok: $ok}}' >> "$RUNNER_TEMP/requirements.jsonl"
           }
           require verify "$VERIFY" success
           require secrets "$SECRETS" success
@@ -522,6 +589,55 @@ jobs:
           require stripe-integration "$STRIPE" success
           require "stripe-integration executed" "$STRIPE_RAN" true
           exit "$failed"
+
+      # The per-commit record for the Intelligence OS (docs/ids.md): one file
+      # that says whether this commit got a finished green gate, and why not.
+      # Written and kept on every outcome, red included.
+      - name: Fetch the browser summary for the record
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: browser-release-summary-${{ github.sha }}
+          path: ${{ runner.temp }}/browser-summary
+
+      - name: Write the release-gate record
+        if: always()
+        env:
+          SHA: ${{ github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          REF: ${{ github.ref }}
+          EVENT: ${{ github.event_name }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RESULT: ${{ steps.require.outcome }}
+          E2E_FIRST_ATTEMPT: ${{ needs.e2e.outputs.first_attempt_passed }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/release-gate"
+          summary="$RUNNER_TEMP/browser-summary/browser-release-$SHA.json"
+          counts=null
+          if [ -s "$summary" ]; then counts=$(jq -c '.counts' "$summary"); fi
+          requirements='{}'
+          if [ -s "$RUNNER_TEMP/requirements.jsonl" ]; then requirements=$(jq -cs 'add' "$RUNNER_TEMP/requirements.jsonl"); fi
+          jq -n \
+            --arg sha "$SHA" --arg head_sha "$HEAD_SHA" --arg ref "$REF" --arg event "$EVENT" \
+            --arg result "${RESULT:-unknown}" --argjson run_id "$RUN_ID" --argjson run_attempt "$RUN_ATTEMPT" \
+            --argjson requirements "$requirements" \
+            --argjson first_attempt_passed "$([ "$E2E_FIRST_ATTEMPT" = true ] && echo true || echo false)" \
+            --argjson browser_counts "$counts" \
+            '{sha: $sha, head_sha: $head_sha, ref: $ref, event: $event, run_id: $run_id, run_attempt: $run_attempt,
+              result: $result, requirements: $requirements, first_attempt_passed: $first_attempt_passed,
+              browser_counts: $browser_counts}' > "$RUNNER_TEMP/release-gate/release-gate-$SHA.json"
+          cat "$RUNNER_TEMP/release-gate/release-gate-$SHA.json"
+
+      - name: Retain the release-gate record
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-gate-${{ github.sha }}
+          path: ${{ runner.temp }}/release-gate/release-gate-${{ github.sha }}.json
+          if-no-files-found: error
+          retention-days: 30
 
   # The honest green: says out loud what did and didn't run, so a passing
   # build can't be mistaken for full coverage.
@@ -544,5 +660,6 @@ jobs:
             echo "| SQL guards (all registered suites) | ${{ needs.sql-guard.result }} |"
             echo "| Required browser regression suite | ${{ needs.e2e.result }}; executed=${{ needs.e2e.outputs.ran }}; first attempt passed=${{ needs.e2e.outputs.first_attempt_passed || 'false' }} |"
             echo "| Stripe test-mode integration | ${{ needs.stripe-integration.result }}; executed=${{ needs.stripe-integration.outputs.ran }} |"
+            echo "| JUnit results (one artifact per job, prefix \`test-results-${{ github.sha }}-\`) | verify, sql-guard, e2e, stripe-integration; see docs/ids.md |"
             echo "| Provider coverage | Stripe test API covers multi-seller capture and late compensation; browser checkout uses stubs. Connected payout/dispute and 3DS browser proof remain open |"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -7,21 +7,27 @@ import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { abuseIdentity } from "@/lib/abuse-identity";
-import { getCartIds, removeCartIds } from "@/lib/cart";
+import { getCartIds, removeCartIds, setCartIds } from "@/lib/cart";
 import { guestCheckoutIdentity, isPlausibleEmail, setGuestOrders } from "@/lib/guest-checkout";
 import { resolveGuestBuyer, sendOrderAccessLink } from "./guest-buyer";
+import { AGE_CONFIRMATION_REQUIRED, ageConfirmedIn } from "@/lib/age-confirmation";
+import { recordAgeConfirmation } from "@/lib/age-confirmation-record";
+import { admitGuestHolds, releaseGuestHolds } from "./guest-holds";
 import { freezeOrderShipping, hashDestination, planCartFulfillment, type FulfillmentPlan } from "./checkout-shipping";
 import { getPaymentProvider } from "@/lib/payments/provider";
 import { getStripeCustomerId } from "@/lib/payments/customers";
 import { CHARGE_OUT_OF_BOUNDS_CODE, CHECKOUT_OUT_OF_BOUNDS_MESSAGE } from "@/lib/payments/charge-bounds";
+import { PAYOUTS_NOT_READY_CODE, SELLER_CANNOT_TAKE_PAYMENT_MESSAGE } from "@/lib/payments/payout-readiness";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { capture } from "@/lib/analytics";
 import { createClient } from "@/lib/supabase/server";
-import type { Json, PurchaseBeginResult } from "@/lib/database.types";
+import type { Json, OrderStatus, PurchaseBeginResult, ShippingRateQuote } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
-import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
-import type { CommerceState, CheckoutOutcome, ShippingDetails } from "./action-types";
+import { cartCheckoutRequestKey, forgetCheckoutKey, rememberCheckoutKey } from "@/lib/checkout-key";
+import { CART_ATTEMPT_COLUMNS, findOwnCartAttemptForOrder, isOrderId } from "@/lib/checkout-data";
+import type { CheckoutBreakdown, CommerceState, CheckoutOutcome, ShippingDetails } from "./action-types";
+import { releaseCartCheckout } from "./checkout-release";
 
 const PAYMENT_SETTLED_ORDER_STATUSES = new Set([
   "paid",
@@ -31,6 +37,190 @@ const PAYMENT_SETTLED_ORDER_STATUSES = new Set([
   "refunded",
   "disputed",
 ]);
+
+const LIVE_ORDER_STATUSES: OrderStatus[] = ["pending", "requires_action"];
+const TERMINAL_ORDER_STATUSES = new Set(["payment_failed", "cancelled"]);
+
+/** purchase_begin's refusal text for the per-buyer cap (5 unfinished). */
+const UNRESOLVED_CHECKOUT_CAP_ERROR = "Too many unresolved checkouts";
+const UNRESOLVED_CHECKOUT_CAP_MESSAGE =
+  "You have 5 checkouts waiting for payment. Finish one from your orders, or wait for an unpaid one to lapse (holds last 15 minutes), then try again. Nothing was charged.";
+const OWN_HOLD_MESSAGE =
+  "Your checkout is already holding these parts. Finish paying in the checkout you started, or check your orders. If you don't, the hold lapses within 15 minutes. Nothing new was charged.";
+const RELEASE_UNRESOLVED_MESSAGE =
+  "Your earlier payment for these parts is still being confirmed, so they stay held for now. Check your orders in a few minutes before trying again. Nothing new was charged.";
+
+/** The listings among `listingIds` that the buyer's own unfinished
+ *  checkouts are holding. A failed read holds nothing (the caller falls back
+ *  to its general message). */
+async function ownHeldListingIds(
+  admin: ReturnType<typeof createAdminClient>,
+  buyerId: string,
+  /** Omitted: every listing the buyer's unfinished checkouts hold. */
+  listingIds?: string[]
+): Promise<Set<string>> {
+  const { data, error } = await admin
+    .from("orders")
+    .select("id, order_items(listing_id)")
+    .eq("buyer_id", buyerId)
+    .in("status", LIVE_ORDER_STATUSES);
+  if (error || !Array.isArray(data)) return new Set();
+  const wanted = listingIds ? new Set(listingIds) : null;
+  const held = new Set<string>();
+  for (const order of data) {
+    for (const item of order.order_items ?? []) {
+      if (item.listing_id && (!wanted || wanted.has(item.listing_id))) held.add(item.listing_id);
+    }
+  }
+  return held;
+}
+
+/** The order ids a saved attempt reserved. */
+function attemptOrderIds(result: Json | null): string[] {
+  return result && typeof result === "object" && !Array.isArray(result) && Array.isArray(result.orders)
+    ? result.orders.flatMap((order) =>
+        order && typeof order === "object" && !Array.isArray(order) && typeof order.order_id === "string"
+          ? [order.order_id]
+          : []
+      )
+    : [];
+}
+
+/** What purchase_begin fingerprinted an attempt with: its basket and the
+ *  shipping overrides it reserved at. Null when malformed. */
+function attemptFingerprint(
+  fingerprint: Json | null
+): { listingIds: string[]; overrides: Record<string, number> } | null {
+  if (!fingerprint || typeof fingerprint !== "object" || Array.isArray(fingerprint)) return null;
+  const ids = fingerprint.ids;
+  const listingIds =
+    Array.isArray(ids) && ids.every((id): id is string => typeof id === "string") ? ids : null;
+  const rawOverrides =
+    fingerprint.shipping && typeof fingerprint.shipping === "object" && !Array.isArray(fingerprint.shipping)
+      ? fingerprint.shipping
+      : null;
+  if (!listingIds?.length || !rawOverrides) return null;
+  const overrides = Object.fromEntries(
+    Object.entries(rawOverrides).filter(
+      (entry): entry is [string, number] =>
+        typeof entry[1] === "number" && Number.isInteger(entry[1]) && entry[1] >= 0
+    )
+  );
+  return { listingIds, overrides };
+}
+
+const GUEST_ATTEMPT_UNREADABLE =
+  "We couldn't check the checkout you started. Nothing new was charged. Try again.";
+const GUEST_DELIVERY_UNRECOVERABLE =
+  "Your checkout is holding these parts, but we couldn't recover its delivery plan. Nothing was charged. The hold lapses within 15 minutes; check out again then.";
+
+type GuestAttempt =
+  /** No attempt under this key: plan and reserve afresh. */
+  | { state: "none" }
+  /** Its orders are over (lapsed, failed, released), it reserved nothing, or
+   *  it belongs to another buyer: start a new attempt under a new key. */
+  | { state: "over" }
+  /** Resume it with exactly what it reserved at. */
+  | { state: "resume"; plan: FulfillmentPlan }
+  | { state: "error"; error: string };
+
+/**
+ * OS-W17 follow-up: a guest's checkout, resumed after a reload with the same
+ * details, replays the attempt under the same key. Fulfilment must not be
+ * re-planned for it: its parts are reserved now (by this guest), so planning
+ * sees no active line and produces empty shipping overrides, which
+ * purchase_begin refuses against the attempt's fingerprint. The attempt's
+ * own frozen fulfilment is recovered instead: the overrides it reserved at,
+ * and for DRVN-shipped lines the quotes its orders consumed (so a freeze that
+ * was interrupted can finish). Guest quotes carry no buyer, so a quote is
+ * only reused when one of this attempt's own orders consumed it, at the
+ * amount the attempt reserved.
+ */
+async function recoverGuestAttempt(
+  admin: ReturnType<typeof createAdminClient>,
+  input: { idempotencyKey: string; buyerId: string; isCollection: boolean }
+): Promise<GuestAttempt> {
+  const { data: attempt, error } = await admin
+    .from("purchase_attempts")
+    .select("buyer_id, request_fingerprint, result")
+    .eq("idempotency_key", input.idempotencyKey)
+    .maybeSingle();
+  if (error) {
+    reportError("[checkout] guest attempt lookup failed", { error });
+    return { state: "error", error: GUEST_ATTEMPT_UNREADABLE };
+  }
+  if (!attempt) return { state: "none" };
+  if (attempt.buyer_id !== input.buyerId) return { state: "over" };
+  const orderIds = attemptOrderIds(attempt.result);
+  if (!orderIds.length) return { state: "over" };
+
+  const { data: orders, error: ordersError } = await admin
+    .from("orders")
+    .select("id, status")
+    .in("id", orderIds);
+  if (ordersError || orders?.length !== orderIds.length) {
+    reportError("[checkout] guest attempt orders could not be verified", { ordersError });
+    return { state: "error", error: GUEST_ATTEMPT_UNREADABLE };
+  }
+  if (orders.every((order) => TERMINAL_ORDER_STATUSES.has(order.status))) return { state: "over" };
+
+  const fingerprint = attemptFingerprint(attempt.request_fingerprint);
+  if (!fingerprint) {
+    reportError("[checkout] guest attempt fingerprint was malformed", { orderIds });
+    return { state: "error", error: GUEST_ATTEMPT_UNREADABLE };
+  }
+  const quotes = new Map<string, ShippingRateQuote>();
+  // Collected baskets override every line to zero and freeze no quote.
+  const quoted = input.isCollection ? [] : Object.keys(fingerprint.overrides);
+  if (quoted.length) {
+    const { data: consumed, error: quotesError } = await admin
+      .from("shipping_rate_quotes")
+      .select("*")
+      .in("consumed_order_id", orderIds);
+    if (quotesError || !Array.isArray(consumed)) {
+      reportError("[checkout] guest attempt quotes could not be read", { quotesError });
+      return { state: "error", error: GUEST_ATTEMPT_UNREADABLE };
+    }
+    for (const listingId of quoted) {
+      const quote = consumed.find(
+        (candidate) =>
+          candidate.listing_id === listingId && candidate.amount_cents === fingerprint.overrides[listingId]
+      );
+      if (!quote) {
+        reportError("[checkout] guest attempt quote could not be recovered", { listingId });
+        return { state: "error", error: GUEST_DELIVERY_UNRECOVERABLE };
+      }
+      quotes.set(listingId, quote);
+    }
+  }
+  return { state: "resume", plan: { overrides: fingerprint.overrides, quotes } };
+}
+
+/** OS-W17 (N485): the payment step's breakdown, from what was reserved. */
+async function admittedBreakdown(
+  admin: ReturnType<typeof createAdminClient>,
+  result: PurchaseBeginResult,
+  skipped: CheckoutOutcome["skipped"]
+): Promise<CheckoutBreakdown> {
+  const orderIds = result.orders.map((order) => order.order_id);
+  const breakdown: CheckoutBreakdown = {
+    goodsCents: result.orders.reduce((sum, order) => sum + order.subtotal_cents, 0),
+    shippingCents: result.orders.reduce((sum, order) => sum + order.shipping_cents, 0),
+    skipped: skipped.length ? skipped.map((s) => s.title) : undefined,
+  };
+  const { data: items, error } = await admin
+    .from("order_items")
+    .select("listing_id, title, price_cents")
+    .in("order_id", orderIds);
+  if (!error && Array.isArray(items) && items.length) {
+    breakdown.lines = items.map((item) => ({
+      id: item.listing_id ?? item.title ?? "part",
+      title: item.title ?? "Part",
+      priceCents: item.price_cents,
+    }));
+  }
+  return breakdown;
+}
 
 async function requireUser() {
   const supabase = await createClient();
@@ -101,6 +291,14 @@ async function purchaseListings(
 
   if (error) {
     if (error.code === CHARGE_OUT_OF_BOUNDS_CODE) return { ...empty, error: CHECKOUT_OUT_OF_BOUNDS_MESSAGE };
+    // purchase_begin leaves out a part whose seller can't be paid; any other
+    // reservation of one is refused (20261107210000, N244).
+    if (error.code === PAYOUTS_NOT_READY_CODE) return { ...empty, error: SELLER_CANNOT_TAKE_PAYMENT_MESSAGE };
+    // OS-W17 (N88): purchase_begin's cap on unfinished checkouts is a
+    // refusal the buyer can act on, not a failure to report.
+    if (error.message?.includes(UNRESOLVED_CHECKOUT_CAP_ERROR)) {
+      return { ...empty, error: UNRESOLVED_CHECKOUT_CAP_MESSAGE };
+    }
     reportError("[commerce] purchase_begin failed", { buyerId, error });
     return { ...empty, error: error.message?.includes("at most") ? error.message : "We couldn't start that purchase. Nothing was charged." };
   }
@@ -113,12 +311,19 @@ async function purchaseListings(
   }));
 
   if (!result.orders?.length) {
+    // OS-W17 (N85): "sold or are your own" was wrong when the buyer's own
+    // unfinished checkout is what holds them.
+    const heldByBuyer = skipped.length
+      ? await ownHeldListingIds(admin, buyerId, skipped.map((s) => s.listingId))
+      : new Set<string>();
     return {
       ...empty,
       skipped,
-      error: skipped.length
-        ? "Nothing was available — those parts have sold or are your own."
-        : "Nothing purchasable in that request.",
+      error: skipped.length && skipped.every((s) => heldByBuyer.has(s.listingId))
+        ? OWN_HOLD_MESSAGE
+        : skipped.length
+          ? "Nothing was available — those parts have sold or are your own."
+          : "Nothing purchasable in that request.",
     };
   }
   const idempotencyKey = options.idempotencyKey;
@@ -212,8 +417,11 @@ async function purchaseListings(
           orderId: order.order_id,
           shipWrite,
         });
+        // The orders are reserved (and a guest's holds bound to them), so
+        // the outcome keeps them: this is not "nothing was reserved".
         return {
           ...empty,
+          orderIds: result.orders.map((candidate) => candidate.order_id),
           skipped,
           error: "Couldn't confirm the delivery method for this order. Nothing was charged.",
         };
@@ -347,7 +555,12 @@ async function purchaseListings(
       orderIds: allOrderIds,
       purchased: [],
       skipped,
-      payment: { clientSecret: payment.clientSecret, orderIds: allOrderIds, amountCents: basketTotal },
+      payment: {
+        clientSecret: payment.clientSecret,
+        orderIds: allOrderIds,
+        amountCents: basketTotal,
+        breakdown: await admittedBreakdown(admin, result, skipped),
+      },
     };
   } else if (payment.status === "processing") {
     return { ...empty, orderIds: allOrderIds, skipped, error: "Your payment is processing. Check your order before trying again." };
@@ -456,16 +669,22 @@ function readShipping(formData: FormData): { shipping?: ShippingDetails; error?:
   };
 }
 
+const SHIPPING_FIELDS = [
+  "name", "line1", "line2", "city", "postcode", "country", "state", "phone", "isCollection",
+] as const satisfies readonly (keyof ShippingDetails)[];
+
+/** The submitted delivery details are the ones an attempt was started with
+ *  (its journalled context; jsonb doesn't keep key order, so field by field). */
+function sameShipping(submitted: ShippingDetails | undefined, saved: Json | undefined): boolean {
+  if (!submitted || !saved || typeof saved !== "object" || Array.isArray(saved)) return false;
+  return SHIPPING_FIELDS.every((field) => (saved[field] ?? null) === (submitted[field] ?? null));
+}
+
 export async function checkoutCart(
   _prev: CommerceState,
   formData: FormData
 ): Promise<CommerceState> {
   const { user } = await optionalUser();
-  const betaAccess = await getBetaAccess(user?.id, "buyer");
-  if (betaAccess.enforced && !user) {
-    return { error: "Sign in with an invited beta account to check out." };
-  }
-  if (!betaAccess.eligible) return { error: betaCommerceError("buyer") };
 
   const { shipping, error: shippingError } = readShipping(formData);
   if (shippingError) return { error: shippingError };
@@ -474,16 +693,31 @@ export async function checkoutCart(
   // buyer-scoped digest for finding the durable purchase attempt after a
   // successful response is lost and the cart cookie has already been cleared.
   // The full payment idempotency key below still binds the address and basket.
-  const rawKey = String(formData.get("idempotency_key") ?? "");
+  //
+  // OS-W17 (N85): the page renders the key this browser's checkout reserved
+  // under (the checkout-key cookie), so a reload resumes the same attempt.
+  // When that attempt is over, or the buyer changes what they're buying or
+  // where it goes, the key is rotated below and a new attempt starts.
+  let rawKey = String(formData.get("idempotency_key") ?? "");
   if (user && (rawKey.length < 16 || rawKey.length > 200)) {
     return { error: "This checkout request expired. Reload checkout and try again." };
   }
   const browserIdentity = user ? `user:${user.id}` : null;
-  const checkoutRequestKey = browserIdentity
-    ? createHash("sha256")
-        .update(JSON.stringify(["cart-checkout:v1", browserIdentity, rawKey]))
-        .digest("hex")
-    : null;
+  let checkoutRequestKey = user ? cartCheckoutRequestKey(user.id, rawKey) : null;
+  // OS-W17: "Finish checkout" on an order resumes by that order, because
+  // another device has neither this checkout's key cookie nor its cart.
+  const resumeOrderId = user && isOrderId(formData.get("order_id")) ? String(formData.get("order_id")) : null;
+  let resumingByOrder = false;
+  const startNewAttempt = () => {
+    rawKey = randomUUID();
+    checkoutRequestKey = user ? cartCheckoutRequestKey(user.id, rawKey) : null;
+    resumingByOrder = false;
+  };
+  let cartIds: string[] | undefined;
+  /** A by-order resume whose details changed: the released attempt's basket,
+   *  which is all the restarted checkout may buy (never this device's other
+   *  cart lines, which that checkout was not opened for). */
+  let restartBasket: string[] | undefined;
 
   let replay:
     | {
@@ -497,12 +731,20 @@ export async function checkoutCart(
 
   if (user && checkoutRequestKey) {
     const admin = createAdminClient();
-    const { data: attempt, error: attemptError } = await admin
-      .from("purchase_attempts")
-      .select("idempotency_key, request_fingerprint, result, checkout_context")
-      .eq("checkout_request_key", checkoutRequestKey)
-      .eq("buyer_id", user.id)
-      .maybeSingle();
+    const { data: attempt, error: attemptError } = resumeOrderId
+      ? await findOwnCartAttemptForOrder(admin, user.id, resumeOrderId)
+      : await admin
+          .from("purchase_attempts")
+          .select(CART_ATTEMPT_COLUMNS)
+          .eq("checkout_request_key", checkoutRequestKey)
+          .eq("buyer_id", user.id)
+          .maybeSingle();
+    if (attempt && resumeOrderId) {
+      // The attempt was found by its order and its buyer (ownership); it is
+      // bound to its own request key, which purchase_begin checks again.
+      resumingByOrder = true;
+      if (attempt.checkout_request_key) checkoutRequestKey = attempt.checkout_request_key;
+    }
 
     if (attemptError) {
       reportError("[checkout] durable request lookup failed", {
@@ -562,30 +804,6 @@ export async function checkoutCart(
         return { error: "We found this checkout but couldn't safely resume it. Open your orders before trying again." };
       }
 
-      const storedQuoteIds = context.quoteIds as Record<string, Json | undefined>;
-      const quoteSelectionChanged = Object.entries(storedQuoteIds).some(
-        ([listingId, quoteId]) =>
-          typeof quoteId !== "string" || formData.get(`quote_${listingId}`) !== quoteId
-      );
-      if (quoteSelectionChanged) {
-        return { error: "The shipping service changed after this order started. Open your orders to review the existing checkout before trying again." };
-      }
-
-      const expectedIdempotencyKey = createHash("sha256")
-        .update(JSON.stringify([browserIdentity, rawKey, shipping, [...listingIds].sort()]))
-        .digest("hex");
-      if (expectedIdempotencyKey !== attempt.idempotency_key) {
-        return { error: "These checkout details changed after the order started. Open your orders to review the existing checkout before trying again." };
-      }
-
-      replay = {
-        listingIds,
-        idempotencyKey: attempt.idempotency_key,
-        overrides,
-        result: purchaseResult,
-        context,
-      };
-
       const orderIds = purchaseResult.orders.map((order) => order.order_id);
       if (!orderIds.length) {
         return { error: "This checkout did not reserve an order. Reload your cart to try again." };
@@ -604,11 +822,82 @@ export async function checkoutCart(
         return { error: "We found this checkout but couldn't verify every order. Open your orders before trying again." };
       }
 
-      if (orders.every((order) => PAYMENT_SETTLED_ORDER_STATUSES.has(order.status))) {
+      const placedPath = () => {
         const params = new URLSearchParams({ placed: "1" });
-        redirect(orderIds.length === 1
+        return orderIds.length === 1
           ? `/orders/${orderIds[0]}?${params.toString()}`
-          : `/orders?${params.toString()}`);
+          : `/orders?${params.toString()}`;
+      };
+      if (orders.every((order) => PAYMENT_SETTLED_ORDER_STATUSES.has(order.status))) {
+        await forgetCheckoutKey();
+        redirect(placedPath());
+      }
+
+      if (!orders.some((order) => LIVE_ORDER_STATUSES.includes(order.status))) {
+        // The attempt behind this key is over — lapsed, failed or released —
+        // so its parts are back on sale. Replaying it would answer with the
+        // dead orders; a new attempt reserves the cart afresh.
+        startNewAttempt();
+      } else {
+        const storedQuoteIds = context.quoteIds as Record<string, Json | undefined>;
+        const quoteSelectionChanged = Object.entries(storedQuoteIds).some(
+          ([listingId, quoteId]) =>
+            typeof quoteId !== "string" || formData.get(`quote_${listingId}`) !== quoteId
+        );
+        // Resumed by order (another device): this page never held the
+        // attempt's key, so the details are compared with what the attempt
+        // was started with, and its basket is the attempt's, not this
+        // device's cart.
+        const detailsChanged = resumingByOrder
+          ? !sameShipping(shipping, context.shipping)
+          : createHash("sha256")
+              .update(JSON.stringify([browserIdentity, rawKey, shipping, [...listingIds].sort()]))
+              .digest("hex") !== attempt.idempotency_key;
+        cartIds = await getCartIds();
+        const requested = new Set(listingIds);
+        const cartChanged =
+          !resumingByOrder &&
+          cartIds.length > 0 &&
+          (cartIds.length !== requested.size || cartIds.some((id) => !requested.has(id)));
+
+        if (quoteSelectionChanged || detailsChanged || cartChanged) {
+          // "Edit address", another service or a changed cart: a changed
+          // checkout can never be attached to the existing payment, so the
+          // buyer's own hold is released (payment cancelled first) and the
+          // checkout restarts with what they asked for now.
+          const release = await releaseCartCheckout(admin, {
+            buyerId: user.id,
+            idempotencyKey: attempt.idempotency_key,
+            orderIds,
+          });
+          if (release.outcome === "settled") {
+            await forgetCheckoutKey();
+            redirect(placedPath());
+          }
+          if (release.outcome === "unresolved") return { error: RELEASE_UNRESOLVED_MESSAGE };
+          // The released parts are on sale again, and this page's basket is
+          // the live cart once more (a DRVN-shipped line needs fresh rates).
+          revalidatePath("/marketplace");
+          revalidatePath("/checkout");
+          for (const id of listingIds) revalidatePath(`/listings/${id}`);
+          if (resumingByOrder) {
+            // Restarting from another device: the restarted checkout buys the
+            // released attempt's basket and nothing else. Its parts are also
+            // kept in this device's cart (so a restart that needs fresh rates
+            // isn't lost); the cart's other lines are left exactly as they are.
+            restartBasket = listingIds;
+            await setCartIds([...new Set([...listingIds, ...cartIds])]);
+          }
+          startNewAttempt();
+        } else {
+          replay = {
+            listingIds,
+            idempotencyKey: attempt.idempotency_key,
+            overrides,
+            result: purchaseResult,
+            context,
+          };
+        }
       }
     }
   }
@@ -616,8 +905,15 @@ export async function checkoutCart(
   const requestHeaders = await headers();
   const subject = abuseIdentity(requestHeaders, user?.id);
   if (!(await allowAction(RATE_LIMITS.checkout, subject))) return { error: rateLimitMessage(RATE_LIMITS.checkout) };
-  const ids = replay?.listingIds ?? await getCartIds();
-  if (!ids.length) return { error: "Your cart is empty." };
+  const ids = replay?.listingIds ?? restartBasket ?? cartIds ?? await getCartIds();
+  if (!ids.length) {
+    // "Finish checkout" from an order on another device lands on an empty
+    // cart: say what is actually holding the parts.
+    if (user && (await ownHeldListingIds(createAdminClient(), user.id)).size) {
+      return { error: OWN_HOLD_MESSAGE };
+    }
+    return { error: "Your cart is empty." };
+  }
 
   // Guest checkout: the email is the only extra thing asked for, and it's the
   // address the receipt and dispatch notices have to go to anyway. It resolves
@@ -631,6 +927,9 @@ export async function checkoutCart(
     const email = String(formData.get("email") ?? "").trim();
     if (!email) return { error: "Add an email so we can send your order confirmation." };
     if (!isPlausibleEmail(email)) return { error: "That email doesn't look right." };
+    // R69-age: asked before any account is made or emailed, and checked
+    // here, so a post that skips the box creates nothing.
+    if (!ageConfirmedIn(formData)) return { error: AGE_CONFIRMATION_REQUIRED };
 
     const { buyer, error: buyerError } = await resolveGuestBuyer(
       email,
@@ -640,6 +939,9 @@ export async function checkoutCart(
 
     buyerId = buyer.id;
     guestEmail = email;
+    if (!(await recordAgeConfirmation(buyer.id, "guest_checkout"))) {
+      return { error: "We couldn't start that purchase. Nothing was charged." };
+    }
 
     // A brand-new account has no display name, so the seller would see
     // "DRVN member" against an order that has a real name on the parcel.
@@ -654,6 +956,33 @@ export async function checkoutCart(
     }
   }
 
+  // Carried on the form so a double-submitted checkout replays the first
+  // result instead of creating a second set of orders.
+  const effectiveBrowserIdentity = browserIdentity ?? await guestCheckoutIdentity();
+  let effectiveRawKey = rawKey || randomUUID();
+  const guestKeyFor = (key: string) => createHash("sha256")
+    .update(JSON.stringify([effectiveBrowserIdentity, key, shipping, [...ids].sort()]))
+    .digest("hex");
+  let idempotencyKey = replay?.idempotencyKey ?? guestKeyFor(effectiveRawKey);
+  let guestResume: FulfillmentPlan | undefined;
+  if (!user && !replay && buyerId) {
+    // OS-W17 (N85): a guest's key now survives a reload too. An attempt that
+    // is over (lapsed or failed) would answer with dead orders, so a new
+    // attempt starts instead; a live one resumes with the fulfilment it
+    // froze, never a re-plan of its now-reserved lines.
+    const guestAttempt = await recoverGuestAttempt(createAdminClient(), {
+      idempotencyKey,
+      buyerId,
+      isCollection: shipping?.isCollection ?? false,
+    });
+    if (guestAttempt.state === "error") return { error: guestAttempt.error };
+    if (guestAttempt.state === "over") {
+      effectiveRawKey = randomUUID();
+      idempotencyKey = guestKeyFor(effectiveRawKey);
+    }
+    if (guestAttempt.state === "resume") guestResume = guestAttempt.plan;
+  }
+
   // Fulfillment plan (0053, §14/§15): pickup eligibility and DRVN-Shipping
   // amounts are validated server-side — the checkbox and the rate picker are
   // requests, not facts.
@@ -665,6 +994,10 @@ export async function checkoutCart(
     // or rewrite the already-frozen order details during recovery.
     plan = { overrides: replay.overrides, quotes: new Map() };
     checkoutContext = replay.context;
+  } else if (guestResume) {
+    // The same for a guest: the attempt's own overrides, and the quotes its
+    // orders consumed (the guest freeze replays exactly, never re-rates).
+    plan = guestResume;
   } else {
     const quoteIds: Record<string, string> = {};
     for (const id of ids) {
@@ -700,13 +1033,23 @@ export async function checkoutCart(
     }
   }
 
-  // Carried on the form so a double-submitted checkout replays the first
-  // result instead of creating a second set of orders.
-  const effectiveBrowserIdentity = browserIdentity ?? await guestCheckoutIdentity();
-  const effectiveRawKey = rawKey || randomUUID();
-  const idempotencyKey = replay?.idempotencyKey ?? createHash("sha256")
-    .update(JSON.stringify([effectiveBrowserIdentity, effectiveRawKey, shipping, [...ids].sort()]))
-    .digest("hex");
+  // N89 (OS-W31): a guest's holds are admitted first, atomically capped at
+  // 2 live per device and per network and 1 per listing (guest_hold_admit,
+  // 20261107220800). Nothing is reserved without an admission. Admissions
+  // belong to this request (its idempotency key), and purchase_begin binds
+  // them to its orders in the same transaction (20261108130000).
+  let guestHolds = false;
+  if (guestEmail) {
+    const admitted = await admitGuestHolds(createAdminClient(), {
+      device: effectiveBrowserIdentity,
+      network: subject,
+      listingIds: ids,
+      buyerId,
+      request: idempotencyKey,
+    });
+    if ("error" in admitted) return { error: admitted.error };
+    guestHolds = true;
+  }
 
   const outcome = await purchaseListings(buyerId, ids, {
     useSavedCustomer: Boolean(user),
@@ -716,6 +1059,11 @@ export async function checkoutCart(
     shipping: replay ? undefined : shipping,
     fulfillment: plan,
   });
+
+  // Nothing reserved: give back this request's own unbound admissions (a
+  // no-op once purchase_begin has committed, which settles them itself).
+  // Bound admissions, and other requests' admissions, are never touched.
+  if (guestHolds && !outcome.orderIds.length) await releaseGuestHolds(createAdminClient(), idempotencyKey);
 
   // Whatever happens next — an inline confirmation or a Stripe redirect — the
   // guest has no session, so this browser needs a receipt saying which orders
@@ -731,16 +1079,41 @@ export async function checkoutCart(
     await removeCartIds(outcome.purchased.map((p) => p.listingId));
   }
 
+  // A by-order restart that reserved its replacement: from here on the
+  // replacement is the checkout to recover, whatever happens next. Its key is
+  // remembered and the page moves to its order, so a reload or a retry
+  // resumes the pending replacement instead of the released order (whose
+  // parts the replacement now holds). A payment-step failure (a shipping
+  // freeze, a reconciliation) says so on that page.
+  const replacementOrderId = restartBasket && !outcome.purchased.length ? outcome.orderIds[0] : undefined;
+  if (replacementOrderId) {
+    await rememberCheckoutKey(effectiveRawKey);
+    const params = new URLSearchParams({ order: replacementOrderId });
+    if (!outcome.payment) params.set("resume", "incomplete");
+    redirect(`/checkout?${params.toString()}`);
+  }
+
   // Async processor: hand the client secret back so the form can swap to the
   // Payment Element confirmation step. The cart stays intact until the money
   // is actually confirmed (the return route clears it).
   if (outcome.payment) {
+    // OS-W17 (N85): the basket is reserved under this key; a reload renders
+    // it back and resumes this payment instead of starting a second one.
+    // A checkout resumed by its order has no key on this device (the page
+    // keeps resuming it by order), so nothing is remembered for it. (A
+    // restarted one was handled above.)
+    if (!resumingByOrder) await rememberCheckoutKey(effectiveRawKey);
     return { payment: outcome.payment };
   }
 
   if (!outcome.purchased.length) {
+    // Orders that exist without a settled outcome (processing, or a payment
+    // still being reconciled) are retried under the same key. A key whose
+    // attempt has ended is rotated on the next submit, so it can stay.
+    if (outcome.orderIds.length && !resumingByOrder) await rememberCheckoutKey(effectiveRawKey);
     return { error: outcome.error ?? "Nothing could be purchased." };
   }
+  await forgetCheckoutKey();
 
   const params = new URLSearchParams({ placed: "1" });
   if (outcome.skipped.length) {
@@ -773,9 +1146,6 @@ export async function completeReservedOrder(
 ): Promise<CommerceState> {
   const { user } = await requireUser();
   const admin = createAdminClient();
-
-  const betaAccess = await getBetaAccess(user.id, "buyer");
-  if (!betaAccess.eligible) return { error: betaCommerceError("buyer") };
 
   const orderId = String(formData.get("order_id") ?? "");
   if (!orderId) return { error: "Missing order." };

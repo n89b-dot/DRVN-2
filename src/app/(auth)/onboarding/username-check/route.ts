@@ -1,32 +1,33 @@
 import { createClient } from "@/lib/supabase/server";
+import { isValidUsername, normalizeUsername } from "@/lib/username";
 
 /**
  * Proactive username-availability check for onboarding. Usernames are
  * write-once (migration 0006 pins them after first set), so telling someone
  * it's taken *after* they submit is a worse experience than a small
- * debounced lookup while they type. Read-only, publicly-readable column
- * (profile pages already resolve by username), so no auth is required.
+ * debounced lookup while they type. No auth is required.
+ *
+ * N38 (OS-W34): the database answers (username_available, 20261107220500),
+ * so reserved handles and those retired by deleted accounts read as taken
+ * here exactly as they are refused on save — and which is which never shows.
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const raw = (searchParams.get("username") ?? "").trim().toLowerCase();
+  const raw = normalizeUsername(searchParams.get("username") ?? "");
 
-  if (!/^[a-z0-9_]{3,24}$/.test(raw)) {
+  if (!isValidUsername(raw)) {
     return Response.json({ available: false, reason: "invalid" });
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("username", raw)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("username_available", { p_username: raw });
 
-  if (error) {
+  if (error || typeof data !== "string") {
     // Fail open on infra errors — the server action re-validates on submit
     // anyway, so a stale "available" is corrected there, not left to stand.
     return Response.json({ available: true, reason: "unknown" });
   }
 
-  return Response.json({ available: !data });
+  if (data === "invalid") return Response.json({ available: false, reason: "invalid" });
+  return Response.json({ available: data === "available" });
 }

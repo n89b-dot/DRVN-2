@@ -25,7 +25,6 @@ declare
   v_reader record;
   v_bad text;
 begin
-  update public.beta_access_config set enforced = false where singleton;
 
   insert into auth.users(id, email) values
     (v_seller, 'rules-seller@drvn.test'), (v_suspended, 'rules-suspended@drvn.test'), (v_viewer, 'rules-viewer@drvn.test');

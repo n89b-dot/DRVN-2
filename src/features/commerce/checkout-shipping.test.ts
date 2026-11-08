@@ -4,7 +4,7 @@ vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 
 import type { ShippingRateQuote } from "@/lib/database.types";
 
-import { freezeOrderShipping } from "./checkout-shipping";
+import { freezeOrderShipping, planCartFulfillment } from "./checkout-shipping";
 
 const quote: ShippingRateQuote = {
   id: "quote-1",
@@ -79,4 +79,38 @@ it("fails closed when a shipment item link cannot be persisted", async () => {
 
   await expect(freezeOrderShipping(admin as never, orders, quotes))
     .rejects.toThrow("Shipping item link could not be created");
+});
+
+// OS-W31 (#82's finding): a guest's quote is stored with no buyer (the
+// shipping-quote action has no session to bind it to). The guest path plans
+// against that quote with the guest's resolved account and freezes it with
+// freezeOrderShipping above; only the signed-in durable freeze matches buyers.
+function planAdmin(storedQuote: ShippingRateQuote) {
+  return {
+    from: (table: string) => {
+      if (table === "listings") {
+        return { select: () => ({ in: vi.fn().mockResolvedValue({
+          data: [{ id: "listing-1", title: "Intercooler", shipping_mode: "drvn", allows_collection: false, status: "active" }],
+          error: null,
+        }) }) };
+      }
+      return { select: () => ({ eq: () => ({ maybeSingle: vi.fn().mockResolvedValue({ data: storedQuote, error: null }) }) }) };
+    },
+  };
+}
+
+const live = { ...quote, expires_at: new Date(Date.now() + 600_000).toISOString() };
+const guestPlan = { listingIds: ["listing-1"], isCollection: false, quoteIds: { "listing-1": "quote-1" }, buyerId: "guest-buyer-1", destinationHash: "destination" };
+
+it("plans a guest's DRVN Shipping against the buyer-less quote the guest was shown", async () => {
+  const { plan, error } = await planCartFulfillment(planAdmin(live) as never, guestPlan);
+  expect(error).toBeUndefined();
+  expect(plan?.overrides).toEqual({ "listing-1": 975 });
+  expect(plan?.quotes.get("listing-1")?.id).toBe("quote-1");
+});
+
+it("still refuses a quote bound to a different buyer", async () => {
+  const { plan, error } = await planCartFulfillment(planAdmin({ ...live, buyer_id: "someone-else" }) as never, guestPlan);
+  expect(plan).toBeUndefined();
+  expect(error).toMatch(/refresh the rates/);
 });

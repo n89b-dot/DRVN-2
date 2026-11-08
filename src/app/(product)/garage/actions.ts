@@ -1,5 +1,6 @@
 "use server";
 
+import { STALE_MOD_SHEET } from "@/lib/mods/sheet-revision";
 import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 
@@ -16,6 +17,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { capture } from "@/lib/analytics";
 import { reportError } from "@/lib/monitoring";
 import { confirmIdentity } from "@/lib/confirm-identity";
+import { signsInWithPassword } from "@/lib/reauthentication";
 
 import { decodeVin, decodeVinResult } from "@/lib/vehicles/vpic";
 import { matchCatalogByName, resolveCatalogSelection } from "@/lib/vehicles/catalog";
@@ -364,31 +366,9 @@ export type ModItemInput = {
   origin?: "aftermarket" | "stock";
 };
 
-/**
- * Saves the mod sheet.
- *
- * One database function applies the whole desired sheet transactionally.
- * Existing ids update in place so listing links survive; stable new ids make a
- * repeated request converge after a committed response is lost.
- */
-export async function saveModItems(carId: string, items: ModItemInput[]): Promise<ActionState> {
-  const { supabase, user } = await requireUser();
-  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  if (!carId || items.length > 200 || items.some((item) => !uuid.test(item.id))) {
-    return { error: "The modification sheet is invalid. Reload and try again." };
-  }
-  if (new Set(items.map((item) => item.id)).size !== items.length) {
-    return { error: "The modification sheet contains duplicate lines." };
-  }
-
-  // Ownership is enforced by RLS, but check up front for a clean error.
-  const { data: car, error: carError } = await supabase
-    .from("cars")
-    .select("id, slug, owner_id")
-    .eq("id", carId)
-    .maybeSingle();
-  if (carError || !car || car.owner_id !== user.id) return { error: "Car not found." };
-
+/** The sheet exactly as save_mod_items receives it, so a lost save can be
+ *  compared with what the database holds (mod_sheet_revision_if_matches). */
+function modSheetPayload(items: ModItemInput[], userId: string) {
   // These three render on the public build page, so none is taken as typed:
   // the link must be http(s), the thumbnail must be one this member uploaded
   // (an arbitrary host is a tracking pixel on somebody's build), and the
@@ -402,7 +382,7 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
       return null;
     }
   };
-  const payload = items.map((item) => {
+  return items.map((item) => {
     const link = linkOf(item.product_url);
     return {
     id: item.id,
@@ -422,7 +402,7 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
     // that came off last month keeps that date through every later save.
     status: item.status === "removed" ? "removed" : "installed",
     product_url: link ? link.toString() : null,
-    image_url: item.image_url && isOwnedStorageUrl(item.image_url, user.id) ? item.image_url : null,
+    image_url: item.image_url && isOwnedStorageUrl(item.image_url, userId) ? item.image_url : null,
     source_domain: link ? link.hostname.replace(/^www\./, "").toLowerCase() : null,
     ref_price_cents:
       typeof item.ref_price_cents === "number" && Number.isFinite(item.ref_price_cents)
@@ -432,19 +412,115 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
     origin: item.origin === "stock" ? "stock" : "aftermarket",
     };
   });
+}
+
+/** Every write to a build line takes the sheet's lock (20261108110200); a
+ *  write made elsewhere at the same instant can make the database roll one of
+ *  them back whole. Nothing was written, so trying again is safe. */
+const SHEET_WRITE_COLLIDED = "Another change to this build was saving at the same moment. Nothing was saved — try again.";
+
+/**
+ * Undoes the "release a part" link between a build line and the listing it
+ * spawned (a listing pulled down or repurposed left "For sale" on the line).
+ *
+ * One database call (OS-W23 follow-up): unlink_mod_listing checks the sheet is
+ * still the revision this editor loaded, unlinks under the sheet's lock and
+ * hands back the revision that write produced. Reading the revision before
+ * and after in separate requests let a line another tab added in between be
+ * folded into the revision the editor adopted, and its next save deleted it.
+ */
+export async function unlinkModListing(
+  carId: string,
+  modItemId: string,
+  expectedRevision: string
+): Promise<ActionState & { revision?: string; stale?: boolean }> {
+  const { supabase } = await requireUser();
+  if (!carId || !modItemId) return { error: "Missing build line." };
+  if (!expectedRevision) return { error: "Reload the build before changing it." };
+
+  const { data, error } = await supabase.rpc("unlink_mod_listing", {
+    p_car: carId,
+    p_mod_item: modItemId,
+    p_expected_revision: expectedRevision,
+  });
+  if (error?.code === "40001" && error.hint === "stale_mod_sheet") return { error: STALE_MOD_SHEET, stale: true };
+  if (error?.code === "40P01") return { error: SHEET_WRITE_COLLIDED };
+  if (error?.code === "42501") return { error: "That car isn't in your garage." };
+  if (error?.code === "P0002") return { error: "That line isn't on this build any more. Reload to see the latest." };
+  if (error) return { error: "Couldn't remove the link. Nothing changed — try again." };
+  const done = data as unknown as { revision?: string; listing_id?: string | null } | null;
+  if (!done?.revision) return { error: "Couldn't remove the link. Nothing changed — try again." };
+
+  const { data: car } = await supabase.from("cars").select("slug").eq("id", carId).maybeSingle();
+  revalidatePath(`/garage/${carId}/edit`);
+  if (car?.slug) revalidatePath(`/cars/${car.slug}`);
+  if (done.listing_id) revalidatePath(`/listings/${done.listing_id}`);
+  return { ok: "Link removed.", revision: done.revision };
+}
+
+/**
+ * N65 follow-up: after a save's response was lost, the editor asks whether
+ * the sheet is exactly what that save sent. If so it gets the current
+ * revision (its own write committed); otherwise null, and its next save is
+ * still checked against the revision it loaded.
+ */
+export async function confirmLostModSave(carId: string, items: ModItemInput[]): Promise<string | null> {
+  const { supabase, user } = await requireUser();
+  if (!carId || items.length > 200) return null;
+  const { data, error } = await supabase.rpc("mod_sheet_revision_if_matches", {
+    p_car: carId,
+    p_items: modSheetPayload(items, user.id),
+  });
+  return error ? null : (data ?? null);
+}
+
+/**
+ * Saves the mod sheet.
+ *
+ * One database function applies the whole desired sheet transactionally.
+ * Existing ids update in place so listing links survive; stable new ids make a
+ * repeated request converge after a committed response is lost.
+ */
+export async function saveModItems(
+  carId: string,
+  items: ModItemInput[],
+  expectedRevision: string
+): Promise<ActionState & { revision?: string; stale?: boolean }> {
+  const { supabase, user } = await requireUser();
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!carId || !expectedRevision || items.length > 200 || items.some((item) => !uuid.test(item.id))) {
+    return { error: "The modification sheet is invalid. Reload and try again." };
+  }
+  if (new Set(items.map((item) => item.id)).size !== items.length) {
+    return { error: "The modification sheet contains duplicate lines." };
+  }
+
+  // Ownership is enforced by RLS, but check up front for a clean error.
+  const { data: car, error: carError } = await supabase
+    .from("cars")
+    .select("id, slug, owner_id")
+    .eq("id", carId)
+    .maybeSingle();
+  if (carError || !car || car.owner_id !== user.id) return { error: "Car not found." };
+
+  const payload = modSheetPayload(items, user.id);
   const { data, error } = await supabase.rpc("save_mod_items", {
     p_car_id: carId,
     p_items: payload,
+    p_expected_revision: expectedRevision,
   });
+  if (error?.code === "40001" && error.hint === "stale_mod_sheet") return { error: STALE_MOD_SHEET, stale: true };
+  if (error?.code === "40P01") return { error: SHEET_WRITE_COLLIDED };
   if (error) return { error: error.message };
-  if ((data as unknown as { outcome?: string } | null)?.outcome !== "saved") {
+  const saved = data as unknown as { outcome?: string; revision?: string } | null;
+  if (saved?.outcome !== "saved") {
     return { error: "The modification sheet was not saved." };
   }
 
   // Mods are searchable build content (brief §20) — resync the car's document.
   revalidatePath(`/garage/${carId}/edit`);
   revalidatePath(`/cars/${car.slug}`);
-  return { ok: "Build saved." };
+  return { ok: "Build saved.", revision: saved.revision };
 }
 
 /**
@@ -471,7 +547,9 @@ export async function readPartLink(url: string): Promise<
   const { fetchPartLink } = await import("@/lib/mods/part-link");
   const result = await fetchPartLink(trimmed, user.id);
   if (!result.ok) return { ok: false, error: result.error };
-  const { ok, ...part } = result;
+  // The mod line's fields only: where the fetch landed is the agent's provenance, not part of the line.
+  const { ok, fetched_url: fetchedUrl, ...part } = result;
+  void fetchedUrl;
   return { ok, part };
 }
 
@@ -568,8 +646,9 @@ export type ShowcasePinInput = {
 
 /**
  * The annotated showcase (§U): ONE image, up to 8 pins, each snapshotting its
- * label. Delete-and-reinsert like the gallery/fitment savers; RLS scopes both
- * statements to the owner, and the image must be one of this car's photos.
+ * label. N66: replaced by one database function in one transaction
+ * (replace_car_showcase), which checks the owner, the photo and every pin's
+ * part before touching anything — a failed save leaves the old showcase.
  */
 export async function saveShowcase(
   carId: string,
@@ -590,22 +669,14 @@ export async function saveShowcase(
       label: pin.label.trim().slice(0, 80),
     }));
 
-  if (sane.length > 0) {
-    const { data: image } = await supabase
-      .from("car_images")
-      .select("id")
-      .eq("car_id", carId)
-      .eq("url", imageUrl)
-      .maybeSingle();
-    if (!image) return { error: "Pick one of this car's photos for the showcase." };
-  }
-
-  await supabase.from("car_hotspots").delete().eq("car_id", carId);
-  if (sane.length > 0) {
-    const { error } = await supabase
-      .from("car_hotspots")
-      .insert(sane.map((pin) => ({ car_id: carId, image_url: imageUrl, ...pin })));
-    if (error) return { error: "Couldn't save the showcase." };
+  const { error } = await supabase.rpc("replace_car_showcase", {
+    p_car: carId,
+    p_image_url: imageUrl,
+    p_pins: sane,
+  });
+  if (error) {
+    // The function's own refusals are written for the member (22023).
+    return { error: error.code === "22023" ? error.message : "Couldn't save the showcase. Your previous one is unchanged." };
   }
 
   const { data: car } = await supabase.from("cars").select("slug").eq("id", carId).maybeSingle();
@@ -1292,15 +1363,28 @@ export async function deleteAccount(_prev: ActionState, formData: FormData): Pro
   }
   // N41: typing DELETE proves nothing about who is at the session. The
   // password typed now, or a Google sign-in moments ago, is checked
-  // server-side before the request is made.
+  // server-side before the request is made; request_account_deletion()
+  // refuses a token without a sign-in in the last ten minutes on its own,
+  // so calling the RPC directly with an old token gets nowhere either.
   const identity = await confirmIdentity(supabase, user, String(formData.get("current_password") ?? ""));
   if (!identity.ok) return { error: identity.error, reauth: identity.reauth };
 
   const { data, error } = await supabase.rpc("request_account_deletion");
   if (error) {
     // N49: the database's wording stays in telemetry.
+    // The database checks the same freshness itself (20261107200450), so a
+    // token that went stale between the two checks is asked again too.
+    if (error.code === "42501" && /recent sign-in required/i.test(error.message ?? "")) {
+      const reauth = signsInWithPassword(user.app_metadata) ? "password" : "oauth";
+      return {
+        error: reauth === "password" ? "Enter your password to confirm it's you." : "Confirm it's you with Google first, then try again.",
+        reauth,
+      };
+    }
+    // N39: a suspension no longer stops a deletion request; only one
+    // already underway does (20261107220400).
     if (error.code === "42501" && /suspended/i.test(error.message ?? "")) {
-      return { error: "Your account is suspended, so deletion can't be requested here yet. Email hello@drvn.app and we'll handle it." };
+      return { error: "Your account's deletion is already underway." };
     }
     reportError("[settings] account deletion request failed", { userId: user.id, error });
     return { error: "Couldn't request deletion. Nothing was changed — try again." };

@@ -18,6 +18,8 @@ const CATEGORY_LABEL: Record<string, string> = {
   item_not_as_described: "Not as described",
   damaged_in_transit: "Damaged",
   wrong_item: "Wrong item",
+  counterfeit: "Counterfeit",
+  does_not_fit: "Doesn't fit",
   other: "Other",
 };
 

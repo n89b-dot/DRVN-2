@@ -1,33 +1,255 @@
 # Applying migrations
 
+**The runner** (OS-W10): `scripts/apply-migration.mjs`. A run is a dry run
+unless it says `--apply` with the code that dry run printed:
+
+```bash
+node scripts/apply-migration.mjs --target shared-dev supabase/migrations/<file>.sql
+node scripts/apply-migration.mjs --target shared-dev --apply --confirm <code> supabase/migrations/<file>.sql
+node scripts/apply-migration.mjs --target shared-dev --status   # read-only: applied vs on disk, as JSON
+```
+
+Every file in `supabase/migrations/` gets a row below, and its "Applied to"
+cell is `not applied`, `shared-dev YYYY-MM-DD`, `staging YYYY-MM-DD` or
+`production YYYY-MM-DD` (several joined with `; `). `tests/ci/migrations-md.test.ts`
+enforces it; rows older than the check are in `supabase/migrations-md-baseline.json`.
+
+`--target` names a project in `supabase/migration-targets.json` and must be
+the project `.env.local` (or `--env-file`) points at. The connection verifies
+the server's certificate against Supabase's root CA
+(`supabase/certs/supabase-root-2021-ca.crt`) and its hostname. Each file runs
+in one transaction with its row in `supabase_migrations.schema_migrations`; a
+recorded file is skipped, and a destructive baseline (0001) is refused on a
+database with any table in `public`. Details: "Applying without Docker or
+psql" below.
+
+**Recording files that already ran** (OS-R-migrations): `--record-only` writes
+history rows without running the files, only for files whose every object it
+verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
+TLS. Details: "Recording without running" below.
+
+## November 8 — staging caught up to main; shared dev history gaps
+
+**Staging, 2026-11-08.** The ten files staging lacked were applied with the runner, each with its PR's `--pr`. They were #133 `110200`, #141 `110300`, #148 `120000`–`120020`, #152 `130000`, #154 `130100`, #156 `130300`, #157 `130400` and #158 `130500`. Their cells here say so. Afterwards `--status` on staging showed 277 applied, none missing and none extra, at main 4c28663. A read-only comparison with shared dev matched on 128 tables, 145 policies, 21 cron jobs and 536 `public`/`private` functions, with identical `pg_get_functiondef` and policy fingerprints. The first two files merged without rows, so they get them here. Both were already on shared dev, which `--status` reported on 8 Nov.
+
+| File | Applied to |
+|---|---|
+| `20261108110200_mod_sheet_lock_everywhere.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+| `20261108110300_guest_cart_checkout_release.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+
+**Shared dev's history, known extras.** Five rows are on shared dev but not on disk: `20260913014536`, `20260913014621`, `20260913134641`, `20260913135341` and `20260913144516`. They are the 13 Sept marketplace files, recorded under their timestamps from before the rename. `20260913144516` is the file now named `20260913144218`. These rows stay; nothing is deleted on dev.
+
+**Shared dev's history, known gaps** (#91, R-migrations). Twelve files on main have no history row on shared dev. Each was applied in Sept–Oct 2026 per its row below, before the runner recorded history. A `--record-only` dry run on 8 Nov refused all twelve, so none was recorded, and none will be without a ruling (an attested row with a written reason, or documented and closed by hand; Neil is choosing). One line per file: why record-only refused it, and the read-only evidence on shared dev that it ran (probe of 8 Nov 2026, the same query on staging, which ran every file through the runner, gave the same answer each time unless the line says otherwise).
+
+| Version | Why record-only refused it | Evidence it ran on shared dev |
+|---|---|---|
+| `20260905011618` | a DO block creates `deletion_write_guard` through dynamic SQL, which the check cannot verify | `public.payment_requests`, index `payments_one_per_order` and `purchase_attempts.request_fingerprint` all exist, as on staging |
+| `20260905143949` | a DO block alters functions through dynamic SQL and creates nothing | the 10 `public` functions without a pinned `search_path` today are the same count on staging, which ran the file; all were created after it |
+| `20260905224929` | fully superseded: later files replace or drop every object it creates (`save_mod_items`) | nothing of its own is left to check: `20261107220100` drops the two-argument `save_mod_items(uuid, jsonb)` it created and replaces it with a three-argument one, and the two-argument one is gone on both projects |
+| `20260913144218` | data only (an `update` of `listings`) | recorded on shared dev under its pre-rename version `20260913144516` (kept, see "known extras") |
+| `20260919203000` | fully superseded, as `20260905224929` | as `20260905224929` |
+| `20260919204000` | data only (brand spellings) | no listing has an un-normalised Öhlins or GReddy brand (0 rows) |
+| `20260928120000` | a drop, nothing to probe as created | the 8-argument `write_activity_post` does not exist |
+| `20260928181000` | data only (catalogue ids on `cars`) | no car whose make matches a catalogue make lacks `catalog_make_id` (0 rows) |
+| `20261004100000` | grants only | `anon` cannot execute `invoke_transfer_worker()` and `authenticated` cannot execute `prune_rate_limits()` |
+| `20261006100200` | data only (`settlement_settings`); later superseded by the 2-day hold ruling | `settlement_settings` reads `fixed`, 2 days, auto-confirm 21 days, as later files set it; the same on staging |
+| `20261011121000` | a policy change (`alter policy`) only | policy "published activity readable" has the same `qual` fingerprint (md5 `1afdefb0`) as on staging |
+| `20261017140000` | policy changes (`alter policy`) only | none of the 130 `public` policies calls `auth.uid()` outside a `(select …)`, the file's rewrite, as on staging |
+
+## November 8 — account deletion checks financial holds before banning sign-in: OS-W11 (#157, not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261108130400_deletion_hold_before_ban.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+
+Apply after every earlier migration, together with the app from #157: the new worker calls `account_deletion_hold_gate` and `account_deletion_finalise`, which the old database doesn't have, and the old worker still runs against the new database (its RPCs are unchanged or restated). New `account_deletion_requests.hold_order_id` (FK to orders, `on delete set null`, partial index), `private.account_deletion_lock_key`, `private.account_deletion_hold_order`, `private.account_deletion_lease_held`, `private.requeue_account_deletion_for_hold`, `private.account_deletion_hold_appeared` and the deferred constraint trigger `account_deletion_hold_watch` on `orders`, `returns`, `refund_operations`, `payment_recoveries`, `transfer_intents` and `payment_requests`. Restated: `pause_account_deletion_hold` (from `20260905185725`; records and names the order to settle) and `block_deleted_account_writes` (from `20260905130250`; a member whose deletion is paused on a hold may write). What holds a deletion (`account_deletion_blockers`) is unchanged. Guards: `deletion_hold_before_ban_guard.sql`, `deletion_hold_race_guard.sql` (two sessions over dblink).
+
+## November 8 — an open bank chargeback holds account deletion (ruled by Neil, 8 Nov 2026)
+
+| File | Applied to |
+|---|---|
+| `20261108140000_chargeback_holds_deletion.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+
+Apply after `20261108130400`. `account_deletion_blockers` (from `20260905185725`) gains one hold: an unresolved chargeback in `stripe_dispute_journal` on any order the member bought or sold, whatever the order's status (unresolved means not `won`, `warning_closed` or `lost`, as for the payout freeze in `20261107130000`). Restated from `20261108130400` with only the chargeback added: `private.account_deletion_hold_order`, `private.requeue_account_deletion_for_hold`, `pause_account_deletion_hold` and `private.account_deletion_hold_appeared`. New: `private.account_deletion_hold_note`, `private.account_deletion_hold_code` (blocker code `open_chargeback` when the named order waits on the bank) and the deferred constraint trigger `account_deletion_hold_watch` on `stripe_dispute_journal`. The app reads `blocker_code` on the signed-out status page; the old app ignores it. Guard: `deletion_chargeback_hold_guard.sql`.
+
+## November 8 — files merged with no entry here (record gaps after #143)
+
+These four merged on 8 Nov 2026 after `tests/ci/migrations-md.test.ts` (#143) and before anyone added their rows, which left `main` red. `node scripts/apply-migration.mjs --target shared-dev --status` (read-only, 8 Nov) lists each of them, and the three `120000`–`120020` files above, as applied on the shared dev project. They are not on staging or production.
+
+| File | Applied to |
+|---|---|
+| `20261108130000_guest_holds_by_request.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+| `20261108130100_social_moderation_races.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+| `20261108130300_dispute_evidence_attach_cap.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+| `20261108130500_agent_redact_skips_ids.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+
+- **`130000`** — OS-W17/N89 checkout follow-up (#152); see that PR.
+- **`130100`** — OS-W21 follow-up (#154): a moderation hold always takes the car's row lock; the dispute-evidence upload count locks the uploader's folder; `listing_save` notifications are de-duplicated; `take_down_reported_content` closes every report on a post and its replies in one transaction. Guards: `social_moderation_guard.sql`, `social_moderation_race_guard.sql`.
+- **`130300`** — OS-W29 (#156): a BEFORE INSERT trigger holds the 8-photo dispute-evidence limit under a per-order-and-uploader lock. Guard: `dispute_evidence_cap_race_guard.sql`.
+- **`130500`** — #158: `agent_redact_cards` never scans UUID-shaped text, so card redaction can't corrupt ids. Guards: `agent_redact_ids_guard.sql`, `agent_tool_audit_guard.sql`.
+
+## November 8 — audited exports, old photo metadata, storage reference report: N531, N627, N232 (shared dev)
+
+| File | Applied to |
+|---|---|
+| `20261108120000_admin_export_audit.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+| `20261108120010_photo_metadata_scrub.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+| `20261108120020_storage_reference_report.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+
+Apply in order, after every earlier migration, **before the app from #148 serves the console**: the new export route records every download through `record_admin_export` and refuses to send a file it can't record, so without `120000` every CSV export answers 503.
+
+- **`120000`** — `admin_audit_log_subject_type_check` gains `export` (rebuilt from the constraint as it stands). `guard_audit_actor` restated from `0040` (its only definition): export rows (`export.started` / `export.completed` / `export.failed` on an `export` subject) may name any console member, so a viewer's export is recorded; every other row still needs a full admin. New `record_admin_export(phase, view, filters, export, rows, detail)`, called with the admin's own session (`is_admin()`), finishing only the caller's own export, once. Who may export is unchanged (N135). Guard: `admin_export_audit_guard.sql`.
+- **`120010`** — new `private.media_rewrite_claims` (lease with the object's `storage.objects.id`) and `private.photo_metadata_scrubs` (outcomes); `photo_metadata_candidates`, `claim_photo_rewrite`, `check_photo_rewrite`, `finish_photo_rewrite`, `photo_metadata_scrub_summary` (service role only) for `scripts/owner/scrub-photo-metadata.mjs`. `photo_rewrite_strays` lists unfinished leases and tombstoned paths with an object again, which every run deletes before its scan. `claim_media_deletion` restated from `20261107203000` (its only definition), adding only: a photo under a live rewrite lease is left for later. `agent_chat_photos_expired` restated from `20261107220300` (its only definition): the same lease rule, and its default age now comes from the new `private.agent_chat_photo_retention()` (still 48 hours; the app stops passing its own). Storage's write always upserts, so the rewrite is fenced on the object's identity (a recreated photo is deleted again). Guard: `photo_metadata_scrub_guard.sql`.
+- **`120020`** — read-only `private.storage_reference_rows`, `storage_object_rows`, `storage_reference_report` (service role only) for `scripts/owner/storage-reference-check.mjs` and the restore runbook (`docs/production-runbook.md` §6a). Chat photos the sweep has deleted (`private.agent_chat_photo_swept`: the sweep's own 48 hours plus one `drvn-agent-worker` interval) and tombstoned deletions count as `expectedMissing`, not missing; `storage_object_rows.expected_reason` gives the byte check the same rule. Guard: `storage_reference_report_guard.sql`.
+
+`supabase/tests/ci_shim.sql` gains `storage.objects.updated_at` and `metadata` (hosted Storage has both). The three guards were run against a throwaway Postgres with stubbed Supabase objects, not the full chain; CI's sql-guard job runs them on the full chain.
+
+## November 7 — deletion scrub and username rules: OS-W34 N16 N38 (shared dev and staging, 8 Nov)
+
+| File | Applied to |
+|---|---|
+| `20261107220500_username_rules.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+| `20261107220510_account_deletion_scrub.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+| `20261107220520_deletion_storage_message_photos.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+
+From #149. Apply in order, after every earlier migration (they sort before `20261107220600`, which is already applied: apply them as missing files), together with the app from #149: the new worker calls `scrub_deleted_account`, and the onboarding check calls `username_available`.
+
+- **`220500` (N38):** audits and fixes existing usernames **on the data**: it lowercases the unambiguous ones and clears the rest back to onboarding, recording every change in `private.username_audit`. Then it adds `profiles_username_format` (lowercase a-z, 0-9, `_`, 3 to 30 characters), reserved names, tombstones and `username_available(text)`. Read `private.username_audit` after applying: a cleared member chooses a new handle at onboarding.
+- **`220510` (N16):** `scrub_deleted_account` (service role only) and the retention columns on `account_deletion_requests` (`email_digest`, `email_digest_key`, `scrubbed_at`, `retention_starts_at`, `retain_until`). It writes `auth.users` and `auth.identities` as a definer function: confirm on the hosted project that the migration role may update them (if not, deletions fail loudly and retry). It takes `private.account_deletion_lock_key` from `20261108130400`, so apply that first (it is). It restates `guard_accepted_checkout_shipping` from `20260905223236` (its only definition), adding only the scrub's exception for the order's own buyer.
+- **`220520` (N16):** widens `deletion_storage_tasks_bucket_check` to include `message-photos`, which the new worker drains.
+
+Guards: `account_deletion_scrub_guard.sql` (U1–U6, S1–S12; fails before these migrations: the functions don't exist) and `definer_exposure_guard.sql`. Checked on a fresh `supabase/postgres` (CI's pinned image) with the CI shim: every migration applies and every SQL guard passes.
+
+## November 8 — Payout setup: started to sell, 14 days to finish, N244 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261108100000_payout_setup_started.sql` | — |
+
+Apply after every earlier migration, then deploy the app from the same PR: the new app writes `payout_details_submitted` on every Connect sync and calls the two new RPCs from the money worker. The old app keeps working against the new database (it never writes the new column, so sellers stay "not started" until the new app syncs them, which is the old rule). Owner ruling 8 Nov 2026, "go with the eBay approach, 14 days" (`docs/decisions/seller-payout-setup.md`). New `profiles.payout_details_submitted` (Stripe's `details_submitted`, backfilled true where payouts are already enabled) and `profiles.payout_restricted_at`, both server-only (no client grant; `guard_profile_columns` restated from `0018_admin.sql`, keeping the search_path `20260905143949` pinned). `private.seller_can_take_payment` (latest `20261107210000`) now says yes for payouts enabled, or a connected account with details submitted and no restriction, so publishing, reserving, `purchase_begin`'s skip and `prepare_payment_request` all follow the new rule unchanged. New `claim_payout_deadline_cancellations(limit)` and `settle_payout_deadline_cancellation(order)` (service role only), tables `private.payout_deadline_cancellations` / `private.payout_deadline_paused_listings`, the `orders_payout_deadline_dispatch_guard` trigger (LS002) and two `profiles` triggers that clear the restriction and restore the paused listings when payouts are enabled. `private.scheduled_job_inventory()` restated from `20261107210100` with only the `payoutDeadlines` family added to `drvn-transfer-worker`; no cron job changes. Anything that restates the inventory later must keep `payoutDeadlines` (and `drvn-ledger-reconciliation`). Payout release is unchanged (`blocked_unpayable` until payouts are enabled). Guard: `supabase/tests/payout_setup_started_guard.sql` (new; fails on the schema before this migration: the columns don't exist).
+
+Checked on a fresh `supabase/postgres:17.6.1.165` with the CI shim: every migration applies and every SQL guard passes.
+
+## November 7 — 18+ confirmation, copyright takedown, policy announcements: R69-age, R69-dmca, N629
+
+| File | Applied to |
+|---|---|
+| `20261107231001_age_confirmation.sql` | shared dev project (2026-11-08) |
+| `20261107231002_copyright_takedown.sql` | shared dev project (2026-11-08) |
+| `20261107231003_policy_announcements.sql` | shared dev project (2026-11-08) |
+
+From #117. Apply in order, after every earlier migration, **before the app from #117 serves traffic**: without `231001` every new account is stuck at onboarding (its age record can't be saved, so onboarding answers "We couldn't save that") and guest checkout refuses; without `231002` `/copyright` and Admin → Copyright fail.
+
+- **`231001`** — `public.age_confirmations (user_id, age_confirmed_at, source)`: when and where an account confirmed it is 18 or over, never a date of birth. Service role writes only; a member reads their own row; rows are never rewritten. The `profiles_require_age_confirmation` trigger refuses a member's first `username` (finishing onboarding) without a row; server writers are exempt. Existing members aren't backfilled.
+- **`231002`** — the `copyright` report reason (`reports_reason_check` restated); `public.copyright_notices` (filed from `/copyright`, admins read); `public.copyright_blocked_media` (objects a takedown removed; the proxy answers 451 for their `/_next/image` copies); `media_cleanup_queue_reason_check` gains `copyright_takedown`; `admin_audit_log_subject_type_check` gains `copyright_notice` (rebuilt from the constraint as it stands). New `copyright_takedown(notice, listing_ids, media_urls, note)` and `reject_copyright_notice(notice, note)`: an admin with a fresh step-up only, one transaction each, audited. A takedown removes the listings and purges the photos from every gallery, avatar, cover, hotspot and buyers' order snapshots (`order_item_snapshot_images`, otherwise immutable since 0049).
+- **`231003`** — `public.policy_announcements` and `announce_policy_update(key, title, body, href)` (service role only, idempotent per key). **Applying it notifies every member with a username** (`policy_updated`: "We updated our Terms and Privacy Policy", linking to `/terms#changes`).
+
+**Shared dev, 2026-11-08**: reported applied by the owner (not probed from the cloud session that recorded it, which can't reach the database). Applying `231003` sent that project's members the policy notification. Not applied to staging or production.
+
+Guard: `supabase/tests/launch_legal_guard.sql` (fails before these migrations). Checked on a fresh `supabase/postgres:17.6.1.165` with the CI shim: every migration applies and every SQL guard passes.
+
+## November 7 — payout hold fallbacks become 2 days, R-hold (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261107220900_payout_hold_fallback_two_days.sql` | not applied |
+
+Apply after every earlier migration. Neil, 7 Nov 2026: the fallbacks follow his 2-day rule. `settlement_settings.payout_hold_days` defaults to 2 (was 7), and `payout_available_at()` (restated from `20261006100000`, the only change being the coalesce's 7 → 2) treats a missing settings row as a fixed 2 days. The deployed row is already fixed, 2 days (`20261009100000`), so no payout date changes; dates already set never move. The app's `DEFAULT_PAYOUT_HOLD` changes to 2 in the same PR. Guard: `payout_hold_setting_guard.sql` check 7 (missing row and a new row both mean 2 days), which fails on the schema before this migration.
+
+## November 7 — Refund gap snapshot, OS-W20 follow-up (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261107210150_refund_gap_snapshot.sql` | not applied |
+
+Apply after `20261107210100`. New `refund_gap_snapshot(payment_reference, refund_references[])` (service role only, read-only): a payment's booked refund total and the cents of the listed refunds whose operation is still booking, from one statement. `applyChargeRefund` opens an "unattributed refund" case only on this result, so a refund settling while `charge.refunded` is handled can't be counted in neither place. Redefines nothing. Guard: `supabase/tests/refund_gap_snapshot_guard.sql` (fails before this migration: the function doesn't exist). Checked on a fresh native PostgreSQL 17 with the CI shim: every migration applies and every guard passes except `job_inventory_health_guard.sql` (needs real pg_cron).
+
+## November 7 — Settlement correctness and reconciliation, OS-W20 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261107210100_settlement_reconciliation.sql` | shared dev project (present by probe, 7 Nov 2026; apply date not recorded) |
+
+Apply after every earlier migration. Restates `claim_transfer_intents` (latest 20261107130000, #72), `invoke_remediation_worker` and `private.scheduled_job_inventory()` (latest 20261107200300, #84, whose `saved-search-digests` family and `drvn-saved-search-digests` row are kept); the payment_recoveries kind check (latest 20260905174828). Admission (N114): a `blocked_unpayable` payout is admitted only when its seller has a Stripe account with payouts enabled, or its provider call may have happened (that one reconciles when its `next_attempt_at` is due); due work is served longest-due first. Readiness, payout dates, the attempt budget and the chargeback freeze are unchanged. New `admin_retry_transfer_intent(order)` (service role only, called by the console's audited "Retry payout"): resets the attempt budget of a payout that spent all eight, keeping its frozen request and provider-call flag. New `ledger_reconciliation_runs` (service role only) and the `ledger_discrepancy` recovery kind for the daily read-only reconciliation, scheduled as `drvn-ledger-reconciliation` (05:50 UTC) and added to the job inventory with the `ledgerReconciliation` family. Anything that restates the inventory or the invoker later must keep `drvn-ledger-reconciliation` and `ledger-reconciliation`. Guard: `supabase/tests/settlement_reconciliation_guard.sql`, which fails on the schema before this migration (FAIL 1).
+
+Checked on a fresh database (native PostgreSQL 17 with the CI shim and stubbed roles, `auth`, `cron` and `net`): every migration applies and every SQL guard passes except `job_inventory_health_guard.sql`, which needs real pg_cron (CI's image has it).
+
 ## November 7 — fulfilment integrity, OS-W19 / OS-W30 (not applied anywhere)
 
 | File | Applied to |
 |---|---|
-| `20261107200100_fulfilment_integrity.sql` | not applied (PR only) |
+| `20261107200100_fulfilment_integrity.sql` | shared dev project (present by probe, 7 Nov 2026; apply date not recorded) |
 
 Apply before deploying the app from the same PR: the new app calls `pickup_mint_pass`. It sorts before `20261107203000_media_integrity.sql` (#73), which merged first; the two share no objects, so either order works. The old app keeps working against the new database (it still mints with its own upsert until it's replaced, and its pre-dispatch tracker call is simply no longer needed). `pickup_mint_pass` (new, service role only) mints and rotates a Pickup Pass under the same order-then-pass lock as `pickup_redeem` and never writes `redeemed_at`/`redeemed_by`, so a mint can't erase a handoff (N93). `mark_order_dispatched` is restated from `20261009100000` without the `tracking_required_from_cents` refusal (N110, "similar to eBay"); `settlement_settings.tracking_required_from_cents` is set to null and kept, unused. A first dispatch whose shipment has tracking but no carrier tracker queues a `tracker_registration` remediation job in the same transaction (dedup `tracker:<shipment id>`, first try in 5 minutes); `remediation_jobs_kind_check` gains that kind (restated from `20260905185725`; anything else that restates the check must keep it). `shipping_rate_quotes` gains `request_fingerprint` (a hash of every provider-shipment input: provider, both full addresses, end shipper, parcel); a stored quote is reused only on an exact match, and older rows (null) never are. Payout release rules are unchanged. Guards: `fulfilment_integrity_guard.sql` (new) and `payout_release_guard.sql` (check 1 and 6 updated for the removed rule).
 
-## November 7 — Media integrity and lifecycle, OS-W15 (not applied anywhere)
+## November 7 — Media integrity and lifecycle, OS-W15
 
 | File | Applied to |
 |---|---|
-| `20261107203000_media_integrity.sql` | not applied |
+| `20261107203000_media_integrity.sql` | shared dev project (present by probe, 7 Nov 2026; apply date not recorded); `job_config.media_storage_origin` is set there |
 
 Apply after every earlier migration (it redefines no function another migration owns). Written as `20261107150500`; renamed when rebased so it sorts after main's latest (`20261107191000`). One storage object has one identity, `(bucket, decoded path)` (`private.media_object_key`, indexed on every photo column), and `public.media_object_referenced(bucket, path)` (service role only) is the one in-use check: it now counts dispute evidence by `storage_path` and message photos by path. Members can no longer insert, delete or rewrite `staged_uploads` rows (only stamp `consumed_at`); every row must name an object in its owner's own folder, and rows that don't are dropped from the ledger (storage untouched). Members can't delete media or evidence objects from Storage at all, evidence can't be overwritten, and evidence uploads only into `<uploader>/<order>/<file>` while that order is disputed and under 8 photos. A member's photo columns (car cover and gallery, hotspots, mod thumbnail, listing gallery, post photos and body media, avatar) only take their own canonical public URLs, on `job_config.media_storage_origin`, which fails closed: **set that row when applying this migration** (docs/production-runbook.md §4); until it exists no new member photo reference is accepted (the upload route and media-gc also record it from `NEXT_PUBLIC_SUPABASE_URL`, never overwriting). Deleting a car, post or listing queues its photos in `media_cleanup_queue`; the media job (and the deleting action, straight after) removes each one only if nothing references it. Removal first claims the object (`claim_media_deletion`, under a per-object lock) and gets an exclusive token: a second remover is told `busy`, and only the holder can `complete_media_deletion` (a tombstone) or `release_media_claim`; a claim past its 10-minute lease can be taken over. Uncertainty is sticky: an unknown Storage outcome (lost response, timeout, 5xx) is recorded on the claim (`mark_media_deletion_uncertain`), and a lease takeover makes the claim uncertain too. An uncertain claim is never released, only completed once a delete is confirmed (success, or not-found); only a definitive 400/401/403/404 refusal on a claim with no uncertainty releases it. The cleanup queue retries with backoff (`next_attempt_at`, 15 minutes doubling to a day), each object at most once per run, and an exhausted row raises a `media_cleanup_stuck` admin alert. Each enqueue gets a fresh `generation`; the worker dequeues or reschedules only the generation it read, so a request queued again mid-run survives. Every reference write, including the server's evidence attach, refuses a claimed object, so nothing attached mid-removal is lost. The queue is filled only as the deleted row's real owner (folder must match) and only for URLs on the recorded storage origin.
 
 Checked on a fresh database (native PostgreSQL 17 with the CI shim): every migration applies and every SQL guard passes, including the new `media_integrity_guard.sql`, which fails on the schema before this migration.
 
-## November 7 — AG-7, the member's agent mode (NOT applied anywhere)
+## November 7 — AG-7, the member's agent mode
 
 | File | Applied to |
 |---|---|
-| `20261107170000_agent_member_mode.sql` | nowhere yet — not shared dev, not production |
-| `20261107190000_agent_mode_enforced.sql` | nowhere yet — not shared dev, not production |
+| `20261107170000_agent_member_mode.sql` | shared dev project (present by probe, 7 Nov 2026; apply date not recorded) |
+| `20261107190000_agent_mode_enforced.sql` | shared dev project (present by probe, 7 Nov 2026; apply date not recorded) |
 
 Apply after `20261107100000` (#64's agent model boundary, already on shared dev). Written as `20261026130000`; renamed when #66 was rebased onto #64 so it sorts after every migration already applied. It touches only `profiles` and redefines no function. One column, `profiles.agent_mode` (`'off' | 'suggest' | 'act'`, default `'act'`, Settings → Agent): Off disables every agent entry point, Suggest keeps the chat and price-drop suggestions but lets no mandate start, Act is today's behaviour. The owner writes it through the existing "users update own profile" policy plus a column update grant (0017's column-list model); there is no client select grant — the app reads it server-side for the signed-in member only. The worker is unchanged: it acts only on a live mandate, which the app refuses to start outside Act and ends when the member drops below it. Guard: `supabase/tests/agent_member_mode_guard.sql`.
 
 **`20261107190000` (R-agentmode)**, apply right after `20261107170000`. The mode holds in the database: `agent_mode_set(p_mode)` is the only write (the column update grant is revoked) and, below Act, revokes every live mandate with its open task and pending cards in the same transaction. `agent_mandate_set` and a resume (`agent_mandate_set_status(…, 'active')`) refuse below Act with `AG009`; `agent_claim_jobs` cancels a job whose owner is below Act and `agent_authority` (every worker write) refuses with `AG003`. `agent_chat_turn_begin`, the only path that stores a member's chat message, refuses under Off with `AG009` (restated from 20261107100000; spend reserve is left to 20261107190500, PR #79). All of them read the mode under `agent_member_lock_key(owner)`, shared, which `agent_mode_set` takes exclusively. Lock order: listing → offer → job → member → mandate → task → approval. Restated from their latest definitions: `agent_chat_turn_begin` (20261107100000), `agent_mandate_set` (20261026100000), `agent_mandate_set_status`, `agent_claim_jobs`, `agent_authority` (20261021100100). New: `agent_member_lock_key`, `agent_mode_set`. Guards: `agent_mode_enforcement_guard.sql`, `agent_member_mode_guard.sql`.
+
+## November 7 — files merged with no entry here (record gaps, OS-PR63)
+
+Checked on 7 Nov 2026 by listing every file in `supabase/migrations/` on
+`main` against this record. These merged without an entry of their own. Each
+was then probed on the shared dev project, read-only, for an object only that
+file creates; every one is **present**, so each was applied there after it
+merged, on a date this record doesn't have. None is on production (there is
+no production project yet). Staging has the 229 files on `main` at 836d636
+(`docs/staging-setup.md`): of the sixteen, all but `20261107130000`,
+`20261107190500`, `20261107200300`, `200500`, `200510`, `200520` and
+`210000` (nor `20261107200100`, `20261107203000` or `20261107210100`
+above, which also merged later).
+
+| File | Merged in | Shared dev, by probe | Probe |
+|---|---|---|---|
+| `20261026100000_agent_hosted_schedule.sql` | #64 | present | `cron.job` has `drvn-agent-worker` |
+| `20261026150000_carry_payout_admin.sql` | #69 | present | `public.admin_retry_seller_carry_payout` exists |
+| `20261107100000_agent_model_boundary.sql` | #64 | present | `public.agent_spend_holds` exists |
+| `20261107130000_chargeback_freezes_payout.sql` | #72 | present | `private.order_has_unresolved_chargeback` exists |
+| `20261107150000_sitemap_post_page.sql` | #74 | present | `public.sitemap_post_page` exists |
+| `20261107153100_foreign_key_indexes.sql` | #71 | present | index `account_deletion_requests_job_id_idx` exists |
+| `20261107153200_listing_published_at.sql` | #71 | present | `listings.published_at` exists |
+| `20261107180000_social_retrieval_at_scale.sql` | #77 | present | index `activity_posts_author_published_idx` exists |
+| `20261107180100_dangling_social_targets.sql` | #77 | present | `public.forget_deleted_social_target` exists |
+| `20261107190500_agent_spend_lock_order.sql` | #79 | present | `public.agent_chat_turn_status` exists |
+| `20261107191000_job_inventory_health.sql` | #80 | present | `cron.job` has `drvn-cron-history-prune` |
+| `20261107200300_saved_search_email_digests.sql` | #84 | present | `cron.job` has `drvn-saved-search-digests` |
+| `20261107200500_admin_mfa_enrolment.sql` | #87 | present | `admin_users.mfa_confirmed_at` exists |
+| `20261107200510_admin_refund_refusal_release.sql` | #87 | present | `public.release_refused_admin_refund` exists |
+| `20261107200520_admin_complete_reads.sql` | #87 | present | `public.admin_audit_actor_ids` exists |
+| `20261107210000_listing_write_boundary.sql` | #89 | present | `private.guard_member_listing_publish` exists |
+
+What each does is in the file's own header comment and its PR. Two of them
+change what an operator checks:
+
+- With `20261107191000`, `20261107200300` and `20261107210100`, `cron.job` holds **twenty-one**
+  rows on a complete database: `private.scheduled_job_inventory()`, mirrored
+  in `src/lib/job-inventory.ts` and listed in `docs/production-runbook.md`
+  §4. Shared dev has twenty-one.
+- `20261107203000` needs `job_config.media_storage_origin` set in the same
+  step (`docs/production-runbook.md` §4); it is set on shared dev.
+
+The four "not applied anywhere" entries above (`20261107210100`,
+`20261107200100`, `20261107203000`, `20261107170000` + `20261107190000`) were written before
+they merged; their "Applied to" cells now say what the probe found. The
+older gaps, `0057` and `20260919171500`, are in "Explore search — two files
+this record never mentioned" further down.
 
 ## October 25 — "Ask about DRVN" cards and sentence-to-filters usage, A4 (shared dev project)
 
@@ -742,6 +964,9 @@ were diffed against a fresh database: only the intended lines changed.
 `20261006100200` then sets the owner's decisions (Neil, 4 Oct): hold mode
 `claim_window` (7-day floor) and auto-confirm after 21 days. Guards that test
 the fixed 7-day mechanism pin it inside their own rolled-back transaction.
+(Superseded: `20261009100000` sets the live rule to `fixed`, 2 days after
+delivery; `docs/decisions/payout-hold.md`. `20261107220900` makes the column
+default and the missing-row fallback 2 days as well.)
 `20261006100300` adds `seller_payout_dates()`: a seller reads the payout date
 already set on their own orders, so the ledger shows the date the database
 pays on rather than re-dating delivered orders with whatever the setting is
@@ -1376,6 +1601,38 @@ The migration adds durable payment requests, atomic capture/payout/compensation,
 
 Follow [the remediation rollout](../docs/remediation-rollout.md) for coordinated application/schema deployment and required Auth, SMTP and scheduler settings. Do not apply the destructive initial schema to an existing project.
 
+## Explore search — two files this record never mentioned
+
+Found on 2026-10-24 while checking this file against `supabase/migrations/`;
+neither file was recorded anywhere here. Probed read-only on the shared dev
+project on 7 Nov 2026: both are present (apply dates not recorded).
+
+| File | Applied to |
+|---|---|
+| `0057_explore_search.sql` | shared dev project (present by probe, 7 Nov 2026: `activity_posts.search_text` exists) |
+| `20260919171500_car_search_installed_mods.sql` | shared dev project (present by probe, 7 Nov 2026: `search_car_ids` reads `mod_items` status) |
+
+- **`0057_explore_search.sql`** — Explore search for builds, posts and
+  accounts, one ranked family each, on the marketplace's doctrine (Postgres is
+  the truth, a provider only ranks ids). Adds `activity_post_search_text(jsonb)`
+  (an IMMUTABLE extractor over the post body, so `activity_posts.search_text`
+  can be a stored generated column), `search_car_ids(text)`,
+  `search_update_ids(text)` and `search_profile_ids(text)` (username, display
+  name and headline only — never location, bio or garage), plus five trigram
+  indexes (`cars_name_trgm_idx`, `activity_posts_title_trgm_idx`,
+  `activity_posts_search_text_trgm_idx`, `profiles_username_trgm_idx`,
+  `profiles_display_name_trgm_idx`). Visibility is checked inside each
+  function; an empty query returns nothing. Documented in
+  `docs/site/search.md`. Probe: `select to_regproc('public.search_update_ids')`
+  and `select indexname from pg_indexes where indexname like '%trgm_idx'`.
+- **`20260919171500_car_search_installed_mods.sql`** — restates
+  `search_car_ids` so only `mod_items` with `status = 'installed'` feed a
+  build's search text; a part that came off the car (removal became a state in
+  `20260919170000`) no longer finds it. Otherwise byte-identical to the
+  `20260905135050` body. Probe:
+  `select pg_get_functiondef('public.search_car_ids(text)'::regprocedure)`
+  and look for `m.status = 'installed'`: present means applied.
+
 
 The entries below are historical application records. Compare the destination's actual schema and migration history before applying any file. Apply only reviewed, unapplied migrations through the established SQL Editor/runner procedure. **0001 is destructive; never replay the tree against an existing project.** Some later files were tested for repeatability, but the whole tree is not a safe re-run operation.
 
@@ -1557,34 +1814,124 @@ the record of how, and what to do for the next environment. For standing up a
 
 `supabase db dump` and `supabase db start` need Docker; `supabase db query`
 can't take a multi-statement file (it uses a prepared statement, which Postgres
-refuses for multiple commands). Neither was available here, so the files were
-applied over the direct IPv6 connection with `node-postgres`, which uses the
-simple query protocol and accepts whole scripts including `DO` blocks:
+refuses for multiple commands). So files are applied over the direct IPv6
+connection with `node-postgres`, which uses the simple query protocol and
+accepts whole scripts including `DO` blocks. `scripts/apply-migration.mjs` is
+that runner (OS-W10, readiness N131 and N246):
 
-```js
-// scratch runner — node apply.mjs <file.sql>
-import { readFileSync } from "node:fs";
-import { Client } from "pg";
-const client = new Client({
-  connectionString: process.env.DB_URL,       // postgresql://postgres:<pwd>@db.<ref>.supabase.co:5432/postgres
-  ssl: { rejectUnauthorized: false },
-});
-client.on("notice", (n) => console.log(n.message));  // migration assertions arrive as NOTICEs
-await client.connect();
-await client.query(readFileSync(process.argv[2], "utf8"));
-await client.end();
+- **Target.** `--target <name>` is required, must be in
+  `supabase/migration-targets.json` (shared dev and staging today; production
+  is added by a reviewed PR), and must be the project the env file points at.
+  `.env.local` alone never decides where a migration goes.
+- **TLS.** The connection trusts only Supabase Root 2021 CA (shipped in
+  `supabase/certs/`, pinned by SHA-256 in `scripts/lib/supabase-db.mjs`) and
+  checks the hostname against the certificate. A certificate from anywhere
+  else, one for another host, or a server that won't do TLS fails the
+  connection. There is no switch to turn this off.
+- **Dry run first.** Without `--apply` the runner connects, reads in a
+  read-only transaction (who it is, Postgres version, TLS, how many tables
+  `public` has, the recorded history) and prints each file's plan (apply,
+  skip, refuse) and a confirmation code. `--apply --confirm <code>` only runs
+  when the code matches the same target and the same files byte for byte.
+  The dry run doesn't execute the SQL: to rehearse what a file does, run it
+  against a copy.
+- **History in the same transaction.** Each file runs inside one transaction
+  the runner opens. Statements are found with a PostgreSQL-aware lexer
+  (`scripts/lib/sql-statements.mjs`: strings, quoted identifiers, nested
+  comments, dollar quotes), so a file's own outer `begin;`/`commit;` (or
+  `end;`) is removed, and any other top-level `COMMIT`, `END`, `ROLLBACK`,
+  `ABORT`, `BEGIN`, `START TRANSACTION`, `SAVEPOINT`, `RELEASE`,
+  `PREPARE TRANSACTION` or `COMMIT/ROLLBACK PREPARED` refuses the file, as do
+  `CONCURRENTLY`, `VACUUM` and `BEGIN ATOMIC`,
+  under an advisory lock, and its row goes into
+  `supabase_migrations.schema_migrations` (version, name, the file's text) in
+  that transaction. A failing file leaves neither its changes nor a row. The
+  runner creates the history table (the CLI's shape) on first apply.
+- **No replay.** A version already in the history is skipped.
+- **No baseline on a populated database.** A file that is marked
+  `-- DESTRUCTIVE` or drops a schema (0001) is refused when `public` has any
+  table, both in the dry run and again inside the apply transaction. Nothing
+  overrides this.
+- **Risky SQL needs an allow-list entry on a populated database.** A
+  top-level `TRUNCATE` or `DROP TABLE`, the same run directly inside a `DO`
+  block or a function the file creates and then calls, or dynamic SQL
+  (`EXECUTE` there) that destroys data or can't be classified from its
+  leading literal, is risky. Bodies are read in any quoting (dollar quotes,
+  `'…'` with doubled quotes, `E'…'` escapes, nested `DO`s), and a body that
+  doesn't parse counts as risky; temporary tables the body creates are
+  exempt. A risky file is refused when `public` has tables unless `supabase/migration-targets.json` `dynamicSqlAllowed`
+  names the file, the sha256 of its exact bytes and a reason. The tree has one
+  entry, `20261011100000_listing_vehicle_fit.sql` (it empties and rebuilds a
+  derived table); a test fails if a risky file has no entry or an entry goes
+  stale.
+
+Several files can go in one run (they are sorted by name and each gets its own
+transaction; the run stops at the first failure). PostgREST is told to
+reload its schema after each committed file, so a later failure can't leave
+an applied file unannounced, and once on an apply run that finds everything
+already recorded. `scripts/import-vehiclesdb.mjs` uses
+the same target check and TLS.
+
+The SQL Editor in the dashboard is the alternative for a one-off, but it records
+no history.
+
+### Recording without running (`--record-only`)
+
+Shared dev's history table only has 0001–0011 (and five 13 September versions
+no file has) plus what was applied after the runner existed; about 230 files
+that did run there show as pending, so a whole-tree apply would replay them.
+`--record-only` closes that gap without running anything:
+
+```bash
+node scripts/apply-migration.mjs --target shared-dev --record-only supabase/migrations/*.sql
+node scripts/apply-migration.mjs --target shared-dev --record-only --apply --confirm <code> supabase/migrations/*.sql
 ```
 
-The SQL Editor in the dashboard does all of this without the plumbing — prefer
-it unless you're scripting.
+- **What it verifies.** `scripts/lib/migration-objects.mjs` reads each file
+  with the same lexer for the objects it creates: functions (schema, name and
+  identity argument types), tables, columns, views, sequences, indexes,
+  triggers, policies, named constraints, types and enum values, schemas,
+  extensions and roles, at top level or as static DDL in a `DO` block. An
+  `EXECUTE` in a `DO` block is read only when it is a lone literal or one
+  whole `format('…', …)` call whose created object names are all static;
+  any other expression (a literal `||` anything, a variable, a function's
+  result) is SQL built at run time and the file can't be checked. A
+  function's identity keeps each argument type's schema (`private.kind` is
+  not `public.kind`); only built-in aliases (`int` → `integer`, …) and the
+  `public.`/`pg_catalog.` qualifiers, which `format_type` omits under the
+  `search_path = public` the catalog is read with, are normalised. It walks the whole
+  tree in name order, so it knows the last thing any file does to each
+  object. Each object must be in the target's catalog (read in a read-only
+  transaction); an object a later file drops isn't expected. For a function
+  the file is the tree's **latest** definition of, `pg_proc.prosrc` (the body
+  `pg_get_functiondef` prints) must equal the file's body byte for byte (CRLF
+  aside); an earlier definition, replaced later, only has to exist.
+- **What it refuses.** A file with any object missing, a latest function body
+  that differs, or something it can't check (dynamic DDL that names objects
+  at run time, a kind of object it doesn't read, an unnamed index or added
+  constraint, a `%TYPE` argument) is not
+  recorded and is listed with every reason. So is a file with nothing to
+  check: data changes, grants, comments and `ALTER … SET` aren't objects, and
+  a file of only those (or whose objects were all dropped later) can't be
+  verified this way. Refused files stay pending; record them by hand only
+  after reading them.
+- **Limits.** It proves the objects are there, not who made them: a file is
+  verified if a later file created the same objects. Data changes, grants and
+  comments in a verified file are not checked. Most files here wrap
+  themselves in one `begin; … commit;`, so for those, objects present means
+  the whole file committed, unless a later file made the same objects.
+- **Two steps, one transaction.** The dry run prints `record`, `skip` or
+  `refuse` for each file and a code bound to the target and the exact files
+  it would record (its own code, so an apply's code never confirms it, nor
+  the reverse). `--apply --confirm <code>` takes the run lock, verifies again
+  inside one transaction, refuses everything if the set that verifies isn't
+  the one the code was printed for, and inserts the rows. Each row's
+  `statements` is the file's text after a comment line saying it was recorded
+  by `--record-only` and not run.
 
 **Do not use `supabase db push`.** 0001–0005 were applied by hand, so the CLI has
-no `supabase_migrations.schema_migrations` history and would try to run 0001 —
-which drops every table in `public`.
-
-**A wrapping transaction won't make a dry run safe.** Each file ends with its own
-`commit;`, so an outer `begin` is closed by the file itself and a following
-`rollback` does nothing. To rehearse a migration, run it against a copy.
+no complete `supabase_migrations.schema_migrations` history and would try to run
+0001, which drops every table in `public`.
 
 ## Order
 
@@ -1630,6 +1977,65 @@ which drops every table in `public`.
 On a fresh environment, apply **0001–0028 in order**; for the production path
 (baselining, verification, Stripe live wiring, first admin) follow
 [docs/production-runbook.md](../docs/production-runbook.md).
+
+## Reading this record, and the CLI history
+
+This file is the record of what is applied where. The CLI history table,
+`supabase_migrations.schema_migrations`, is not, on the projects that exist
+today:
+
+- **Shared dev** records 16 versions: `0001`–`0011` and five from 13
+  September (`20260913014536`, `…014621`, `…134641`, `…135341`, `…144516`).
+  Those five are the versions the September 13 repair was recorded under,
+  not the filenames' (see "September 13 marketplace shopping contract").
+  Nothing after them is recorded, though every later file is applied.
+- **Staging** was seeded by hand with the 229 files applied on 7 Nov 2026.
+
+When this file is silent, find the real state by probing objects
+(`to_regproc`, `to_regclass`, `pg_get_functiondef`, `cron.job`,
+`information_schema.columns`), read-only, never from that table. Once the
+runner records history (OS-W10), files it applies are recorded as they go;
+the older gaps stay until an operator fills them from probes
+(`docs/production-runbook.md` §3).
+
+## Verifying on a throwaway database
+
+Every migration, SQL guard and the generated types are proven on a disposable
+Postgres before anything reaches the shared dev project — never on dev itself.
+The recipe matches CI's `sql-guard` job (the port is one that
+`scripts/test-sql-guards.sh` and `scripts/generate-database-types.mjs`
+accept, so nothing here can be pointed at a hosted project by mistake):
+
+```bash
+# 1. A disposable database on CI's image (supabase/postgres 17.6.1.165, the
+#    Postgres major supabase/config.toml declares), loopback only.
+docker run -d --name drvn-review-db -e POSTGRES_PASSWORD=postgres \
+  -p 127.0.0.1:55440:5432 supabase/postgres:17.6.1.165
+
+# 2. The CI shim (storage stand-ins and auth helpers the migrations expect),
+#    then every migration in order as supabase_admin, stopping on the first error.
+export PGPASSWORD=postgres PGHOST=127.0.0.1 PGPORT=55440
+psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/ci_shim.sql
+for f in supabase/migrations/*.sql; do
+  echo "== $f"
+  psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f "$f" || break
+done
+
+# 3. Every *_guard.sql in supabase/tests; each must print "all … checks passed".
+bash scripts/test-sql-guards.sh
+
+# 4. The committed types match the schema (= `npm run db:types:check`;
+#    without --check, `npm run db:types` rewrites them).
+DRVN_TYPES_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:55440/postgres \
+  node scripts/generate-database-types.mjs --check
+
+docker rm -f drvn-review-db
+```
+
+The shim is for this database only — never apply `supabase/tests/ci_shim.sql`
+to a hosted project. On an 8 GB machine without Docker, a native PostgreSQL 17
+with the shim has been used instead (the media integrity entry above); the
+image is the reference.
 
 ## Verifying the purchase guard
 

@@ -27,7 +27,6 @@ declare
   expected_cents bigint := 0;
   stats record;
 begin
-  update public.beta_access_config set enforced = false where singleton = true;
   insert into auth.users(id, email, raw_user_meta_data) values
     (seller, 'refund-alloc-seller@drvn.test', '{}'), (buyer, 'refund-alloc-buyer@drvn.test', '{}');
   insert into public.cars(id, owner_id, name, slug)

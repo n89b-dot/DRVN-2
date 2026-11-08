@@ -8,7 +8,8 @@ import { reportError } from "@/lib/monitoring";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { isOwnedDisputeEvidenceRef } from "@/lib/media-url";
 import { sendAdminAlert } from "@/lib/admin/alerts";
-import { SELLER_RESPONSE_DAYS } from "./disputes";
+import { REFUND_OFFER_HOURS, disputeRefusalMessage } from "./disputes";
+import { refundNotReceived } from "@/lib/payments/dispute-clocks";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { postOrderEvent } from "./order-thread";
@@ -113,7 +114,7 @@ export async function offerRefund(
     kind: "refund_offered",
     section: "marketplace",
     title: "The seller offered a refund",
-    body: `${formatPrice(amount)} — review it on the order.`,
+    body: `${formatPrice(amount)} — review it on the order. The offer stands for ${REFUND_OFFER_HOURS} hours.`,
     href: `/orders/${orderId}`,
     actor_id: user.id,
   });
@@ -124,7 +125,7 @@ export async function offerRefund(
   return {
     ok: noticeError
       ? "Refund offer saved. We couldn't notify the buyer just now — they'll see it on the order."
-      : "Refund offer sent to the buyer.",
+      : `Refund offer sent to the buyer. It stands for ${REFUND_OFFER_HOURS} hours.`,
   };
 }
 
@@ -171,7 +172,7 @@ export async function acceptRefund(
 
   const { data: order, error: orderError } = await admin
     .from("orders")
-    .select("id, buyer_id, seller_id, status, refund_offer_cents, refund_offered_at")
+    .select("id, buyer_id, seller_id, status, refund_offer_cents, refund_offered_at, refund_offer_expires_at")
     .eq("id", orderId)
     .maybeSingle();
   if (orderError) return { error: "Couldn't load this order. Nothing changed — try again." };
@@ -179,6 +180,15 @@ export async function acceptRefund(
   if (order.buyer_id !== user.id) return { error: "That isn't your order." };
   if (order.status !== "disputed" || !order.refund_offer_cents || !order.refund_offered_at) {
     return { error: "There's no refund offer to accept." };
+  }
+  // N92: an offer stands for 48 hours from when it was made, checked here
+  // whether or not the cleanup has run (the database refuses the claim
+  // below too). The case's own clock carries on regardless.
+  const nowIso = new Date().toISOString();
+  if (!order.refund_offer_expires_at || new Date(order.refund_offer_expires_at).getTime() <= Date.now()) {
+    return {
+      error: `This refund offer expired after ${REFUND_OFFER_HOURS} hours. The seller can make a new one, or you can ask DRVN to step in.`,
+    };
   }
   // This offer's identity: the refund it starts is keyed to it, so accepting
   // again after an unconfirmed answer drives the same refund, never a second.
@@ -214,7 +224,11 @@ export async function acceptRefund(
     .eq("id", orderId)
     .eq("status", "disputed")
     .eq("refund_offered_at", offeredAt)
+    .gt("refund_offer_expires_at", nowIso)
     .select("refund_offer_cents");
+  if (claimError?.code === "42501") {
+    return { error: `This refund offer expired after ${REFUND_OFFER_HOURS} hours. Nothing was refunded.` };
+  }
   if (claimError) return { error: "Couldn't accept the offer. Nothing changed — try again." };
   const claimedAmount = claimed?.[0]?.refund_offer_cents;
   if (!claimedAmount) {
@@ -317,6 +331,13 @@ export async function closeDispute(
   return { ok: "Dispute closed." };
 }
 
+/**
+ * Either party asks DRVN to step in (N6), from 3 to 21 business days after
+ * the report. escalate_order_dispute (20261107210300) checks the party, the
+ * frozen window and, for the buyer, a live refund offer (an expired one never
+ * blocks, N92). A not-received case with no valid tracking is then refunded
+ * in full at once, through the one refund path.
+ */
 export async function escalateDispute(
   _prev: CommerceState,
   formData: FormData
@@ -326,73 +347,80 @@ export async function escalateDispute(
   const orderId = String(formData.get("order_id") ?? "");
   if (!orderId) return { error: "Missing order." };
 
+  const { data, error } = await admin.rpc("escalate_order_dispute", { p_order: orderId, p_actor: user.id });
+  if (error || !data) {
+    reportError("[disputes] escalation failed", { orderId, error });
+    return { error: "Couldn't escalate. Nothing changed — try again." };
+  }
+  const result = data as {
+    ok: boolean;
+    reason?: string;
+    refund_due?: boolean;
+    opens_at?: string;
+    closed_at?: string;
+  };
+  if (!result.ok && !(result.reason === "already_escalated" && result.refund_due)) {
+    return { error: disputeRefusalMessage(result.reason, result) };
+  }
+
   const { data: order } = await admin
     .from("orders")
-    .select(
-      "id, buyer_id, seller_id, status, total_cents, disputed_at, dispute_category, dispute_escalated_at, refund_offer_cents"
-    )
+    .select("id, buyer_id, seller_id, total_cents, disputed_at, dispute_category")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { error: "Order not found." };
-  if (order.buyer_id !== user.id) return { error: "That isn't your order." };
-  if (order.status !== "disputed") return { error: "This order isn't in dispute." };
-  if (order.dispute_escalated_at) return { error: "This dispute is already with DRVN support." };
-  if (order.refund_offer_cents) {
-    return { error: "The seller has a refund offer out — accept it or wait before escalating." };
+  const byBuyer = order.buyer_id === user.id;
+
+  if (result.ok) {
+    const otherParty = byBuyer ? order.seller_id : order.buyer_id;
+    if (otherParty) {
+      await postOrderEvent(admin, orderId, user.id, "Asked DRVN to step in — the case is now with support.");
+      // The escalation stands either way; support works from the case queue,
+      // so a missed notice is reported rather than shown.
+      const { error: noticeError } = await admin.from("notifications").insert({
+        user_id: otherParty,
+        kind: "dispute_escalated",
+        section: "marketplace",
+        title: "A dispute was escalated to DRVN",
+        body: byBuyer
+          ? "The buyer asked DRVN support to review this case. Unanswered disputes are refunded automatically."
+          : "The seller asked DRVN support to review this case.",
+        href: `/orders/${orderId}`,
+        actor_id: user.id,
+      });
+      if (noticeError) reportError("[disputes] escalation notification failed", { orderId, noticeError });
+    }
+    await sendAdminAlert({
+      kind: "dispute_escalated",
+      title: byBuyer ? "Buyer escalated a dispute" : "Seller escalated a dispute",
+      detail: (order.dispute_category ?? "other").replaceAll("_", " "),
+      orderId,
+      amountCents: order.total_cents,
+    });
   }
-  const disputedAt = order.disputed_at ? new Date(order.disputed_at).getTime() : Date.now();
-  const waitMs = disputedAt + SELLER_RESPONSE_DAYS * 86_400_000 - Date.now();
-  if (waitMs > 0) {
+
+  // N6: no valid tracking once the seller's 3 business days are up — DRVN
+  // refunds in full. The money worker retries anything left pending.
+  if (result.refund_due && order.disputed_at) {
+    const outcome = await refundNotReceived(admin, orderId, order.disputed_at);
+    revalidatePath("/orders");
+    revalidatePath(`/orders/${orderId}`);
+    if (outcome.ok) {
+      return { ok: "No valid tracking was added in time, so DRVN refunded the order in full." };
+    }
     return {
-      error: `Give the seller ${SELLER_RESPONSE_DAYS} days to respond first — you can escalate in ${Math.ceil(waitMs / 86_400_000)} day(s).`,
+      ok: outcome.pending
+        ? "Escalated. A full refund is being confirmed with the card provider."
+        : "Escalated — DRVN support will review this case.",
     };
   }
-
-  const { data: escalated, error } = await admin
-    .from("orders")
-    .update({
-      dispute_escalated_at: new Date().toISOString(),
-      dispute_escalated_by: user.id,
-    })
-    .eq("id", orderId)
-    .eq("status", "disputed")
-    .is("dispute_escalated_at", null)
-    .select("id");
-  if (error) return { error: error.message };
-  if (!escalated?.length) return { error: "This dispute has already moved on — reload." };
-
-  if (order.seller_id) {
-    await postOrderEvent(
-      admin,
-      orderId,
-      user.id,
-      "Asked DRVN to step in — the case is now with support."
-    );
-    // The escalation stands either way; support works from the case queue,
-    // so a missed seller notice is reported rather than shown to the buyer.
-    const { error: noticeError } = await admin.from("notifications").insert({
-      user_id: order.seller_id,
-      kind: "dispute_escalated",
-      section: "marketplace",
-      title: "A dispute was escalated to DRVN",
-      body: "The buyer asked DRVN support to review this case. Unanswered disputes are refunded automatically.",
-      href: `/orders/${orderId}`,
-      actor_id: user.id,
-    });
-    if (noticeError) reportError("[disputes] escalation notification failed", { orderId, noticeError });
-  }
-  await sendAdminAlert({
-    kind: "dispute_escalated",
-    title: "Buyer escalated a dispute",
-    detail: (order.dispute_category ?? "other").replaceAll("_", " "),
-    orderId,
-    amountCents: order.total_cents,
-  });
 
   revalidatePath("/orders");
   revalidatePath(`/orders/${orderId}`);
   return { ok: "Escalated — DRVN support will review this case." };
 }
+
+const MAX_EVIDENCE_MESSAGE = "You've attached the maximum of 8 photos.";
 
 export async function addDisputeEvidence(
   _prev: CommerceState,
@@ -428,15 +456,9 @@ export async function addDisputeEvidence(
     return { error: "Evidence can only be added while the dispute is open." };
   }
 
-  const { data: existing } = await admin
-    .from("dispute_evidence")
-    .select("id")
-    .eq("order_id", orderId)
-    .eq("uploader_id", user.id);
-  if ((existing?.length ?? 0) >= 8) {
-    return { error: "You've attached the maximum of 8 photos." };
-  }
-
+  // The 8-photo limit is held by the database (20261108130300): the insert
+  // counts this party's photos under a per-dispute lock, so two attaches at
+  // once can't both pass it. A count here first would race.
   const { error } = await admin.from("dispute_evidence").insert({
     order_id: orderId,
     uploader_id: user.id,
@@ -444,6 +466,7 @@ export async function addDisputeEvidence(
     storage_path: url,
     note: note || null,
   });
+  if (error?.code === "23514") return { error: MAX_EVIDENCE_MESSAGE };
   if (error) return { error: error.message };
   // Attached evidence is in use (the media reference check reads
   // storage_path); stamp its staging row so the 48h sweep needn't re-check.

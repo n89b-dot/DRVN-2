@@ -19,7 +19,6 @@ declare
   rejected boolean := false;
   hydrated jsonb;
 begin
-  update public.beta_access_config set enforced = false where singleton = true;
   insert into auth.users(id, email, raw_user_meta_data) values
     (seller, 'watch-seller@drvn.test', '{}'), (banned, 'watch-banned@drvn.test', '{}'),
     (buyer, 'watch-buyer@drvn.test', '{}'), (watcher_a, 'watch-a@drvn.test', '{}'),

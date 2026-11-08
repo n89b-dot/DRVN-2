@@ -2,7 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Alert, Foot, PageHead, SellingNav } from "@/components/ui";
-import { getConnectAccountId } from "@/lib/payments/connect";
+import { getConnectAccountId, getConnectStatus } from "@/lib/payments/connect";
+import { PAYOUT_SETUP_DEADLINE_DAYS } from "@/lib/payments/payout-readiness";
 import { getSellerLedger } from "@/lib/payments/ledger";
 import { getPaymentProvider, paymentsAreLive } from "@/lib/payments/provider";
 import { reportError } from "@/lib/monitoring";
@@ -33,7 +34,7 @@ export default async function PayoutsPage({
   const user = await getViewer();
   if (!user) redirect("/login");
 
-  const [ledgerRead, offersCount, connectAccount, profileRead, { count: draftCount }] = await Promise.all([
+  const [ledgerRead, offersCount, connectAccount, profileRead, setupRead, { count: draftCount }] = await Promise.all([
     getSellerLedger(supabase, user.id),
     loadOffersNeedingAttention(supabase, user.id),
     // No client select grant on the Connect pointer — read server-side, the
@@ -47,6 +48,9 @@ export default async function PayoutsPage({
       }
     ),
     supabase.from("profiles").select("payouts_enabled").eq("id", user.id).maybeSingle(),
+    // Setup started and the day-14 restriction are server-only columns
+    // (20261108100000); a failed read counts as "not started".
+    getConnectStatus(user.id).catch(() => null),
     // Back from Stripe: the drafts that setup was blocking are the way on.
     onboarding
       ? supabase
@@ -60,6 +64,8 @@ export default async function PayoutsPage({
   const connectKnown = connectAccount.ok && !profileRead.error && Boolean(profileRead.data);
   const ledger = ledgerRead.status === "ok" ? ledgerRead.ledger : null;
   const payoutsEnabled = connectKnown && (profileRead.data?.payouts_enabled ?? false);
+  const detailsSubmitted = connectKnown && (setupRead?.detailsSubmitted ?? false);
+  const restricted = connectKnown && (setupRead?.restricted ?? false);
   const draftsLink =
     (draftCount ?? 0) > 0 ? (
       <Link href="/listings?register=draft" className="jumplink">
@@ -95,6 +101,13 @@ export default async function PayoutsPage({
         <Alert tone="ok" ico="✓" title="Payouts are set up" role="status">
           Your listings can go live now. {draftsLink}
         </Alert>
+      ) : onboarding === "returned" && connectKnown && detailsSubmitted && !restricted ? (
+        <Alert tone="ok" ico="✓" title="Stripe has your details" role="status">
+          Your listings can go live now. Stripe is still checking your details, and your sale money
+          is paid out once it switches payouts on — if that hasn&apos;t happened{" "}
+          {PAYOUT_SETUP_DEADLINE_DAYS} days after a sale, an order you haven&apos;t dispatched is
+          cancelled and the buyer refunded. {draftsLink}
+        </Alert>
       ) : onboarding === "returned" && connectKnown ? (
         <Alert tone="live" ico="!" title="Payout setup isn't finished yet" role="status">
           Stripe hasn&apos;t switched payouts on yet. If it still needs details, Finish payout setup
@@ -111,6 +124,8 @@ export default async function PayoutsPage({
                   stripeConfigured: getPaymentProvider().name === "stripe",
                   hasAccount: Boolean(connectAccount.ok && connectAccount.id),
                   payoutsEnabled: profileRead.data?.payouts_enabled ?? false,
+                  detailsSubmitted,
+                  restricted,
                 }
               : { stripeConfigured: getPaymentProvider().name === "stripe", unavailable: true }
           }

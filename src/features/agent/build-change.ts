@@ -1,4 +1,5 @@
 import type { TurnCard } from "@/lib/ai/run";
+import { safeProductLink } from "@/lib/mods/safe-link";
 
 /**
  * The pure half of "Update my build": what a confirmed draft does to the mod
@@ -77,6 +78,15 @@ function toItem(row: SheetRow, position: number) {
   };
 }
 
+/**
+ * The link a confirmed draft saves (N124): the draft's own, only when it is a
+ * safe web address, exactly as the confirm card shows it. Anything else is
+ * left off rather than saved.
+ */
+export function confirmedLink(draft: Pick<BuildDraft, "product_url">): string | null {
+  return safeProductLink(draft.product_url)?.url ?? null;
+}
+
 /** The new line a draft describes, ready to sit in the sheet. */
 export function draftRow(draft: BuildDraft, groupLabel?: string): SheetRow {
   return {
@@ -90,7 +100,7 @@ export function draftRow(draft: BuildDraft, groupLabel?: string): SheetRow {
     raw_text: [draft.brand, draft.product].filter(Boolean).join(" "),
     position: 0,
     status: "installed",
-    product_url: draft.product_url,
+    product_url: confirmedLink(draft),
     image_url: draft.image_url,
     source_domain: null,
     ref_price_cents: null,

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 
+import { Alert } from "@/components/ui";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { requiredRead } from "@/lib/supabase/required-read";
 
@@ -45,6 +46,19 @@ export default async function CarEditPage({
   const { data: vin, error: vinError } = await supabase.rpc("my_car_vin", { p_car: id });
   if (vinError) throw new Error("Couldn't load this car's VIN.");
   const car = { ...carRow, vin: vin ?? null };
+  // N53: an admin's hold on this build (only its owner can read it).
+  const { data: hold } = await supabase
+    .from("car_moderation_holds")
+    .select("reason")
+    .eq("car_id", id)
+    .maybeSingle();
+
+  // N65: the sheet revision is read before the sheet itself, so it can only
+  // be older than what the editor shows (a save is then refused and the
+  // member reloads), never newer (which would let this tab erase lines it
+  // never loaded).
+  const { data: modRevision, error: revisionError } = await supabase.rpc("mod_sheet_revision", { p_car: id });
+  if (revisionError || !modRevision) throw new Error("Couldn't load this build sheet.");
 
   const [imagesResult, modsResult, postsResult, hotspotsResult, profileResult] =
     await Promise.all([
@@ -117,6 +131,14 @@ export default async function CarEditPage({
         </p>
       </header>
 
+      {/* N53: an admin hid this build. It stays private, and the switch to
+          public does nothing, until DRVN lifts the hold. */}
+      {hold && (
+        <Alert tone="live" title="DRVN has hidden this build" className="mb-4">
+          Only you can see it, and it can&apos;t be made public while it&apos;s hidden. Reason: {hold.reason}
+        </Alert>
+      )}
+
       <div className="deck">
         <CarDetailsForm car={car} isMain={profile?.main_car_id === car.id} />
         <GalleryManager
@@ -126,7 +148,7 @@ export default async function CarEditPage({
           coverImageUrl={car.cover_image_url}
           coverFocal={{ x: car.cover_focal_x, y: car.cover_focal_y }}
         />
-        <ModsEditor carId={car.id} carMake={car.make} initialMods={mods ?? []} draft={draft} />
+        <ModsEditor carId={car.id} carMake={car.make} initialMods={mods ?? []} initialRevision={modRevision} draft={draft} />
         <ShowcaseEditor
           carId={car.id}
           images={images ?? []}

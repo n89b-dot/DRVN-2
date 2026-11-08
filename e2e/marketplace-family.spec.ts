@@ -245,6 +245,7 @@ test.describe.serial("Marketplace family", () => {
     await expect(page).toHaveURL(/\/signup\?next=/);
     await page.getByLabel(/email/i).fill(newcomer.email);
     await page.getByLabel(/^password$/i).fill(newcomer.password);
+    await page.getByLabel(/18 or over/i).check();
     await page.getByRole("button", { name: /create account/i }).click();
 
     // …and it survives onboarding, which used to end unconditionally at /home.

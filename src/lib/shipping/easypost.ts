@@ -223,9 +223,17 @@ export function mapTracker(tracker: Json): TrackingSummary {
       city: typeof loc.city === "string" ? loc.city : null,
       state_code: typeof loc.state === "string" ? loc.state : null,
       country: typeof loc.country === "string" ? loc.country : null,
+      postalCode: typeof loc.zip === "string" ? loc.zip : null,
     };
   });
-  const delivered = events.filter((e) => e.state === "delivered");
+  // Only a delivered scan with its own timestamp is a delivery date; an
+  // undated row's epoch placeholder is not (N95).
+  const delivered = events.filter(
+    (e) => e.state === "delivered" && e.occurredAt !== new Date(0).toISOString()
+  );
+  const detail = (tracker.carrier_detail ?? {}) as Json;
+  const destination = (detail.destination_tracking_location ?? null) as Json | null;
+  const text = (value: unknown) => (typeof value === "string" && value.trim() ? value : null);
   return {
     trackerRef: typeof tracker.id === "string" ? tracker.id : null,
     trackingCode: typeof tracker.tracking_code === "string" ? tracker.tracking_code : "",
@@ -234,6 +242,15 @@ export function mapTracker(tracker: Json): TrackingSummary {
     estDeliveryAt: typeof tracker.est_delivery_date === "string" ? tracker.est_delivery_date : null,
     deliveredAt: delivered.length ? delivered[delivered.length - 1].occurredAt : null,
     events,
+    signedBy: text(tracker.signed_by),
+    destination: destination
+      ? {
+          postalCode: text(destination.zip),
+          city: text(destination.city),
+          state: text(destination.state),
+          country: text(destination.country),
+        }
+      : null,
   };
 }
 

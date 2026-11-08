@@ -157,11 +157,39 @@ describe("stopBuyerAgent (readiness 64)", () => {
 });
 
 describe("decideAgentApproval (readiness 72)", () => {
-  it("tells the truth about a dismissal: the task waits, nothing is queued", async () => {
-    mocks.rpc.mockResolvedValue({ data: {}, error: null });
+  function answer(choice: "accept" | "dismiss") {
     const data = new FormData();
     data.set("approval_id", "a-1");
-    data.set("choice", "dismiss");
-    await expect(decideAgentApproval({}, data)).resolves.toEqual({ ok: "Dismissed. Your agent waits for the next move on this offer." });
+    data.set("choice", choice);
+    return decideAgentApproval({}, data);
+  }
+
+  it("tells the truth about a dismissal: the task waits, nothing is queued", async () => {
+    mocks.rpc.mockResolvedValue({ data: { status: "dismissed", outcome: "dismissed", replayed: false }, error: null });
+    await expect(answer("dismiss")).resolves.toEqual({ ok: "Dismissed. Your agent waits for the next move on this offer." });
+  });
+
+  it("opens the offer only when the database reports an accept (N128)", async () => {
+    mocks.rpc.mockResolvedValue({ data: { status: "approved", outcome: "accepted", order_id: "o-1", replayed: false }, error: null });
+    mocks.rows.set("agent_approvals", { data: { offer_id: "offer-1" }, error: null });
+    await expect(answer("accept")).rejects.toThrow("redirect:/offers/offer-1");
+    expect(mocks.capture).toHaveBeenCalledWith("user-1", { event: "agent_approval_answered", props: { choice: "accept", outcome: "accepted" } });
+  });
+
+  it.each([
+    ["expired", "This offer expired before you accepted it, so nothing was sold."],
+    ["refused", "This offer can't be accepted any more, so nothing was sold. Open the offer to see where it stands."],
+    ["noop", "The offer moved on before you answered, so nothing changed. Open the offer to see where it stands."],
+  ])("an accept that came back %s says so, and doesn't open the offer as a sale (N128)", async (outcome, copy) => {
+    mocks.rpc.mockResolvedValue({ data: { status: outcome, outcome, replayed: outcome === "noop" }, error: null });
+    mocks.rows.set("agent_approvals", { data: { offer_id: "offer-1" }, error: null });
+    await expect(answer("accept")).resolves.toEqual({ error: copy });
+    expect(mocks.capture).toHaveBeenCalledWith("user-1", { event: "agent_approval_answered", props: { choice: "accept", outcome } });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/agent");
+  });
+
+  it("never claims a sale when the result has no outcome", async () => {
+    mocks.rpc.mockResolvedValue({ data: { status: "approved" }, error: null });
+    await expect(answer("accept")).resolves.toEqual({ error: "Couldn't confirm what happened. Open the offer to see where it stands." });
   });
 });

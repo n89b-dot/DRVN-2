@@ -9,10 +9,12 @@ import { riskAtMost, type AgentContext, type AgentScope } from "@/lib/agent/cont
 import { agentModelHalted } from "@/lib/agent/controls";
 import type { z } from "zod";
 
-import type { draftBuildList, draftCarUpdate, draftListingFromPhotos, findPartsToList, proposeBuildChange } from "@/lib/capabilities/build";
+import type { draftBuildList, draftCarUpdate, draftListingFromPhotos, findPartsToList, proposeBuildChange, readPartLink } from "@/lib/capabilities/build";
 import type { browseMarketplace } from "@/lib/capabilities/reads";
 import { JOB_TOOLS, modelToolsFor } from "@/lib/capabilities/registry";
+import { photoToolAllowed, type PhotoJob } from "@/lib/agent/photo-job";
 import { CapabilityError, invokeCapability, type MemberClient } from "@/lib/capabilities/types";
+import { linkKey, linksIn } from "@/lib/mods/safe-link";
 import { reportError } from "@/lib/monitoring";
 
 import { anthropicClient } from "./client";
@@ -70,7 +72,46 @@ const IMAGE_TOKEN_CEILING = 5_000;
 /** Request framing the byte count can't see: role markers, tool rendering. */
 const FRAMING_TOKENS = 1_500;
 
-export type ToolCall = { name: string; ok: boolean; code?: string };
+/**
+ * One tool the model ran (R-audit): its name, whether it answered, the
+ * error code when it didn't, how long it took, and the object ids it named
+ * (toolCallIds). Never its other arguments or its answer: this is what
+ * agent_record_tool_calls keeps.
+ */
+export type ToolCall = { name: string; ok: boolean; code?: string; ms?: number; ids?: Record<string, string | string[]> };
+
+const UUID_VALUE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The id fields the audit keeps: the capabilities' own argument names, and a
+ * draft's proposalId (its card's id). A fixed list, because the model writes
+ * the arguments and could name a key anything (OS-W07 follow-up);
+ * agent_record_tool_calls holds the same list.
+ */
+export const AUDIT_ID_KEYS: ReadonlySet<string> = new Set(["listingId", "carId", "replacesModId", "modId", "modIds", "offerId", "proposalId"]);
+
+/**
+ * The object ids a tool call named: its arguments in AUDIT_ID_KEYS whose
+ * values are uuids, and a draft's proposalId. Search words, pasted text,
+ * links and any key the model made up never get here.
+ */
+export function toolCallIds(args: unknown, result?: unknown): Record<string, string | string[]> {
+  const ids: Record<string, string | string[]> = {};
+  const take = (source: unknown, only?: string) => {
+    if (!source || typeof source !== "object" || Array.isArray(source)) return;
+    for (const [key, value] of Object.entries(source as Record<string, unknown>)) {
+      if (only ? key !== only : key === "proposalId" || !AUDIT_ID_KEYS.has(key)) continue;
+      if (typeof value === "string" && UUID_VALUE.test(value)) ids[key] = value.toLowerCase();
+      else if (Array.isArray(value)) {
+        const list = value.filter((item): item is string => typeof item === "string" && UUID_VALUE.test(item)).slice(0, 40);
+        if (list.length) ids[key] = list.map((item) => item.toLowerCase());
+      }
+    }
+  };
+  take(args);
+  take(result, "proposalId");
+  return ids;
+}
 
 /**
  * What a reply points at, for result cards (agent_messages.cards): a listing
@@ -191,10 +232,9 @@ export function linkInMessage(url: unknown, message: string): boolean {
   } catch {
     return false;
   }
-  const key = (link: URL) => `${link.hostname.replace(/^www\./, "").toLowerCase()}${link.pathname.replace(/\/$/, "")}`;
-  for (const match of message.match(/https?:\/\/[^\s<>"']+/gi) ?? []) {
+  for (const match of linksIn(message)) {
     try {
-      if (key(new URL(match.replace(/[).,!?]+$/, ""))) === key(wanted)) return true;
+      if (linkKey(new URL(match)) === linkKey(wanted)) return true;
     } catch {
       // not a link after all
     }
@@ -213,7 +253,7 @@ export function agentSystemPrompt(scope: AgentScope, jobs = false): string {
     "You are the member's DRVN agent. You speak only to the member who owns you; you never write to anyone else.",
     SCOPE_JOB[scope],
     "You never choose a price, a counter or a limit, and you never accept, pay or move money: DRVN's rules do that, and you may explain an outcome the rules already decided.",
-    "Use the tools to look things up. When a tool says there isn't enough evidence, say so plainly; don't guess fitment or prices.",
+    "Use the tools to look things up. You can't check fitment or what a part sold for yet: when asked, say so plainly and point to the listing's own details; never guess fitment or prices.",
     "For questions about what's on DRVN (how many of something are for sale, under what price), use browse_marketplace and give its count; it only sees public listings, and you never have anyone else's private data.",
     "When the member says a part went on or came off one of their cars, or pastes a product link for one, draft it with propose_build_change (read_part_link first for a link, list_my_cars and read_my_car to find the car and the part it replaces). It isn't saved until they tap Confirm on the card, so say that rather than that it's done.",
     ...(jobs
@@ -277,6 +317,9 @@ export async function runAgentTurn(options: {
   halted?: (ownerId: string) => Promise<boolean>;
   /** The jobs step is open (A3d): its tools join the model's. */
   jobs?: boolean;
+  /** R-photos: the photo job this message is, if any. Only then are `images`
+   *  sent, and then only that job's photo tool is offered. */
+  photoJob?: PhotoJob;
   /** The member's photos on this message (A3d), already loaded: sent with it, and the only photos a draft may use. */
   images?: TurnImage[];
   /** The caller's own deadline (epoch ms), when it is sooner than TURN_TIMEOUT_MS from now. */
@@ -341,31 +384,50 @@ export async function runAgentTurn(options: {
   const budgetUsd = TURN_CAP_USD;
   const roundFits = () => spentUsd + unresolvedUsd + roundCeilingUsd(config.model, nextInputBound) <= budgetUsd;
 
+  // R-photos: no photo job, no photos — whatever a caller passed.
+  const turnImages = options.photoJob ? (options.images ?? []) : [];
+
+  // The links the member gave this turn (N124): what they typed, and each
+  // page read_part_link reads for them. A drafted build link must be one.
+  const memberLinks: string[] = linksIn(options.message);
+
   const tools = modelToolsFor(options.context.scope)
     .filter((capability) => options.jobs || !JOB_TOOLS.has(capability.name))
+    .filter((capability) => photoToolAllowed(capability.name, options.photoJob))
     .map((capability) =>
     betaZodTool({
       name: capability.name,
       description: capability.description,
       inputSchema: capability.input,
       run: async (args) => {
+        const started = Date.now();
+        // Every call is recorded (R-audit): its name, the ids it named, how it ended, how long it took.
+        const record = (ok: boolean, code?: string, result?: unknown) =>
+          toolCalls.push({ name: capability.name, ok, ...(code ? { code } : {}), ms: Date.now() - started, ids: toolCallIds(args, result) });
         const answer = async (): Promise<string> => {
           if (controller.signal.aborted) {
-            toolCalls.push({ name: capability.name, ok: false, code: "stopped" });
+            record(false, "stopped");
             return wrapToolResult(capability.name, { error: "stopped" });
           }
           // A page is read only when the member pasted its link this turn, so
           // nothing the model read elsewhere can send DRVN fetching.
           if (capability.name === "read_part_link" && !linkInMessage((args as { url?: unknown }).url, options.message)) {
-            toolCalls.push({ name: capability.name, ok: false, code: "not_allowed" });
+            record(false, "not_allowed");
             return wrapToolResult(capability.name, { error: "not_allowed", reason: "Only a link the member pasted in this message can be read." });
           }
           try {
             const result = await Promise.race([
-              invokeCapability(capability, { context: options.context, supabase: options.supabase, attachments: (options.images ?? []).map((image) => image.url), signal: controller.signal }, args),
+              invokeCapability(
+                capability,
+                { context: options.context, supabase: options.supabase, attachments: turnImages.map((image) => image.url), signal: controller.signal, memberLinks },
+                args,
+              ),
               abortedPromise(),
             ]);
-            toolCalls.push({ name: capability.name, ok: true });
+            record(true, undefined, result);
+            // The page DRVN fetched for the member's own link (their address, or a
+            // redirect the fetch guard followed), never the page's canonical claim.
+            if (capability.name === "read_part_link") memberLinks.push((result as z.infer<typeof readPartLink.output>).productUrl);
             // The listings a reply leans on become its cards: the one read, or the top of a search.
             if (capability.name === "read_listing" && typeof (args as { listingId?: unknown }).listingId === "string") {
               addCard({ kind: "listing", id: (args as { listingId: string }).listingId });
@@ -410,7 +472,7 @@ export async function runAgentTurn(options: {
             return wrapToolResult(capability.name, result);
           } catch (error) {
             const code = controller.signal.aborted ? "stopped" : error instanceof CapabilityError ? error.code : "failed";
-            toolCalls.push({ name: capability.name, ok: false, code });
+            record(false, code);
             return wrapToolResult(capability.name, { error: code });
           }
         };
@@ -422,11 +484,11 @@ export async function runAgentTurn(options: {
   // The first round's input, bounded from the request itself. Older history
   // goes first if even one round wouldn't fit.
   const system = agentSystemPrompt(options.context.scope, Boolean(options.jobs));
-  const current: Anthropic.Beta.BetaMessageParam = { role: "user", content: userContent(options.message, options.images) };
+  const current: Anthropic.Beta.BetaMessageParam = { role: "user", content: userContent(options.message, turnImages) };
   let history = redactHistory(options.history ?? []);
   const historyBytes = history.map((entry) => bytes(withoutImageData([entry])));
   nextInputBound =
-    bytes(system) + bytes(tools) + bytes(withoutImageData([current])) + (options.images?.length ?? 0) * IMAGE_TOKEN_CEILING + historyBytes.reduce((sum, n) => sum + n, 0);
+    bytes(system) + bytes(tools) + bytes(withoutImageData([current])) + turnImages.length * IMAGE_TOKEN_CEILING + historyBytes.reduce((sum, n) => sum + n, 0);
   let dropped = 0;
   while (!roundFits() && dropped < history.length) {
     // Oldest first, and never leave the history opening on the agent's turn.
@@ -533,7 +595,12 @@ export async function runAgentTurn(options: {
         const results = await Promise.all(
           uses.map(async (use): Promise<Anthropic.Beta.BetaToolResultBlockParam> => {
             const tool = byName.get(use.name);
-            if (!tool) return { type: "tool_result", tool_use_id: use.id, content: `Error: no tool named ${use.name}`, is_error: true };
+            if (!tool) {
+              // A tool it wasn't given: refused, and recorded as unknown_tool. The
+              // name is the model's own words and could be anything, a secret included.
+              toolCalls.push({ name: "unknown_tool", ok: false, code: "not_allowed", ms: 0, ids: {} });
+              return { type: "tool_result", tool_use_id: use.id, content: `Error: no tool named ${use.name}`, is_error: true };
+            }
             return { type: "tool_result", tool_use_id: use.id, content: (await tool.run(use.input as never)) as string };
           }),
         );

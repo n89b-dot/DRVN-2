@@ -2,7 +2,6 @@
 -- refuse a changed retry (offer_open since the contract, 20261019120000).
 begin;
 
-update public.beta_access_config set enforced=false where singleton=true;
 insert into auth.users(id,email) values
   ('10000000-0000-4000-8000-000000000001','offer-atomic-seller@drvn.test'),
   ('10000000-0000-4000-8000-000000000002','offer-atomic-buyer@drvn.test');

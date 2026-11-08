@@ -9,8 +9,10 @@ import { modelContext, type AgentScope } from "@/lib/agent/context";
 import { loadAgentMode } from "@/lib/agent/member-mode";
 import { agentModeAllowsChat, agentModeRefusal } from "@/lib/agent/mode";
 import { capture } from "@/lib/analytics";
+import { recordToolCalls } from "@/lib/ai/audit";
 import { runAgentTurn, type TurnCard, type TurnImage } from "@/lib/ai/run";
-import { isOwnedStorageUrl } from "@/lib/media-url";
+import { chatPhotoPath, readChatPhoto, signChatPhotos } from "@/lib/agent/chat-photos";
+import { parsePhotoJob, type PhotoJob } from "@/lib/agent/photo-job";
 import { resolveCards, type ResolvedCard } from "./cards";
 import { loadChat, resolveAbout, type ChatAbout } from "./chat-load";
 import { reportError } from "@/lib/monitoring";
@@ -42,24 +44,17 @@ const CHAT_TURN_DEADLINE_MS = 120_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * The photos as the model gets them: read back from DRVN's own storage (the
- * URLs are checked as the member's own first, so this fetches nothing else),
- * re-encoded on upload, and sent as data rather than a link. One that can't
- * be read is left out rather than failing the message.
+ * The photos as the model gets them — only in a photo job (R-photos): read
+ * back from the private chat bucket with the service role (each is checked
+ * as the member's own first, so this reads nothing else), re-encoded on
+ * upload, and sent as data rather than a link. One that can't be read is
+ * left out rather than failing the message.
  */
-async function loadImages(urls: string[], deadline: AbortSignal): Promise<TurnImage[]> {
+async function loadImages(admin: ReturnType<typeof createAdminClient>, urls: string[]): Promise<TurnImage[]> {
   const loaded = await Promise.all(
     urls.map(async (url): Promise<TurnImage | null> => {
-      try {
-        const response = await fetch(url, { signal: AbortSignal.any([AbortSignal.timeout(10_000), deadline]) });
-        const type = response.headers.get("content-type")?.split(";")[0] ?? "";
-        if (!response.ok || !["image/jpeg", "image/png", "image/webp", "image/gif"].includes(type)) return null;
-        const bytes = Buffer.from(await response.arrayBuffer());
-        if (bytes.byteLength > MAX_PHOTO_BYTES) return null;
-        return { url, mediaType: type as TurnImage["mediaType"], data: bytes.toString("base64") };
-      } catch {
-        return null;
-      }
+      const bytes = await readChatPhoto(admin, url, MAX_PHOTO_BYTES).catch(() => null);
+      return bytes ? { url, mediaType: "image/webp", data: bytes.toString("base64") } : null;
     }),
   );
   return loaded.filter((image): image is TurnImage => image !== null);
@@ -72,7 +67,7 @@ const FALLBACK: Record<string, string> = {
   suspended: SUSPENDED_MESSAGE,
   timeout: "That took too long, so I stopped. Try again, or ask one thing at a time.",
   ai_disabled: "Chat isn't switched on here yet. Everything I do is also on the listing and offer pages.",
-  refused: "I can't help with that one. I can look things up on DRVN for you: parts, your car, what fits and what things sell for.",
+  refused: "I can't help with that one. I can look things up on DRVN for you: parts for sale, your cars and their builds.",
   incomplete: "That took more steps than I can do at once. Try asking one thing at a time.",
   not_allowed: "I can't do that from chat.",
   model_error: "Something went wrong on my side. Try again in a moment.",
@@ -94,7 +89,15 @@ type StoredMessage = { id: string; role: string; body: string; cards: unknown; i
  * send: the same id sent again replays the stored turn instead of storing
  * the message twice and calling the model again.
  */
-export async function sendAgentMessage(input: { text: string; scope?: AgentScope; about?: { kind: string; id: string }; images?: string[]; requestId?: string }): Promise<ChatState> {
+export async function sendAgentMessage(input: {
+  text: string;
+  scope?: AgentScope;
+  about?: { kind: string; id: string };
+  images?: string[];
+  /** R-photos: which photo job these photos are for. Without one, no photos. */
+  photoJob?: PhotoJob;
+  requestId?: string;
+}): Promise<ChatState> {
   const deadline = Date.now() + CHAT_TURN_DEADLINE_MS;
   const supabase = await createClient();
   const {
@@ -111,12 +114,16 @@ export async function sendAgentMessage(input: { text: string; scope?: AgentScope
   const mode = await loadAgentMode(user.id);
   if (!agentModeAllowsChat(mode)) return { error: agentModeRefusal(mode) ?? "Agent is off in Settings." };
 
-  // Photos (A3d) only once the jobs step is open, and only the member's own
-  // listing-images uploads; the database checks the folder again.
+  // Photos (A3d) only once the jobs step is open, only in a named photo job
+  // (R-photos: ordinary chat sends the model no image at all), and only the
+  // member's own private chat uploads (R81); the database checks again.
   const jobs = await agentStepOpen("jobs");
-  const images = jobs ? (input.images ?? []).filter((url) => isOwnedStorageUrl(url, user.id) && url.includes("/listing-images/")).slice(0, MAX_PHOTOS) : [];
-  if ((input.images?.length ?? 0) > images.length) return { error: "Those photos can't be sent here. Add them again." };
-  const text = input.text.trim() || (images.length ? "What's in these photos?" : "");
+  const photoJob = jobs ? parsePhotoJob(input.photoJob) : null;
+  const images = photoJob ? (input.images ?? []).filter((url) => chatPhotoPath(url, user.id) !== null).slice(0, MAX_PHOTOS) : [];
+  if ((input.images?.length ?? 0) > images.length) {
+    return { error: photoJob || !input.images?.length ? "Those photos can't be sent here. Add them again." : "Choose what the photos are for: a listing or an update." };
+  }
+  const text = input.text.trim() || (photoJob === "listing" ? "List this part from my photos" : photoJob === "update" ? "Post an update" : "");
   if (!text) return { error: "Type a message first." };
   if (text.length > MAX_LENGTH) return { error: `Keep it under ${MAX_LENGTH} characters.` };
   if (input.requestId !== undefined && !UUID.test(input.requestId)) return { error: "Couldn't send that. Try again." };
@@ -146,7 +153,7 @@ export async function sendAgentMessage(input: { text: string; scope?: AgentScope
     const replayCards = ((turn0.reply?.cards ?? []) as TurnCard[]);
     const resolved = await resolveCards(supabase, replayCards);
     return {
-      messages: toChatMessages([turn0.member, ...(turn0.reply ? [turn0.reply] : [])], resolved),
+      messages: await toChatMessages([turn0.member, ...(turn0.reply ? [turn0.reply] : [])], resolved),
       ...(turn0.reply ? {} : { pending: { requestId } }),
     };
   }
@@ -175,10 +182,15 @@ export async function sendAgentMessage(input: { text: string; scope?: AgentScope
     message: modelMessage,
     history,
     jobs,
-    images: await loadImages(images, deadlineSignal),
+    // R-photos: bytes reach the model only in a photo job, which also limits
+    // the photo tools to that job's.
+    photoJob: photoJob ?? undefined,
+    images: photoJob ? await loadImages(admin, images) : [],
     deadline,
     signal: deadlineSignal,
   });
+  // The audit trail (R-audit): every tool the model ran, by name, ids, outcome and timing, under this request id.
+  await recordToolCalls(admin, user.id, requestId, turn);
   const replyBody = turn.ok ? turn.text || "Done." : FALLBACK[turn.code] ?? FALLBACK.model_error;
   const replyCards = turn.ok ? turn.cards : [];
 
@@ -192,7 +204,7 @@ export async function sendAgentMessage(input: { text: string; scope?: AgentScope
 
   capture(user.id, { event: "agent_chat_turn", props: { tool_calls: Math.min(turn.toolCalls.length, 9), ok: turn.ok } });
   const resolved = await resolveCards(supabase, ((stored?.cards ?? []) as TurnCard[]));
-  return { messages: toChatMessages([turn0.member, ...(stored ? [stored] : [])], resolved) };
+  return { messages: await toChatMessages([turn0.member, ...(stored ? [stored] : [])], resolved) };
 }
 
 /**
@@ -214,18 +226,20 @@ export async function pollAgentReply(requestId: string): Promise<ChatState> {
   if (!status.found || !status.member) return { error: "Couldn't find that message." };
   const resolved = await resolveCards(supabase, ((status.reply?.cards ?? []) as TurnCard[]));
   return {
-    messages: toChatMessages([status.member, ...(status.reply ? [status.reply] : [])], resolved),
+    messages: await toChatMessages([status.member, ...(status.reply ? [status.reply] : [])], resolved),
     ...(status.reply ? {} : { pending: { requestId } }),
   };
 }
 
-function toChatMessages(rows: StoredMessage[], resolved: Map<string, ResolvedCard>): ChatMessage[] {
+/** R81: a private chat photo is shown through a short-lived signed link. */
+async function toChatMessages(rows: StoredMessage[], resolved: Map<string, ResolvedCard>): Promise<ChatMessage[]> {
+  const signed = await signChatPhotos(createAdminClient(), rows.flatMap((row) => row.images ?? []));
   return rows.map((row) => ({
     id: row.id,
     role: row.role as ChatMessage["role"],
     body: row.body,
     cards: ((row.cards ?? []) as TurnCard[]).flatMap((card) => (resolved.has(card.id) ? [resolved.get(card.id)!] : [])),
-    images: row.images ?? [],
+    images: (row.images ?? []).flatMap((url) => (signed.has(url) ? [signed.get(url)!] : [])),
     created_at: row.created_at,
   }));
 }

@@ -963,6 +963,72 @@ export async function searchUsers(
   };
 }
 
+// ---------- Account deletions (N35) ----------
+
+/** A deletion that hasn't finished: on a financial hold, being cleaned up, or
+ *  waiting on an operator. Oldest first, because the oldest is the one a
+ *  member has waited longest on. */
+export type AccountDeletionCase = {
+  id: string;
+  /** Null once the account itself is gone. */
+  userId: string | null;
+  person: PartyRef | null;
+  outcome: "temporary_financial_hold" | "cleanup_pending" | "operator_attention";
+  nextAction: string | null;
+  owner: string | null;
+  pendingDecisions: string[];
+  updatedAt: string;
+  requestedAt: string;
+  /** When an operator said they would look again, if they set one. */
+  reviewAt: string | null;
+  /** N16: transaction keys are kept until then (6 years on the scrub's clock). */
+  retainUntil: string | null;
+};
+
+export const ACCOUNT_DELETIONS_PAGE_SIZE = 50;
+
+/**
+ * OS-W11 N35: nothing showed where account deletions stood — "operator
+ * attention" existed only inside the worker. Every unfinished case, with
+ * who acts next and since when, a page at a time: oldest first with the id
+ * as a tiebreak, so a page boundary never repeats or skips a case and a
+ * long-lived hold can't hide everything asked after it.
+ */
+export async function getAccountDeletionCases(page = 0): Promise<{ rows: AccountDeletionCase[]; total: number; page: number; hasMore: boolean }> {
+  const a = await admin();
+  const size = ACCOUNT_DELETIONS_PAGE_SIZE;
+  const from = Math.max(0, page) * size;
+  const { data, error, count } = await a
+    .from("account_deletion_requests")
+    .select("id, user_id, outcome, next_action, responsible_owner, policy_decisions_pending, updated_at, requested_at, review_at, retain_until", { count: "exact" })
+    .neq("outcome", "completed")
+    .order("requested_at", { ascending: true })
+    .order("id", { ascending: true })
+    .range(from, from + size - 1);
+  unlessFailed("account deletions", error);
+  const rows = data ?? [];
+  const people = await partiesFor(a, rows.map((r) => r.user_id));
+  const total = count ?? from + rows.length;
+  return {
+    total,
+    page: Math.max(0, page),
+    hasMore: from + rows.length < total,
+    rows: rows.map((r) => ({
+      id: r.id,
+      userId: r.user_id,
+      person: r.user_id ? (people.get(r.user_id) ?? null) : null,
+      outcome: r.outcome as AccountDeletionCase["outcome"],
+      nextAction: r.next_action,
+      owner: r.responsible_owner,
+      pendingDecisions: r.policy_decisions_pending ?? [],
+      updatedAt: r.updated_at,
+      requestedAt: r.requested_at,
+      reviewAt: r.review_at,
+      retainUntil: r.retain_until,
+    })),
+  };
+}
+
 // ---------- User detail ----------
 
 export type AdminUserOrderRow = {
@@ -1174,8 +1240,10 @@ export type AdminReportRow = Report & {
   /** "Listing" · "User" · "Post" · "Reply" — what the row names. */
   subjectKind: string;
   /** Where the reviewer looks at it: the console search for a listing or a
-   *  member, the public post for a post or a reply. */
+   *  member, the public post for a post or a reply, the build page for a car. */
   subjectHref: string;
+  /** A reported build under a moderation hold (N53), so the row offers to lift it. */
+  carHidden?: boolean;
 };
 
 export const REPORTS_PAGE_SIZE = 50;
@@ -1212,7 +1280,8 @@ export async function getReports(
   const userIds = rows.filter((r) => r.subject_type === "user").map((r) => r.subject_id);
   const postIds = rows.filter((r) => r.subject_type === "post").map((r) => r.subject_id);
   const commentIds = rows.filter((r) => r.subject_type === "comment").map((r) => r.subject_id);
-  const [{ data: listings }, users, { data: posts }, { data: comments }] = await Promise.all([
+  const carIds = rows.filter((r) => r.subject_type === "car").map((r) => r.subject_id);
+  const [{ data: listings }, users, { data: posts }, { data: comments }, { data: cars }] = await Promise.all([
     listingIds.length
       ? a.from("listings").select("id, title").in("id", listingIds)
       : Promise.resolve({ data: [] as { id: string; title: string }[] }),
@@ -1223,12 +1292,25 @@ export async function getReports(
     commentIds.length
       ? a.from("activity_comments").select("id, post_id, body").in("id", commentIds)
       : Promise.resolve({ data: [] }),
+    carIds.length
+      ? a.from("cars").select("id, slug, name, car_moderation_holds(car_id)").in("id", carIds)
+      : Promise.resolve({ data: [] as { id: string; slug: string; name: string; car_moderation_holds: { car_id: string } | null }[] }),
   ]);
+  const carById = new Map((cars ?? []).map((c) => [c.id, c]));
   const listingTitles = new Map((listings ?? []).map((l) => [l.id, l.title]));
   const postById = new Map((posts ?? []).map((p) => [p.id, p]));
   const commentById = new Map((comments ?? []).map((c) => [c.id, c]));
   const clip = (text: string) => (text.length > 80 ? `${text.slice(0, 79)}…` : text);
-  function subject(r: Report): { subjectLabel: string; subjectKind: string; subjectHref: string } {
+  function subject(r: Report): { subjectLabel: string; subjectKind: string; subjectHref: string; carHidden?: boolean } {
+    if (r.subject_type === "car") {
+      const car = carById.get(r.subject_id);
+      return {
+        subjectLabel: car ? clip(car.name) : "Build (deleted)",
+        subjectKind: "Build",
+        subjectHref: car ? `/cars/${car.slug}` : "/admin/reports",
+        carHidden: Boolean(car?.car_moderation_holds),
+      };
+    }
     if (r.subject_type === "listing") {
       const label = listingTitles.get(r.subject_id) ?? "Listing (deleted)";
       return { subjectLabel: label, subjectKind: "Listing", subjectHref: `/admin/listings?q=${encodeURIComponent(label)}` };
@@ -1462,7 +1544,7 @@ export type AuditLogResult = { rows: AuditRow[]; page: number; hasMore: boolean 
 
 export type AuditFilters = {
   action?: string;
-  /** Actor by username/display name — resolved to ids here. */
+  /** Actor by username/display name — matched inside the database query. */
   actorQuery?: string;
   subjectType?: AdminAuditLogEntry["subject_type"];
   /** ISO timestamps — inclusive start, exclusive end. */
@@ -1470,36 +1552,37 @@ export type AuditFilters = {
   to?: string;
 };
 
-/** The audit actors whose name matches, found in the database rather than
- *  as the first 20 matching members (only admins act, so it's a few ids). */
-async function auditActorIds(a: Admin, query: string): Promise<string[]> {
-  const { data, error } = await a.rpc("admin_audit_actor_ids", { p_query: query.trim() });
-  unlessFailed("audit actors", error);
-  return (data ?? []) as string[];
+/** One page of admin_audit_page (20261107200550): every filter, the actor's
+ *  name included, runs inside the database's own paged query, so no search
+ *  ever becomes a list of ids in a URL (a name matching 1,000 historical
+ *  actors made a ~39 KB request that was refused). */
+async function auditPage(
+  a: Admin,
+  filters: AuditFilters,
+  page: { offset?: number; limit: number; before?: { at: string; id: number } }
+): Promise<AdminAuditLogEntry[]> {
+  const { data, error } = await a.rpc("admin_audit_page", {
+    p_action: filters.action?.trim() || undefined,
+    p_actor: filters.actorQuery?.trim() || undefined,
+    p_subject_type: filters.subjectType,
+    p_from: filters.from,
+    p_to: filters.to,
+    p_before_at: page.before?.at,
+    p_before_id: page.before?.id,
+    p_offset: page.offset ?? 0,
+    p_limit: page.limit,
+  });
+  // N138: a failed read is an error page, never "No actions recorded".
+  unlessFailed("the audit log", error);
+  return (data ?? []) as AdminAuditLogEntry[];
 }
 
 export async function getAuditLog(opts: AuditFilters & { page?: number } = {}): Promise<AuditLogResult> {
   const a = await admin();
   const page = Math.max(0, opts.page ?? 0);
   const size = AUDIT_PAGE_SIZE;
-  let builder = a
-    .from("admin_audit_log")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .range(page * size, page * size + size);
-  if (opts.action) builder = builder.ilike("action", `${opts.action}%`);
-  if (opts.subjectType) builder = builder.eq("subject_type", opts.subjectType);
-  if (opts.from) builder = builder.gte("created_at", opts.from);
-  if (opts.to) builder = builder.lt("created_at", opts.to);
-  if (opts.actorQuery?.trim()) {
-    const ids = await auditActorIds(a, opts.actorQuery);
-    if (!ids.length) return { rows: [], page, hasMore: false };
-    builder = builder.in("actor_id", ids);
-  }
-  // N138: a failed read is an error page, never "No actions recorded".
-  const { data, error } = await builder;
-  unlessFailed("the audit log", error);
-  const fetched = data ?? [];
+  // One extra row = a cheap hasMore signal.
+  const fetched = await auditPage(a, opts, { offset: page * size, limit: size + 1 });
   const hasMore = fetched.length > size;
   const rows = fetched.slice(0, size);
   const parties = await partiesFor(a, rows.map((r) => r.actor_id));
@@ -1523,34 +1606,21 @@ export class ExportTooLargeError extends Error {
 
 /**
  * Every audit row matching the filters, newest first, read in keyset pages
- * by id until a short page, so the file is complete whatever its size (the
+ * (created_at, then id) until a short page, so the file is complete whatever its size (the
  * old export asked for 5,000 and PostgREST quietly sent 1,000). A failed
  * page throws: the route answers with an error, not a partial file.
  */
 export async function exportAuditRows(filters: AuditFilters, limit = EXPORT_ROW_LIMIT): Promise<AuditRow[]> {
   const a = await admin();
-  let actorIds: string[] | null = null;
-  if (filters.actorQuery?.trim()) {
-    actorIds = await auditActorIds(a, filters.actorQuery);
-    if (!actorIds.length) return [];
-  }
   const rows: AdminAuditLogEntry[] = [];
-  let after: number | null = null;
+  let before: { at: string; id: number } | undefined;
   for (;;) {
-    let builder = a.from("admin_audit_log").select("*").order("id", { ascending: false }).limit(EXPORT_PAGE_SIZE);
-    if (filters.action) builder = builder.ilike("action", `${filters.action}%`);
-    if (filters.subjectType) builder = builder.eq("subject_type", filters.subjectType);
-    if (filters.from) builder = builder.gte("created_at", filters.from);
-    if (filters.to) builder = builder.lt("created_at", filters.to);
-    if (actorIds) builder = builder.in("actor_id", actorIds);
-    if (after != null) builder = builder.lt("id", after);
-    const { data, error } = await builder;
-    unlessFailed("the audit log export", error);
-    const page = data ?? [];
+    const page = await auditPage(a, filters, { limit: EXPORT_PAGE_SIZE, before });
     rows.push(...page);
     if (rows.length > limit) throw new ExportTooLargeError(limit);
     if (page.length < EXPORT_PAGE_SIZE) break;
-    after = page[page.length - 1].id;
+    const last = page[page.length - 1];
+    before = { at: last.created_at, id: last.id };
   }
   const parties = await partiesFor(a, rows.map((r) => r.actor_id));
   return rows.map((r) => ({ ...r, actor: parties.get(r.actor_id) ?? null }));

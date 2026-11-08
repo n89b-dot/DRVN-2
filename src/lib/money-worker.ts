@@ -10,7 +10,9 @@ import { mapBounded } from "@/lib/map-bounded";
 import { reportError } from "@/lib/monitoring";
 import { reconcileCapturedPayments } from "@/lib/payments/capture-reconciliation";
 import { processDisputeSla } from "@/lib/payments/dispute-sla";
+import { processDisputeClocks } from "@/lib/payments/dispute-clocks";
 import { processCarryPayouts } from "@/lib/payments/carry-payout-worker";
+import { processPayoutDeadlines } from "@/lib/payments/payout-deadline";
 import { resumeIncompleteRefunds } from "@/lib/payments/refunds";
 import { processReservationExpiries } from "@/lib/payments/reservation-expiry";
 import { processDueTransfers, reconcileTransferRecords } from "@/lib/payments/transfer-worker";
@@ -32,7 +34,7 @@ export type MoneyWorkerPass = {
  * One pass of the money worker: every durable queue the money paths write
  * gets its retry heartbeat here — reservation expiries, capture
  * reconciliation, due transfers, transfer-record reconciliation, carry-forward credit payouts, abandoned
- * refunds, label voids and carrier trackers, return timers, the dispute-SLA sweep, the alert
+ * refunds, label voids and carrier trackers, return timers, the dispute-SLA sweep, the payout deadline, the alert
  * outbox, purchase analytics and receipts. Each family is recorded in
  * worker_runs, which is what /api/health/workers and the console read.
  *
@@ -71,7 +73,17 @@ export async function runMoneyWorkerPass(admin: Admin): Promise<MoneyWorkerPass>
       return { ...voidSummary, failed: voidSummary.failed + trackerSummary.failed, trackers: trackerSummary };
     },
     returns: () => processReturnTimers(admin),
-    disputes: () => processDisputeSla(admin),
+    // Offer expiry and not-received refunds (dispute-clocks), then the
+    // day-4 alert and day-10 auto-refund (dispute-sla). Expired offers are
+    // cleared first, so they never hold back the day-10 sweep.
+    disputes: async () => {
+      const clocks = await processDisputeClocks(admin);
+      const sla = await processDisputeSla(admin);
+      return { ...sla, failed: sla.failed + clocks.failed, clocks };
+    },
+    // Day 14 with payouts still off: restrict, pause, refund what wasn't
+    // dispatched (20261108100000, N244).
+    payoutDeadlines: () => processPayoutDeadlines(admin, { batch: 5 }),
     alerts: () => processAlertOutbox(admin, { batch: 5 }),
     analytics: () => processPurchaseAnalytics(),
     // Order-access emails, then the auto-confirm warning for guest buyers —

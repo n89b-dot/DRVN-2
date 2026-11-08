@@ -23,7 +23,9 @@ test("dispute open, escalation and settlement recover from local request failure
       return order.data.id;
     }
     const openOrder = await orderFixture("shipped", { shipped_at: new Date().toISOString() });
-    const escalateOrder = await orderFixture("disputed", { dispute_category: "wrong_item", disputed_at: new Date(Date.now() - 4 * 86_400_000).toISOString() });
+    // Past the seller's 3 business days whatever weekday the run lands on
+    // (20261107210300), and well inside the 21-business-day window.
+    const escalateOrder = await orderFixture("disputed", { dispute_category: "wrong_item", disputed_at: new Date(Date.now() - 8 * 86_400_000).toISOString() });
     const settleOrder = await orderFixture("disputed", { dispute_category: "wrong_item", disputed_at: new Date().toISOString(), refund_offer_cents: 2500, refund_offered_at: new Date().toISOString() });
     await admin.from("payments").insert({ order_id: settleOrder, provider: "stub", provider_reference: `stub_${randomUUID()}`, status: "succeeded", amount_cents: 10000, currency: "USD" }).throwOnError();
 

@@ -37,7 +37,6 @@ declare
   c text;
   n integer;
 begin
-  update public.beta_access_config set enforced = false where singleton = true;
   delete from public.job_config where key in ('transfer_worker_url', 'transfer_worker_secret');
   insert into auth.users(id, email) values
     (seller, 'schedule-seller@drvn.test'), (buyer, 'schedule-buyer@drvn.test'), (viewer, 'schedule-viewer@drvn.test');

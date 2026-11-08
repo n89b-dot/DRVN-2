@@ -8,6 +8,9 @@ import { ObjectRow } from "@/components/ui";
  * what it is, the object as a row, and the page it opens. A card only ever
  * opens the real page — it never holds a form (the plan's rule) — so a
  * listing card opens the listing, a negotiation card the offer.
+ *
+ * `details` are the facts a confirm card must show before Confirm, such as
+ * the full address of a link the change saves (DataRow lines under the row).
  */
 export function AgentResultCard({
   eyebrow,
@@ -16,6 +19,7 @@ export function AgentResultCard({
   image,
   href,
   action,
+  details,
 }: {
   eyebrow: ReactNode;
   title: ReactNode;
@@ -25,6 +29,8 @@ export function AgentResultCard({
   /** Trailing actions: Confirm and Edit on a confirm card. With actions the
    *  row isn't one link (a link can't hold buttons): the title and photo are. */
   action?: ReactNode;
+  /** Facts shown under the row before Confirm (DataRow lines): what the change saves that the title doesn't say. */
+  details?: ReactNode;
 }) {
   return (
     <article className="tile !p-4">
@@ -44,6 +50,7 @@ export function AgentResultCard({
       ) : (
         <ObjectRow href={href} media={image} title={title} meta={meta} />
       )}
+      {details}
     </article>
   );
 }

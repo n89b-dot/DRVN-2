@@ -36,7 +36,6 @@ begin
 
   -- Builders to follow must run for a client role (it used to read a column
   -- no client may read, and every call failed).
-  update public.beta_access_config set enforced = false where singleton;
   insert into auth.users(id, email) values (v_seller, 'direction-security@drvn.test');
   insert into public.profiles(id, username) values (v_seller, 'direction_security')
     on conflict (id) do update set username = excluded.username;

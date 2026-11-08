@@ -27,6 +27,10 @@ export type CheckoutTotalsInput = {
   selectedQuoteCents: number | null;
   /** The amount of the payment the server created, once admitted. */
   admittedCents: number | null;
+  /** OS-W17 (N485): the goods in that payment, as the server reserved them.
+   *  Without it the split falls back to the page-load goods, and a price
+   *  rise in between showed up as "Shipping". */
+  admittedGoodsCents?: number | null;
 };
 
 export type CheckoutTotals = {
@@ -40,7 +44,7 @@ export function checkoutTotals(input: CheckoutTotalsInput): CheckoutTotals {
   const { goodsCents, flatShippingCents, quotedLines, collection, selectedQuoteCents, admittedCents } = input;
 
   if (admittedCents != null) {
-    const shippingCents = Math.max(0, admittedCents - goodsCents);
+    const shippingCents = Math.max(0, admittedCents - (input.admittedGoodsCents ?? goodsCents));
     return {
       shipping: collection ? "Collecting — no shipping" : shippingCents > 0 ? formatPrice(shippingCents) : "Free",
       total: formatPrice(admittedCents),

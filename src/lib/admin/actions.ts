@@ -20,6 +20,17 @@ import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { reportError } from "@/lib/monitoring";
 import { scheduleMediaCleanup } from "@/lib/media-lifecycle";
+import { takedownTargets } from "@/lib/copyright/notice";
+import { copyrightHosts } from "@/lib/copyright/hosts";
+import type { ReportSubjectType } from "@/lib/database.types";
+import {
+  closeSiblingReports,
+  notifyReporters,
+  outcomeForResolution,
+  reporterNotice,
+  type ClosedReport,
+  type ReporterOutcome,
+} from "./report-outcome";
 
 /**
  * Admin mutations. Every action:
@@ -94,12 +105,13 @@ async function notifyBothParties(
 /**
  * Tells a member who filed a report that it was looked at (admin-22). They
  * used to hear nothing, whatever the outcome. Best-effort: a failed
- * notification never undoes the resolution.
+ * notification never undoes the resolution. N140: the words follow what
+ * really happened — "took down" only after a takedown from this console.
  */
 async function notifyReporter(
   admin: ReturnType<typeof createAdminClient>,
   reportId: string,
-  outcome: "actioned" | "dismissed"
+  outcome: ReporterOutcome
 ) {
   const { data: report } = await admin
     .from("reports")
@@ -107,21 +119,39 @@ async function notifyReporter(
     .eq("id", reportId)
     .maybeSingle();
   if (!report?.reporter_id) return;
-  const what =
-    report.subject_type === "post" ? "post" : report.subject_type === "comment" ? "reply" : report.subject_type === "listing" ? "listing" : "member";
+  const notice = reporterNotice(report.subject_type, outcome);
   const { error } = await admin.from("notifications").insert({
     user_id: report.reporter_id,
     kind: "report_reviewed",
-    section: report.subject_type === "post" || report.subject_type === "comment" ? "engagement" : "marketplace",
-    title: "Thanks — we reviewed your report",
-    body:
-      outcome === "actioned"
-        ? `We took action on the ${what} you reported.`
-        : `We looked at the ${what} you reported and didn't find a breach of DRVN's rules.`,
+    section: notice.section,
+    title: notice.title,
+    body: notice.body,
     href: null,
     actor_id: null,
   });
   if (error) reportError("[admin] reporter notification failed", { reportId, error });
+}
+
+/** N140: a takedown settles every open report on the same thing. Closes
+ *  them and tells each reporter. Best-effort after the takedown committed:
+ *  a failure leaves them open for a human, it never undoes the removal. */
+async function settleSiblingReports(
+  ctx: { admin: ReturnType<typeof createAdminClient>; userId: string },
+  subjects: { type: ReportSubjectType; ids: string[] }[],
+  exceptReportId: string | null,
+  note: string
+) {
+  try {
+    const closed = await closeSiblingReports(ctx.admin, {
+      subjects,
+      exceptReportId,
+      adminId: ctx.userId,
+      note,
+    });
+    for (const report of closed) await notifyReporter(ctx.admin, report.id, "removed");
+  } catch (error) {
+    reportError("[admin] closing sibling reports failed", { subjects, error });
+  }
 }
 
 /** The member's own notice that their account was suspended or restored
@@ -305,6 +335,48 @@ export async function adminResolveForSeller(
   }
 }
 
+/**
+ * N91: a resolved in-app dispute is final for the members. Support may reopen
+ * it: execute_admin_command('dispute.reopen') opens a follow-up case with the
+ * previous category and reason, with support from the start, on a fresh
+ * clock, and keeps the previous case and its resolution in
+ * order_dispute_history. Audited in the same transaction.
+ */
+export async function adminReopenDispute(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const orderId = field(formData, "order_id");
+  const reason = field(formData, "reason");
+  if (!orderId) return { error: "Missing order." };
+  if (!reason) return { error: "A reason is required — it goes in the audit log." };
+
+  try {
+    await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: "dispute.reopen",
+        subjectType: "dispute",
+        subjectId: orderId,
+        orderId,
+        reason,
+      },
+      async () => {
+        throw new Error("dispute.reopen runs in the database.");
+      }
+    );
+    revalidateOrder(orderId);
+    return { ok: "Dispute reopened. The earlier decision stays on record." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not reopen the dispute." };
+  }
+}
+
 // ---------- Listings ----------
 
 export async function adminRemoveListing(
@@ -366,6 +438,8 @@ export async function adminRemoveListing(
         return { previousStatus: listing.status };
       }
     );
+    // N140: every open report on this listing is settled by the takedown.
+    await settleSiblingReports(ctx, [{ type: "listing", ids: [listingId] }], null, `Listing removed: ${reason}`);
     revalidatePath("/admin", "layout");
     revalidatePath("/listings");
     revalidatePath(`/listings/${listingId}`);
@@ -630,7 +704,7 @@ export async function adminResolveReport(
         return {};
       }
     );
-    await notifyReporter(ctx.admin, reportId, outcome as "actioned" | "dismissed");
+    await notifyReporter(ctx.admin, reportId, outcomeForResolution(outcome as "actioned" | "dismissed"));
     revalidatePath("/admin", "layout");
     return { ok: outcome === "actioned" ? "Report actioned." : "Report dismissed." };
   } catch (error) {
@@ -706,6 +780,9 @@ export async function adminRemoveReportedContent(
   }
   const isPost = report.subject_type === "post";
 
+  // Every report the takedown closed, kept out of the audit record (which
+  // gets the count) so it doesn't grow with the thread.
+  let closed: ClosedReport[] = [];
   try {
     const { removed } = await auditedAction(
       ctx.admin,
@@ -718,40 +795,25 @@ export async function adminRemoveReportedContent(
         metadata: { subjectType: report.subject_type, subjectId: report.subject_id },
       },
       async () => {
-        const snapshot = isPost
-          ? await ctx.admin
-              .from("activity_posts")
-              .select("id, author_id, car_id, title, intro, body, published_at")
-              .eq("id", report.subject_id)
-              .maybeSingle()
-          : await ctx.admin
-              .from("activity_comments")
-              .select("id, author_id, post_id, body, created_at")
-              .eq("id", report.subject_id)
-              .maybeSingle();
-        if (snapshot.error) throw new Error(snapshot.error.message);
-        const row = snapshot.data as { author_id: string; title?: string | null; body: unknown } | null;
-        if (!row) throw new Error(isPost ? "That post is already gone." : "That reply is already gone.");
-
-        const { error } = await ctx.admin
-          .from(isPost ? "activity_posts" : "activity_comments")
-          .delete()
-          .eq("id", report.subject_id);
+        // One transaction (20261108130100): every open report on the thing
+        // and, for a post, on all of its replies is closed through a join
+        // before the delete takes the replies with it. Listing the replies
+        // here first was capped at PostgREST's max_rows (1,000), which left
+        // reports on a big thread open and their reporters untold.
+        const { data, error } = await ctx.admin.rpc("take_down_reported_content", {
+          p_actor: ctx.userId,
+          p_report: reportId,
+          p_reason: reason,
+        });
         if (error) throw new Error(error.message);
-
-        await ctx.admin
-          .from("reports")
-          .update({
-            status: "actioned",
-            resolved_by: ctx.userId,
-            resolved_at: new Date().toISOString(),
-            resolution_note: `Removed: ${reason}`,
-          })
-          .eq("id", reportId)
-          .eq("status", "open");
+        const result = data as unknown as {
+          removed: { author_id: string };
+          replyCount: number;
+          closed: ClosedReport[];
+        };
 
         const { error: noteError } = await ctx.admin.from("notifications").insert({
-          user_id: row.author_id,
+          user_id: result.removed.author_id,
           kind: isPost ? "post_removed" : "comment_removed",
           section: "engagement",
           title: isPost ? "A post of yours was removed" : "A reply of yours was removed",
@@ -760,19 +822,171 @@ export async function adminRemoveReportedContent(
           actor_id: null,
         });
         if (noteError) reportError("[admin] removal notification failed", { reportId, noteError });
-        return { removed: row };
+        closed = result.closed;
+        return { removed: result.removed, replyCount: result.replyCount, closedReports: result.closed.length };
       }
     );
     // Deleting the post queued its photos (20261107203000, N51); taken-down
     // content shouldn't stay reachable by link until the daily job.
     if (isPost) scheduleMediaCleanup(removed.author_id);
-    await notifyReporter(ctx.admin, reportId, "actioned");
+    // The report this ran from is told even if it had already been closed.
+    if (!closed.some((r) => r.id === reportId)) await notifyReporter(ctx.admin, reportId, "removed");
+    try {
+      await notifyReporters(ctx.admin, closed, "removed");
+    } catch (error) {
+      reportError("[admin] reporter notifications failed", { reportId, closed: closed.length, error });
+    }
     revalidatePath("/admin", "layout");
     revalidatePath("/home");
     revalidatePath("/explore");
     return { ok: isPost ? "Post removed; the author and the reporter were told." : "Reply removed; the author and the reporter were told." };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not remove it." };
+  }
+}
+
+/**
+ * Hides a reported build (N53, 20261107220010): the car is made private and
+ * held there — its owner can't republish it or lift the hold — with the
+ * reason shown to them on Manage. Nothing is deleted, so the hold can be
+ * lifted. Every open report on the build is settled and each reporter told.
+ */
+export async function adminHideReportedCar(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const reportId = field(formData, "report_id");
+  const reason = field(formData, "reason").slice(0, 500);
+  if (!reportId) return { error: "Missing report." };
+  if (!reason) return { error: "A reason is required — it is shown to the owner." };
+
+  const { data: report } = await ctx.admin
+    .from("reports")
+    .select("id, subject_type, subject_id, status")
+    .eq("id", reportId)
+    .maybeSingle();
+  if (!report) return { error: "Report not found." };
+  if (report.subject_type !== "car") return { error: "Only a reported build is hidden from here." };
+
+  try {
+    const { car } = await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: "report.hide_car",
+        subjectType: "report",
+        subjectId: reportId,
+        reason,
+        metadata: { subjectType: "car", subjectId: report.subject_id },
+      },
+      async () => {
+        const { data: car } = await ctx.admin
+          .from("cars")
+          .select("id, owner_id, slug, name")
+          .eq("id", report.subject_id)
+          .maybeSingle();
+        if (!car) throw new Error("That build is already gone.");
+        // The hold makes the build private and keeps it so (20261107220010).
+        const { error } = await ctx.admin
+          .from("car_moderation_holds")
+          .insert({ car_id: car.id, reason, hidden_by: ctx.userId, report_id: reportId });
+        if (error?.code === "23505") throw new Error("That build is already hidden.");
+        if (error) throw new Error(error.message);
+
+        await ctx.admin
+          .from("reports")
+          .update({
+            status: "actioned",
+            resolved_by: ctx.userId,
+            resolved_at: new Date().toISOString(),
+            resolution_note: `Hidden: ${reason}`,
+          })
+          .eq("id", reportId)
+          .eq("status", "open");
+
+        const { error: noteError } = await ctx.admin.from("notifications").insert({
+          user_id: car.owner_id,
+          kind: "car_hidden",
+          section: "engagement",
+          title: `DRVN hid your build ${car.name}`,
+          body: reason,
+          href: `/garage/${car.id}/edit`,
+          actor_id: null,
+        });
+        if (noteError) reportError("[admin] hide-car notification failed", { reportId, noteError });
+        return { car };
+      }
+    );
+    await notifyReporter(ctx.admin, reportId, "removed");
+    await settleSiblingReports(ctx, [{ type: "car", ids: [car.id] }], reportId, `Hidden: ${reason}`);
+    revalidatePath("/admin", "layout");
+    revalidatePath(`/cars/${car.slug}`);
+    revalidatePath("/explore");
+    return { ok: "Build hidden; the owner and the reporter were told." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not hide that build." };
+  }
+}
+
+/** Lifts a build's moderation hold (N53). It stays private until its owner
+ *  makes it public again, as a restored listing comes back paused. */
+export async function adminUnhideCar(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const carId = field(formData, "car_id");
+  const reportId = field(formData, "report_id");
+  const reason = field(formData, "reason");
+  // Lifted from the report that hid it, so the audit row sits with that case.
+  if (!carId || !reportId) return { error: "Missing build." };
+  if (!reason) return { error: "A reason is required — it goes in the audit log." };
+
+  try {
+    await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: "car.unhide",
+        subjectType: "report",
+        subjectId: reportId,
+        reason,
+        metadata: { subjectType: "car", subjectId: carId },
+      },
+      async () => {
+        const { data: lifted, error } = await ctx.admin
+          .from("car_moderation_holds")
+          .delete()
+          .eq("car_id", carId)
+          .select("car_id");
+        if (error) throw new Error(error.message);
+        if (!lifted?.length) throw new Error("This build isn't hidden.");
+        const { data: car } = await ctx.admin.from("cars").select("id, owner_id, name").eq("id", carId).maybeSingle();
+        if (!car) throw new Error("That build is gone.");
+        const { error: noteError } = await ctx.admin.from("notifications").insert({
+          user_id: car.owner_id,
+          kind: "car_restored",
+          section: "engagement",
+          title: `${car.name} can be public again`,
+          body: "DRVN lifted the hold. It's still private — make it public from Manage when you're ready.",
+          href: `/garage/${car.id}/edit`,
+          actor_id: null,
+        });
+        if (noteError) reportError("[admin] unhide-car notification failed", { carId, noteError });
+        return {};
+      }
+    );
+    revalidatePath("/admin", "layout");
+    return { ok: "Hold lifted (the build stays private until its owner republishes it)." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not lift the hold." };
   }
 }
 
@@ -993,6 +1207,70 @@ export async function adminRetryCarryPayout(_prev: AdminActionState, formData: F
 
 export async function adminCancelCarryPayout(_prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
   return controlCarryPayout("cancel", formData);
+}
+
+// ---------- Exhausted seller payouts (20261107210100, N8) ----------
+
+/**
+ * Puts a seller payout the worker gave up on (eight failed attempts, a
+ * transfer_unresolved case open) back in the queue. Nothing about whether it
+ * may go changes: admission, readiness, the chargeback freeze and dispatch
+ * all still decide, and a payout Stripe may already hold is looked up before
+ * anything is sent, with the same idempotency key. The recovery case stays
+ * open until the operator closes it.
+ */
+export async function adminRetryTransfer(_prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const orderId = field(formData, "order_id");
+  const reason = field(formData, "reason");
+  if (!/^[0-9a-f-]{36}$/i.test(orderId)) return { error: "Missing payout." };
+  if (!reason) return { error: "A reason is required — it goes in the audit log." };
+
+  const { data: intent, error: readError } = await ctx.admin
+    .from("transfer_intents")
+    .select("order_id, status, attempts, amount_cents, provider_call_may_have_occurred")
+    .eq("order_id", orderId)
+    .maybeSingle();
+  if (readError) return { error: "Couldn't read that payout. Try again." };
+  if (!intent) return { error: "That payout no longer exists." };
+  if (intent.status !== "failed" || intent.attempts < 8) {
+    return { error: "This payout is still being retried automatically; there is nothing to queue again." };
+  }
+
+  try {
+    await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: "payments.transfer_retry",
+        subjectType: "payment",
+        subjectId: orderId,
+        orderId,
+        reason,
+        metadata: {
+          amountCents: intent.amount_cents,
+          previousAttempts: intent.attempts,
+          providerCallMayHaveOccurred: intent.provider_call_may_have_occurred,
+        },
+      },
+      async () => {
+        const { data, error } = await ctx.admin.rpc("admin_retry_transfer_intent", { p_order: orderId });
+        if (error) throw new Error(error.message);
+        return data;
+      }
+    );
+    revalidateOrder(orderId);
+    return {
+      ok: intent.provider_call_may_have_occurred
+        ? "Payout queued again. Stripe may already hold it, so the next worker pass looks it up first and records it rather than sending again."
+        : "Payout queued again. The next worker pass tries it; it comes back here if the cause remains.",
+    };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not queue the payout again." };
+  }
 }
 
 // ---------- Internal notes / party messaging (console audit follow-ups) ----------
@@ -1220,7 +1498,7 @@ export async function adminResolveReports(
         }
       );
       done += 1;
-      await notifyReporter(ctx.admin, reportId, outcome as "actioned" | "dismissed");
+      await notifyReporter(ctx.admin, reportId, outcomeForResolution(outcome as "actioned" | "dismissed"));
     } catch (error) {
       failed.push({ id: reportId, error: error instanceof Error ? error.message : "Failed." });
     }
@@ -1436,4 +1714,104 @@ export async function adminCaseUpdate(formData: FormData) {
   }
   revalidatePath("/admin/cases");
   return { ok: "Case updated." };
+}
+
+// ---------- Copyright notices (R69-dmca) ----------
+
+/**
+ * Acts on a copyright notice: removes the listings it names and purges the
+ * photos wherever DRVN holds them, buyers' order snapshots included. The
+ * database function (copyright_takedown, 20261107231002) checks the admin
+ * and a fresh step-up itself, does all of it in one transaction and writes
+ * the audit row; this parses the form, then tells the members whose content
+ * went, starts the storage deletion, and clears the cached pages. The proxy
+ * refuses the photos' cached optimised copies within 15 seconds
+ * (src/lib/copyright/blocked-media.ts).
+ */
+export async function adminCopyrightTakedown(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const noticeId = field(formData, "notice_id");
+  const note = field(formData, "reason");
+  if (!noticeId) return { error: "Missing notice." };
+  if (!note) return { error: "A note is required — it goes in the audit log and to the member." };
+  const { listingIds, mediaUrls, other } = takedownTargets(
+    [field(formData, "listing_ids"), field(formData, "media_urls"), field(formData, "more")],
+    copyrightHosts()
+  );
+  if (other.length) {
+    return { error: `Not a DRVN listing or photo link: ${other.slice(0, 3).join(", ")}. Open it and paste its photo links instead.` };
+  }
+  if (!listingIds.length && !mediaUrls.length) return { error: "Name at least one listing or photo to take down." };
+
+  const session = await createClient();
+  const { data, error } = await session.rpc("copyright_takedown", {
+    p_notice: noticeId,
+    p_listing_ids: listingIds,
+    p_media_urls: mediaUrls,
+    p_note: note,
+  });
+  if (error) {
+    if (error.code === "42501") return { error: "Confirm your authenticator again, then retry." };
+    return { error: error.message };
+  }
+  const result = data as {
+    removedListings: string[];
+    objects: string[];
+    stillReferenced: string[];
+    owners: string[];
+  };
+
+  if (result.owners.length) {
+    const { error: noteError } = await ctx.admin.from("notifications").insert(
+      result.owners.map((userId) => ({
+        user_id: userId,
+        kind: "copyright_takedown",
+        section: "marketplace" as const,
+        title: "Content removed after a copyright notice",
+        body: `${note} If you think this was a mistake, reply to hello@drvn.app with your reasons.`,
+        href: "/copyright",
+        actor_id: null,
+      }))
+    );
+    if (noteError) reportError("[admin] copyright takedown notification failed", { noticeId, noteError });
+    // The photos are queued under their owners; take them out of storage now
+    // rather than at the next scheduled run.
+    for (const owner of result.owners) scheduleMediaCleanup(owner);
+  }
+  revalidatePath("/", "layout");
+  revalidatePath("/admin", "layout");
+
+  const removed = `${result.removedListings.length} listing(s) and ${result.objects.length} photo(s) taken down`;
+  return result.stillReferenced.length
+    ? { ok: `${removed}. Still named elsewhere (a post's text or a message), remove by hand: ${result.stillReferenced.join(", ")}` }
+    : { ok: `${removed}, order snapshots included.` };
+}
+
+export async function adminRejectCopyrightNotice(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const noticeId = field(formData, "notice_id");
+  const note = field(formData, "reason");
+  if (!noticeId) return { error: "Missing notice." };
+  if (!note) return { error: "A note is required — it goes in the audit log." };
+
+  const session = await createClient();
+  const { error } = await session.rpc("reject_copyright_notice", { p_notice: noticeId, p_note: note });
+  if (error) {
+    if (error.code === "42501") return { error: "Confirm your authenticator again, then retry." };
+    return { error: error.message };
+  }
+  revalidatePath("/admin", "layout");
+  return { ok: "Notice closed with no action. Reply to the claimant with the reason." };
 }

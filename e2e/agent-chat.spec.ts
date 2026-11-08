@@ -41,19 +41,19 @@ test("a member's message and the agent's reply are stored and come back", async 
 
     await page.goto("/agent");
     await expect(page.getByRole("region", { name: "What your agent does" })).toBeVisible();
-    await page.getByRole("group", { name: "Starters" }).getByRole("button", { name: "Will this fit my car?" }).click();
-    await expect(page.getByLabel("Message your agent")).toHaveValue("Will this fit my car?");
+    await page.getByRole("group", { name: "Starters" }).getByRole("button", { name: "Find parts for my car" }).click();
+    await expect(page.getByLabel("Message your agent")).toHaveValue("Find parts for my car");
     const chat = page.getByRole("region", { name: "Chat with your agent" });
     await chat.getByRole("button", { name: /send/i }).click();
-    await expect(chat.getByText("Will this fit my car?").first()).toBeVisible();
+    await expect(chat.getByText("Find parts for my car").first()).toBeVisible();
     await expect(chat.getByText(/Chat isn't switched on here yet|can't reach the model/)).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(chat.getByRole("button", { name: "Will this fit my car?" })).toBeInViewport();
+    await expect(chat.getByRole("button", { name: "Find parts for my car" })).toBeInViewport();
     await page.screenshot({ path: "test-results/design/a3c-02-agent-chat-390.png" });
     await page.setViewportSize({ width: 1280, height: 720 });
 
     await page.reload();
-    await expect(page.getByRole("region", { name: "Chat with your agent" }).getByText("Will this fit my car?").first()).toBeVisible();
+    await expect(page.getByRole("region", { name: "Chat with your agent" }).getByText("Find parts for my car").first()).toBeVisible();
     const rows = await db.query<{ role: string }>("select role from public.agent_messages where owner_id = $1 order by created_at", [memberId]);
     expect(rows.rows.map((row) => row.role)).toEqual(["member", "agent"]);
 

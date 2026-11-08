@@ -21,6 +21,7 @@ import type { SavedCard } from "@/lib/payments/customers";
 import { updateNotificationPrefs, updateProfile, type ActionState } from "../garage/actions";
 import type { ConnectSummary } from "./payout-setup";
 import { DeleteAccount } from "./delete-account";
+import type { DeletionStatus } from "@/lib/account-deletion-status";
 import { ExportAccount } from "./export-account";
 import { PaymentMethods } from "./payment-methods";
 import { PasswordSection } from "./password-section";
@@ -173,8 +174,11 @@ export function SettingsPanel({
   shippingSection,
   shopSection,
   identityProof,
+  deletionStatus = null,
 }: {
   profile: SettingsProfile;
+  /** Where an earlier deletion request stands (N35), from my_account_deletion_status. */
+  deletionStatus?: DeletionStatus;
   /** How this member confirms it's them for email change and deletion (N41/N45). */
   identityProof: IdentityProof;
   logout: () => Promise<void>;
@@ -556,7 +560,7 @@ export function SettingsPanel({
             without your name where the law requires it.
           </p>
           <div className="mt-4">
-            <DeleteAccount proof={identityProof} />
+            <DeleteAccount proof={identityProof} status={deletionStatus} />
           </div>
         </section>
         )}

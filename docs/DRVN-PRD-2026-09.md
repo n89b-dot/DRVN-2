@@ -4,6 +4,8 @@
 >
 > Living artifacts (private to Neil): Direction — https://claude.ai/artifact/RtxJD7miquRrULqpnkowxw · Build plan — https://claude.ai/artifact/1tSqTJ2YTC5nTDGv1EApqY
 >
+> **Amended 2026-11-07 — W-3 keeps the picker.** Neil ruled on 7 Nov 2026 to keep the listing picker for tagging a part and drop "paste your own listing link" (R-w3). Nothing is built for it.
+>
 > **Amended 2026-10-18 — build intelligence ruled out.** Build Mine with AI equivalents, goal planning and similar-build search (agent plan B3) became a non-goal, and their parked row went.
 
 > **Amended 2026-10-17 — the DRVN agent.** New §4.9 (Intelligence), a fifth principle, offers v2 (M-8 narrowed), and the mobile bottom bar (N-4 reversed, non-goal and parked row removed). Implementation plan: "DRVN AI-native: review and implementation plan" — https://claude.ai/code/artifact/0116734a-9a0d-4148-9efa-ecde4f9a177b (a repo copy goes in `docs/plans/` when build starts).
@@ -125,6 +127,7 @@ Mock 4's layout with mock 3's card.
 | M-6 | Brand on listings: prefilled from the mod or importer, matched from titles otherwise, backfilled, editable. Saved searches and their alerts understand it | P1 | New |
 | M-7 | Optional "miles on this part" for used parts | P1 | New |
 | M-8 | Item page, cart, guest checkout, Q&A unchanged — with two named item-page exceptions: brand and miles join the record block (M-6, M-7) and "Posts about this part" (W-4). The item-page redesign is its own session. **Offers are no longer unchanged** (2026-10-17): they move to negotiation v2, §4.9 O-1…O-6 | P0 | Exists |
+| M-9 | (2026-11-07, Neil's ruling R-directcontact) **Message seller** on an item page: a signed-in buyer can ask the seller about a part for sale; it lands in their conversation, where the seller replies. New contacts are limited in the database, and a block between two members stops it (and every other contact), except messages about an order they share. Direct messages from a profile stay a non-goal, and agents never message people (AG-4) | P0 | New |
 
 ### 4.5 Profile and Store
 
@@ -184,7 +187,7 @@ Mock 4's layout with mock 3's card.
 |---|---|---|---|
 | W-1 | Quick post: pick a car → 1–6 photos → caption → Post. No title. **A quick post never touches a saved full-editor draft** (release-blocking). "Write a full update →" saves the content as the draft when none exists; when one exists the link is "Continue your draft" and nothing is merged | P1 | New |
 | W-2 | Every new post needs a photo — quick or full. Drafts are exempt. Posts published before the rule keep their pages and list placements, are left off the photo walls (Explore, Home), and can be edited without adding a photo | P1 | Change |
-| W-3 | Tag a part: a picker over your active listings (current car's first, type to filter, or paste your own listing link); up to three per post; available in the quick box and as a "Part for sale" block in the editor | P1 | New |
+| W-3 | Tag a part: a picker over your active listings (current car's first, type to filter); up to three per post; available in the quick box and as a "Part for sale" block in the editor. (2026-11-07) Pasting your own listing link was dropped by Neil's ruling on 7 Nov 2026; the picker stays | P1 | New |
 | W-4 | Tagged parts render as a compact row under the photos with price and add-to-cart; "Sold" when sold; the listing page gains "Posts about this part" | P1 | New |
 | W-5 | Posting with no car: tag a part instead. A post must have a car, a tagged part, or both. Not available before this ships — W-1…W-4 require a car | P2 | New |
 
@@ -253,7 +256,6 @@ Not needed: tables for shops, personas, home modules, away mode, car facts, note
 |---|---|
 | Modular / personalised Home | Real usage shows two clearly different patterns and the fixed Home fails one |
 | Onboarding by intent | Scheduled as its own session |
-| Message button / open DMs | Listing Q&A and offers demonstrably aren't enough for pre-sale contact |
 | Away mode | Sellers ask, or late-dispatch complaints appear |
 | Dispatch-time statistic | Orders record paid and shipped times reliably |
 | Buy now on cards | Cart-to-checkout drop-off suggests it |

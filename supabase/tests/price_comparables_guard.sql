@@ -31,7 +31,6 @@ declare
   denied boolean;
   i int;
 begin
-  update public.beta_access_config set enforced = false where singleton = true;
   insert into auth.users(id, email, raw_user_meta_data) values
     (v_seller, 'comps-seller@drvn.test', '{}'), (v_buyer, 'comps-buyer@drvn.test', '{}'), (v_banned, 'comps-banned@drvn.test', '{}');
 

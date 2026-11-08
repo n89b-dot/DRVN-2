@@ -12,9 +12,9 @@ const mocks = vi.hoisted(() => ({
   updateUser: vi.fn(),
   profileUpdate: vi.fn(),
   adminInsert: vi.fn(),
-  getBetaAccess: vi.fn(),
-  prepareBetaSignup: vi.fn(),
   reportError: vi.fn(),
+  hasAgeConfirmation: vi.fn(),
+  recordAgeConfirmation: vi.fn(),
   redirect: vi.fn((path: string) => {
     throw new Error(`redirect:${path}`);
   }),
@@ -23,8 +23,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock("next/headers", () => ({ headers: async () => new Headers({ origin: "https://drvn.example" }) }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/lib/beta-access", () => ({ getBetaAccess: mocks.getBetaAccess, prepareBetaSignup: mocks.prepareBetaSignup }));
 vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
+vi.mock("@/lib/age-confirmation-record", () => ({
+  hasAgeConfirmation: mocks.hasAgeConfirmation,
+  recordAgeConfirmation: mocks.recordAgeConfirmation,
+}));
 vi.mock("@/lib/revalidate", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/site", () => ({ siteUrl: () => "https://drvn.example" }));
 vi.mock("@/lib/supabase/admin", () => ({
@@ -79,9 +82,9 @@ beforeEach(() => {
   mocks.network.mockReturnValue("network:abc");
   mocks.signInWithPassword.mockResolvedValue({ data: { user: { id: "u1" } }, error: null });
   mocks.resetPasswordForEmail.mockResolvedValue({ error: null });
-  mocks.signUp.mockResolvedValue({ data: { user: { id: "new" }, session: null }, error: null });
-  mocks.prepareBetaSignup.mockResolvedValue({ enforced: false });
-  mocks.getBetaAccess.mockResolvedValue({ enforced: false, eligible: true });
+  mocks.signUp.mockResolvedValue({ data: { user: { id: "new", identities: [{ id: "i1" }] }, session: null }, error: null });
+  mocks.hasAgeConfirmation.mockResolvedValue(true);
+  mocks.recordAgeConfirmation.mockResolvedValue(true);
   mocks.updateUser.mockResolvedValue({ error: null });
   mocks.getUser.mockResolvedValue({ data: { user: { id: "u1", user_metadata: { avatar_url: "https://img.example/a.png" } } } });
   mocks.profileUpdate.mockReturnValue({ data: [{ id: "u1" }], error: null });
@@ -180,25 +183,23 @@ describe("password reset throttling", () => {
 
 // Readiness N42: sign-up is throttled before anything can email a stranger.
 describe("sign-up throttling", () => {
-  const attempt = () => signup({}, form({ email: " New@DRVN.test ", password: "long-enough-pass" }));
+  const attempt = () => signup({}, form({ email: " New@DRVN.test ", password: "long-enough-pass", age_confirmed: "yes" }));
 
-  it("counts the hashed email and the network before the invitation check or Supabase", async () => {
+  it("counts the hashed email and the network before Supabase", async () => {
     await expect(attempt()).rejects.toThrow("redirect:/login?message=check-email");
     expect(subjects().map(([action]) => action)).toEqual(["sign-up", "sign-up-email", "sign-up-network"]);
     expect(subjects()[0][1]).toMatch(/^email:[0-9a-f]{64}:network:abc$/);
     expect(JSON.stringify(subjects())).not.toContain("new@drvn");
-    expect(mocks.allowAction.mock.invocationCallOrder[0]).toBeLessThan(mocks.prepareBetaSignup.mock.invocationCallOrder[0]);
+    expect(mocks.allowAction.mock.invocationCallOrder[0]).toBeLessThan(mocks.signUp.mock.invocationCallOrder[0]);
     expect(mocks.signUp).toHaveBeenCalledOnce();
   });
 
   it("sends no confirmation email once any key is exhausted", async () => {
     for (const exhausted of ["sign-up", "sign-up-email", "sign-up-network"]) {
       mocks.signUp.mockClear();
-      mocks.prepareBetaSignup.mockClear();
       mocks.allowAction.mockImplementation(async (rule: { action: string }) => rule.action !== exhausted);
       await expect(attempt()).resolves.toMatchObject({ error: "Too many sign-up attempts. Wait a while and try again." });
       expect(mocks.signUp).not.toHaveBeenCalled();
-      expect(mocks.prepareBetaSignup).not.toHaveBeenCalled();
     }
   });
 
@@ -290,14 +291,107 @@ describe("onboarding an account with no profile", () => {
     await expect(finish()).resolves.toEqual({ error: "That username is taken." });
   });
 
-  it("refuses without creating anything when the existing access check says no, and says how to leave", async () => {
-    mocks.getBetaAccess.mockResolvedValue({ enforced: true, eligible: false });
-    const result = await finish();
-    expect(result.error).toMatch(/Sign out below/);
+  // OS-W31 (#86 follow-up): the invite-only beta is gone, so no access check
+  // can refuse onboarding; the missing-profile repair above still runs.
+  it("never asks the removed beta whether this account may finish", async () => {
+    const source = (await import("node:fs")).readFileSync("src/app/(auth)/actions.ts", "utf8");
+    expect(source).not.toMatch(/beta-access|getBetaAccess|prepareBetaSignup|beta_claim_id/);
+  });
+});
+
+// R69-age: the server actions are the check, not the form.
+describe("18+ confirmation", () => {
+  it("sign-up refuses a post without the box, before counting, mailing or creating anything", async () => {
+    const result = await signup({}, form({ email: "new@drvn.test", password: "long-enough-pass" }));
+    expect(result).toEqual({ error: "Confirm you're 18 or over to continue.", field: "age", email: "new@drvn.test" });
+    for (const value of ["", "on", "no", "true"]) {
+      await expect(signup({}, form({ email: "new@drvn.test", password: "long-enough-pass", age_confirmed: value }))).resolves.toHaveProperty("field", "age");
+    }
+    expect(mocks.signUp).not.toHaveBeenCalled();
+    expect(mocks.allowAction).not.toHaveBeenCalled();
+    expect(mocks.recordAgeConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("sign-up records the confirmation against the new account", async () => {
+    await expect(signup({}, form({ email: "new@drvn.test", password: "long-enough-pass", age_confirmed: "yes" }))).rejects.toThrow("redirect:/login?message=check-email");
+    expect(mocks.recordAgeConfirmation).toHaveBeenCalledWith("new", "email_signup");
+  });
+
+  it("records nothing when the address already had an account", async () => {
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "obfuscated", identities: [] }, session: null }, error: null });
+    await expect(signup({}, form({ email: "taken@drvn.test", password: "long-enough-pass", age_confirmed: "yes" }))).rejects.toThrow("redirect:");
+    expect(mocks.recordAgeConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("onboarding without a record refuses a post without the box and sets no handle", async () => {
+    mocks.hasAgeConfirmation.mockResolvedValue(false);
+    const result = await completeOnboarding({}, form({ username: "kaito_r", display_name: "Kaito" }));
+    expect(result).toEqual({ error: "Confirm you're 18 or over to continue.", field: "age" });
     expect(mocks.profileUpdate).not.toHaveBeenCalled();
     expect(mocks.adminInsert).not.toHaveBeenCalled();
+    expect(mocks.recordAgeConfirmation).not.toHaveBeenCalled();
+  });
 
-    mocks.getBetaAccess.mockResolvedValue({ enforced: true, eligible: false, unavailable: true });
-    await expect(finish()).resolves.toEqual({ error: "That didn't go through. Try again in a moment." });
+  it("onboarding records the box (a first Google sign-in) before the handle is set", async () => {
+    mocks.hasAgeConfirmation.mockResolvedValue(false);
+    await expect(completeOnboarding({}, form({ username: "kaito_r", display_name: "Kaito", age_confirmed: "yes" }))).rejects.toThrow("redirect:/garage");
+    expect(mocks.recordAgeConfirmation).toHaveBeenCalledWith("u1", "onboarding");
+    expect(mocks.recordAgeConfirmation.mock.invocationCallOrder[0]).toBeLessThan(mocks.profileUpdate.mock.invocationCallOrder[0]);
+  });
+
+  it("onboarding stops when the confirmation can't be saved", async () => {
+    mocks.hasAgeConfirmation.mockResolvedValue(false);
+    mocks.recordAgeConfirmation.mockResolvedValue(false);
+    await expect(completeOnboarding({}, form({ username: "kaito_r", display_name: "Kaito", age_confirmed: "yes" }))).resolves.toEqual({ error: "We couldn't save that. Try again." });
+    expect(mocks.profileUpdate).not.toHaveBeenCalled();
+  });
+
+  it("onboarding doesn't ask again after sign-up or checkout recorded it", async () => {
+    await expect(completeOnboarding({}, form({ username: "kaito_r", display_name: "Kaito" }))).rejects.toThrow("redirect:/garage");
+    expect(mocks.recordAgeConfirmation).not.toHaveBeenCalled();
+  });
+});
+
+// F-3 (PRD 2026-09-24): sign-up and return-to-where-you-were are unchanged;
+// "Add your car" carries next=/garage through sign-up; an account with
+// nowhere to return to finishes onboarding on the garage, which opens on the
+// add-car form when it is empty; "Skip — just browsing" goes to Home.
+describe("sign-up and return (F-3)", () => {
+  const signUpAs = (next?: string) =>
+    signup({}, form({ email: "new@drvn.test", password: "long-enough-pw", age_confirmed: "yes", ...(next ? { next } : {}) }));
+
+  it("carries Add your car's next=/garage into the confirmation link and the email notice", async () => {
+    await expect(signUpAs("/garage")).rejects.toThrow("redirect:/login?message=check-email&next=%2Fgarage");
+    const redirectTo = new URL(mocks.signUp.mock.calls[0][0].options.emailRedirectTo);
+    expect(redirectTo.pathname).toBe("/callback");
+    expect(redirectTo.searchParams.get("next")).toBe("/garage");
+  });
+
+  it("carries next=/garage straight into onboarding when sign-up opens a session", async () => {
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "new" }, session: { access_token: "t" } }, error: null });
+    await expect(signUpAs("/garage")).rejects.toThrow("redirect:/onboarding?next=%2Fgarage");
+  });
+
+  it("keeps any other return target, and drops an off-site one", async () => {
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "new" }, session: { access_token: "t" } }, error: null });
+    await expect(signUpAs("/listings/abc")).rejects.toThrow("redirect:/onboarding?next=%2Flistings%2Fabc");
+    await expect(signUpAs("https://evil.example/x")).rejects.toThrow(/^redirect:\/onboarding$/);
+  });
+
+  const onboard = (next?: string) =>
+    completeOnboarding({}, form({ username: "kaito_r", display_name: "Kaito", ...(next !== undefined ? { next } : {}) }));
+
+  it("finishes on the garage (add-car) when there is nowhere to return to", async () => {
+    await expect(onboard()).rejects.toThrow(/^redirect:\/garage$/);
+    await expect(onboard("")).rejects.toThrow(/^redirect:\/garage$/);
+  });
+
+  it("sends “Skip — just browsing” (next=/home) to Home", async () => {
+    await expect(onboard("/home")).rejects.toThrow(/^redirect:\/home$/);
+  });
+
+  it("returns to where the visitor was when there is a target", async () => {
+    await expect(onboard("/listings/abc")).rejects.toThrow(/^redirect:\/listings\/abc$/);
+    await expect(onboard("//evil.example")).rejects.toThrow(/^redirect:\/garage$/);
   });
 });

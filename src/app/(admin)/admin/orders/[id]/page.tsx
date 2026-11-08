@@ -8,8 +8,10 @@ import {
   adminAddNote,
   adminForceRefund,
   adminMessageParties,
+  adminReopenDispute,
   adminResolveForSeller,
 } from "@/lib/admin/actions";
+import { PROOF_REASON_LABEL, type ProofReason } from "@/lib/shipping/delivery-proof";
 import { OfferRound } from "@/components/commerce";
 import { getOrderDetail } from "@/lib/admin/queries";
 import { adminReadClient } from "@/lib/admin/guard";
@@ -52,6 +54,14 @@ function transferredValue(
   return "Not transferred";
 }
 
+function dateOnly(iso: string | null): string {
+  return iso ? new Date(iso).toLocaleDateString("en-US", { timeZone: "UTC" }) : "—";
+}
+
+function dateTime(iso: string | null): string {
+  return iso ? new Date(iso).toLocaleString("en-US", { timeZone: "UTC", timeZoneName: "short" }) : "—";
+}
+
 function days(iso: string | null): string {
   if (!iso) return "—";
   const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -89,8 +99,28 @@ export default async function AdminOrderPage({
         .order("round_no")
     : { data: null };
 
+  // N91/N95 (20261107210300): every closed case and reopen, and the
+  // verified-proof record of each delivered parcel. Gated console reads.
+  const [{ data: disputeHistory }, { data: proofs }] = await Promise.all([
+    admin
+      .from("order_dispute_history")
+      .select("id, event, kind, category, outcome, resolved_at, created_at, note")
+      .eq("order_id", id)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    admin
+      .from("delivery_proofs")
+      .select("shipment_id, verdict, reasons, carrier_delivered_at, destination_match, signature_required, signed_by")
+      .eq("order_id", id)
+      .order("evaluated_at", { ascending: false })
+      .limit(5),
+  ]);
+  const resolvedInApp = (disputeHistory ?? []).some((h) => h.event === "resolved" && h.kind === "in_app");
+
   const refundable = order.total_cents - order.refunded_cents;
   const disputed = order.status === "disputed";
+  const reopenable =
+    !disputed && resolvedInApp && ["paid", "shipped", "delivered", "completed"].includes(order.status);
 
   return (
     <>
@@ -136,7 +166,11 @@ export default async function AdminOrderPage({
               : ""}
             {order.dispute_escalated_at
               ? order.dispute_escalated_by
-                ? " Escalated by the buyer — support owes this case a decision."
+                ? order.dispute_escalated_by === order.seller_id
+                  ? " Escalated by the seller — support owes this case a decision."
+                  : order.dispute_escalated_by === order.buyer_id
+                    ? " Escalated by the buyer — support owes this case a decision."
+                    : " Reopened by support."
                 : " Escalated by the SLA sweep."
               : ""}
           </p>
@@ -178,6 +212,31 @@ export default async function AdminOrderPage({
                     {
                       label: "Seller's refund offer",
                       value: `${formatPrice(order.refund_offer_cents)}${order.refund_offered_at ? ` · ${days(order.refund_offered_at)}` : ""} — awaiting buyer`,
+                    },
+                  ]
+                : []),
+              ...(disputed && order.dispute_respond_by
+                ? [
+                    {
+                      label: "Case clock",
+                      value: `Seller by ${dateOnly(order.dispute_respond_by)} · escalation closes ${dateOnly(order.dispute_escalate_until)}`,
+                    },
+                  ]
+                : []),
+              ...(order.refund_offer_expires_at && order.refund_offer_cents
+                ? [{ label: "Offer expires", value: dateTime(order.refund_offer_expires_at) }]
+                : []),
+              ...((disputeHistory ?? []).length
+                ? [
+                    {
+                      label: "Dispute history",
+                      value: (disputeHistory ?? [])
+                        .map((h) =>
+                          h.event === "reopened"
+                            ? `Reopened by support ${days(h.created_at)}${h.note ? ` — ${h.note}` : ""}`
+                            : `${h.kind === "chargeback" ? "Bank chargeback" : (h.category ?? "other").replaceAll("_", " ")} — ${(h.outcome ?? "closed").replaceAll("_", " ")} ${days(h.resolved_at)}`
+                        )
+                        .join(" · "),
                     },
                   ]
                 : []),
@@ -232,6 +291,18 @@ export default async function AdminOrderPage({
                 submitLabel="Close dispute"
               />
             )}
+            {reopenable && (
+              <ActionDialog
+                action={adminReopenDispute}
+                title="Reopen dispute"
+                trigger="Reopen dispute"
+                triggerClassName="btn"
+                hidden={{ order_id: order.id }}
+                confirmNote="A resolved dispute is final for the buyer and seller. Reopening starts a follow-up case with support, with the previous reason, on a fresh 3- and 21-business-day clock. The earlier case and its decision stay on record. Both parties are notified."
+                fields={[{ kind: "reason" }]}
+                submitLabel="Reopen"
+              />
+            )}
           </div>
         </section>
 
@@ -248,6 +319,24 @@ export default async function AdminOrderPage({
                   : "not yet",
               },
               { label: "Delivered", value: order.delivered_at ? days(order.delivered_at) : "not yet" },
+              // Frozen at purchase (N6).
+              ...(order.is_collection
+                ? [{ label: "Available by", value: dateOnly(order.available_by) }]
+                : [
+                    { label: "Dispatch by", value: dateOnly(order.dispatch_by) },
+                    {
+                      label: "Latest delivery",
+                      value: `${dateOnly(order.deliver_by)}${order.delivery_estimate_source === "fallback" ? " (fallback estimate)" : ""}`,
+                    },
+                  ]),
+              // N95: one verified-proof record per delivered parcel.
+              ...(proofs ?? []).map((proof) => ({
+                label: proof.verdict === "verified" ? "Delivery proof" : "Delivery proof — review",
+                value:
+                  proof.verdict === "verified"
+                    ? `Verified · carrier date ${dateOnly(proof.carrier_delivered_at)} · ${proof.destination_match} match${proof.signature_required ? ` · signed by ${proof.signed_by}` : ""}`
+                    : proof.reasons.map((r) => PROOF_REASON_LABEL[r as ProofReason] ?? r).join("; "),
+              })),
               {
                 label: "Ship to",
                 value: order.is_collection
