@@ -33,6 +33,7 @@ export default async function LegalLayout({ children }: { children: ReactNode })
             <Link href="/privacy">Privacy</Link>
             <Link href="/fees">Fees</Link>
             <Link href="/protection">Protection</Link>
+            <Link href="/copyright">Copyright</Link>
           </span>
         }
       />
