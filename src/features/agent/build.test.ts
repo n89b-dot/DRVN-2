@@ -10,11 +10,13 @@ const state = vi.hoisted(() => ({ cards: [] as unknown[], saved: [] as unknown[]
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/lib/analytics", () => ({ capture: vi.fn() }));
 vi.mock("@/app/(product)/garage/actions", () => ({
-  saveModItems: vi.fn(async (_car: string, items: unknown[]) => (state.saved.push(...items), {})),
+  saveModItems: vi.fn(async (_car: string, items: unknown[], revision: unknown) => (expect(revision).toBe("rev-1"), state.saved.push(...items), {})),
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: { id: "22222222-2222-4222-8222-222222222222" } } }) },
+    // N65: the sheet revision, read before the sheet.
+    rpc: async () => ({ data: "rev-1", error: null }),
     from(table: string) {
       const query = {
         select: () => query,
