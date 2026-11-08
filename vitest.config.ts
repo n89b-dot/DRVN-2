@@ -2,9 +2,12 @@ import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "vitest/config";
 
+import { junitInCi } from "./tests/support/vitest-junit";
+
 export default defineConfig({
   test: {
     environment: "node",
+    ...junitInCi("vitest.xml"),
     include: ["src/**/*.test.ts", "src/**/*.test.tsx", "e2e/*.test.ts", "tests/support/**/*.test.ts", "tests/ci/**/*.test.ts", "tests/agent-evals/**/*.test.ts"],
   },
   resolve: {
