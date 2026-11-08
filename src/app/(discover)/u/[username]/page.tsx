@@ -229,6 +229,8 @@ export default async function PublicProfilePage({
           (isShop ? "parts" : undefined)
         }
         basePath={`/u/${profile.username}`}
+        /* P-3: the owner also sees Saved — only theirs, never a visitor's. */
+        savedHref={isOwner ? "/saved" : undefined}
         storeNote={profile.store_note}
         partsCount={partsForSale}
         partsPanel={
