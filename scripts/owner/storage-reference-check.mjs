@@ -81,7 +81,7 @@ export function parseArgs(argv) {
  * either way); `missing` only those it said aren't there.
  */
 export async function verifyBytes(deps, options) {
-  const result = { checked: 0, missing: 0, unknown: 0, missingSample: [], unknownSample: [], complete: true };
+  const result = { checked: 0, missing: 0, unknown: 0, expectedMissing: 0, missingSample: [], unknownSample: [], expectedMissingSample: [], complete: true };
   let budget = options.limit;
   for (const bucket of options.buckets) {
     let after = null;
@@ -97,7 +97,15 @@ export async function verifyBytes(deps, options) {
       for (const row of page) {
         result.checked += 1;
         const state = await deps.probe(bucket, row.path);
-        if (state === "missing") {
+        if (state === "missing" && row.expected_reason) {
+          // Deleted on purpose (a chat photo past retention, a tombstoned
+          // path) and its row came back with a restore: not a loss, and
+          // never to be restored (storage_object_rows' classification).
+          result.expectedMissing += 1;
+          if (result.expectedMissingSample.length < options.sample) {
+            result.expectedMissingSample.push({ bucket, path: row.path, reason: row.expected_reason });
+          }
+        } else if (state === "missing") {
           result.missing += 1;
           if (result.missingSample.length < options.sample) result.missingSample.push({ bucket, path: row.path });
         } else if (state !== "present") {
@@ -166,6 +174,10 @@ export function describe(report, bytes) {
         (bytes.complete ? "." : " (stopped at --limit; run again with a higher one).")
     );
     for (const m of bytes.missingSample) lines.push(`    no bytes: ${m.bucket}/${m.path}`);
+    if (bytes.expectedMissing) {
+      lines.push(`  ${bytes.expectedMissing} gone on purpose (not to restore): their rows came back, their bytes were deleted by retention or the media cleanup.`);
+      for (const e of bytes.expectedMissingSample) lines.push(`    ${e.bucket}/${e.path}  (${e.reason})`);
+    }
     for (const u of bytes.unknownSample) lines.push(`    unanswered: ${u.bucket}/${u.path}`);
   }
   return lines.join("\n");

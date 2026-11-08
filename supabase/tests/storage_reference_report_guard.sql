@@ -15,6 +15,12 @@ declare
   chat_photo text := gen_random_uuid()::text || '.webp';
   expired_photo text := gen_random_uuid()::text || '.webp';
   live_gone_photo text := gen_random_uuid()::text || '.webp';
+  photo_47h text := gen_random_uuid()::text || '.webp';
+  photo_48h text := gen_random_uuid()::text || '.webp';
+  photo_49h text := gen_random_uuid()::text || '.webp';
+  object_47h text := gen_random_uuid()::text || '.webp';
+  object_49h text := gen_random_uuid()::text || '.webp';
+  tombstoned_row text;
   c uuid := gen_random_uuid();
   before jsonb;
   after jsonb;
@@ -25,7 +31,7 @@ begin
     (b, 'storage-report-b@example.test'),
     (c, 'storage-report-c@example.test');
   insert into storage.buckets(id, name, public) values
-    ('avatars', 'avatars', true), ('agent-chat-photos', 'agent-chat-photos', false)
+    ('avatars', 'avatars', true), ('agent-chat-photos', 'agent-chat-photos', false), ('message-photos', 'message-photos', false)
   on conflict (id) do nothing;
 
   before := public.storage_reference_report(0);
@@ -60,14 +66,28 @@ begin
   perform public.agent_chat_append(a, 'member', 'New photo', '[]'::jsonb,
     array[origin || '/storage/v1/object/authenticated/agent-chat-photos/' || a || '/' || live_gone_photo]);
 
+  -- The sweep's own cutoff (N232 fix-check 3): 48 hours, and a sweep pass
+  -- (every 5 minutes) since. 47½ hours, or 48 hours and a minute, is too
+  -- young to have been swept: a missing photo then is a real loss.
+  perform public.agent_chat_append(a, 'member', 'At 47.5h', '[]'::jsonb,
+    array[origin || '/storage/v1/object/authenticated/agent-chat-photos/' || a || '/' || photo_47h]);
+  update public.agent_messages set created_at = now() - interval '47 hours 30 minutes' where owner_id = a and body = 'At 47.5h';
+  perform public.agent_chat_append(a, 'member', 'At 48h', '[]'::jsonb,
+    array[origin || '/storage/v1/object/authenticated/agent-chat-photos/' || a || '/' || photo_48h]);
+  update public.agent_messages set created_at = now() - interval '48 hours 1 minute' where owner_id = a and body = 'At 48h';
+  perform public.agent_chat_append(a, 'member', 'At 49h', '[]'::jsonb,
+    array[origin || '/storage/v1/object/authenticated/agent-chat-photos/' || a || '/' || photo_49h]);
+  update public.agent_messages set created_at = now() - interval '49 hours' where owner_id = a and body = 'At 49h';
+
   after := public.storage_reference_report(500);
 
   -- 1. Counts move by exactly the fixtures.
-  if (after->>'references')::int - (before->>'references')::int <> 6 then
-    raise exception 'FAIL 1: % references added, expected 6', (after->>'references')::int - (before->>'references')::int;
+  if (after->>'references')::int - (before->>'references')::int <> 9 then
+    raise exception 'FAIL 1: % references added, expected 9', (after->>'references')::int - (before->>'references')::int;
   end if;
-  -- b's avatar and the fresh chat photo: missing. The other two: expected.
-  if (after->>'missingObjects')::int - (before->>'missingObjects')::int <> 2 then
+  -- Missing: b's avatar, the fresh chat photo, the 47½ h and 48 h 1 min ones.
+  -- Expected: the tombstone, the 3-day and 49 h chat photos.
+  if (after->>'missingObjects')::int - (before->>'missingObjects')::int <> 4 then
     raise exception 'FAIL 2: the missing object was not counted once: % → %', before->'missingObjects', after->'missingObjects';
   end if;
   if (after->>'unreferencedObjects')::int - (before->>'unreferencedObjects')::int <> 1 then
@@ -77,9 +97,9 @@ begin
   if coalesce((after->'missingByBucket'->>'avatars')::int, 0) - coalesce((before->'missingByBucket'->>'avatars')::int, 0) <> 1 then
     raise exception 'FAIL 4: the missing object was not counted under its bucket';
   end if;
-  if (after->>'expectedMissing')::int - (before->>'expectedMissing')::int <> 2
+  if (after->>'expectedMissing')::int - (before->>'expectedMissing')::int <> 3
      or coalesce((after->'expectedMissingByReason'->>'deleted')::int, 0) - coalesce((before->'expectedMissingByReason'->>'deleted')::int, 0) <> 1
-     or coalesce((after->'expectedMissingByReason'->>'retention')::int, 0) - coalesce((before->'expectedMissingByReason'->>'retention')::int, 0) <> 1 then
+     or coalesce((after->'expectedMissingByReason'->>'retention')::int, 0) - coalesce((before->'expectedMissingByReason'->>'retention')::int, 0) <> 2 then
     raise exception 'FAIL 4a: deletions on purpose were not told apart: %', after->'expectedMissingByReason';
   end if;
   if not (after->'expectedMissingSample') @> jsonb_build_array(jsonb_build_object('bucket', 'agent-chat-photos', 'path', a || '/' || expired_photo, 'reason', 'retention'))
@@ -89,6 +109,32 @@ begin
   if (after->'missingSample') @> jsonb_build_array(jsonb_build_object('path', a || '/' || expired_photo))
      or not (after->'missingSample') @> jsonb_build_array(jsonb_build_object('bucket', 'agent-chat-photos', 'path', a || '/' || live_gone_photo)) then
     raise exception 'FAIL 4c: a fresh chat photo''s loss was excused, or an expired one reported: %', after->'missingSample';
+  end if;
+
+  -- N232 fix-check 3: 47½ h and 48 h 1 min are losses; 49 h is retention.
+  if not (after->'missingSample') @> jsonb_build_array(jsonb_build_object('bucket', 'agent-chat-photos', 'path', a || '/' || photo_47h))
+     or not (after->'missingSample') @> jsonb_build_array(jsonb_build_object('bucket', 'agent-chat-photos', 'path', a || '/' || photo_48h)) then
+    raise exception 'FAIL 4d: a chat photo younger than the sweep''s cutoff was excused as expired: %', after->'expectedMissingSample';
+  end if;
+  if not (after->'expectedMissingSample') @> jsonb_build_array(jsonb_build_object('bucket', 'agent-chat-photos', 'path', a || '/' || photo_49h, 'reason', 'retention')) then
+    raise exception 'FAIL 4e: a chat photo past the sweep''s cutoff was not expected: %', after->'missingSample';
+  end if;
+
+  -- N232 fix-check 2: object rows carry the same classification for the byte
+  -- check. A restored row past retention, or at a tombstoned path, has its
+  -- bytes deleted on purpose; one younger than the cutoff doesn't.
+  tombstoned_row := a || '/' || b || '/tombstoned.jpg';
+  insert into storage.objects(bucket_id, name, owner, created_at) values
+    ('agent-chat-photos', a || '/' || object_47h, a, now() - interval '47 hours 30 minutes'),
+    ('agent-chat-photos', a || '/' || object_49h, a, now() - interval '49 hours'),
+    ('message-photos', tombstoned_row, a, now() - interval '1 day');
+  insert into private.media_deletion_claims(bucket, path, token, state, completed_at)
+  values ('message-photos', tombstoned_row, gen_random_uuid(), 'done', now());
+  if (select expected_reason from public.storage_object_rows('agent-chat-photos', a || '/', 1000) where path = a || '/' || object_49h) is distinct from 'retention'
+     or (select expected_reason from public.storage_object_rows('agent-chat-photos', a || '/', 1000) where path = a || '/' || object_47h) is not null
+     or (select expected_reason from public.storage_object_rows('message-photos', null, 1000) where path = tombstoned_row) is distinct from 'deleted'
+     or (select expected_reason from public.storage_object_rows('avatars', a || '/', 1000) where path = a || '/present.webp') is not null then
+    raise exception 'FAIL 4f: object rows are not classified for the byte check';
   end if;
 
   -- 2. Each reference names its source; the escaped spelling decodes.

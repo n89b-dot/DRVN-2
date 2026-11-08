@@ -28,9 +28,11 @@
 begin;
 
 -- Every (source, bucket, path) a row names. retention_expired: a chat
--- message's photo past the 48 hours the agent sweep keeps them
--- (20261107220300); the message keeps naming it by design. 47 hours here,
--- because the sweep ages the object, uploaded a little before its message.
+-- message's photo the agent sweep has deleted by now
+-- (private.agent_chat_photo_swept: the sweep's own 48 hours, and a sweep pass
+-- since); the message keeps naming it by design. Judged by the message's age:
+-- the photo was uploaded first, so it is at least as old. A younger photo
+-- that is missing is a loss.
 create or replace function private.storage_reference_rows()
 returns table(source text, bucket text, path text, retention_expired boolean)
 language sql
@@ -55,7 +57,7 @@ as $$
       from public.dispute_evidence
     union all select 'messages.attachments', 'message-photos/' || a, false
       from public.messages m cross join lateral unnest(m.attachments) a where private.media_path_ok(a)
-    union all select 'agent_messages.images', private.media_object_key(i), am.created_at < now() - interval '47 hours'
+    union all select 'agent_messages.images', private.media_object_key(i), private.agent_chat_photo_swept(am.created_at)
       from public.agent_messages am cross join lateral unnest(am.images) i
     union all select 'order_items.commercial_snapshot', unnest(private.json_media_keys(commercial_snapshot)), false
       from public.order_items where strpos(commercial_snapshot::text, '/storage/v1/') > 0
@@ -78,13 +80,22 @@ create or replace function public.storage_object_rows(
   p_after text default null,
   p_limit integer default 500
 )
-returns table(path text, created_at timestamptz)
+returns table(path text, created_at timestamptz, expected_reason text)
 language sql
 stable
 security definer
 set search_path = public, pg_temp
 as $$
-  select o.name::text, o.created_at
+  -- expected_reason: why missing bytes would be on purpose. 'deleted' — the
+  -- media cleanup deleted this path for good (a restored row whose bytes it
+  -- removed); 'retention' — a chat photo the sweep has deleted by now (the
+  -- sweep judges the object's own age). Null: missing bytes are a loss.
+  select o.name::text, o.created_at,
+         case
+           when exists (select 1 from private.media_deletion_claims c
+                         where c.bucket = o.bucket_id and c.path = o.name and c.state = 'done') then 'deleted'
+           when o.bucket_id = 'agent-chat-photos' and private.agent_chat_photo_swept(o.created_at) then 'retention'
+         end
     from storage.objects o
    where o.bucket_id = p_bucket
      and p_bucket in ('avatars', 'car-images', 'activity-images', 'listing-images',

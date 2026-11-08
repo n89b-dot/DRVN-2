@@ -233,6 +233,7 @@ export async function scrubObject(deps, bucket, path, { apply }) {
 
 /** Every candidate in each bucket, up to the limit, one at a time. */
 export async function run(deps, options) {
+  const strays = await clearStrays(deps, options);
   const totals = {};
   let budget = options.limit;
   let more = false;
@@ -267,11 +268,49 @@ export async function run(deps, options) {
       after = page[page.length - 1].path;
     }
   }
-  return { totals, more };
+  return { totals, strays, more };
 }
 
-export function describe({ totals, more }, { apply }) {
+/**
+ * Before the scan, every run looks for what the scan can't see: an unfinished
+ * lease past its 10 minutes (a run that died, perhaps after a write that
+ * recreated a deleted photo) and a tombstoned path with an object again (a
+ * late write landed after the media cleanup). The candidate scan leaves both
+ * out, so a recreated photo would otherwise never be deleted again. Each is
+ * claimed: a recreated photo is deleted, a lease over an intact object is
+ * taken over and the object scrubbed as usual. A dry run only counts them.
+ */
+export async function clearStrays(deps, options) {
+  const strays = {};
+  for (const bucket of options.buckets) {
+    const { data, error } = await deps.rpc("photo_rewrite_strays", { p_bucket: bucket, p_limit: 500 });
+    if (error) throw new Error(`listing ${bucket} strays failed: ${error.message}`);
+    const found = data ?? [];
+    const counts = { found: found.length, recreatedRemoved: 0, scrubbed: 0, failed: 0, busy: 0 };
+    if (options.apply) {
+      for (const row of found) {
+        const one = await scrubObject(deps, bucket, row.path, options);
+        counts.recreatedRemoved += one.recreatedRemoved;
+        counts.scrubbed += one.scrubbed;
+        counts.failed += one.failed + one.leaseLost;
+        counts.busy += one.busy;
+      }
+    }
+    strays[bucket] = counts;
+  }
+  return strays;
+}
+
+export function describe({ totals, strays = {}, more }, { apply }) {
   const lines = [apply ? "Re-encoded photos that carried metadata:" : "Dry run (nothing claimed, changed or recorded):"];
+  for (const [bucket, c] of Object.entries(strays)) {
+    if (!c.found) continue;
+    lines.push(
+      apply
+        ? `  ${bucket} strays: ${c.recreatedRemoved} deleted again (recreated after deletion), ${c.scrubbed} re-encoded, ${c.busy} busy, ${c.failed} failed`
+        : `  ${bucket} strays: ${c.found} found (would be deleted, or re-encoded if intact)`
+    );
+  }
   for (const [bucket, c] of Object.entries(totals)) {
     lines.push(
       `  ${bucket}: ${c.checked} checked, ${c.clean} clean, ${c.withMetadata} with metadata` +
@@ -331,7 +370,7 @@ async function main() {
       for (const row of recorded.data ?? []) console.log(`  ${row.bucket} ${row.outcome}: ${row.objects}`);
     }
   }
-  if (Object.values(summary.totals).some((c) => c.failed || c.leaseLost)) process.exitCode = 1;
+  if (Object.values(summary.totals).some((c) => c.failed || c.leaseLost) || Object.values(summary.strays).some((c) => c.failed)) process.exitCode = 1;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

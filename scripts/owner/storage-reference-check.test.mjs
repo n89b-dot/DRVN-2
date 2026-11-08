@@ -23,8 +23,10 @@ function storage(rows, answers) {
     rpc: async (name, args) => {
       calls.push(args);
       assert.equal(name, "storage_object_rows");
-      const paths = (rows[args.p_bucket] ?? []).filter((p) => !args.p_after || p > args.p_after).sort().slice(0, args.p_limit);
-      return { data: paths.map((path) => ({ path })), error: null };
+      // A row is a path, or { path, expected_reason } as storage_object_rows returns it.
+      const all = (rows[args.p_bucket] ?? []).map((r) => (typeof r === "string" ? { path: r, expected_reason: null } : r));
+      const page = all.filter((r) => !args.p_after || r.path > args.p_after).sort((a, b) => (a.path < b.path ? -1 : 1)).slice(0, args.p_limit);
+      return { data: page, error: null };
     },
     probe: async (bucket, path) => answers[`${bucket}/${path}`] ?? "present",
   };
@@ -148,4 +150,35 @@ test("photos gone on purpose are listed apart and don't fail the check", () => {
   });
   assert.equal(exitCode(r, null), 0);
   assert.match(describe(r, null), /Gone on purpose, not to restore: 2 \(retention 1, deleted 1\)\n {4}agent-chat-photos\/o\/1\.webp {2}\(retention\)/);
+});
+
+test("N232 fix-check 2: after a restore, an expired or tombstoned photo's missing bytes are expected, not a loss", async () => {
+  const deps = storage(
+    {
+      "agent-chat-photos": [
+        { path: "o/expired.webp", expected_reason: "retention" },
+        { path: "o/fresh.webp", expected_reason: null },
+      ],
+      "message-photos": [{ path: "s/r/deleted.jpg", expected_reason: "deleted" }],
+    },
+    { "agent-chat-photos/o/expired.webp": "missing", "message-photos/s/r/deleted.jpg": "missing" }
+  );
+  const bytes = await verifyBytes(deps, parseArgs(["--verify-bytes"]));
+  assert.equal(bytes.missing, 0);
+  assert.equal(bytes.expectedMissing, 2);
+  // In bucket order (MEDIA_BUCKETS), each with why it's gone.
+  assert.deepEqual(bytes.expectedMissingSample, [
+    { bucket: "message-photos", path: "s/r/deleted.jpg", reason: "deleted" },
+    { bucket: "agent-chat-photos", path: "o/expired.webp", reason: "retention" },
+  ]);
+  assert.equal(exitCode(report(), bytes), 0);
+  assert.match(describe(report(), bytes), /2 gone on purpose \(not to restore\)/);
+});
+
+test("N232 fix-check 2b: a live photo's missing bytes still fail the check", async () => {
+  const deps = storage({ "agent-chat-photos": [{ path: "o/fresh.webp", expected_reason: null }] }, { "agent-chat-photos/o/fresh.webp": "missing" });
+  const bytes = await verifyBytes(deps, parseArgs(["--verify-bytes"]));
+  assert.equal(bytes.missing, 1);
+  assert.equal(bytes.expectedMissing, 0);
+  assert.equal(exitCode(report(), bytes), 1);
 });

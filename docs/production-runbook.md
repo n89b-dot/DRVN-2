@@ -391,7 +391,10 @@ so a rerun continues where the last stopped. Storage's write always upserts,
 so a write that lands after a deletion (clearing a chat, account deletion,
 which never wait for this job) would bring the photo back: the write is fenced
 on the object's identity, and a photo it recreated is deleted again at once,
-or by the next run if this one died ("recreated … and deleted again" in the
+or by the next run if this one died. Every run starts by checking what the
+scan can't see: unfinished leases past their 10 minutes, and paths the media
+cleanup tombstoned that have an object again (a late write landed after the
+cleanup). Those photos are deleted again ("strays: … deleted again" in the
 summary). Repeat `--apply` until it
 reports nothing left, then once more to confirm. `skipped` objects (a format
 it won't re-encode) are listed for a person to look at. Dispute evidence is
@@ -503,9 +506,13 @@ Record the sync's last completion time; it is the object recovery point.
    the full result for the restore record.
 
    References whose object is gone **on purpose** are listed apart as "gone
-   on purpose, not to restore" and don't fail the check: chat photos past the
-   48 hours the privacy page promises (the message keeps naming them), and
-   anything the media cleanup deleted and tombstoned. Never restore those.
+   on purpose, not to restore" and don't fail the check: chat photos the
+   sweep has deleted (at least the 48 hours the privacy page promises, from
+   `private.agent_chat_photo_retention()`, the same value the sweep uses, and a
+   sweep pass since; a missing chat photo younger than that is a real loss),
+   and anything the media cleanup deleted and tombstoned. `--verify-bytes`
+   applies the same rule to restored object rows whose bytes are gone. Never
+   restore those.
 4. For each missing object: restore it from an older object version if one
    exists; otherwise record it as lost in the restore record. Don't edit the
    referencing rows to hide it: a missing listing photo shows as missing,

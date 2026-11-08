@@ -24,7 +24,10 @@
 --     once and never wait for this job. A recreated object has a new id:
 --     finish_photo_rewrite answers 'recreated' and the job deletes it, and
 --     the lease keeps the old id so a run that died first is caught by the
---     next claim of that path.
+--     next claim of that path. A tombstone never hides a live object:
+--     photo_rewrite_strays lists unfinished leases and tombstoned paths with
+--     an object again, every run deletes those before its scan, and a claim
+--     of a tombstoned path that has an object answers 'recreated'.
 --   * finish_photo_rewrite releases the lease (only with its token) and
 --     records the outcome in private.photo_metadata_scrubs, with the object's
 --     version at that moment. photo_metadata_candidates skips an object whose
@@ -172,8 +175,18 @@ begin
     return jsonb_build_object('status', 'gone');
   end if;
   select * into v_deletion from private.media_deletion_claims where bucket = p_bucket and path = p_path;
+  if found and v_deletion.state = 'done' then
+    -- A tombstone never hides a live object: the cleanup deleted this path
+    -- for good (and no reference may name it again), so an object here
+    -- exists only because a late write recreated it. The job deletes it.
+    insert into private.media_rewrite_claims (bucket, path, token, object_id, claimed_at)
+    values (p_bucket, p_path, v_token, v_object, now())
+    on conflict (bucket, path) do update set token = excluded.token, claimed_at = excluded.claimed_at;
+    return jsonb_build_object('status', 'recreated', 'token', v_token,
+                              'object_id', coalesce(v_lease.object_id, v_object));
+  end if;
   if found then
-    return jsonb_build_object('status', case when v_deletion.state = 'done' then 'gone' else 'busy' end);
+    return jsonb_build_object('status', 'busy');
   end if;
   insert into private.media_rewrite_claims (bucket, path, token, object_id, claimed_at)
   values (p_bucket, p_path, v_token, v_object, now())
@@ -215,6 +228,37 @@ end;
 $$;
 revoke all on function public.check_photo_rewrite(text, text, uuid, uuid) from public, anon, authenticated;
 grant execute on function public.check_photo_rewrite(text, text, uuid, uuid) to service_role;
+
+-- What the job checks before every run's scan (N627 fix-check): an unfinished
+-- lease past its 10 minutes (a run that died, perhaps after a write that
+-- recreated a deleted photo), and a tombstoned path that has an object again
+-- (a late write landed after the cleanup). The candidate scan leaves both out,
+-- so without this a recreated photo would never be deleted again.
+create or replace function public.photo_rewrite_strays(p_bucket text, p_limit integer default 500)
+returns table(path text, reason text)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select s.path, min(s.reason)
+    from (
+      select r.path, 'unfinished_lease' as reason
+        from private.media_rewrite_claims r
+       where r.bucket = p_bucket and r.claimed_at <= now() - interval '10 minutes'
+      union all
+      select c.path, 'tombstoned_object'
+        from private.media_deletion_claims c
+        join storage.objects o on o.bucket_id = c.bucket and o.name = c.path
+       where c.bucket = p_bucket and c.state = 'done'
+    ) s
+   where private.photo_scrub_bucket(p_bucket)
+   group by s.path
+   order by s.path
+   limit least(greatest(coalesce(p_limit, 500), 1), 1000);
+$$;
+revoke all on function public.photo_rewrite_strays(text, integer) from public, anon, authenticated;
+grant execute on function public.photo_rewrite_strays(text, integer) to service_role;
 
 -- After the write (or instead of one). p_object is the identity the claim
 -- returned. Answers:
@@ -341,12 +385,53 @@ $$;
 revoke all on function public.claim_media_deletion(text, text) from public, anon, authenticated;
 grant execute on function public.claim_media_deletion(text, text) to service_role;
 
--- ---------- 5. The chat sweep skips a photo mid-rewrite ----------
--- Restated from 20261107220300 (its only definition) with one condition: a
+-- ---------- 5. Chat photo retention, in one place ----------
+-- The privacy page's 48 hours. The sweep (agent_chat_photos_expired, called
+-- by src/lib/agent/chat-photos.ts with no age of its own) and the storage
+-- reference report (20261108120020) both read it from here.
+create or replace function private.agent_chat_photo_retention()
+returns interval
+language sql
+immutable
+set search_path = pg_catalog, pg_temp
+as $$
+  select interval '48 hours';
+$$;
+revoke all on function private.agent_chat_photo_retention() from public, anon, authenticated;
+
+-- How often the sweep runs: every pass of drvn-agent-worker (*/5 * * * *,
+-- src/lib/job-inventory.ts; job-inventory.test.ts holds the two together).
+create or replace function private.agent_chat_sweep_interval()
+returns interval
+language sql
+immutable
+set search_path = pg_catalog, pg_temp
+as $$
+  select interval '5 minutes';
+$$;
+revoke all on function private.agent_chat_sweep_interval() from public, anon, authenticated;
+
+-- A chat photo dated p_at is one the sweep has deleted by now: at or past the
+-- retention, and a sweep pass has come since. Anything younger that is
+-- missing is a loss, not retention.
+create or replace function private.agent_chat_photo_swept(p_at timestamptz)
+returns boolean
+language sql
+stable
+set search_path = pg_catalog, pg_temp
+as $$
+  select p_at is not null
+     and p_at <= now() - private.agent_chat_photo_retention() - private.agent_chat_sweep_interval();
+$$;
+revoke all on function private.agent_chat_photo_swept(timestamptz) from public, anon, authenticated;
+
+-- ---------- 6. The chat sweep skips a photo mid-rewrite ----------
+-- Restated from 20261107220300 (its only definition) with two changes: its
+-- default age is private.agent_chat_photo_retention() (still 48 hours), and a
 -- photo under a live rewrite lease waits for the next sweep (every few
 -- minutes), so the sweep and the rewrite don't meet. Clearing a chat and
 -- account deletion delete at once and never wait; the write fence covers them.
-create or replace function public.agent_chat_photos_expired(p_older_than interval default interval '48 hours', p_limit integer default 500)
+create or replace function public.agent_chat_photos_expired(p_older_than interval default null, p_limit integer default 500)
 returns table (name text)
 language sql
 stable
@@ -356,7 +441,7 @@ as $$
   select o.name
     from storage.objects o
    where o.bucket_id = 'agent-chat-photos'
-     and o.created_at < now() - greatest(coalesce(p_older_than, interval '48 hours'), interval '1 hour')
+     and o.created_at < now() - greatest(coalesce(p_older_than, private.agent_chat_photo_retention()), interval '1 hour')
      and not exists (select 1 from private.media_rewrite_claims r
                       where r.bucket = 'agent-chat-photos' and r.path = o.name
                         and r.claimed_at > now() - interval '10 minutes')

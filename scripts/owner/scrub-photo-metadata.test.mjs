@@ -37,6 +37,8 @@ function project(objects) {
   const recorded = [];
   const calls = [];
   const busy = new Set();
+  // Paths the media cleanup deleted for good (a 'done' deletion claim).
+  const tombstones = new Set();
   let clock = 0;
   let tokens = 0;
   const live = (lease) => lease && clock - lease.claimedAt < 10 * 60 * 1000;
@@ -52,6 +54,12 @@ function project(objects) {
     recorded,
     calls,
     busy,
+    tombstones,
+    // The media cleanup deletes the object and leaves its tombstone.
+    cleanup: (key) => {
+      store.delete(key);
+      tombstones.add(key);
+    },
     bytesOf: (key) => store.get(key)?.bytes,
     rpc: async (name, args) => {
       calls.push(name);
@@ -59,8 +67,19 @@ function project(objects) {
       if (name === "photo_metadata_candidates") {
         const settled = new Set(recorded.filter((r) => r.p_outcome !== "failed").map((r) => r.p_path));
         const paths = [...store.keys()].filter((p) => p.startsWith(`${args.p_bucket}:`)).map((p) => p.slice(args.p_bucket.length + 1))
-          .filter((p) => !settled.has(p) && (!args.p_after || p > args.p_after)).sort().slice(0, args.p_limit);
+          .filter((p) => !settled.has(p) && (!args.p_after || p > args.p_after))
+          // Like the SQL: an object the cleanup holds or deleted is no candidate.
+          .filter((p) => !busy.has(`${args.p_bucket}:${p}`) && !tombstones.has(`${args.p_bucket}:${p}`))
+          .sort().slice(0, args.p_limit);
         return { data: paths.map((path) => ({ path })), error: null };
+      }
+      if (name === "photo_rewrite_strays") {
+        // Unfinished leases past their 10 minutes, and tombstoned paths that
+        // have an object again (20261108120010).
+        const strays = new Set();
+        for (const [k, lease] of leases) if (k.startsWith(`${args.p_bucket}:`) && !live(lease)) strays.add(k);
+        for (const k of tombstones) if (k.startsWith(`${args.p_bucket}:`) && store.has(k)) strays.add(k);
+        return { data: [...strays].sort().slice(0, args.p_limit).map((k) => ({ path: k.slice(args.p_bucket.length + 1) })), error: null };
       }
       if (name === "claim_photo_rewrite") {
         const lease = leases.get(key);
@@ -75,13 +94,18 @@ function project(objects) {
           leases.delete(key);
           return { data: { status: "gone" }, error: null };
         }
+        // An object at a tombstoned path exists only because a write recreated it.
+        if (tombstones.has(key)) {
+          leases.set(key, { token, objectId: lease?.objectId ?? object.id, claimedAt: clock });
+          return { data: { status: "recreated", token, object_id: lease?.objectId ?? object.id }, error: null };
+        }
         if (busy.has(key)) return { data: { status: "busy" }, error: null };
         leases.set(key, { token, objectId: object.id, claimedAt: clock });
         return { data: { status: "claimed", token, object_id: object.id }, error: null };
       }
       if (name === "check_photo_rewrite") {
         const object = store.get(key);
-        if (!object || busy.has(key)) return { data: "gone", error: null };
+        if (!object || busy.has(key) || tombstones.has(key)) return { data: "gone", error: null };
         const lease = leases.get(key);
         return { data: object.id === args.p_object && lease?.token === args.p_token && live(lease) ? "current" : "lost", error: null };
       }
@@ -158,7 +182,8 @@ test("a dry run downloads and counts, and claims, changes and records nothing", 
     "message-photos:s/r/3.png": await pngWithXmp(),
   });
   const summary = await run(deps, parseArgs([]));
-  assert.deepEqual(deps.calls.filter((name) => name !== "photo_metadata_candidates"), []);
+  // Only reads: the candidates, and the stray list it reports but doesn't touch.
+  assert.deepEqual(deps.calls.filter((name) => !["photo_metadata_candidates", "photo_rewrite_strays"].includes(name)), []);
   assert.equal(deps.updates.length, 0);
   assert.equal(deps.recorded.length, 0);
   const c = summary.totals["message-photos"];
@@ -255,9 +280,53 @@ test("a run that dies after recreating a photo leaves it for the next run to del
   assert.equal((await scrubObject(deps, "agent-chat-photos", "o/1.jpg", { apply: true })).busy, 1);
   deps.advance(11 * 60 * 1000);
   const next = await run(deps, parseArgs(["--apply", "--bucket", "agent-chat-photos"]));
-  assert.equal(next.totals["agent-chat-photos"].recreatedRemoved, 1);
+  // The stray pass, before the scan, finds the dead run's lease.
+  assert.equal(next.strays["agent-chat-photos"].recreatedRemoved, 1);
   assert.equal(deps.store.has("agent-chat-photos:o/1.jpg"), false);
-  assert.match(describe(next, { apply: true }), /1 recreated by a write after deletion and deleted again/);
+  assert.match(describe(next, { apply: true }), /agent-chat-photos strays: 1 deleted again/);
+});
+
+test("N627 fix-check 1: a write that lands after cleanup, then a crash: the tombstone doesn't hide it, the next run deletes it", async () => {
+  const deps = project({ "message-photos:s/r/1.jpg": await jpegWithGps() });
+  const write = deps.write;
+  const rpc = deps.rpc;
+  // The write is sent in time but lands late: by then the lease has lapsed
+  // and the media cleanup has deleted the photo and left its tombstone.
+  deps.write = async (bucket, path, bytes, contentType) => {
+    deps.advance(11 * 60 * 1000);
+    deps.cleanup(`${bucket}:${path}`);
+    await write(bucket, path, bytes, contentType);
+  };
+  // ...and the job dies before it can finish.
+  deps.rpc = async (name, args) => (name === "finish_photo_rewrite" ? { data: null, error: { message: "connection lost" } } : rpc(name, args));
+  assert.equal((await scrubObject(deps, "message-photos", "s/r/1.jpg", { apply: true })).failed, 1);
+  assert.equal(deps.store.has("message-photos:s/r/1.jpg"), true, "the late write recreated the deleted photo");
+
+  deps.rpc = rpc;
+  deps.write = write;
+  deps.advance(11 * 60 * 1000);
+  const next = await run(deps, parseArgs(["--apply", "--bucket", "message-photos"]));
+  assert.equal(deps.store.has("message-photos:s/r/1.jpg"), false, "the next run deleted the recreated photo");
+  assert.equal(next.strays["message-photos"].recreatedRemoved, 1);
+  assert.equal(deps.leases.size, 0);
+});
+
+test("N627 fix-check 1b: an object at a tombstoned path with no lease left is deleted too", async () => {
+  const deps = project({ "message-photos:s/r/1.jpg": await cleanWebp() });
+  deps.tombstones.add("message-photos:s/r/1.jpg");
+  const next = await run(deps, parseArgs(["--apply", "--bucket", "message-photos"]));
+  assert.equal(deps.store.has("message-photos:s/r/1.jpg"), false);
+  assert.equal(next.strays["message-photos"].recreatedRemoved, 1);
+  assert.match(describe(next, { apply: true }), /strays: 1 deleted again \(recreated after deletion\)/);
+});
+
+test("a dry run lists strays and touches none", async () => {
+  const deps = project({ "message-photos:s/r/1.jpg": await cleanWebp() });
+  deps.tombstones.add("message-photos:s/r/1.jpg");
+  const summary = await run(deps, parseArgs(["--bucket", "message-photos"]));
+  assert.equal(deps.store.has("message-photos:s/r/1.jpg"), true);
+  assert.equal(summary.strays["message-photos"].found, 1);
+  assert.match(describe(summary, { apply: false }), /strays: 1 found \(would be deleted, or re-encoded if intact\)/);
 });
 
 test("a run that outlasts its lease uploads nothing and leaves the photo for the next run", async () => {

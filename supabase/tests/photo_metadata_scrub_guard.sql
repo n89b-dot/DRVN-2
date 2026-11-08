@@ -121,6 +121,7 @@ begin
   if exists (select 1 from public.photo_metadata_candidates('message-photos', null, 500) where path = photo_b) then
     raise exception 'FAIL 18: a photo being deleted is a candidate';
   end if;
+  delete from storage.objects where bucket_id = 'message-photos' and name = photo_b;   -- the cleanup's delete
   perform public.complete_media_deletion('message-photos', photo_b, (answer->>'token')::uuid);
   if public.claim_photo_rewrite('message-photos', photo_b)->>'status' <> 'gone' then
     raise exception 'FAIL 19: a deleted photo was claimed for a rewrite';
@@ -182,6 +183,41 @@ begin
     raise exception 'FAIL 20i: the recreated photo''s lease was not closed';
   end if;
 
+  -- N627 fix-check 1: a tombstone must not hide a live object. A write that
+  -- landed after the cleanup deleted the photo, then a crash: the stale lease
+  -- and the tombstoned path with a row are both listed as strays, and the
+  -- next claim says 'recreated' so the job deletes it again.
+  photo_b := sender || '/' || recipient || '/late-write.jpg';
+  insert into storage.objects(bucket_id, name, owner, created_at) values ('message-photos', photo_b, sender, now() - interval '60 days');
+  answer := public.claim_photo_rewrite('message-photos', photo_b);
+  update private.media_rewrite_claims set claimed_at = now() - interval '11 minutes' where bucket = 'message-photos' and path = photo_b;
+  answer := public.claim_media_deletion('message-photos', photo_b);
+  if answer->>'status' <> 'claimed' then raise exception 'FAIL 20j: cleanup could not claim after the lease lapsed: %', answer; end if;
+  delete from storage.objects where bucket_id = 'message-photos' and name = photo_b;
+  perform public.complete_media_deletion('message-photos', photo_b, (answer->>'token')::uuid);
+  insert into storage.objects(bucket_id, name, owner) values ('message-photos', photo_b, sender);   -- the late write
+  if exists (select 1 from public.photo_metadata_candidates('message-photos', null, 500) where path = photo_b) then
+    raise exception 'FAIL 20k: a tombstoned path became an ordinary candidate';
+  end if;
+  if not exists (select 1 from public.photo_rewrite_strays('message-photos') where path = photo_b) then
+    raise exception 'FAIL 20l: the recreated photo at a tombstoned path is not listed as a stray';
+  end if;
+  answer := public.claim_photo_rewrite('message-photos', photo_b);
+  if answer->>'status' <> 'recreated' then raise exception 'FAIL 20m: the next claim did not say recreated: %', answer; end if;
+  delete from storage.objects where bucket_id = 'message-photos' and name = photo_b;
+  if public.finish_photo_rewrite('message-photos', photo_b, (answer->>'token')::uuid, (answer->>'object_id')::uuid, 'failed') <> 'gone' then
+    raise exception 'FAIL 20n: the stray''s lease was not closed';
+  end if;
+  if exists (select 1 from public.photo_rewrite_strays('message-photos') where path = photo_b) then
+    raise exception 'FAIL 20o: a deleted stray is still listed';
+  end if;
+  -- The same with no lease left at all: an object at a tombstoned path.
+  insert into storage.objects(bucket_id, name, owner) values ('message-photos', photo_b, sender);
+  if not exists (select 1 from public.photo_rewrite_strays('message-photos') where path = photo_b)
+     or public.claim_photo_rewrite('message-photos', photo_b)->>'status' <> 'recreated' then
+    raise exception 'FAIL 20p: an object at a tombstoned path with no lease is not deleted again';
+  end if;
+
   -- 11. A lease that ran out (a job that died) no longer holds off cleanup.
   token := (public.claim_photo_rewrite('message-photos', photo_a)->>'token')::uuid;
   update private.media_rewrite_claims set claimed_at = now() - interval '11 minutes' where bucket = 'message-photos' and path = photo_a;
@@ -193,6 +229,7 @@ begin
   if has_function_privilege('authenticated', 'public.claim_photo_rewrite(text,text)', 'execute')
      or has_function_privilege('authenticated', 'public.finish_photo_rewrite(text,text,uuid,uuid,text,text)', 'execute')
      or has_function_privilege('authenticated', 'public.check_photo_rewrite(text,text,uuid,uuid)', 'execute')
+     or has_function_privilege('authenticated', 'public.photo_rewrite_strays(text,integer)', 'execute')
      or has_function_privilege('authenticated', 'public.photo_metadata_candidates(text,text,integer,timestamp with time zone)', 'execute')
      or has_function_privilege('anon', 'public.photo_metadata_scrub_summary()', 'execute') then
     raise exception 'FAIL 22: a member credential can drive the metadata job';

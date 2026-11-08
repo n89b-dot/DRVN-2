@@ -8382,6 +8382,13 @@ export type Database = {
           outcome: string
         }[]
       }
+      photo_rewrite_strays: {
+        Args: { p_bucket: string; p_limit?: number }
+        Returns: {
+          path: string
+          reason: string
+        }[]
+      }
       pickup_mint_pass: {
         Args: {
           p_buyer_id: string
@@ -9031,6 +9038,7 @@ export type Database = {
         Args: { p_after?: string; p_bucket: string; p_limit?: number }
         Returns: {
           created_at: string
+          expected_reason: string
           path: string
         }[]
       }
