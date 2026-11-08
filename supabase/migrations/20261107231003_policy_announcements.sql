@@ -9,8 +9,10 @@
 --  * public.policy_announcements — one row per announced change, keyed, so
 --    announcing the same change twice reaches nobody twice.
 --  * public.announce_policy_update(key, title, body, href) — service role
---    only. Records the change and notifies every member with a profile
---    (kind 'policy_updated', never muted). Returns how many were told.
+--    only. Records the change and notifies every member: every profile with
+--    a handle (a deleted account loses its handle, and an unfinished one has
+--    none yet), kind 'policy_updated', never muted. Returns how many were
+--    told.
 --
 -- Then the change this release makes is announced: the 7 November 2026
 -- Terms and Privacy update (18+ confirmation, copyright notices).
@@ -53,8 +55,7 @@ begin
   insert into public.notifications (user_id, kind, section, title, body, href, actor_id)
   select p.id, 'policy_updated', 'marketplace', p_title, p_body, p_href, null
     from public.profiles p
-    join auth.users u on u.id = p.id
-   where u.deleted_at is null;
+   where p.username is not null;
   get diagnostics v_count = row_count;
 
   update public.policy_announcements set recipients = v_count where key = p_key;

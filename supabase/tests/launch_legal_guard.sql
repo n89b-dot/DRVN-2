@@ -223,7 +223,10 @@ begin
   -- 3. Policy announcements
   -- ------------------------------------------------------------------
   v_count := public.announce_policy_update('guard-test-change', 'Terms updated', 'What changed.', '/terms#changes');
-  if v_count < 4 then raise exception 'Every member should be told (told %)', v_count; end if;
+  if v_count < 3 then raise exception 'Every member should be told (told %)', v_count; end if;
+  if exists (select 1 from public.notifications where user_id = v_admin and kind = 'policy_updated' and title = 'Terms updated') then
+    raise exception 'An account with no handle (unfinished or deleted) was told';
+  end if;
   if public.announce_policy_update('guard-test-change', 'Terms updated', 'What changed.', '/terms#changes') <> 0 then
     raise exception 'A change was announced twice';
   end if;
