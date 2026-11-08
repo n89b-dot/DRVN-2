@@ -30,6 +30,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 8 — earlier members confirm they are 18 at their next sign-in: N686 (OS-W38)
+
+| File | Applied to |
+|---|---|
+| `20261108150000_age_confirmation_returning_members.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+
+Apply after `20261107231001`, before the app from this PR: the new `/confirm-age` action records `source = 'returning_member'`, which the old check refuses (the member would see "We couldn't save that"). The old app keeps working against the new database. Only `age_confirmations_source_check` changes (it gains `returning_member`); the table, policies and triggers are as `231001` left them. Ruling: `docs/decisions/age-confirmation-and-takedown.md` (the plan's default, kept). Guard: `age_confirmation_returning_guard.sql`.
+
 ## November 8 — staging caught up to main; shared dev history gaps
 
 **Staging, 2026-11-08.** The ten files staging lacked were applied with the runner, each with its PR's `--pr`. They were #133 `110200`, #141 `110300`, #148 `120000`–`120020`, #152 `130000`, #154 `130100`, #156 `130300`, #157 `130400` and #158 `130500`. Their cells here say so. Afterwards `--status` on staging showed 277 applied, none missing and none extra, at main 4c28663. A read-only comparison with shared dev matched on 128 tables, 145 policies, 21 cron jobs and 536 `public`/`private` functions, with identical `pg_get_functiondef` and policy fingerprints. The first two files merged without rows, so they get them here. Both were already on shared dev, which `--status` reported on 8 Nov.
