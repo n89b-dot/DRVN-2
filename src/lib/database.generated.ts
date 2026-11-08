@@ -7087,6 +7087,17 @@ export type Database = {
         }
         Returns: Json
       }
+      begin_payout_deadline_refund: {
+        Args: {
+          p_actor_role: string
+          p_dispute_outcome: string
+          p_order: string
+          p_payment_reference: string
+          p_reason: string
+          p_requested_by: string
+        }
+        Returns: Json
+      }
       begin_refund_operation: {
         Args: {
           p_actor_role: string

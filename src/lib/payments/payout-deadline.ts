@@ -15,10 +15,18 @@ import { reportError } from "@/lib/monitoring";
  * refunds each claimed order in full through the one refund path and puts
  * its part back as the seller's (paused) listing.
  *
- * Never twice: the refund carries the request key `payout_deadline:<order>`,
- * so a retry after a crash or a lost answer adopts the same refund operation
- * (begin_request_refund_operation) and a fully refunded order has nothing
- * left to refund. Settling is idempotent too.
+ * Never twice, and always in full (20261108110000): the refund is reserved
+ * by begin_payout_deadline_refund under the order lock. A retry after a
+ * crash or a lost answer adopts the deadline's own refund while it is in
+ * flight (request key `payout_deadline:<order>`); while any other refund of
+ * the order is in flight it waits, reserving nothing, so a partial refund
+ * that later fails can't leave its amount unrefunded; and a deadline refund
+ * that completed short is topped up to the total under the next free key.
+ * A fully refunded order has nothing left to refund. Settling is idempotent.
+ *
+ * Retries rotate: the claim function hands out only the claims that are due
+ * and pushes each back by a doubling backoff as it does, so a claim that
+ * keeps failing can't hold the batch.
  *
  * An order already dispatched by day 14 is not refunded: its payout keeps
  * waiting for Stripe. That case hasn't been ruled.
@@ -38,6 +46,8 @@ export type PayoutDeadlineSummary = {
 
 type Claimed = { order_id: string; status: string };
 
+/** The deadline refund's request key (begin_payout_deadline_refund builds it;
+ *  a top-up after a short refund takes `<key>:1`, `<key>:2` ...). */
 export const payoutDeadlineRequestKey = (orderId: string) => `payout_deadline:${orderId}`;
 
 async function settle(admin: Admin, orderId: string): Promise<boolean> {
@@ -76,17 +86,26 @@ export async function processPayoutDeadlines(
           orderId: order.order_id,
           reason: `Cancelled: the seller's payouts weren't set up within ${PAYOUT_SETUP_DEADLINE_DAYS} days of the sale`,
           initiator: { kind: "payout_deadline" },
-          requestKey: payoutDeadlineRequestKey(order.order_id),
+          payoutDeadline: true,
         });
         if (!outcome.ok) {
-          if (outcome.pending) {
+          if (outcome.pending || outcome.waiting) {
+            // Still being confirmed, or another refund of the order is still
+            // in flight: the claim comes round again after its backoff.
             summary.retrying += 1;
-          } else {
-            // refundOrder opened a recovery case for a provider failure
-            // (which alerts); this is the sweep's own trail.
-            summary.failed += 1;
-            reportError("[payout-deadline] refund failed", { orderId: order.order_id, error: outcome.error });
+            continue;
           }
+          // Refused before anything was reserved. If the order was refunded
+          // in full by another path meanwhile, there is nothing left to
+          // refund and the part can go back now.
+          if (outcome.refused && (await settle(admin, order.order_id))) {
+            summary.refunded += 1;
+            continue;
+          }
+          // refundOrder opened a recovery case for a provider failure
+          // (which alerts); this is the sweep's own trail.
+          summary.failed += 1;
+          reportError("[payout-deadline] refund failed", { orderId: order.order_id, error: outcome.error });
           continue;
         }
       }
