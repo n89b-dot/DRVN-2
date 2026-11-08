@@ -11,7 +11,8 @@
 --      "add to my car", a listing release, the API) took no lock, so it could
 --      commit after save_mod_items checked the revision and before its upsert,
 --      and the upsert overwrote it. Every write to mod_items now takes the
---      car's lock first and stamps updated_at, so it either lands before the
+--      car's lock first and moves updated_at strictly on (so the revision
+--      changes on every write), so it either lands before the
 --      save reads the revision (and the save is refused as stale) or waits
 --      until the save commits (and moves the revision on for everyone).
 --      Revoking member writes instead would break save_listing_creation and
@@ -43,9 +44,17 @@ begin;
 -- queue the same way. NO KEY UPDATE conflicts with the FOR UPDATE those
 -- functions take and with itself, but not with the key-share locks other
 -- tables' foreign keys take on a car, so it adds no contention beyond the
--- sheet. updated_at is stamped (with the clock, not the transaction start,
--- so two writes in one transaction differ too) so any change to a line moves
--- mod_sheet_revision on, even one that writes a value back unchanged.
+-- sheet.
+--
+-- mod_sheet_revision hashes each line's full contents, updated_at included,
+-- so every update must move updated_at, strictly: on from the clock and
+-- never back to an earlier or equal value, even for two writes in one
+-- transaction or two in the same microsecond. Otherwise a write that puts a
+-- value back unchanged would leave the revision unmoved. This trigger is now
+-- the only thing that sets mod_items.updated_at. 0007's
+-- mod_items_touch_updated_at ran after it and reset the value to now() (the
+-- transaction's start), so it is dropped below; touch_updated_at still
+-- serves the other tables.
 create or replace function private.mod_sheet_lock()
 returns trigger
 language plpgsql
@@ -64,7 +73,7 @@ begin
     perform 1 from public.cars c where c.id = new.car_id for no key update;
   end if;
   if tg_op = 'UPDATE' then
-    new.updated_at := clock_timestamp();
+    new.updated_at := greatest(clock_timestamp(), old.updated_at + interval '1 microsecond');
   end if;
   return new;
 end;
@@ -74,6 +83,7 @@ revoke all on function private.mod_sheet_lock() from public, anon, authenticated
 
 -- Named to fire before every other row trigger on the table (they fire in
 -- name order), so the guards after it read the sheet under the lock.
+drop trigger if exists mod_items_touch_updated_at on public.mod_items;
 drop trigger if exists aa_mod_sheet_lock on public.mod_items;
 create trigger aa_mod_sheet_lock
   before insert or update or delete on public.mod_items

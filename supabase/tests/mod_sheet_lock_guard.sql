@@ -79,12 +79,25 @@ begin
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims', json_build_object('sub', owner_id, 'role', 'authenticated')::text, true);
 
-  -- A direct write moves the revision on even when it writes a value back
-  -- unchanged, so nothing a second screen does can hide from the check.
+  -- Every direct write moves the revision on, even one that writes a value
+  -- back unchanged, and even several in one transaction (now() is constant
+  -- inside one), so nothing a second screen does can hide from the check.
+  if exists (select 1 from pg_trigger t
+              where t.tgrelid = 'public.mod_items'::regclass and not t.tgisinternal
+                and t.tgfoid = 'public.touch_updated_at()'::regprocedure) then
+    raise exception 'FAIL 5a: another trigger still resets mod_items.updated_at to the transaction start';
+  end if;
   r1 := public.mod_sheet_revision(car);
   update public.mod_items set product = product where id = line_b;
-  if public.mod_sheet_revision(car) = r1 then
+  r2 := public.mod_sheet_revision(car);
+  if r2 = r1 then
     raise exception 'FAIL 5: a direct write to a line left the sheet revision unchanged';
+  end if;
+  update public.mod_items set product = product where id = line_b;
+  r3 := public.mod_sheet_revision(car);
+  update public.mod_items set product = product where id = line_b;
+  if r3 = r2 or public.mod_sheet_revision(car) in (r1, r2, r3) then
+    raise exception 'FAIL 5b: a later write in the same transaction left the revision unchanged or brought back an earlier one';
   end if;
 
   -- ---------- 1: unlink is one locked, revision-checked call ----------
