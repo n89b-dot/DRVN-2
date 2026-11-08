@@ -58,47 +58,42 @@ const ORDER_COLUMNS =
   "id, status, buyer_id, seller_id, total_cents, is_collection, pickup_ready_at, created_at, shipped_at, delivered_at, completed_at, cancelled_at, refunded_at, updated_at, order_items(id, title, listing_id)";
 const OFFER_COLUMNS =
   "id, status, buyer_id, listing_id, amount_cents, counter_amount_cents, created_at, countered_at, responded_at, updated_at, expires_at, round_count, listings!inner(id, title, seller_id)";
-const ENQUIRY_COLUMNS = "listing_id, sender_id, recipient_id, created_at, listings!inner(id, title, seller_id, status, price_cents)";
 
 type DealRows = { orders: OrderDealRow[]; offers: OfferDealRow[]; enquiries: EnquiryDealRow[] };
 
-/** A message about a listing with no offer or order (R-directcontact). */
-export type EnquiryMessageRow = {
-  listing_id: string | null;
-  sender_id: string;
-  recipient_id: string;
-  created_at: string;
-  listings:
-    | { id: string; title: string; seller_id: string; status: string; price_cents: number }
-    | { id: string; title: string; seller_id: string; status: string; price_cents: number }[]
-    | null;
+/** One listing a pair has messaged about with no offer or order
+ *  (R-directcontact), from my_listing_enquiries. */
+export type EnquiryTopicRow = {
+  other_id: string;
+  listing_id: string;
+  last_at: string;
+  title: string;
+  seller_id: string;
+  status: string;
+  price_cents: number;
 };
 
 /**
- * The listings each of `others` and `me` have messaged about with no offer or
- * order yet, newest first, one per listing — the listing has to be one of
- * theirs. `rows` must be newest first.
+ * Each of `others`' enquiry topics with `me`: one per listing, newest first,
+ * and only a listing that is one of theirs.
  */
-export function enquiriesByPerson(rows: EnquiryMessageRow[], me: string, others: string[]): Map<string, EnquiryDealRow[]> {
+export function enquiriesByPerson(rows: EnquiryTopicRow[], me: string, others: string[]): Map<string, EnquiryDealRow[]> {
   const byPerson = new Map<string, EnquiryDealRow[]>(others.map((id) => [id, []]));
   const seen = new Set<string>();
-  for (const m of rows) {
-    const listing = Array.isArray(m.listings) ? m.listings[0] : m.listings;
-    if (!m.listing_id || !listing) continue;
-    const other = m.sender_id === me ? m.recipient_id : m.recipient_id === me ? m.sender_id : null;
-    const bucket = other ? byPerson.get(other) : undefined;
-    if (!other || !bucket) continue;
-    if (listing.seller_id !== me && listing.seller_id !== other) continue;
-    const key = `${other}:${m.listing_id}`;
+  for (const row of [...rows].sort((a, b) => b.last_at.localeCompare(a.last_at))) {
+    const bucket = byPerson.get(row.other_id);
+    if (!bucket) continue;
+    if (row.seller_id !== me && row.seller_id !== row.other_id) continue;
+    const key = `${row.other_id}:${row.listing_id}`;
     if (seen.has(key)) continue;
     seen.add(key);
     bucket.push({
-      listing_id: m.listing_id,
-      seller_id: listing.seller_id,
-      title: listing.title,
-      status: listing.status,
-      price_cents: listing.price_cents,
-      at: m.created_at,
+      listing_id: row.listing_id,
+      seller_id: row.seller_id,
+      title: row.title,
+      status: row.status,
+      price_cents: row.price_cents,
+      at: row.last_at,
     });
   }
   return byPerson;
@@ -141,17 +136,11 @@ export async function loadDealRows(
       .order("created_at", { ascending: false })
       .limit(200),
     // R-directcontact: a listing asked about with no offer or order yet is a
-    // deal too — in the inbox and its Buying/Selling filters, not only once
-    // the thread is open.
-    supabase
-      .from("messages")
-      .select(ENQUIRY_COLUMNS)
-      .is("order_id", null)
-      .is("offer_id", null)
-      .not("listing_id", "is", null)
-      .or(`and(sender_id.eq.${me},recipient_id.in.(${list})),and(recipient_id.eq.${me},sender_id.in.(${list}))`)
-      .order("created_at", { ascending: false })
-      .limit(500),
+    // deal too — in the inbox and its Buying/Selling filters, and in the
+    // thread's composer. One row per listing over the pair's whole history
+    // (20261107230000), so an old topic survives any number of newer
+    // messages.
+    supabase.rpc("my_listing_enquiries", { p_others: others }),
   ]);
   for (const res of [ordersRes, offersBuyingRes, offersSellingRes, enquiriesRes]) {
     if (res.error) reportError("[messages] deal lookup failed", res.error);
@@ -159,7 +148,7 @@ export async function loadDealRows(
 
   const orders = ordersRes.data ?? [];
   const offers = [...(offersBuyingRes.data ?? []), ...(offersSellingRes.data ?? [])];
-  const enquiries = enquiriesByPerson((enquiriesRes.data ?? []) as EnquiryMessageRow[], me, others);
+  const enquiries = enquiriesByPerson(enquiriesRes.data ?? [], me, others);
 
   let orderImages = new Map<string, string>();
   let listingImages = new Map<string, string>();

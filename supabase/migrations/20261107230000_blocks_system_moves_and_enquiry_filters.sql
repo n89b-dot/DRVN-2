@@ -32,12 +32,16 @@
 --   4. P2  Listing enquiries vanished from the Buying and Selling inbox
 --          filters, which looked only for an order or offer between the two.
 --          list_conversations now counts a listing enquiry in the pair's
---          conversation too.
+--          conversation too, and my_listing_enquiries gives the inbox and
+--          the thread every enquiry topic (distinct listings) over a pair's
+--          whole history — not the topics in the newest N messages, which
+--          dropped an older listing from the composer.
 --
 -- Restated from their latest definitions: private.refuse_blocked_contact and
 -- private.block_ends_follows (20261107220600), public.list_conversations
 -- (20260928140000). New: private.member_pair_lock_key, private.lock_member_pair,
--- private.refuse_member_events and the messages_00_member_events trigger. No
+-- private.refuse_member_events, the messages_00_member_events trigger and
+-- public.my_listing_enquiries. No
 -- money rule changes.
 
 begin;
@@ -313,5 +317,48 @@ $$;
 
 revoke all on function public.list_conversations(text, text, int, int) from public, anon;
 grant execute on function public.list_conversations(text, text, int, int) to authenticated;
+
+-- The listings the caller and each of p_others have messaged about with no
+-- offer or order: one row per pair and listing, over the pair's whole
+-- history, so an old enquiry stays a topic the composer can reply about
+-- however many newer messages there are. Bounded by distinct listings, not
+-- messages. Invoker: RLS limits it to the caller's own messages, and the
+-- listing has to be one of the two people's.
+create or replace function public.my_listing_enquiries(p_others uuid[])
+returns table (
+  other_id uuid,
+  listing_id uuid,
+  last_at timestamptz,
+  title text,
+  seller_id uuid,
+  status text,
+  price_cents integer
+)
+language sql
+stable
+security invoker
+set search_path = public, pg_temp
+as $$
+  with pairs as (
+    select case when m.sender_id = (select auth.uid()) then m.recipient_id else m.sender_id end as other_id,
+           m.listing_id, max(m.created_at) as last_at
+      from public.messages m
+     where (select auth.uid()) is not null
+       and cardinality(p_others) <= 100
+       and m.order_id is null and m.offer_id is null and m.listing_id is not null
+       and ((m.sender_id = (select auth.uid()) and m.recipient_id = any (p_others))
+         or (m.recipient_id = (select auth.uid()) and m.sender_id = any (p_others)))
+     group by 1, 2
+  )
+  select p.other_id, p.listing_id, p.last_at, l.title, l.seller_id, l.status::text, l.price_cents
+    from pairs p
+    join public.listings l on l.id = p.listing_id
+   where l.seller_id in ((select auth.uid()), p.other_id)
+   order by p.last_at desc, p.listing_id
+   limit 1000;
+$$;
+
+revoke all on function public.my_listing_enquiries(uuid[]) from public, anon;
+grant execute on function public.my_listing_enquiries(uuid[]) to authenticated;
 
 commit;

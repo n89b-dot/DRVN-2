@@ -3,7 +3,7 @@
 -- block while new terms don't, a member can't forge a lifecycle event past
 -- the block or the first-contact limit, blocks and follows serialise on one
 -- pair lock, and listing enquiries count in the Buying and Selling inbox
--- filters.
+-- filters and stay topics however many newer messages there are.
 begin;
 
 do $$
@@ -22,6 +22,7 @@ declare
   stale_part uuid := gen_random_uuid();
   stranger_part uuid := gen_random_uuid();
   shop_part uuid := gen_random_uuid();
+  shop_part_b uuid := gen_random_uuid();
   sold_offer uuid := gen_random_uuid();
   stale_offer uuid := gen_random_uuid();
   checkout jsonb;
@@ -42,7 +43,8 @@ begin
     (sold_part, seller, 'W32F coilovers', 'brakes-suspension', 50000, 1500, 'active', 'USD'),
     (stale_part, seller, 'W32F intake', 'performance', 5000, 0, 'active', 'USD'),
     (stranger_part, stranger, 'W32F stranger part', 'performance', 5000, 0, 'active', 'USD'),
-    (shop_part, shop, 'W32F shop part', 'performance', 5000, 0, 'active', 'USD');
+    (shop_part, shop, 'W32F shop part', 'performance', 5000, 0, 'active', 'USD'),
+    (shop_part_b, shop, 'W32F shop part B', 'performance', 5000, 0, 'active', 'USD');
 
   -- pest's offers go in before the block; one has already lapsed.
   insert into public.offers(id, listing_id, buyer_id, amount_cents, status) values (sold_offer, sold_part, pest, 40000, 'open');
@@ -243,6 +245,31 @@ begin
   end if;
   if exists (select 1 from public.list_conversations('buying') x where x.id = conv) then
     raise exception 'FAIL 18: the seller''s enquiry is listed under Buying';
+  end if;
+  perform set_config('role', 'none', true);
+
+  -- Every topic, however many newer messages: 501 about part B after the
+  -- one about part A, and both are still topics, for both of them.
+  perform set_config('request.jwt.claims', '', true);
+  insert into public.messages(listing_id, sender_id, recipient_id, body, created_at)
+    select shop_part_b, case when g % 2 = 0 then asker else shop end, case when g % 2 = 0 then shop else asker end,
+           'more ' || g, now() + make_interval(secs => g)
+      from generate_series(1, 501) g;
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', asker, 'role', 'authenticated')::text, true);
+  if (select count(*) from public.my_listing_enquiries(array[shop]) e where e.listing_id in (shop_part, shop_part_b)) <> 2 then
+    raise exception 'FAIL 19: an older enquiry topic dropped out behind 501 newer messages';
+  end if;
+  if (select e.listing_id from public.my_listing_enquiries(array[shop]) e limit 1) is distinct from shop_part_b then
+    raise exception 'FAIL 20: enquiry topics aren''t newest first';
+  end if;
+  perform set_config('request.jwt.claims', json_build_object('sub', shop, 'role', 'authenticated')::text, true);
+  if not exists (select 1 from public.my_listing_enquiries(array[asker]) e where e.listing_id = shop_part and e.other_id = asker) then
+    raise exception 'FAIL 21: the seller lost the older enquiry topic';
+  end if;
+  perform set_config('request.jwt.claims', json_build_object('sub', stranger, 'role', 'authenticated')::text, true);
+  if exists (select 1 from public.my_listing_enquiries(array[asker, shop])) then
+    raise exception 'FAIL 22: someone outside the pair sees its enquiry topics';
   end if;
   perform set_config('role', 'none', true);
 
