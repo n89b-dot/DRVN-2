@@ -9,7 +9,7 @@ Status words: **merged** (on `main`, CI green) · **open** (PR up, merged by han
 | Item | Ids | PR | Merge commit | Status |
 |---|---|---|---|---|
 | Staging and shared dev catch-up | R-staging-behind | #167 | `72ec871` | merged: `20261107220500`–`220520` (#149) applied to both, `20261108140000` (#166) to staging |
-| A1 approval guard | OS-W36 N677 (N676) | #168 | `1b8080c` | merged. Cause: card redaction mangled ~0.3% of random UUIDs (fixed by #158), not ordering. FAIL 0 now sweeps 5,000 ids; sql-guard passed 3 times on the PR |
+| A1 approval guard | OS-W36 N677 (N676) | #168, #180 | `1b8080c` | merged (#180 open: Codex's FAIL 7 null-safety fix). Cause: card redaction mangled ~0.3% of random UUIDs (fixed by #158), not ordering. FAIL 0 now sweeps 5,000 ids; sql-guard passed 3 times on the PR |
 | A2 strict status checks | (owner) | — | — | done by the orchestrator at Neil's go-ahead: `protect-main` ruleset id `26808907`, strict on; `docs/owner/branch-protection.md` records it |
 | A3 Codex queue file | #95 | #171 | `2f68c91` | merged: 106 rows, 26 code PRs owe a review; reviews run rationed after the merges |
 | A4 inventory families | OS-W36 N680 | #168 | `1b8080c` | merged |
@@ -24,7 +24,7 @@ Status words: **merged** (on `main`, CI green) · **open** (PR up, merged by han
 | C1 deletion proof on staging | B7 N418 N439 N442 | — | — | owner: waits for D3 |
 | C2 transfer recovery | N499 | #176 | | open: already fixed by #91; adds N499 tests, corrects the crosswalk |
 | C3 deploy gating | N528 | #175 | | open, with D2 |
-| C4 private-car and draft photos | OS-W38 N455 | #178 (#177 closed) | | open; migration applied after merge (order below) |
+| C4 private-car and draft photos | OS-W38 N455 | #178 (#177 closed, branch deleted) | | open; migration applied after merge (order below); the account export links photos for seven days |
 | C5 18+ backfill prompt | OS-W38 N686 | #174 | | open; `20261108150000` applied to shared dev and staging |
 | C6 Supabase Auth settings | N451 N441 N662 | — | — | owner (rows ready in `docs/release-evidence/infrastructure.md`, #175) |
 | C7 stub-override boot assertion | OS-W38 N540 | #173 | | open |
@@ -52,6 +52,12 @@ Status words: **merged** (on `main`, CI green) · **open** (PR up, merged by han
 ### Early merges while `main` had no protection
 
 On 8 November, from about 18:45 to 18:54 UTC, `main` had no ruleset, so `gh pr merge --auto` merged at once: #167, #98, #100, #101, #103 (verify, sql-guard and secrets had passed; e2e had not finished) and #169 (nothing had finished). All were docs or tests, green locally. The main run that proves them is **42512274085** on `d2c09f8`, which finished green on every job. Since then every merge is by hand, after every check is green on a branch level with `main`.
+
+### A stray branch can turn every history scan red
+
+CI's `secrets-full` lane scans every reachable ref (`git log --all`), not just `main` and the PR. On 8 November, #177's first commit carried a JWT-shaped test fixture that gitleaks' generic-api-key rule flags. #177 was closed and replaced by #178 (one clean commit), but its branch `fix/os-w38-private-photos` stayed on the remote. That turned `secrets-full` red on every PR and on `main` at `1b8080c` until the branch was deleted. **Rule:** when a closed PR's history holds a false positive, delete its branch. Main's failed jobs were rerun rather than fixed forward.
+
+**Follow-up (not built yet, its own small PR after the current queue):** scope the history lane to commits reachable from `main` plus the PR head instead of `--all`, or add a `.gitleaks.toml` allowlist for `token=` fixtures in `src/**/*.test.ts`.
 
 ## Defaults applied
 
