@@ -55,6 +55,7 @@ declare
     'listing_question_parent_matches(uuid,uuid)',      -- boolean: a reply's parent is on a listing the caller can see
     'listing_enquiry_reply_allowed(uuid,uuid)',        -- boolean, true only for the listing's own seller answering a buyer who asked about it (R-directcontact, 20261107220600)
     'my_car_vin(uuid)',                                -- the caller's own car's VIN (20261004160000)
+    'my_deal_listing_ids()',                           -- ids of the listings the caller offered on or ordered, for the archived-listing read policies; the caller's own (OS-W33, 20261108110100)
     'my_default_offer_floor()',                        -- the caller's own default minimum
     'my_dispute_evidence_upload_count(uuid)',          -- count of the caller's own files in one order's evidence folder (N247, 20261107220000)
     'my_listing_offer_floor(uuid)',                    -- the caller's own listing's minimum (20261017120000)
@@ -64,7 +65,7 @@ declare
     'order_buyer_reviewable(uuid)',                    -- boolean, only for the order's buyer or seller
     'price_comparables(text,text,text,uuid)',          -- aggregates of completed sales and live listings of one product, only from 3 up; no rows or ids (20261020140000)
     'reconcile_admin_external_operation(uuid,bigint,text,text)', -- refuses anyone but an admin with step-up
-    'withdraw_listing(uuid)',                          -- the caller's own listing only, listing-first lock; ends its live offers and archives it (N77, 20261107220700)
+    'withdraw_listing(uuid)',                          -- the caller's own listing only, listing-first lock; ends its live offers and archives it; refuses a removed listing (N77, 20261107220700, 20261108110100)
     'record_listing_view(uuid,text)',                  -- counts the caller's own view (bump_listing_view's rules) and its arrival surface; no viewer ids stored (OS-R-arrival, 20261107220200)
     'record_listing_edit(uuid,text,uuid,timestamp with time zone,jsonb)', -- the caller's own edit request
     'replay_listing_edit(uuid,text,uuid,timestamp with time zone)',      -- same request, replayed for its owner

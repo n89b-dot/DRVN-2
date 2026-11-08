@@ -238,7 +238,7 @@ export default async function OfferThreadPage({
       }
     : null;
   const history: HistoryEntry[] = rounds?.length
-    ? offerHistoryFromRounds(rounds as OfferRound[], { incoming, mandate })
+    ? offerHistoryFromRounds(rounds as OfferRound[], { incoming, mandate, endedReason: offer.ended_reason })
     : derived;
 
   const live = offer.status === "open" || offer.status === "countered";

@@ -48,6 +48,8 @@ export type OfferDealRow = {
   expires_at: string | null;
   /** Moves so far (negotiation v2); every move names the round it was made at. */
   round_count?: number;
+  /** Why DRVN ended it rather than a party: 'listing_withdrawn' (N77). */
+  ended_reason?: string | null;
   title: string;
   image?: string | null;
 };
@@ -401,7 +403,12 @@ export function dealEvents(
       events.push({ key: `${dealKey}:declined`, at: f.responded_at, dealKey, actor: null, text: `Offer on the ${part} declined`, live: false });
     }
     if (status === "withdrawn") {
-      events.push({ key: `${dealKey}:withdrawn`, at: f.updated_at, dealKey, actor: buyer, text: "withdrew the offer", live: false });
+      // N77: the seller withdrawing the listing ended it, not the buyer.
+      events.push(
+        f.ended_reason === "listing_withdrawn"
+          ? { key: `${dealKey}:withdrawn`, at: f.updated_at, dealKey, actor: seller, text: "withdrew the listing, so the offer ended", live: false }
+          : { key: `${dealKey}:withdrawn`, at: f.updated_at, dealKey, actor: buyer, text: "withdrew the offer", live: false },
+      );
     }
     if (status === "expired") {
       const at = f.responded_at ?? f.expires_at ?? f.updated_at;

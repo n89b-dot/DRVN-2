@@ -135,6 +135,17 @@ describe("dealEvents", () => {
     ]);
   });
 
+  // OS-W33 follow-up: a listing withdrawal ends the offer on the seller's
+  // move, not the buyer's (withdraw_listing, 20261107220700).
+  it("says the seller withdrew the listing, not that the buyer withdrew the offer", () => {
+    const ended = offer({ status: "withdrawn", ended_reason: "listing_withdrawn", updated_at: "2026-09-27T12:00:00Z" });
+    const asSeller = dealEvents([], [ended], ME, "Tommy", NOW).map((e) => `${e.actor ?? ""} ${e.text}`.trim());
+    const asBuyer = dealEvents([], [ended], THEM, "Kaito", NOW).map((e) => `${e.actor ?? ""} ${e.text}`.trim());
+    expect(asSeller.at(-1)).toBe("You withdrew the listing, so the offer ended");
+    expect(asBuyer.at(-1)).toBe("Kaito withdrew the listing, so the offer ended");
+    expect(dealEvents([], [offer({ status: "withdrawn" })], ME, "Tommy", NOW).at(-1)?.text).toBe("withdrew the offer");
+  });
+
   it("marks a counter waiting on the reader as live", () => {
     const events = dealEvents([], [offer({ status: "countered", buyer_id: ME, seller_id: THEM, counter_amount_cents: 130000, countered_at: "2026-09-27T12:00:00Z" })], ME, "Tommy", NOW);
     expect(events.find((e) => e.key.endsWith(":countered"))?.live).toBe(true);
