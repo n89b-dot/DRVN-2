@@ -8,10 +8,8 @@ guest order-access link (`deliverOrderAccessLink` in
 handful of messages an hour and is not meant for real recipients, so staging
 and production need **custom SMTP**.
 
-Beta invitations are not emailed by the app. Admin → Invitations shows a
-`/signup?invite=…` link, and the admin sends it by hand
-(`src/app/(admin)/admin/invitations/actions.ts`). Supabase's "Invite user"
-email is never used.
+There are no beta invitations: #126 removed the invite-only beta, so sign-up
+is open. Supabase's "Invite user" email is never used.
 
 Steps marked **[OWNER]** need the owner's accounts, payment or DNS access.
 **[ENGINEER]** steps can be done by an engineer with shared credentials.
@@ -53,7 +51,7 @@ and are not quotes.
 | DNS it asks for | DKIM TXT (`<selector>pm._domainkey`), Return-Path CNAME (e.g. `pm-bounces` → `pm.mtasv.net`) | DKIM TXT (`resend._domainkey`), MX + SPF TXT on a `send` subdomain | 3 DKIM CNAMEs (`<token>._domainkey` → `<token>.dkim.amazonses.com`), optional custom MAIL FROM subdomain (MX + SPF TXT) |
 | Bounce handling | Built in; suppresses hard bounces | Built in | You must watch bounce (<5%) and complaint (<0.1%) rates or AWS pauses sending |
 
-**Suggestion, not a decision:** Postmark or Resend. Volume in an invited beta
+**Suggestion, not a decision:** Postmark or Resend. Volume at a small launch
 is tiny, the emails are all sign-in critical, and both need less setup than
 SES. SES is cheapest at volume but needs more care. Whichever you choose,
 the privacy policy has to name it (`docs/legal-review-checklist.md`, "Name the
@@ -164,7 +162,7 @@ subject, that the link's host is the site origin, and that it works once.
 
 - [ ] **[OWNER]** Domain shows verified at the provider; DKIM, return-path and
       DMARC records resolve (`dig TXT _dmarc.<domain>`, `dig TXT <selector>._domainkey.<domain>`).
-- [ ] **[OWNER]** Signup confirm: sign up with an invitation link. Email
+- [ ] **[OWNER]** Signup confirm: sign up at `/signup`. Email
       arrives within a minute. Open it in the **same** browser → "Confirm
       and continue" → signed in (onboarding for a new account). Then repeat
       with a second address and open the link on your phone → the same:
@@ -195,5 +193,5 @@ subject, that the link's host is the site origin, and that it works once.
 - [ ] **[OWNER]** Headers: in Gmail, "Show original" on one email → SPF,
       DKIM and DMARC all `PASS`.
 - [ ] **[ENGINEER]** Save screenshots and the "Show original" headers as
-      evidence for the `invitation-boundaries` and `privacy` gates
+      evidence for the `privacy` gate
       (`docs/staging-setup.md` §13).
