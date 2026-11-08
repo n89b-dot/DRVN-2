@@ -404,12 +404,36 @@ export const USAGE = `usage:
   node scripts/apply-migration.mjs --target <name> --apply --confirm <code> <migration.sql>...
   node scripts/apply-migration.mjs --target <name> --record-only <migration.sql>...         dry run of recording
   node scripts/apply-migration.mjs --target <name> --record-only --apply --confirm <code> <migration.sql>...
+  node scripts/apply-migration.mjs --target <name> --status                                 read-only: what is applied, as JSON
 
   --target <name>     a project in supabase/migration-targets.json; must be the one the env file points at
   --env-file <path>   read SUPABASE_DB_PASSWORD and NEXT_PUBLIC_SUPABASE_URL from here (default .env.local)
   --apply             apply for real; needs --confirm with the code the dry run printed for these files
   --record-only       don't run the files: record the history row of each one whose every object is
-                      verified on the target (functions by signature and body); list the rest with reasons`;
+                      verified on the target (functions by signature and body); list the rest with reasons
+  --status            read-only: print {target, applied, onDisk, missing, extra, newest, count} as JSON`;
+
+/**
+ * What a target has applied against what is in supabase/migrations/, for the
+ * Intelligence OS and for people (docs/ids.md). Versions only: "missing" is
+ * on disk but not applied, "extra" is applied but not on disk, "newest" is
+ * the newest applied version and "count" the number applied.
+ */
+export function migrationStatus(targetName, recorded, fileNames) {
+  const onDisk = [...new Set(fileNames.map((name) => name.match(FILE_NAME)?.[1]).filter(Boolean))].sort();
+  const applied = [...new Set([...recorded].map(String))].sort();
+  const appliedSet = new Set(applied);
+  const diskSet = new Set(onDisk);
+  return {
+    target: targetName,
+    applied,
+    onDisk,
+    missing: onDisk.filter((v) => !appliedSet.has(v)),
+    extra: applied.filter((v) => !diskSet.has(v)),
+    newest: applied.at(-1) ?? null,
+    count: applied.length,
+  };
+}
 
 /**
  * The whole command. `deps` exists for tests: `createClient(config)` returns
@@ -433,6 +457,7 @@ export async function run(argv, deps = {}) {
         confirm: { type: "string" },
         "record-only": { type: "boolean", default: false },
         "env-file": { type: "string", default: ".env.local" },
+        status: { type: "boolean", default: false },
         help: { type: "boolean", default: false },
       },
     });
@@ -445,7 +470,11 @@ export async function run(argv, deps = {}) {
     log(USAGE);
     return 0;
   }
-  if (!positionals.length) {
+  if (values.status && (positionals.length || values.apply || values.confirm || values["dry-run"] || values["record-only"])) {
+    fail("--status takes only --target and --env-file: it reads the whole history and changes nothing");
+    return 1;
+  }
+  if (!positionals.length && !values.status) {
     fail(USAGE);
     return 1;
   }
@@ -500,6 +529,12 @@ export async function run(argv, deps = {}) {
   try {
     await client.connect();
     const state = await inspectTarget(client);
+    if (values.status) {
+      // stdout is the JSON alone, so it can be piped; inspectTarget read it in a read-only transaction.
+      const listDir = deps.listMigrations ?? ((dir) => readdirSync(dir));
+      log(JSON.stringify(migrationStatus(target.name, state.recorded, listDir(migrationsDir)), null, 2));
+      return 0;
+    }
     log(`target: ${target.name} (${target.ref}${target.note ? `, ${target.note}` : ""}) at ${target.host}`);
     log(
       `connected as ${state.role} to ${state.database}, Postgres ${state.serverVersion}, TLS ${state.ssl ? "on" : "OFF"}, ` +
