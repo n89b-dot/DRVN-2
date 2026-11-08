@@ -37,6 +37,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
+          # On a pull request HEAD is the merge commit; depth 2 brings its
+          # base parent (HEAD^1), which tests/ci/test-ids.test.ts diffs against.
+          fetch-depth: 2
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -59,14 +62,15 @@ jobs:
       - name: Lint
         run: npm run lint -- --max-warnings 0
 
-      # tests/ci/pr-resolves.test.ts reads the PR's title and description
-      # (docs/ids.md). Passed through env, never interpolated into the script.
-      # Empty on a push, where that check skips.
+      # tests/ci/pr-resolves.test.ts and tests/ci/test-ids.test.ts read the
+      # PR's title and description (docs/ids.md). Passed through env, never
+      # interpolated into the script. Empty on a push, where those checks skip.
       - name: Tests
         run: npm test
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
+          PR_DIFF_BASE: HEAD^1
 
       - name: Independent monitor contract
         run: npm run test:monitor
