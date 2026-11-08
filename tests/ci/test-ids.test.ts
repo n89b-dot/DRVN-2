@@ -27,7 +27,7 @@ const GUARD_FILE = /^supabase\/tests\/[^/]+_guard\.sql$/;
  */
 export function testTitles(source: string): string[] {
   const titles: string[] = [];
-  const call = /(?:\b(?:describe|it|test)(?:\.\w+)*\s*\(|\)\s*\()\s*(["'`])((?:\\.|(?!\1)[^\\])*)\1/gs;
+  const call = /(?:\b(?:describe|it|test)(?:\.\w+)*\s*\(|\)\s*\()\s*(["'`])((?:\\[\s\S]|(?!\1)[^\\])*)\1/g;
   for (const m of source.matchAll(call)) titles.push(m[2]);
   return titles;
 }
