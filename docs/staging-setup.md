@@ -112,13 +112,13 @@ every table in `public`.
      are created by the migrations** — create nothing by hand.
    - The CI `sql-guard` job is green for this exact commit (guards are never
      run against a hosted project).
-5. **After step 12** (the first admin has to sign up while the gate is still
-   off), turn on the invited-beta gate — the release-candidate config
-   requires `betaRequired: true` and the migration leaves it off:
-   ```sql
-   update public.beta_access_config set enforced = true, updated_at = now() where singleton;
-   ```
-   Admin → Invitations then shows "Beta gate enforced".
+5. **No beta gate.** The invite-only beta was removed by #126
+   (`20261107220800_open_beta_and_guest_holds.sql` dropped
+   `public.beta_access_config`), so there is nothing to turn on. Sign-up is
+   open and guest checkout is open with its holds capped: 2 live guest holds
+   per device and per network, and 1 per listing. The release-candidate
+   config declares this as `"guestCheckout": "capped"` (§13), and the
+   `guest-hold-caps` gate proves it on staging.
 
 ## 3. Supabase Auth [OWNER clicks, ENGINEER can drive]
 
@@ -307,8 +307,7 @@ on a separate host (`docs/remediation-release-and-monitoring.md`).
 
 ## 12. First admin [ENGINEER]
 
-While the beta gate is still off (step 2.5 comes after this), sign up on
-staging with the operator's email and confirm it, then:
+Sign up on staging with the operator's email and confirm it, then:
 
 ```sql
 insert into public.admin_users (user_id, note)
@@ -318,8 +317,9 @@ values ('<auth.users id>', 'staging operator') on conflict do nothing;
 Enrol TOTP at `/admin-verify`, then confirm that factor as the operator
 (`docs/production-runbook.md` §5, steps 3–4: check the reference shown on
 the page against `auth.mfa_factors`, then `select public.confirm_admin_mfa(…)`).
-Until then the membership is pending and the console stays closed. Now do step 2.5 (turn the gate on), then
-create invitations for testers from Admin → Invitations.
+Until then the membership is pending and the console stays closed. Testers
+sign up themselves; there are no invitations (the invite-only beta was removed
+by #126).
 
 ## 13. Release-candidate evidence — the 15 gates [ENGINEER, OWNER reviews]
 
@@ -333,7 +333,7 @@ create invitations for testers from Admin → Invitations.
      "shippingMode": "easypost-test",
      "analyticsEnabled": false,
      "searchEnabled": false,
-     "betaRequired": true,
+     "guestCheckout": "capped",
      "operator": "<responsible person>"
    }
    ```
@@ -358,7 +358,7 @@ create invitations for testers from Admin → Invitations.
    | `browser-first-attempt` | Playwright run with zero retries; report must carry `counts.expected > 0`, `counts.flaky = 0`, `counts.unexpected = 0` |
    | `stripe-api` | CI `stripe-integration` job against the test key |
    | `hosted-provider` | a purchase, refund, dispute and payout on staging in Stripe test mode, plus a test label and tracker if EasyPost is on |
-   | `invitation-boundaries` | uninvited signup/buy/sell refused, invited accepted, on staging |
+   | `guest-hold-caps` | on staging, as a guest: a third live hold from one device refused, a third from one network refused, a second live guest hold on one listing refused, and a hold released when its checkout ends (`20261107220800`; CI's `open_beta_guest_holds_guard.sql` passing for the commit) |
    | `privacy` | an export downloaded and checked, a deletion completed, private buckets refusing anonymous reads |
    | `accessibility` | the axe/e2e accessibility run against staging |
    | `operations` | worker health green, a monitor failure + recovery delivered (step 10), an alert delivered (step 9) |

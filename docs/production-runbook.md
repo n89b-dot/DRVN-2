@@ -480,7 +480,7 @@ Hosted acceptance still requires:
    provider callbacks and private downloads. Use a forward fix if the previous
    application is incompatible; do not erase committed financial state.
 5. Record actual elapsed recovery time, unrecovered data and operator findings
-   against approved targets. Obtain hosted acceptance before releasing invitations.
+   against approved targets. Obtain hosted acceptance before opening to members.
 
 ### 6a. Storage objects: back up, restore, reconcile (N232)
 

@@ -39,7 +39,7 @@ Each area below is proved by its own PR, whose title starts with every id that a
 
 ## Auth and account
 
-Proof PR: opened from `cloud/os-proof-sweep-auth`.
+Proof PR: #98, from `cloud/os-proof-sweep-auth`.
 
 | Item | Title | Status | Plan id / batch | PR / commit | Proving test (file › test name) |
 |---|---|---|---|---|---|
@@ -103,7 +103,7 @@ Notes:
 
 ## Listings and discovery
 
-Proof PR: opened from `cloud/os-proof-sweep-listings`.
+Proof PR: #100, from `cloud/os-proof-sweep-listings`.
 
 | Item | Title | Status | Plan id / batch | PR / commit | Proving test (file › test name) |
 |---|---|---|---|---|---|
@@ -127,7 +127,7 @@ Notes:
 
 ## Commerce and money
 
-Proof PR: opened from `cloud/os-proof-sweep-commerce`.
+Proof PR: #101, from `cloud/os-proof-sweep-commerce`.
 
 | Item | Title | Status | Plan id / batch | PR / commit | Proving test (file › test name) |
 |---|---|---|---|---|---|
@@ -161,7 +161,7 @@ Notes:
 
 ## Admin, ops and CI
 
-Proof PR: opened from `cloud/os-proof-sweep-ops`.
+Proof PR: #103, from `cloud/os-proof-sweep-ops`.
 
 | Item | Title | Status | Plan id / batch | PR / commit | Proving test (file › test name) |
 |---|---|---|---|---|---|

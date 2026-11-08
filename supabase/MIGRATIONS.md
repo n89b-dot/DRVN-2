@@ -23,6 +23,10 @@ recorded file is skipped, and a destructive baseline (0001) is refused on a
 database with any table in `public`. Details: "Applying without Docker or
 psql" below.
 
+**Staging stays level with shared dev** (R-staging-behind). A migration PR is applied to shared dev *and* staging before it merges, by the same session, with both cells filled. `tests/ci/migrations-md.test.ts` lets a row name `shared-dev` without `staging` (or say `not applied`) only while the file is less than two days old by its timestamp. A session that cannot reach staging lists the file in `supabase/migrations-staging-pending.json` with the reason, and the next session with the credential applies it and removes the entry.
+
+**A merged migration is never renamed** (#97). Apply order on every target is merge order, so filename order must stay the same as merge order. A pull request may only add migration files, each with a timestamp later than every file already on `main`, and may never rename or remove a file `main` has. If `main` gains a later file before yours merges, rename yours (it is not merged yet) to a timestamp after it. `tests/ci/migration-order.test.ts` fails a PR that breaks either rule, naming the file. Find what a merge added with `git diff --diff-filter=A`, never by name.
+
 **Recording files that already ran** (OS-R-migrations): `--record-only` writes
 history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
@@ -39,10 +43,22 @@ TLS. Details: "Recording without running" below.
 
 **Shared dev's history, known extras.** Five rows are on shared dev but not on disk: `20260913014536`, `20260913014621`, `20260913134641`, `20260913135341` and `20260913144516`. They are the 13 Sept marketplace files, recorded under their timestamps from before the rename. `20260913144516` is the file now named `20260913144218`. These rows stay; nothing is deleted on dev.
 
-**Shared dev's history, known gaps.** Twelve files on main have no history row on shared dev. Each was applied in Sept–Oct 2026 per its row below, before the runner recorded history: `20260905011618`, `20260905143949`, `20260905224929`, `20260913144218`, `20260919203000`, `20260919204000`, `20260928120000`, `20260928181000`, `20261004100000`, `20261006100200`, `20261011121000` and `20261017140000`. A `--record-only` dry run on 8 Nov refused all twelve, so none was recorded, and none will be without a stronger check. The reasons it gave:
-- `20260905011618`: not checkable, since a DO block creates `deletion_write_guard` through dynamic SQL. Its `worker_runs` table was created identically by `20260913132451`.
-- `20260905224929` and `20260919203000`: nothing left to check, because later files drop every object they create.
-- The other nine create nothing the check can probe; it reads them as data, grants or comments only. `20260913144218` is on dev as `20260913144516`.
+**Shared dev's history, known gaps** (#91, R-migrations). Twelve files on main have no history row on shared dev. Each was applied in Sept–Oct 2026 per its row below, before the runner recorded history. A `--record-only` dry run on 8 Nov refused all twelve, so none was recorded, and none will be without a ruling (an attested row with a written reason, or documented and closed by hand; Neil is choosing). One line per file: why record-only refused it, and the read-only evidence on shared dev that it ran (probe of 8 Nov 2026, the same query on staging, which ran every file through the runner, gave the same answer each time unless the line says otherwise).
+
+| Version | Why record-only refused it | Evidence it ran on shared dev |
+|---|---|---|
+| `20260905011618` | a DO block creates `deletion_write_guard` through dynamic SQL, which the check cannot verify | `public.payment_requests`, index `payments_one_per_order` and `purchase_attempts.request_fingerprint` all exist, as on staging |
+| `20260905143949` | a DO block alters functions through dynamic SQL and creates nothing | the 10 `public` functions without a pinned `search_path` today are the same count on staging, which ran the file; all were created after it |
+| `20260905224929` | fully superseded: later files replace or drop every object it creates (`save_mod_items`) | nothing of its own is left to check: `20261107220100` drops the two-argument `save_mod_items(uuid, jsonb)` it created and replaces it with a three-argument one, and the two-argument one is gone on both projects |
+| `20260913144218` | data only (an `update` of `listings`) | recorded on shared dev under its pre-rename version `20260913144516` (kept, see "known extras") |
+| `20260919203000` | fully superseded, as `20260905224929` | as `20260905224929` |
+| `20260919204000` | data only (brand spellings) | no listing has an un-normalised Öhlins or GReddy brand (0 rows) |
+| `20260928120000` | a drop, nothing to probe as created | the 8-argument `write_activity_post` does not exist |
+| `20260928181000` | data only (catalogue ids on `cars`) | no car whose make matches a catalogue make lacks `catalog_make_id` (0 rows) |
+| `20261004100000` | grants only | `anon` cannot execute `invoke_transfer_worker()` and `authenticated` cannot execute `prune_rate_limits()` |
+| `20261006100200` | data only (`settlement_settings`); later superseded by the 2-day hold ruling | `settlement_settings` reads `fixed`, 2 days, auto-confirm 21 days, as later files set it; the same on staging |
+| `20261011121000` | a policy change (`alter policy`) only | policy "published activity readable" has the same `qual` fingerprint (md5 `1afdefb0`) as on staging |
+| `20261017140000` | policy changes (`alter policy`) only | none of the 130 `public` policies calls `auth.uid()` outside a `(select …)`, the file's rewrite, as on staging |
 
 ## November 8 — account deletion checks financial holds before banning sign-in: OS-W11 (#157, not applied anywhere)
 
@@ -56,7 +72,7 @@ Apply after every earlier migration, together with the app from #157: the new wo
 
 | File | Applied to |
 |---|---|
-| `20261108140000_chargeback_holds_deletion.sql` | shared-dev 2026-11-08 |
+| `20261108140000_chargeback_holds_deletion.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
 
 Apply after `20261108130400`. `account_deletion_blockers` (from `20260905185725`) gains one hold: an unresolved chargeback in `stripe_dispute_journal` on any order the member bought or sold, whatever the order's status (unresolved means not `won`, `warning_closed` or `lost`, as for the payout freeze in `20261107130000`). Restated from `20261108130400` with only the chargeback added: `private.account_deletion_hold_order`, `private.requeue_account_deletion_for_hold`, `pause_account_deletion_hold` and `private.account_deletion_hold_appeared`. New: `private.account_deletion_hold_note`, `private.account_deletion_hold_code` (blocker code `open_chargeback` when the named order waits on the bank) and the deferred constraint trigger `account_deletion_hold_watch` on `stripe_dispute_journal`. The app reads `blocker_code` on the signed-out status page; the old app ignores it. Guard: `deletion_chargeback_hold_guard.sql`.
 
@@ -92,13 +108,13 @@ Apply in order, after every earlier migration, **before the app from #148 serves
 
 `supabase/tests/ci_shim.sql` gains `storage.objects.updated_at` and `metadata` (hosted Storage has both). The three guards were run against a throwaway Postgres with stubbed Supabase objects, not the full chain; CI's sql-guard job runs them on the full chain.
 
-## November 7 — deletion scrub and username rules: OS-W34 N16 N38 (not applied anywhere)
+## November 7 — deletion scrub and username rules: OS-W34 N16 N38 (shared dev and staging, 8 Nov)
 
 | File | Applied to |
 |---|---|
-| `20261107220500_username_rules.sql` | not applied |
-| `20261107220510_account_deletion_scrub.sql` | not applied |
-| `20261107220520_deletion_storage_message_photos.sql` | not applied |
+| `20261107220500_username_rules.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+| `20261107220510_account_deletion_scrub.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+| `20261107220520_deletion_storage_message_photos.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
 
 From #149. Apply in order, after every earlier migration (they sort before `20261107220600`, which is already applied: apply them as missing files), together with the app from #149: the new worker calls `scrub_deleted_account`, and the onboarding check calls `username_available`.
 
@@ -140,7 +156,7 @@ Guard: `supabase/tests/launch_legal_guard.sql` (fails before these migrations). 
 
 | File | Applied to |
 |---|---|
-| `20261107220900_payout_hold_fallback_two_days.sql` | not applied |
+| `20261107220900_payout_hold_fallback_two_days.sql` | shared-dev 2026-11-07; staging 2026-11-07 |
 
 Apply after every earlier migration. Neil, 7 Nov 2026: the fallbacks follow his 2-day rule. `settlement_settings.payout_hold_days` defaults to 2 (was 7), and `payout_available_at()` (restated from `20261006100000`, the only change being the coalesce's 7 → 2) treats a missing settings row as a fixed 2 days. The deployed row is already fixed, 2 days (`20261009100000`), so no payout date changes; dates already set never move. The app's `DEFAULT_PAYOUT_HOLD` changes to 2 in the same PR. Guard: `payout_hold_setting_guard.sql` check 7 (missing row and a new row both mean 2 days), which fails on the schema before this migration.
 
@@ -148,7 +164,7 @@ Apply after every earlier migration. Neil, 7 Nov 2026: the fallbacks follow his 
 
 | File | Applied to |
 |---|---|
-| `20261107210150_refund_gap_snapshot.sql` | not applied |
+| `20261107210150_refund_gap_snapshot.sql` | shared-dev 2026-11-07; staging 2026-11-07 |
 
 Apply after `20261107210100`. New `refund_gap_snapshot(payment_reference, refund_references[])` (service role only, read-only): a payment's booked refund total and the cents of the listed refunds whose operation is still booking, from one statement. `applyChargeRefund` opens an "unattributed refund" case only on this result, so a refund settling while `charge.refunded` is handled can't be counted in neither place. Redefines nothing. Guard: `supabase/tests/refund_gap_snapshot_guard.sql` (fails before this migration: the function doesn't exist). Checked on a fresh native PostgreSQL 17 with the CI shim: every migration applies and every guard passes except `job_inventory_health_guard.sql` (needs real pg_cron).
 
