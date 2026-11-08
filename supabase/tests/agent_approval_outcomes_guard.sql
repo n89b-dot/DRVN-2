@@ -85,9 +85,11 @@ declare
   expected numeric;
 begin
   -- 0. Redaction never changes an id (N677). Before 20261108130500 about 15
-  -- of these 5,000 would have been mangled, so this fails on every run.
+  -- of these 5,000 would have been mangled, and the fixed one always was.
   select string_agg(u, ', ') into bad
-  from (select g::text as u from (select gen_random_uuid() as g from generate_series(1, 5000)) x) ids
+  from (select g::text as u from (select gen_random_uuid() as g from generate_series(1, 5000)) x
+        -- and one the old rule always mangled, so the check never rests on chance alone
+        union all select '70e95888-a964-4164-9858-10b5e67f70ec') ids
   where public.agent_redact_cards(u) is distinct from u
      or public.agent_redact_cards('{"approval_id": "' || u || '"}') is distinct from '{"approval_id": "' || u || '"}';
   if bad is not null then
@@ -153,7 +155,7 @@ begin
   r := public.agent_approval_decide(ac, 'accept');
   perform pg_temp.reset();
   if r->>'outcome' <> 'refused' or r->>'status' <> 'refused' or r->>'order_id' is not null
-     or (r->>'replayed')::boolean then
+     or (r->>'replayed')::boolean is distinct from false then
     raise exception 'FAIL 7: an accept the offer refused did not report a fresh refusal (N677) (%)', r;
   end if;
   if pg_temp.answers(ac) = '' and exists (
