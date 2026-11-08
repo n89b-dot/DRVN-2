@@ -28,7 +28,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 import { STALE_MOD_SHEET } from "@/lib/mods/sheet-revision";
 
-import { saveModItems, saveShowcase } from "./actions";
+import { confirmLostModSave, saveModItems, saveShowcase } from "./actions";
 
 const line = {
   id: "12345678-1234-4234-8234-123456789012",
@@ -52,6 +52,17 @@ describe("N65 a stale build sheet can't overwrite a newer one", () => {
   it("says the build changed, and asks for a reload, when the database refuses a stale save", async () => {
     mocks.rpc.mockReturnValue({ data: null, error: { code: "40001", hint: "stale_mod_sheet", message: "x" } });
     expect(await saveModItems("car", [line], "rev-old")).toEqual({ error: STALE_MOD_SHEET, stale: true });
+  });
+
+  it("after a lost response, asks whether the sheet is exactly what that save sent, in the same shape it was saved", async () => {
+    mocks.rpc.mockReturnValue({ data: { outcome: "saved", revision: "rev-2" }, error: null });
+    await saveModItems("car", [line], "rev-1");
+    const saved = (mocks.rpc.mock.calls[0][1] as { p_items: unknown }).p_items;
+    mocks.rpc.mockReturnValue({ data: "rev-2", error: null });
+    expect(await confirmLostModSave("car", [line])).toBe("rev-2");
+    expect(mocks.rpc).toHaveBeenLastCalledWith("mod_sheet_revision_if_matches", { p_car: "car", p_items: saved });
+    mocks.rpc.mockReturnValue({ data: null, error: null });
+    expect(await confirmLostModSave("car", [line])).toBeNull();
   });
 
   it("refuses to save with no revision at all", async () => {

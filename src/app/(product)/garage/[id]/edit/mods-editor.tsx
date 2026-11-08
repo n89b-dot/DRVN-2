@@ -19,7 +19,7 @@ import { modTypeByKey, modTypeFor, PICK_LIST, stockLineLabel, type ModType } fro
 
 import { unlinkModListing } from "@/app/(product)/sell/actions";
 
-import { modSheetRevision, readPartLink, saveModItems, type ModItemInput } from "../../actions";
+import { confirmLostModSave, modSheetRevision, readPartLink, saveModItems, type ModItemInput } from "../../actions";
 import { useUnsavedGuard } from "./use-unsaved";
 import { draftRow, listRow, type BuildDraft, type BuildList } from "@/features/agent/build-change";
 
@@ -286,6 +286,9 @@ export function ModsEditor({
   const savingRef = useRef(false);
   // N65: the revision every save is made over, moved on by each save.
   const revision = useRef(initialRevision);
+  // A save whose response was lost: what it sent, until the next save asks
+  // whether it committed (N65 follow-up).
+  const unconfirmed = useRef<ModItemInput[] | null>(null);
   // Saves call the action in their own transition, so a redirect it already
   // followed — the sign-in redirect when the session has ended, for one —
   // lands in Next's redirect boundary instead of being followed a second time.
@@ -540,10 +543,20 @@ export function ModsEditor({
     const commit = async (): Promise<boolean> => {
       try {
         let result: Awaited<ReturnType<typeof saveModItems>>;
+        let sent = false;
         try {
+          if (unconfirmed.current) {
+            // If the lost save committed, the sheet is exactly what it sent:
+            // save over that revision. Anything else, keep the loaded one.
+            const landed = await confirmLostModSave(carId, unconfirmed.current);
+            if (landed) revision.current = landed;
+            unconfirmed.current = null;
+          }
+          sent = true;
           result = await saveModItems(carId, items, revision.current);
         } catch (error) {
           unstable_rethrow(error);
+          if (sent) unconfirmed.current = items;
           // The request may have committed before its response disappeared. Keep
           // every draft value and the client UUIDs so retrying converges on the
           // same rows instead of forcing a reload or creating duplicates.

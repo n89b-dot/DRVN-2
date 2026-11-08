@@ -83,6 +83,20 @@ begin
     raise exception 'FAIL 4: an exact retry of a committed save did not converge (%)', result;
   end if;
 
+  -- The editor edits further after the lost response: it asks whether the
+  -- sheet is exactly what the lost save sent, and saves over that revision.
+  if public.mod_sheet_revision_if_matches(car, jsonb_build_array(
+       jsonb_build_object('id', line_a, 'group_label', 'Engine', 'brand', 'HKS', 'product', 'Intake', 'raw_text', 'HKS Intake'),
+       jsonb_build_object('id', line_b, 'group_label', 'Wheels', 'brand', 'Volk', 'product', 'TE37', 'raw_text', 'Volk TE37')))
+     is distinct from r2 then
+    raise exception 'FAIL 4b: a lost save that committed was not recognised';
+  end if;
+  if public.mod_sheet_revision_if_matches(car, jsonb_build_array(
+       jsonb_build_object('id', line_a, 'group_label', 'Engine', 'brand', 'HKS', 'product', 'Intake v2', 'raw_text', 'HKS Intake v2')))
+     is not null then
+    raise exception 'FAIL 4c: a sheet that differs from the lost save handed out its revision';
+  end if;
+
   -- Any other write to a line (the agent, a listing release) moves it on.
   update public.mod_items set group_label = 'Intake' where id = line_a;
   r3 := public.mod_sheet_revision(car);

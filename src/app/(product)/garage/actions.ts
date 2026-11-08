@@ -374,10 +374,74 @@ export type ModItemInput = {
  */
 /** The build sheet's current revision (N65), for a caller that changed one
  *  line elsewhere (unlinking a listing) and must move its own token on. */
+/** The sheet exactly as save_mod_items receives it, so a lost save can be
+ *  compared with what the database holds (mod_sheet_revision_if_matches). */
+function modSheetPayload(items: ModItemInput[], userId: string) {
+  // These three render on the public build page, so none is taken as typed:
+  // the link must be http(s), the thumbnail must be one this member uploaded
+  // (an arbitrary host is a tracking pixel on somebody's build), and the
+  // domain shown beside the link is always the link's own.
+  const linkOf = (raw: string | null | undefined) => {
+    if (!raw) return null;
+    try {
+      const url = new URL(raw);
+      return url.protocol === "http:" || url.protocol === "https:" ? url : null;
+    } catch {
+      return null;
+    }
+  };
+  return items.map((item) => {
+    const link = linkOf(item.product_url);
+    return {
+    id: item.id,
+    group_label: item.group_label || "Other",
+    brand: item.brand,
+    product: item.product,
+    part_number: item.part_number ?? null,
+    category: MOD_CATEGORIES.includes(item.category as ModCategory)
+      ? (item.category as ModCategory)
+      : null,
+    confidence:
+      typeof item.confidence === "number" && Number.isFinite(item.confidence)
+        ? Math.min(1, Math.max(0, item.confidence))
+        : null,
+    raw_text: item.raw_text,
+    // `removed_at` is deliberately absent: the function derives it, so a line
+    // that came off last month keeps that date through every later save.
+    status: item.status === "removed" ? "removed" : "installed",
+    product_url: link ? link.toString() : null,
+    image_url: item.image_url && isOwnedStorageUrl(item.image_url, userId) ? item.image_url : null,
+    source_domain: link ? link.hostname.replace(/^www\./, "").toLowerCase() : null,
+    ref_price_cents:
+      typeof item.ref_price_cents === "number" && Number.isFinite(item.ref_price_cents)
+        ? Math.max(0, Math.round(item.ref_price_cents))
+        : null,
+    ref_price_currency: item.ref_price_currency ?? null,
+    origin: item.origin === "stock" ? "stock" : "aftermarket",
+    };
+  });
+}
+
 export async function modSheetRevision(carId: string): Promise<string | null> {
   const { supabase } = await requireUser();
   if (!carId) return null;
   const { data, error } = await supabase.rpc("mod_sheet_revision", { p_car: carId });
+  return error ? null : (data ?? null);
+}
+
+/**
+ * N65 follow-up: after a save's response was lost, the editor asks whether
+ * the sheet is exactly what that save sent. If so it gets the current
+ * revision (its own write committed); otherwise null, and its next save is
+ * still checked against the revision it loaded.
+ */
+export async function confirmLostModSave(carId: string, items: ModItemInput[]): Promise<string | null> {
+  const { supabase, user } = await requireUser();
+  if (!carId || items.length > 200) return null;
+  const { data, error } = await supabase.rpc("mod_sheet_revision_if_matches", {
+    p_car: carId,
+    p_items: modSheetPayload(items, user.id),
+  });
   return error ? null : (data ?? null);
 }
 
@@ -403,49 +467,7 @@ export async function saveModItems(
     .maybeSingle();
   if (carError || !car || car.owner_id !== user.id) return { error: "Car not found." };
 
-  // These three render on the public build page, so none is taken as typed:
-  // the link must be http(s), the thumbnail must be one this member uploaded
-  // (an arbitrary host is a tracking pixel on somebody's build), and the
-  // domain shown beside the link is always the link's own.
-  const linkOf = (raw: string | null | undefined) => {
-    if (!raw) return null;
-    try {
-      const url = new URL(raw);
-      return url.protocol === "http:" || url.protocol === "https:" ? url : null;
-    } catch {
-      return null;
-    }
-  };
-  const payload = items.map((item) => {
-    const link = linkOf(item.product_url);
-    return {
-    id: item.id,
-    group_label: item.group_label || "Other",
-    brand: item.brand,
-    product: item.product,
-    part_number: item.part_number ?? null,
-    category: MOD_CATEGORIES.includes(item.category as ModCategory)
-      ? (item.category as ModCategory)
-      : null,
-    confidence:
-      typeof item.confidence === "number" && Number.isFinite(item.confidence)
-        ? Math.min(1, Math.max(0, item.confidence))
-        : null,
-    raw_text: item.raw_text,
-    // `removed_at` is deliberately absent: the function derives it, so a line
-    // that came off last month keeps that date through every later save.
-    status: item.status === "removed" ? "removed" : "installed",
-    product_url: link ? link.toString() : null,
-    image_url: item.image_url && isOwnedStorageUrl(item.image_url, user.id) ? item.image_url : null,
-    source_domain: link ? link.hostname.replace(/^www\./, "").toLowerCase() : null,
-    ref_price_cents:
-      typeof item.ref_price_cents === "number" && Number.isFinite(item.ref_price_cents)
-        ? Math.max(0, Math.round(item.ref_price_cents))
-        : null,
-    ref_price_currency: item.ref_price_currency ?? null,
-    origin: item.origin === "stock" ? "stock" : "aftermarket",
-    };
-  });
+  const payload = modSheetPayload(items, user.id);
   const { data, error } = await supabase.rpc("save_mod_items", {
     p_car_id: carId,
     p_items: payload,
