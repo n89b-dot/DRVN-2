@@ -10,6 +10,16 @@ import { reportError } from "@/lib/monitoring";
 import { SUSPENDED_MESSAGE, isSuspended } from "@/lib/suspension";
 import type { CommerceState } from "./action-types";
 
+type SentMessage = {
+  sender_id: string;
+  recipient_id: string;
+  body: string;
+  order_id: string | null;
+  offer_id: string | null;
+  listing_id: string | null;
+  attachments: string[];
+};
+
 const FIRST_CONTACT_LIMIT = "You've messaged a lot of new people today — try again tomorrow.";
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -46,28 +56,6 @@ export async function sendThreadMessage(
   const messageId = String(formData.get("message_id") ?? "");
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(messageId)) {
     return { error: "Refresh this page before sending your message." };
-  }
-
-  // Reuse the row identity after an uncertain response. Never adopt someone
-  // else's message, or silently treat changed content as a successful retry.
-  async function existingMessage() {
-    return supabase.from("messages")
-      .select("sender_id, body, order_id, offer_id, attachments")
-      .eq("id", messageId).maybeSingle();
-  }
-  function matches(message: { sender_id: string; body: string; order_id: string | null; offer_id: string | null; attachments: string[] }) {
-    return message.sender_id === user.id && message.body === body &&
-      message.order_id === orderId && message.offer_id === offerId &&
-      (message.attachments ?? []).join("|") === attachments.join("|");
-  }
-  const previous = await existingMessage();
-  if (previous.error) return { error: "Couldn't check whether this message was sent. Try again." };
-  if (previous.data) return matches(previous.data)
-    ? { ok: "Sent." }
-    : { error: "This message changed after sending. Refresh the conversation before sending again." };
-
-  if (!(await allowAction(RATE_LIMITS.sendMessage, user.id))) {
-    return { error: rateLimitMessage(RATE_LIMITS.sendMessage) };
   }
 
   const admin = createAdminClient();
@@ -124,6 +112,31 @@ export async function sendThreadMessage(
   const photoFolder = `${user.id}/${recipient}/`;
   if (attachments.some((path) => !path.startsWith(photoFolder) || path.slice(photoFolder.length).includes("/") || path.includes(".."))) {
     return { error: "Those photos didn't upload for this conversation. Remove them and add them again." };
+  }
+
+  // Reuse the row identity after an uncertain response. Never adopt someone
+  // else's message, or silently treat changed content as a successful retry:
+  // the whole row has to match — which deal, which listing and who it went
+  // to, not just the words (a listing enquiry has no order or offer to tell
+  // two contexts apart).
+  async function existingMessage() {
+    return supabase.from("messages")
+      .select("sender_id, recipient_id, body, order_id, offer_id, listing_id, attachments")
+      .eq("id", messageId).maybeSingle();
+  }
+  function matches(message: SentMessage) {
+    return message.sender_id === user.id && message.recipient_id === recipient && message.body === body &&
+      message.order_id === orderId && message.offer_id === offerId && message.listing_id === listingId &&
+      (message.attachments ?? []).join("|") === attachments.join("|");
+  }
+  const previous = await existingMessage();
+  if (previous.error) return { error: "Couldn't check whether this message was sent. Try again." };
+  if (previous.data) return matches(previous.data)
+    ? { ok: "Sent." }
+    : { error: "This message changed after sending. Refresh the conversation before sending again." };
+
+  if (!(await allowAction(RATE_LIMITS.sendMessage, user.id))) {
+    return { error: rateLimitMessage(RATE_LIMITS.sendMessage) };
   }
 
   const { error } = await supabase.from("messages").insert({

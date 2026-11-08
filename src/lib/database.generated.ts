@@ -7938,6 +7938,18 @@ export type Database = {
       }
       my_car_vin: { Args: { p_car: string }; Returns: string }
       my_default_offer_floor: { Args: never; Returns: number }
+      my_listing_enquiries: {
+        Args: { p_others: string[] }
+        Returns: {
+          last_at: string
+          listing_id: string
+          other_id: string
+          price_cents: number
+          seller_id: string
+          status: string
+          title: string
+        }[]
+      }
       my_listing_offer_floor: { Args: { p_listing: string }; Returns: number }
       not_received_refund_due: { Args: { p_order: string }; Returns: boolean }
       not_received_refunds_due: {
