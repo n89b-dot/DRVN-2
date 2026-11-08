@@ -5,8 +5,12 @@
 --   2. One 'tool_call' event per call, successes, refusals and failures, with
 --      the tool name, object ids, outcome, code, timing, order, the turn's
 --      outcome and the chat request id (initiated_by, idempotency_key).
---   3. Nothing else is kept: arguments, text, links and non-uuid ids the
---      caller sends are dropped; a bad tool name, outcome or shape is refused.
+--   3. Nothing else is kept: arguments, text, links, unknown id keys and
+--      non-uuid ids the caller sends are dropped; a tool name that isn't a
+--      capability's is kept as unknown_tool, a code outside the list as
+--      failed; a bad outcome, turn or shape is refused.
+--   3g. A uuid whose digit groups pass the card check survives the insert
+--      trigger's card scrub; everything else in an event is still scrubbed.
 --   4. A second call for the same request records nothing more.
 --   5. The owner reads their own rows; another member doesn't.
 --   6. The rows are append-only, like every agent event.
@@ -20,6 +24,10 @@ declare
   member uuid := gen_random_uuid();
   other uuid := gen_random_uuid();
   request uuid := gen_random_uuid();
+  request2 uuid := gen_random_uuid();
+  request3 uuid := gen_random_uuid();
+  -- Its digit groups, read together, pass the card check.
+  cardlike uuid := '42424242-4242-4242-8242-424242424242';
   -- Ids with no long digit runs, so the card-number scrub can't touch them.
   listing uuid := 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
   car uuid := 'abcdefab-cdef-4abc-8def-abcdefabcdef';
@@ -47,7 +55,8 @@ begin
       'ids', jsonb_build_object('listingId', upper(listing::text), 'query', 'my VIN is WVWZZZAUZKW123456'),
       'input', jsonb_build_object('text', 'raw chat'), 'answer', 'listing body'),
     jsonb_build_object('tool', 'propose_build_change', 'outcome', 'refused', 'code', 'not_allowed', 'ms', 3,
-      'ids', jsonb_build_object('carId', car::text, 'productUrl', 'https://parts-deals.example.net/x', 'modIds', jsonb_build_array(car::text, 'not-a-uuid'))),
+      'ids', jsonb_build_object('carId', car::text, 'productUrl', 'https://parts-deals.example.net/x', 'modIds', jsonb_build_array(car::text, 'not-a-uuid'),
+                                'passwordHuntertwoId', listing::text)),
     jsonb_build_object('tool', 'search_parts', 'outcome', 'failed', 'code', 'Bad Code!', 'ms', 99999999)
   ));
   if n <> 3 then raise exception 'FAIL 2: % events recorded, expected 3', n; end if;
@@ -69,25 +78,50 @@ begin
     raise exception 'FAIL 2e: the failure was not normalised (%)', e.result;
   end if;
   if exists (select 1 from public.agent_events where owner_id = member and kind = 'tool_call'
-             and (inputs::text ~* 'WVWZZZ|raw chat|listing body|parts-deals|not-a-uuid|query|productUrl' or result::text ~* 'Bad Code')) then
+             and (inputs::text ~* 'WVWZZZ|raw chat|listing body|parts-deals|not-a-uuid|query|productUrl|hunter' or result::text ~* 'Bad Code')) then
     raise exception 'FAIL 3: an argument, text or link was kept in the audit';
   end if;
 
-  -- 3b. Bad input is refused.
-  c := pg_temp.code(format($q$select public.agent_record_tool_calls(%L, %L, 'ok', '[{"tool":"Read Listing","outcome":"ok"}]')$q$, member, gen_random_uuid()));
-  if c <> '22023' then raise exception 'FAIL 3b: a bad tool name was accepted (%)', c; end if;
+  -- 3b. A tool name the model made up is never kept: it could hold anything.
+  n := public.agent_record_tool_calls(member, request2, 'ok', jsonb_build_array(
+    jsonb_build_object('tool', 'password_huntertwo', 'outcome', 'refused', 'code', 'secret_words_here'),
+    jsonb_build_object('tool', 'Read Listing', 'outcome', 'ok')));
+  if n <> 2 or exists (select 1 from public.agent_events where owner_id = member and initiated_by = 'chat:' || request2::text
+                       and (inputs->>'tool' <> 'unknown_tool' or coalesce(result->>'code', 'failed') <> 'failed')) then
+    raise exception 'FAIL 3b: an unregistered tool name or code was kept';
+  end if;
+  if exists (select 1 from public.agent_events where owner_id = member and (inputs::text ~ 'hunter|Read Listing' or result::text ~ 'secret_words')) then
+    raise exception 'FAIL 3b2: a made-up name reached the audit';
+  end if;
+
+  -- 3g. A uuid that looks like a card number to the scrub is kept whole.
+  n := public.agent_record_tool_calls(member, request3, 'ok', jsonb_build_array(
+    jsonb_build_object('tool', 'read_listing', 'outcome', 'ok', 'ids', jsonb_build_object('listingId', cardlike::text))));
+  if (select inputs->'ids'->>'listingId' from public.agent_events where owner_id = member and initiated_by = 'chat:' || request3::text) is distinct from cardlike::text then
+    raise exception 'FAIL 3g: the card scrub corrupted a valid uuid (%)',
+      (select inputs from public.agent_events where owner_id = member and initiated_by = 'chat:' || request3::text);
+  end if;
+  -- ...while a card number elsewhere in an event is still removed, in a tool_call or any other kind.
+  insert into public.agent_events(owner_id, kind, inputs, result)
+  values (member, 'tool_call', jsonb_build_object('tool', 'read_listing', 'ids', jsonb_build_object('listingId', '4242 4242 4242 4242')), '{}'::jsonb),
+         (member, 'status', jsonb_build_object('note', 'card 4242 4242 4242 4242'), jsonb_build_object('id', cardlike::text));
+  if exists (select 1 from public.agent_events where owner_id = member and (inputs::text ~ '4242 4242 4242 4242' or (kind = 'status' and result::text ~ cardlike::text))) then
+    raise exception 'FAIL 3h: the card scrub no longer covers the rest of an event';
+  end if;
   c := pg_temp.code(format($q$select public.agent_record_tool_calls(%L, %L, 'ok', '[{"tool":"read_listing","outcome":"maybe"}]')$q$, member, gen_random_uuid()));
   if c <> '22023' then raise exception 'FAIL 3c: a bad outcome was accepted (%)', c; end if;
   c := pg_temp.code(format($q$select public.agent_record_tool_calls(%L, %L, 'ok', '{"tool":"read_listing"}')$q$, member, gen_random_uuid()));
   if c <> '22023' then raise exception 'FAIL 3d: a non-array was accepted (%)', c; end if;
   c := pg_temp.code(format($q$select public.agent_record_tool_calls(%L, %L, 'Not OK', '[]')$q$, member, gen_random_uuid()));
   if c <> '22023' then raise exception 'FAIL 3e: a bad turn outcome was accepted (%)', c; end if;
+  c := pg_temp.code(format($q$select public.agent_record_tool_calls(%L, %L, 'password_huntertwo', '[]')$q$, member, gen_random_uuid()));
+  if c <> '22023' then raise exception 'FAIL 3e2: a turn outcome outside the list was accepted (%)', c; end if;
   c := pg_temp.code(format($q$select public.agent_record_tool_calls(%L, %L, 'ok', '[]')$q$, gen_random_uuid(), gen_random_uuid()));
   if c <> 'P0002' then raise exception 'FAIL 3f: an unknown member was accepted (%)', c; end if;
 
   -- 4. The same request again adds nothing.
   n := public.agent_record_tool_calls(member, request, 'ok', '[{"tool":"read_listing","outcome":"ok"}]'::jsonb);
-  if n <> 0 or (select count(*) from public.agent_events where owner_id = member and kind = 'tool_call') <> 3 then
+  if n <> 0 or (select count(*) from public.agent_events where owner_id = member and initiated_by = 'chat:' || request::text) <> 3 then
     raise exception 'FAIL 4: a repeated request recorded again';
   end if;
 
@@ -97,7 +131,7 @@ begin
   perform set_config('role', 'none', true), set_config('request.jwt.claims', '', true);
   if n <> 0 then raise exception 'FAIL 5: another member read the audit'; end if;
   perform set_config('role', 'authenticated', true), set_config('request.jwt.claims', jsonb_build_object('sub', member, 'role', 'authenticated')::text, true);
-  n := (select count(*) from public.agent_events where kind = 'tool_call');
+  n := (select count(*) from public.agent_events where kind = 'tool_call' and initiated_by = 'chat:' || request::text);
   perform set_config('role', 'none', true), set_config('request.jwt.claims', '', true);
   if n <> 3 then raise exception 'FAIL 5b: the owner cannot read their own audit (% rows)', n; end if;
 

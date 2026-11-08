@@ -20,7 +20,12 @@ export type SafeLink = { url: string; host: string };
 const MAX_LINK = 2_000;
 const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
 const LABEL = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/;
-const INTERNAL = /(^|\.)(localhost|local|internal|intranet|lan|home|corp|test|example|invalid|onion)$/;
+/**
+ * Names that never reach the public internet, under any parent: localhost,
+ * mDNS (.local), .internal, the special-use .arpa tree (home.arpa, RFC 8375,
+ * and every reverse-lookup name), and the common private suffixes.
+ */
+const INTERNAL = /(^|\.)(localhost|localdomain|local|internal|intranet|lan|home|corp|private|test|example|invalid|onion|arpa)$/;
 
 export function safeProductLink(raw: unknown): SafeLink | null {
   if (typeof raw !== "string") return null;

@@ -19,7 +19,16 @@
 --
 -- Never the chat, a tool's other arguments (search words, a pasted list, a
 -- link), its answer, or anything secret: the function rebuilds every field
--- from a fixed vocabulary and drops the rest, whatever the caller sends.
+-- from a fixed vocabulary and drops the rest, whatever the caller sends. The
+-- tool name must be a capability's (anything else, which the model may have
+-- made up, is kept as 'unknown_tool'); the id keys, error codes and turn
+-- outcomes are fixed lists too (agent_audit_vocabulary below).
+--
+-- The insert trigger's card-number scrub (agent_redact_event) read the digit
+-- groups of a uuid such as 42424242-4242-4242-8242-424242424242 as a card
+-- number and replaced them. It now leaves a tool_call's `ids` alone when
+-- every one of them is a validated uuid under a known key, and scrubs the
+-- rest of the row as before; every other kind of event is unchanged.
 -- The rows are owner-only through the existing "owners read their events"
 -- policy, append-only (guard_agent_append_only), card-number redacted
 -- (agent_redact_event), kept 12 months by the existing retention, and gone
@@ -31,6 +40,74 @@
 -- records nothing more.
 
 begin;
+
+-- The fixed lists the audit keeps. The tools are the capabilities in
+-- src/lib/capabilities/registry.ts (a unit test reads this list back), the
+-- id keys AUDIT_ID_KEYS in src/lib/ai/run.ts, the codes CapabilityError's
+-- and the turn outcomes AgentTurnFailure's.
+create or replace function public.agent_audit_vocabulary(p_list text)
+returns text[]
+language sql
+immutable
+set search_path = public, pg_temp
+as $function$
+  select case p_list
+    when 'tool' then array['search_parts', 'browse_marketplace', 'read_listing_messages', 'read_listing', 'read_my_car', 'read_product',
+                           'fitment_evidence', 'price_comparables', 'list_my_cars', 'read_part_link', 'propose_build_change', 'draft_build_list',
+                           'find_parts_to_list', 'draft_listing_from_photos', 'draft_car_update', 'move_offer', 'set_agent_limits', 'unknown_tool']
+    when 'id_key' then array['listingId', 'carId', 'replacesModId', 'modId', 'modIds', 'offerId', 'proposalId']
+    when 'code' then array['not_allowed', 'invalid_input', 'invalid_output', 'failed', 'stopped']
+    when 'turn' then array['ok', 'ai_disabled', 'model_error', 'refused', 'incomplete', 'not_allowed', 'spend_cap', 'paused', 'suspended', 'timeout']
+  end;
+$function$;
+
+-- Whether a tool_call's ids are exactly what agent_record_tool_calls builds:
+-- known keys, each a lowercase uuid or a list of them.
+create or replace function public.agent_audit_ids_valid(p_ids jsonb)
+returns boolean
+language sql
+immutable
+set search_path = public, pg_temp
+as $function$
+  select jsonb_typeof(p_ids) = 'object' and not exists (
+    select 1 from jsonb_each(p_ids) as kv(key, value)
+    where kv.key <> all (public.agent_audit_vocabulary('id_key'))
+       or not case jsonb_typeof(kv.value)
+            when 'string' then (kv.value #>> '{}') ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            when 'array' then not exists (select 1 from jsonb_array_elements(kv.value) e
+                                          where jsonb_typeof(e) <> 'string' or (e #>> '{}') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+            else false
+          end);
+$function$;
+
+-- 20261021100000's scrub, the same for every event, except that a
+-- tool_call's validated ids are kept as they are.
+create or replace function public.agent_redact_event()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $function$
+declare
+  v_ids jsonb;
+begin
+  begin
+    if new.kind = 'tool_call' and public.agent_audit_ids_valid(new.inputs->'ids') then
+      v_ids := new.inputs->'ids';
+      new.inputs := public.agent_redact_cards((new.inputs - 'ids')::text)::jsonb || jsonb_build_object('ids', v_ids);
+    else
+      new.inputs := public.agent_redact_cards(new.inputs::text)::jsonb;
+    end if;
+    new.result := public.agent_redact_cards(new.result::text)::jsonb;
+  exception when others then
+    new.inputs := jsonb_build_object('redacted', true);
+    new.result := jsonb_build_object('redacted', true);
+  end;
+  return new;
+end;
+$function$;
+
+revoke all on function public.agent_audit_vocabulary(text) from public, anon, authenticated, service_role;
+revoke all on function public.agent_audit_ids_valid(jsonb) from public, anon, authenticated, service_role;
 
 create or replace function public.agent_record_tool_calls(p_owner uuid, p_request uuid, p_turn text, p_calls jsonb)
 returns integer
@@ -54,7 +131,7 @@ begin
   if p_owner is null or p_request is null then
     raise exception 'An owner and a request are required' using errcode = '22023';
   end if;
-  if p_turn is null or p_turn !~ '^[a-z_]{1,40}$' then
+  if p_turn is null or p_turn <> all (public.agent_audit_vocabulary('turn')) then
     raise exception 'Bad turn outcome' using errcode = '22023';
   end if;
   if p_calls is null or jsonb_typeof(p_calls) <> 'array' or jsonb_array_length(p_calls) > 50 then
@@ -74,23 +151,22 @@ begin
     if jsonb_typeof(v_call) <> 'object' then
       raise exception 'Call % is not an object', v_seq using errcode = '22023';
     end if;
+    -- A capability's name, or unknown_tool: a name the model made up could hold anything.
     v_tool := v_call->>'tool';
-    if v_tool is null or v_tool !~ '^[a-z][a-z0-9_]{2,63}$' then
-      raise exception 'Call % has a bad tool name', v_seq using errcode = '22023';
-    end if;
+    if v_tool is null or v_tool <> all (public.agent_audit_vocabulary('tool')) then v_tool := 'unknown_tool'; end if;
     v_outcome := v_call->>'outcome';
     if v_outcome is null or v_outcome not in ('ok', 'refused', 'failed') then
       raise exception 'Call % has a bad outcome', v_seq using errcode = '22023';
     end if;
     v_code := v_call->>'code';
-    if v_code is not null and v_code !~ '^[a-z_]{1,40}$' then v_code := 'failed'; end if;
+    if v_code is not null and v_code <> all (public.agent_audit_vocabulary('code')) then v_code := 'failed'; end if;
     v_ms := case when jsonb_typeof(v_call->'ms') = 'number'
                  then least(greatest(round((v_call->>'ms')::numeric), 0), 600000)::integer end;
-    -- Object ids only: a key in camelCase ending in Id or Ids, and uuid values.
+    -- Object ids only: a known key, and uuid values.
     v_ids := '{}'::jsonb;
     if jsonb_typeof(v_call->'ids') = 'object' then
       for v_key, v_value in select key, value from jsonb_each(v_call->'ids') loop
-        continue when v_key !~ '^[a-z][A-Za-z]{0,30}Ids?$';
+        continue when v_key <> all (public.agent_audit_vocabulary('id_key'));
         if jsonb_typeof(v_value) = 'string' and (v_value #>> '{}') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
           v_ids := v_ids || jsonb_build_object(v_key, lower(v_value #>> '{}'));
         elsif jsonb_typeof(v_value) = 'array' then

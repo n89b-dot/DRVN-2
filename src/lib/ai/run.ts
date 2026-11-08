@@ -9,7 +9,7 @@ import { riskAtMost, type AgentContext, type AgentScope } from "@/lib/agent/cont
 import { agentModelHalted } from "@/lib/agent/controls";
 import type { z } from "zod";
 
-import type { draftBuildList, draftCarUpdate, draftListingFromPhotos, findPartsToList, proposeBuildChange } from "@/lib/capabilities/build";
+import type { draftBuildList, draftCarUpdate, draftListingFromPhotos, findPartsToList, proposeBuildChange, readPartLink } from "@/lib/capabilities/build";
 import type { browseMarketplace } from "@/lib/capabilities/reads";
 import { JOB_TOOLS, modelToolsFor } from "@/lib/capabilities/registry";
 import { photoToolAllowed, type PhotoJob } from "@/lib/agent/photo-job";
@@ -83,17 +83,24 @@ export type ToolCall = { name: string; ok: boolean; code?: string; ms?: number; 
 const UUID_VALUE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * The object ids a tool call named: its arguments ending in Id or Ids whose
- * values are uuids (listingId, carId, replacesModId, modIds), and a draft's
- * proposalId, which is its card's id. Search words, pasted text and links are
- * never ids, so they never get here.
+ * The id fields the audit keeps: the capabilities' own argument names, and a
+ * draft's proposalId (its card's id). A fixed list, because the model writes
+ * the arguments and could name a key anything (OS-W07 follow-up);
+ * agent_record_tool_calls holds the same list.
+ */
+export const AUDIT_ID_KEYS: ReadonlySet<string> = new Set(["listingId", "carId", "replacesModId", "modId", "modIds", "offerId", "proposalId"]);
+
+/**
+ * The object ids a tool call named: its arguments in AUDIT_ID_KEYS whose
+ * values are uuids, and a draft's proposalId. Search words, pasted text,
+ * links and any key the model made up never get here.
  */
 export function toolCallIds(args: unknown, result?: unknown): Record<string, string | string[]> {
   const ids: Record<string, string | string[]> = {};
   const take = (source: unknown, only?: string) => {
     if (!source || typeof source !== "object" || Array.isArray(source)) return;
     for (const [key, value] of Object.entries(source as Record<string, unknown>)) {
-      if (only ? key !== only : !/^[a-z][A-Za-z]{0,30}Ids?$/.test(key)) continue;
+      if (only ? key !== only : key === "proposalId" || !AUDIT_ID_KEYS.has(key)) continue;
       if (typeof value === "string" && UUID_VALUE.test(value)) ids[key] = value.toLowerCase();
       else if (Array.isArray(value)) {
         const list = value.filter((item): item is string => typeof item === "string" && UUID_VALUE.test(item)).slice(0, 40);
@@ -418,7 +425,9 @@ export async function runAgentTurn(options: {
               abortedPromise(),
             ]);
             record(true, undefined, result);
-            if (capability.name === "read_part_link") memberLinks.push((result as { productUrl: string }).productUrl);
+            // The page DRVN fetched for the member's own link (their address, or a
+            // redirect the fetch guard followed), never the page's canonical claim.
+            if (capability.name === "read_part_link") memberLinks.push((result as z.infer<typeof readPartLink.output>).productUrl);
             // The listings a reply leans on become its cards: the one read, or the top of a search.
             if (capability.name === "read_listing" && typeof (args as { listingId?: unknown }).listingId === "string") {
               addCard({ kind: "listing", id: (args as { listingId: string }).listingId });
@@ -587,8 +596,9 @@ export async function runAgentTurn(options: {
           uses.map(async (use): Promise<Anthropic.Beta.BetaToolResultBlockParam> => {
             const tool = byName.get(use.name);
             if (!tool) {
-              // A tool it wasn't given: refused, and recorded under a safe name (R-audit).
-              toolCalls.push({ name: /^[a-z][a-z0-9_]{2,63}$/.test(use.name) ? use.name : "unknown_tool", ok: false, code: "not_allowed", ms: 0, ids: {} });
+              // A tool it wasn't given: refused, and recorded as unknown_tool. The
+              // name is the model's own words and could be anything, a secret included.
+              toolCalls.push({ name: "unknown_tool", ok: false, code: "not_allowed", ms: 0, ids: {} });
               return { type: "tool_result", tool_use_id: use.id, content: `Error: no tool named ${use.name}`, is_error: true };
             }
             return { type: "tool_result", tool_use_id: use.id, content: (await tool.run(use.input as never)) as string };

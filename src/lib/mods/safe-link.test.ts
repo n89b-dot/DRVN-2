@@ -29,6 +29,13 @@ describe("safeProductLink", () => {
       "https://printer.local/x",
       "https://intranet/x",
       "https://metadata.internal/x",
+      // RFC 8375 home networks, and the rest of the special-use .arpa tree.
+      "http://router.home.arpa/admin",
+      "https://home.arpa/",
+      "https://nas.office.home.arpa/x",
+      "http://1.0.168.192.in-addr.arpa/",
+      "https://printer.localdomain/x",
+      "https://router.lan/x",
       `https://kwsuspensions.com/${"a".repeat(2_000)}`,
     ]) {
       expect(safeProductLink(bad), String(bad)).toBeNull();

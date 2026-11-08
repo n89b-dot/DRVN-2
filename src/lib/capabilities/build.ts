@@ -41,7 +41,7 @@ export const listMyCars = defineCapability({
 
 export const readPartLink = defineCapability({
   name: "read_part_link",
-  description: "Read a product page the member pasted: brand, product, part number and category, the way the mods editor's Paste a link does. Only for a link in the member's own message.",
+  description: "Read a product page the member pasted: brand, product, part number and category, the way the mods editor's Paste a link does. Only for a link in the member's own message. Its productUrl is the page DRVN fetched (the member's link or where it redirected), the one to draft.",
   // R1: it fetches a page and keeps the thumbnail in the member's storage.
   risk: "R1",
   scopes: ["buyer", "garage"],
@@ -63,8 +63,11 @@ export const readPartLink = defineCapability({
     const result = await fetchPartLink(input.url, owner);
     if (!result.ok) throw new CapabilityError("failed", result.error);
     return {
-      productUrl: result.product_url,
-      sourceDomain: result.source_domain,
+      // The page DRVN fetched, never the page's canonical claim: a page can
+      // name any address as canonical, and that address was never supplied
+      // or visited (OS-W07 N124 follow-up).
+      productUrl: result.fetched_url,
+      sourceDomain: new URL(result.fetched_url).hostname.replace(/^www\./i, ""),
       title: result.title,
       brand: result.brand,
       product: result.product,
