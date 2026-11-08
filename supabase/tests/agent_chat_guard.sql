@@ -9,8 +9,9 @@
 --      or other key, a known category, http(s) links only.
 --   5. A3d's cards (20261025120000): a parsed build list keeps to its lines'
 --      fields and 40 lines at most; a part to list is ids only.
---   6. Photos (20261025130000): a member's message carries at most four, all
---      their own listing-images uploads; an agent reply carries none; the
+--   6. Photos (20261025130000, private since 20261107220300 R81): a
+--      member's message carries at most four, all their own private chat
+--      photos (never a public listing photo); an agent reply carries none; the
 --      photo drafts keep to their fields, never a price or a condition.
 --   7. "Ask about DRVN" (20261025140000): a Marketplace card holds a relative
 --      /marketplace link only, and a count of at most 1,000.
@@ -120,25 +121,29 @@ begin
 
   -- 6. Photos and photo drafts.
   perform public.agent_chat_append(member, 'member', 'What is this part?', '[]'::jsonb,
-    array['https://x.supabase.co/storage/v1/object/public/listing-images/' || member || '/a.jpg']);
+    array['https://x.supabase.co/storage/v1/object/authenticated/agent-chat-photos/' || member || '/33333333-3333-4333-8333-333333333333.webp']);
   if (select cardinality(images) from public.agent_messages where owner_id = member and body = 'What is this part?') <> 1 then raise exception 'FAIL 6: a photo was not kept'; end if;
   c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb, %L::text[])', member, 'member', 'x', '[]',
-    array['https://x.supabase.co/storage/v1/object/public/listing-images/' || other || '/a.jpg']));
+    array['https://x.supabase.co/storage/v1/object/authenticated/agent-chat-photos/' || other || '/33333333-3333-4333-8333-333333333333.webp']));
   if c <> '22023' then raise exception 'FAIL 6b: someone else''s photo was stored (%)', c; end if;
   c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb, %L::text[])', member, 'member', 'x', '[]',
     array['https://x.supabase.co/storage/v1/object/public/car-images/' || member || '/a.jpg']));
   if c <> '22023' then raise exception 'FAIL 6c: a photo from another bucket was stored (%)', c; end if;
-  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb, %L::text[])', member, 'agent', 'x', '[]',
+  -- R81: the member's own public listing photo is no longer a chat photo.
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb, %L::text[])', member, 'member', 'x', '[]',
     array['https://x.supabase.co/storage/v1/object/public/listing-images/' || member || '/a.jpg']));
+  if c <> '22023' then raise exception 'FAIL 6g: a public listing photo was stored as a chat photo (%)', c; end if;
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb, %L::text[])', member, 'agent', 'x', '[]',
+    array['https://x.supabase.co/storage/v1/object/authenticated/agent-chat-photos/' || member || '/33333333-3333-4333-8333-333333333333.webp']));
   if c <> '22023' then raise exception 'FAIL 6d: an agent reply carried a photo (%)', c; end if;
   c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb, %L::text[])', member, 'member', 'x', '[]',
-    (select array_agg('https://x.supabase.co/storage/v1/object/public/listing-images/' || member || '/' || g || '.jpg') from generate_series(1, 5) g)));
+    (select array_agg('https://x.supabase.co/storage/v1/object/authenticated/agent-chat-photos/' || member || '/' || gen_random_uuid() || '.webp') from generate_series(1, 5) g)));
   if c <> '22023' then raise exception 'FAIL 6e: five photos were stored (%)', c; end if;
   perform public.agent_chat_append(member, 'agent', 'Here is a draft.', jsonb_build_array(
     jsonb_build_object('kind', 'listing_draft', 'id', gen_random_uuid(), 'title', 'Garrett G25-660 turbo', 'brand', 'Garrett', 'part_number', 'G25-660', 'category', 'turbo',
-      'images', jsonb_build_array('https://x.supabase.co/storage/v1/object/public/listing-images/' || member || '/a.jpg')),
+      'images', jsonb_build_array('https://x.supabase.co/storage/v1/object/authenticated/agent-chat-photos/' || member || '/33333333-3333-4333-8333-333333333333.webp')),
     jsonb_build_object('kind', 'update_draft', 'id', gen_random_uuid(), 'car', gen_random_uuid(), 'title', 'New turbo day', 'body', 'Fitted it today.',
-      'images', jsonb_build_array('https://x.supabase.co/storage/v1/object/public/listing-images/' || member || '/a.jpg'), 'mods', jsonb_build_array(gen_random_uuid()))));
+      'images', jsonb_build_array('https://x.supabase.co/storage/v1/object/authenticated/agent-chat-photos/' || member || '/33333333-3333-4333-8333-333333333333.webp'), 'mods', jsonb_build_array(gen_random_uuid()))));
   c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb)', member, 'agent', 'x', jsonb_build_array(jsonb_build_object(
     'kind', 'listing_draft', 'id', gen_random_uuid(), 'title', 'Turbo', 'condition', 'like new',
     'images', jsonb_build_array('https://x.supabase.co/a.jpg')))));

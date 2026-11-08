@@ -3,11 +3,15 @@
 import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
+import { BLOCKED_MESSAGE, isBlockedError } from "@/lib/blocks";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 import { SUSPENDED_MESSAGE, isSuspended } from "@/lib/suspension";
 import type { CommerceState } from "./action-types";
+
+const FIRST_CONTACT_LIMIT = "You've messaged a lot of new people today — try again tomorrow.";
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function requireUser() {
   const supabase = await createClient();
@@ -26,6 +30,9 @@ export async function sendThreadMessage(
 
   const offerId = String(formData.get("offer_id") ?? "") || null;
   const orderId = String(formData.get("order_id") ?? "") || null;
+  // R-directcontact: a message about a listing, with no offer or order yet.
+  const enquiryListingId = !offerId && !orderId ? String(formData.get("listing_id") ?? "") || null : null;
+  const enquiryRecipient = String(formData.get("recipient_id") ?? "") || null;
   const body = String(formData.get("body") ?? "").trim();
   // Private photo paths from the composer's upload (`message-photos` bucket,
   // `<sender>/<recipient>/<file>`); checked against the real recipient below
@@ -35,7 +42,7 @@ export async function sendThreadMessage(
   if (!body && !attachments.length) return { error: "Write something first." };
   if (body.length > 4000) return { error: "Keep it under 4000 characters." };
   if (attachments.length > 4) return { error: "Up to four photos per message." };
-  if (Boolean(offerId) === Boolean(orderId)) return { error: "Choose one conversation to reply to." };
+  if ([offerId, orderId, enquiryListingId].filter(Boolean).length !== 1) return { error: "Choose one conversation to reply to." };
   const messageId = String(formData.get("message_id") ?? "");
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(messageId)) {
     return { error: "Refresh this page before sending your message." };
@@ -98,6 +105,17 @@ export async function sendThreadMessage(
     if (!listing) return { error: "Listing not found." };
     listingId = offer.listing_id;
     participants = [offer.buyer_id, listing.seller_id];
+  } else if (enquiryListingId) {
+    // The buyer writes to the seller; the seller answers the buyer who
+    // asked. The database checks both (20261107220600).
+    const { data: listing } = await admin
+      .from("listings")
+      .select("id, seller_id")
+      .eq("id", enquiryListingId)
+      .maybeSingle();
+    if (!listing) return { error: "Listing not found." };
+    listingId = listing.id;
+    participants = user.id === listing.seller_id ? [listing.seller_id, enquiryRecipient] : [user.id, listing.seller_id];
   }
 
   if (!participants.includes(user.id)) return { error: "That isn't your conversation." };
@@ -123,6 +141,9 @@ export async function sendThreadMessage(
   if (error) {
     const committed = await existingMessage();
     if (committed.error || !committed.data || !matches(committed.data)) {
+      if (isBlockedError(error)) return { error: BLOCKED_MESSAGE };
+      // A first message to someone new is limited in SQL (20261107220600).
+      if (error.code === "RL429") return { error: FIRST_CONTACT_LIMIT };
       // A suspended member's insert is refused by 20260929110000's policy —
       // say so rather than inviting a retry that can't succeed.
       if (await isSuspended(supabase, user.id)) return { error: SUSPENDED_MESSAGE };
@@ -164,4 +185,59 @@ export async function markThreadMessagesRead(
     // A missed read-receipt is not worth failing a page render over.
     reportError("[commerce] markThreadMessagesRead failed", { scope, error });
   }
+}
+
+/**
+ * "Message seller" (R-directcontact, Neil's ruling: buyers may message
+ * sellers). A signed-in buyer asks the seller about a listing for sale; the
+ * message joins the pair's conversation (20261107220600), where the seller
+ * can answer. The database holds the rules: a listing for sale or sold, the
+ * listing's own seller as recipient, no block between them, and a limit on
+ * first messages to new people. Agents never message people (AG-4).
+ */
+export async function messageSeller(_prev: CommerceState, formData: FormData): Promise<CommerceState> {
+  const { supabase, user } = await requireUser();
+  const listingId = String(formData.get("listing_id") ?? "");
+  const messageId = String(formData.get("message_id") ?? "");
+  const body = String(formData.get("body") ?? "").trim();
+  if (!UUID_V4.test(messageId)) return { error: "Refresh this page before sending your message." };
+  if (!/^[0-9a-f-]{36}$/i.test(listingId)) return { error: "Listing not found." };
+  if (!body) return { error: "Write something first." };
+  if (body.length > 4000) return { error: "Keep it under 4000 characters." };
+
+  const { data: listing } = await supabase.from("listings").select("id, seller_id, status").eq("id", listingId).maybeSingle();
+  if (!listing || !["active", "sold"].includes(listing.status)) return { error: "This part isn't for sale any more." };
+  if (listing.seller_id === user.id) return { error: "This is your own listing." };
+
+  async function conversationHref() {
+    const [a, b] = [user.id, listing!.seller_id].sort();
+    const { data } = await supabase.from("conversations").select("id").eq("participant_a", a).eq("participant_b", b).maybeSingle();
+    return data ? `/messages/${data.id}?about=${encodeURIComponent(`listing:${listingId}`)}` : "/messages";
+  }
+
+  // The same message id again (a lost response) is the same message.
+  const { data: previous } = await supabase.from("messages").select("sender_id, body, listing_id").eq("id", messageId).maybeSingle();
+  if (previous) {
+    return previous.sender_id === user.id && previous.body === body && previous.listing_id === listingId
+      ? { ok: "Sent.", href: await conversationHref() }
+      : { error: "This message changed after sending. Refresh before sending again." };
+  }
+  if (!(await allowAction(RATE_LIMITS.sendMessage, user.id))) return { error: rateLimitMessage(RATE_LIMITS.sendMessage) };
+
+  const { error } = await supabase.from("messages").insert({
+    id: messageId,
+    listing_id: listingId,
+    sender_id: user.id,
+    recipient_id: listing.seller_id,
+    body,
+  });
+  if (error) {
+    if (isBlockedError(error)) return { error: BLOCKED_MESSAGE };
+    if (error.code === "RL429") return { error: FIRST_CONTACT_LIMIT };
+    if (await isSuspended(supabase, user.id)) return { error: SUSPENDED_MESSAGE };
+    reportError("[messages] message seller failed", { code: error.code });
+    return { error: "Couldn't send your message. Try again." };
+  }
+  revalidatePath("/messages");
+  return { ok: "Sent.", href: await conversationHref() };
 }
