@@ -73,7 +73,6 @@ declare
   claim jsonb;
   rejected boolean;
 begin
-  update public.beta_access_config set enforced = false where singleton = true;
   insert into public.job_config(key, value) values ('media_storage_origin', 'https://proj.supabase.co')
     on conflict (key) do update set value = excluded.value;
   -- No payments_mode row: the production default, the rule enforced.
