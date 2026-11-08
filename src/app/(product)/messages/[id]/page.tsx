@@ -7,6 +7,7 @@ import { Avatar, ButtonLink, Media } from "@/components/ui";
 import { loadThread, markConversationRead, resolveThreadTarget } from "@/features/commerce/conversations";
 import { defaultDealKey, shortTitle, type Deal } from "@/features/commerce/deals";
 import { ReportButton } from "@/features/moderation/report-button";
+import { BlockButton } from "@/features/social/block-button";
 import { initialsOf } from "@/lib/format";
 import { markNotificationsReadForPage } from "@/lib/notifications-read";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
@@ -140,6 +141,8 @@ export default async function ConversationPage({
                 triggerLabel="Report"
                 context={target.conversationId ? `From conversation ${target.conversationId}` : "From messages"}
               />
+              {/* N54: messages about an order you share still go through. */}
+              <BlockButton memberId={person.id} memberName={person.name} />
             </span>
           </header>
 

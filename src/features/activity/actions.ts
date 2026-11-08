@@ -1,6 +1,7 @@
 "use server";
 
 import { allowAction, RATE_LIMITS, rateLimitMessage } from "@/lib/rate-limit";
+import { BLOCKED_MESSAGE, isBlockedError } from "@/lib/blocks";
 import { createClient } from "@/lib/supabase/server";
 import { SUSPENDED_MESSAGE, isSuspended } from "@/lib/suspension";
 
@@ -87,6 +88,7 @@ export async function addComment(_prev: CommentState, formData: FormData): Promi
     .from("activity_comments")
     .insert({ post_id: postId, author_id: user.id, body });
   if (error) {
+    if (isBlockedError(error)) return { error: BLOCKED_MESSAGE };
     if (await isSuspended(supabase, user.id)) return { error: SUSPENDED_MESSAGE };
     return { error: "Your reply didn't send. It's still here — try again." };
   }

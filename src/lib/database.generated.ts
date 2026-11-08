@@ -2724,6 +2724,39 @@ export type Database = {
         }
         Relationships: []
       }
+      member_blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_blocks_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_blocks_blocker_id_fkey"
+            columns: ["blocker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           attachments: string[]
@@ -7208,6 +7241,10 @@ export type Database = {
           questions: number
         }[]
       }
+      listing_enquiry_reply_allowed: {
+        Args: { p_buyer: string; p_listing: string }
+        Returns: boolean
+      }
       listing_public_offer_floor: {
         Args: { p_listing: string }
         Returns: number
@@ -7862,6 +7899,7 @@ export type Database = {
       }
       profile_is_visible: { Args: { p_id: string }; Returns: boolean }
       profile_sales_count: { Args: { p_profile: string }; Returns: number }
+      profile_shares_deal_with_me: { Args: { p_id: string }; Returns: boolean }
       prune_listing_edit_requests: { Args: never; Returns: number }
       prune_rate_limits: { Args: never; Returns: undefined }
       purchase_begin: {
