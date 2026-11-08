@@ -47,8 +47,8 @@ vi.mock("../../login/login-form", () => ({ LoginForm: () => <form data-form="log
 const render = async (reference = REFERENCE) =>
   renderToStaticMarkup(await AccountDeletionStatusPage({ params: Promise.resolve({ reference }) }));
 
-const status = (outcome: string, hold_order_id: string | null = null) => ({
-  data: [{ outcome, updated_at: "2026-11-08T10:00:00Z", hold_order_id }],
+const status = (outcome: string, hold_order_id: string | null = null, blocker_code: string | null = null) => ({
+  data: [{ outcome, updated_at: "2026-11-08T10:00:00Z", hold_order_id, blocker_code }],
   error: null,
 });
 const ORDER = "a1b2c3d4-0000-4000-8000-000000000001";
@@ -84,6 +84,17 @@ describe("deletion status for a member who can't sign in (OS-W11)", () => {
     expect(html).toContain("Paused: settle order A1B2C3D4");
     expect(html).toContain("still sign in to settle it");
     expect(html).toContain(`href="/login?next=${encodeURIComponent(`/orders/${ORDER}`)}"`);
+  });
+
+  // Ruled 8 Nov 2026: an open bank chargeback holds deletion. The member is
+  // told the bank is deciding it, not asked to settle it.
+  it("says an open bank chargeback is the bank's to decide", async () => {
+    db.result = status("temporary_financial_hold", ORDER, "open_chargeback");
+    const html = await render();
+    expect(html).toContain("Paused: order A1B2C3D4 has an open bank chargeback");
+    expect(html).toContain("The bank is still deciding it");
+    expect(html).not.toContain("settle");
+    expect(html).toContain("Sign in to see the order");
   });
 
   it("never links an order once the case has moved past the hold", async () => {
