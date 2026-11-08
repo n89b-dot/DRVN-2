@@ -57,7 +57,7 @@ async function loadPeople(supabase: Supabase, ids: string[]): Promise<Map<string
 const ORDER_COLUMNS =
   "id, status, buyer_id, seller_id, total_cents, is_collection, pickup_ready_at, created_at, shipped_at, delivered_at, completed_at, cancelled_at, refunded_at, updated_at, order_items(id, title, listing_id)";
 const OFFER_COLUMNS =
-  "id, status, buyer_id, listing_id, amount_cents, counter_amount_cents, created_at, countered_at, responded_at, updated_at, expires_at, round_count, listings!inner(id, title, seller_id)";
+  "id, status, buyer_id, listing_id, amount_cents, counter_amount_cents, created_at, countered_at, responded_at, updated_at, expires_at, round_count, ended_reason, listings!inner(id, title, seller_id)";
 
 type DealRows = { orders: OrderDealRow[]; offers: OfferDealRow[]; enquiries: EnquiryDealRow[] };
 
@@ -214,6 +214,7 @@ export async function loadDealRows(
       updated_at: f.updated_at,
       expires_at: f.expires_at,
       round_count: f.round_count,
+      ended_reason: f.ended_reason,
       title: listing.title,
       image: listingImages.get(f.listing_id) ?? null,
     });

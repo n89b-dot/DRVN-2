@@ -79,3 +79,22 @@ it("calls a counter at the minimum the final one", () => {
   ];
   expect(offerHistoryFromRounds(atFloor, { incoming: true, mandate })[3].reason).toBe("Final counter at your $230 minimum.");
 });
+
+// OS-W33 follow-up (20261108110100): withdraw_listing records a system
+// 'withdraw' round, so the rounds — not the offer row — are what the offer
+// page renders. That round is the seller withdrawing the listing, never the
+// buyer withdrawing the offer.
+it("reads a listing withdrawal as the seller's, from both sides", () => {
+  const withdrawn: OfferRound[] = [
+    { round_no: 1, actor_role: "buyer", kind: "offer", amount_cents: 40000, created_at: at(1) },
+    { round_no: 2, actor_role: "system", kind: "withdraw", amount_cents: null, created_at: at(2) },
+  ];
+  const seller = offerHistoryFromRounds(withdrawn, { incoming: true, endedReason: "listing_withdrawn" }).map((e) => e.label);
+  const buyer = offerHistoryFromRounds(withdrawn, { incoming: false, endedReason: "listing_withdrawn" }).map((e) => e.label);
+  expect(seller).toEqual(["Buyer made an offer", "You withdrew the listing, so the offer ended"]);
+  expect(buyer).toEqual(["You made an offer", "The seller withdrew this listing, so the offer ended"]);
+  expect([...seller, ...buyer].some((label) => /withdrew the offer/.test(label))).toBe(false);
+  // A buyer's own withdrawal still reads as theirs.
+  const own: OfferRound[] = [{ round_no: 1, actor_role: "buyer", kind: "withdraw", amount_cents: null, created_at: at(1) }];
+  expect(offerHistoryFromRounds(own, { incoming: true })[0].label).toBe("Buyer withdrew the offer");
+});

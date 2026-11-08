@@ -18,6 +18,7 @@ declare
     'listing_watch_counts(uuid[])',       -- counts only, for listings the caller can see (R2-09)
     'marketplace_search_capped_ids(text,text,text,text,text,text,integer,integer,integer)', -- the newest 1,001 ids marketplace_search_ids would give, within filters a visitor can apply; callers re-read under RLS (20261011130000)
     'marketplace_search_ids(text)',       -- ids of active parts of visible sellers matching a search; callers re-read under RLS
+    'my_deal_listing_ids()',              -- used by the archived-listing read policies: ids of listings the caller offered on or ordered; none for a visitor (OS-W33, 20261108110100)
     'mod_purchase_sources(uuid[])',       -- source car of purchased build lines, by unguessable item id
     'profile_follow_counts(uuid)',        -- public follower counts
     'profile_is_visible(uuid)',           -- used by public read policies
@@ -65,7 +66,7 @@ declare
     'order_buyer_reviewable(uuid)',                    -- boolean, only for the order's buyer or seller
     'price_comparables(text,text,text,uuid)',          -- aggregates of completed sales and live listings of one product, only from 3 up; no rows or ids (20261020140000)
     'reconcile_admin_external_operation(uuid,bigint,text,text)', -- refuses anyone but an admin with step-up
-    'withdraw_listing(uuid)',                          -- the caller's own listing only, listing-first lock; ends its live offers and archives it (N77, 20261107220700)
+    'withdraw_listing(uuid)',                          -- the caller's own listing only, listing-first lock; ends its live offers and archives it; refuses a removed listing (N77, 20261107220700, 20261108110100)
     'record_listing_view(uuid,text)',                  -- counts the caller's own view (bump_listing_view's rules) and its arrival surface; no viewer ids stored (OS-R-arrival, 20261107220200)
     'record_listing_edit(uuid,text,uuid,timestamp with time zone,jsonb)', -- the caller's own edit request
     'replay_listing_edit(uuid,text,uuid,timestamp with time zone)',      -- same request, replayed for its owner

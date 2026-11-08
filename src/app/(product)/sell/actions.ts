@@ -652,11 +652,16 @@ export async function setListingStatus(
   _prev: ListingActionState,
   formData: FormData
 ): Promise<ListingActionState> {
-  const { supabase, user } = await requireUser();
-
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "") as ListingStatus;
   if (!id || !SETTABLE_STATUSES.includes(status)) return { error: "Missing listing or status." };
+  // Archiving is withdrawing (OS-W33 follow-up, 20261108110100): the one
+  // database step that also ends any live offers and tells their buyers. A
+  // bare status change left those offers live on a listing the buyers could
+  // no longer open, and the database now refuses it (LW409).
+  if (status === "archived") return withdrawListing(_prev, formData);
+
+  const { supabase, user } = await requireUser();
 
   const { data: existing } = await supabase
     .from("listings")
@@ -798,12 +803,15 @@ export async function withdrawListing(
   const { data, error } = await supabase.rpc("withdraw_listing", { p_listing: id });
   if (error) {
     if (error.code === "LW423") return { error: "This listing is mid-checkout or sold — the order decides it now." };
+    if (error.code === "LW403") return { error: "This listing was removed by moderation — check your notifications." };
     if (error.code === "P0002") return { error: "That listing isn't yours or no longer exists." };
     return { error: "Couldn't withdraw it. Nothing changed — try again." };
   }
   const ended = Number((data as { offers_ended?: number } | null)?.offers_ended ?? 0);
+  revalidatePath("/sell");
   revalidatePath("/listings");
   revalidatePath(`/listings/${id}`);
+  revalidatePath(`/listings/${id}/edit`);
   revalidatePath("/offers");
   revalidatePath("/marketplace");
   return {

@@ -37,11 +37,12 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-import { deleteListing, withdrawListing } from "./actions";
+import { deleteListing, setListingStatus, withdrawListing } from "./actions";
 
-function form(id = "listing-1") {
+function form(id = "listing-1", status?: string) {
   const data = new FormData();
   data.set("id", id);
+  if (status) data.set("status", status);
   return data;
 }
 
@@ -68,5 +69,20 @@ describe("N77 withdraw, don't delete", () => {
     const result = await deleteListing(null, form());
     expect(result).toMatchObject({ withdrawInstead: true });
     expect(result?.error).toContain("withdrawn instead of deleted");
+  });
+
+  // OS-W33 follow-up (20261108110100): Archive used to change the status
+  // alone, leaving the buyers' offers live on a listing they could no longer
+  // see. It is the same step as Withdraw now.
+  it("archives through withdraw_listing, so live offers end and buyers are told", async () => {
+    state.rpc.mockReturnValue({ data: { outcome: "withdrawn", offers_ended: 1 }, error: null });
+    const result = await setListingStatus(null, form("listing-1", "archived"));
+    expect(state.rpc).toHaveBeenCalledWith("withdraw_listing", { p_listing: "listing-1" });
+    expect(result?.ok).toBe("Withdrawn. 1 open offer ended, and the buyer was told.");
+  });
+
+  it("leaves a listing moderation removed to moderation", async () => {
+    state.rpc.mockReturnValue({ data: null, error: { code: "LW403", message: "x" } });
+    expect((await withdrawListing(null, form()))?.error).toContain("removed by moderation");
   });
 });
