@@ -1627,10 +1627,13 @@ that runner (OS-W10, readiness N131 and N246):
   table, both in the dry run and again inside the apply transaction. Nothing
   overrides this.
 - **Risky SQL needs an allow-list entry on a populated database.** A
-  top-level `TRUNCATE` or `DROP TABLE`, or dynamic SQL (`EXECUTE` in a `DO`
-  block, or in a function the file creates and then calls) that destroys data
-  or can't be classified from its leading literal, is refused when `public`
-  has tables unless `supabase/migration-targets.json` `dynamicSqlAllowed`
+  top-level `TRUNCATE` or `DROP TABLE`, the same run directly inside a `DO`
+  block or a function the file creates and then calls, or dynamic SQL
+  (`EXECUTE` there) that destroys data or can't be classified from its
+  leading literal, is risky. Bodies are read in any quoting (dollar quotes,
+  `'…'` with doubled quotes, `E'…'` escapes, nested `DO`s), and a body that
+  doesn't parse counts as risky; temporary tables the body creates are
+  exempt. A risky file is refused when `public` has tables unless `supabase/migration-targets.json` `dynamicSqlAllowed`
   names the file, the sha256 of its exact bytes and a reason. The tree has one
   entry, `20261011100000_listing_vehicle_fit.sql` (it empties and rebuilds a
   derived table); a test fails if a risky file has no entry or an entry goes

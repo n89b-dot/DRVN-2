@@ -7,13 +7,30 @@
 //   start, end  offsets into the original text (end is just past its `;`)
 //   code        the statement with comments removed and every literal
 //               replaced by a placeholder ('' or $$), for keyword checks
-//   literals    the contents of its string and dollar-quoted literals, in order
+//   literals    the contents of its string and dollar-quoted literals, in
+//               order, unescaped ('' and E'' backslash escapes resolved), so a
+//               body in any quoting can be lexed again
 //   bodies      the contents of its dollar-quoted literals only (DO blocks,
 //               function bodies), in order
 //   unterminated true when the text ends inside a literal or comment
 
-const IDENT = /[A-Za-z0-9_\u0080-￿]/;
-const TAG_START = /[A-Za-z_\u0080-￿]/;
+const IDENT = /[A-Za-z0-9_\u0080-\uffff]/;
+const TAG_START = /[A-Za-z_\u0080-\uffff]/;
+
+const SIMPLE_ESCAPES = { b: "\b", f: "\f", n: "\n", r: "\r", t: "\t" };
+
+/** One backslash escape in an E'' string at `j`: [its text, characters consumed]. */
+function unescape(sql, j) {
+  const next = sql[j + 1] ?? "";
+  if (SIMPLE_ESCAPES[next]) return [SIMPLE_ESCAPES[next], 2];
+  const octal = /^[0-7]{1,3}/.exec(sql.slice(j + 1, j + 4));
+  if (octal) return [String.fromCharCode(parseInt(octal[0], 8)), 1 + octal[0].length];
+  const hex = /^x([0-9A-Fa-f]{1,2})/.exec(sql.slice(j + 1, j + 4));
+  if (hex) return [String.fromCharCode(parseInt(hex[1], 16)), 1 + hex[0].length];
+  const unicode = /^(u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/.exec(sql.slice(j + 1, j + 10));
+  if (unicode) return [String.fromCodePoint(parseInt(unicode[0].slice(1), 16)), 1 + unicode[0].length];
+  return [next, 2]; // \' is ', \\ is \, any other escaped character is itself
+}
 
 /** The dollar-quote tag starting at `i` (`$$` or `$name$`), or null. */
 function dollarTag(sql, i) {
@@ -77,8 +94,9 @@ export function splitStatements(sql) {
           break;
         }
         if (escapes && sql[j] === "\\") {
-          value += sql.slice(j, j + 2);
-          j += 2;
+          const [text, length] = unescape(sql, j);
+          value += text;
+          j += length;
         } else if (sql[j] === "'" && sql[j + 1] === "'") {
           value += "'";
           j += 2;
@@ -163,13 +181,31 @@ export function classifyDynamic(sql) {
 }
 
 /**
- * Every dynamic EXECUTE in a PL/pgSQL body, with what it runs as far as the
+ * Every dynamic EXECUTE in a PL/pgSQL body, and every TRUNCATE or DROP
+ * TABLE/SCHEMA/MATERIALIZED VIEW/OWNED it runs directly, with what it runs as far as the
  * text shows. `execute format('…', …)` and `execute '…' || x` classify by the
- * leading literal; `execute v_sql` is unknown.
+ * leading literal; `execute v_sql` is unknown. A body that doesn't lex to the
+ * end is "unparsable". Literals inside the body that mention EXECUTE (a
+ * nested DO, or a function body created from inside this one, in any
+ * quoting) are searched the same way, a few levels deep; deeper is
+ * "unparsable" too.
  */
-export function dynamicExecutes(body) {
-  const found = [];
-  for (const statement of splitStatements(body)) {
+export function dynamicExecutes(body, depth = 0) {
+  if (depth > 4) return [{ text: "nested too deeply to inspect", kind: "unparsable" }];
+  const statements = splitStatements(body);
+  const found = statements.some((statement) => statement.unterminated)
+    ? [{ text: "a body that doesn't parse", kind: "unparsable" }]
+    : [];
+  // Temporary tables this body makes are its own scratch space: emptying or dropping them loses nothing.
+  const temporary = new Set(
+    [...statements.map((statement) => statement.code).join(" ").matchAll(/\bcreate\s+(?:local\s+)?temp(?:orary)?\s+table\s+(?:if\s+not\s+exists\s+)?(?:pg_temp\.)?"?(\w+)"?/gi)].map((m) => m[1].toLowerCase()),
+  );
+  const onlyTemporary = (targets) =>
+    targets
+      .split(",")
+      .map((name) => name.trim().replace(/^(if\s+exists\s+|only\s+)+/i, "").split(/\s/)[0].replace(/"/g, "").toLowerCase())
+      .every((name) => name.startsWith("pg_temp.") || temporary.has(name));
+  for (const statement of statements) {
     const code = statement.code;
     const pattern = /\bexecute\b/gi;
     let match;
@@ -178,11 +214,26 @@ export function dynamicExecutes(body) {
       // `grant execute on function …` and `… execute function f()` in a trigger aren't dynamic SQL.
       if (/^(on|function|procedure)\b/i.test(after)) continue;
       // Which literal does the expression start with? Count placeholders before it.
-      const literalIndex = (code.slice(0, match.index + match[0].length).match(/''|\$\$/g) ?? []).length;
-      const startsWithLiteral = /^(format\s*\(\s*)?(''|\$\$)/i.test(after);
+      const literalIndex = placeholdersBefore(code, match.index + match[0].length);
+      const startsWithLiteral = /^(format\s*\(\s*)?(E?''|\$\$)/i.test(after);
       const sql = startsWithLiteral ? statement.literals[literalIndex] : null;
       found.push({ text: `execute ${sql == null ? after.slice(0, 80) : `'${sql.trim().slice(0, 80)}'`}`, kind: classifyDynamic(sql) });
     }
+    // PL/pgSQL runs TRUNCATE and DROP directly too, without EXECUTE.
+    const direct = /\b(truncate(?:\s+table)?|drop\s+(?:table|materialized\s+view))\s+([^;]*?)(?:\s+(?:cascade|restrict|restart\s+identity|continue\s+identity))*\s*$/i.exec(code);
+    if (direct && !onlyTemporary(direct[2])) found.push({ text: code.slice(direct.index, direct.index + 80), kind: "destructive" });
+    if (/\bdrop\s+(schema|owned)\b/i.test(code)) found.push({ text: code.slice(0, 80), kind: "destructive" });
+    // A nested body (a DO block, or a function created from in here) in any quoting.
+    const nested = /\b(do(?:\s+language\s+\w+)?|as)\s*(E?''|\$\$)/gi;
+    while ((match = nested.exec(code))) {
+      const literal = statement.literals[placeholdersBefore(code, match.index + match[0].length - match[2].length)];
+      if (literal != null) found.push(...dynamicExecutes(literal, depth + 1));
+    }
   }
   return found;
+}
+
+/** How many literal placeholders ('' or $$) the masked code has before `index`. */
+function placeholdersBefore(code, index) {
+  return (code.slice(0, index).match(/''|\$\$/g) ?? []).length;
 }

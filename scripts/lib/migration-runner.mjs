@@ -102,7 +102,7 @@ export function parseMigrationFile(file, text, { migrationsDir = path.resolve("s
   const dynamic = (bodies) => bodies.flatMap((inner) => dynamicExecutes(inner)).filter((e) => e.kind !== "safe");
   for (const statement of statements) {
     if (/^do\b/i.test(statement.code)) {
-      for (const e of dynamic(statement.bodies)) risky.push(`a DO block runs ${e.kind} dynamic SQL (${e.text.replace(/\s+/g, " ").slice(0, 60)})`);
+      for (const e of dynamic(statement.literals)) risky.push(`a DO block runs ${e.kind} dynamic SQL (${e.text.replace(/\s+/g, " ").slice(0, 60)})`);
     }
   }
   // A function this file creates and also calls runs its dynamic SQL now.
@@ -110,7 +110,7 @@ export function parseMigrationFile(file, text, { migrationsDir = path.resolve("s
     .map((statement) => [statement, statement.code.match(/^create\s+(?:or\s+replace\s+)?(?:function|procedure)\s+(?:[\w"]+\.)?"?(\w+)"?\s*\(/i)])
     .filter(([, m]) => m);
   for (const [statement, m] of created) {
-    const unsafe = dynamic(statement.bodies);
+    const unsafe = dynamic(statement.literals);
     if (!unsafe.length) continue;
     const call = new RegExp(`\\b${m[1]}\\s*\\(`, "i");
     const called = statements.some(
@@ -118,7 +118,7 @@ export function parseMigrationFile(file, text, { migrationsDir = path.resolve("s
       (other) =>
         /^(select|with|insert|update|delete|call|values)\b/i.test(other.code)
           ? call.test(other.code)
-          : /^do\b/i.test(other.code) && other.bodies.some((inner) => call.test(inner)),
+          : /^do\b/i.test(other.code) && other.literals.some((inner) => call.test(inner)),
     );
     if (called) risky.push(`calls ${m[1]}(), which runs ${unsafe[0].kind} dynamic SQL`);
   }

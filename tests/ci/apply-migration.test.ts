@@ -261,10 +261,41 @@ describe("transaction control in a file", () => {
   });
 });
 
+// The same TRUNCATE in every way PostgreSQL lets a DO body be quoted (OS-W10 fix-check).
+const QUOTED_TRUNCATES: Record<string, (table: string) => string> = {
+  "dollar-quoted": (t) => `DO $body$ BEGIN EXECUTE $sql$TRUNCATE ${t} CASCADE$sql$; END $body$;\n`,
+  "single-quoted": (t) => `DO 'BEGIN EXECUTE ''TRUNCATE ${t} CASCADE''; END';\n`,
+  "E-string": (t) => `DO E'BEGIN EXECUTE \\'TRUNCATE ${t} CASCADE\\'; END';\n`,
+  "with LANGUAGE": (t) => `DO LANGUAGE plpgsql 'BEGIN EXECUTE ''TRUNCATE ${t}''; END';\n`,
+  "direct, no EXECUTE": (t) => `DO 'BEGIN TRUNCATE ${t}; END';\n`,
+  "a nested DO": (t) => `DO $o$ BEGIN EXECUTE $q$DO 'BEGIN EXECUTE ''TRUNCATE ${t}''; END'$q$; END $o$;\n`,
+  "a DO inside a DO": (t) => `DO $o$ BEGIN DO 'BEGIN TRUNCATE ${t}; END'; END $o$;\n`,
+  "a single-quoted function the file calls": (t) =>
+    `create function public.fixture_wipe() returns void language plpgsql as 'begin execute ''truncate ${t}''; end';\nselect public.fixture_wipe();\n`,
+};
+
 describe("dynamic and table-emptying SQL on a populated database", () => {
   const parsed = (name: string, text: string) => parseMigrationFile(path.join(migrationsDir, name), text, { migrationsDir });
   const TRUNCATE_DO = "DO $body$ BEGIN EXECUTE $sql$TRUNCATE public.accounts CASCADE$sql$; END $body$;\n";
   const populated = { publicTables: 118, recorded: new Set<string>() };
+
+  it("refuses a TRUNCATE in a DO or function body however the body is quoted", () => {
+    for (const [form, text] of Object.entries(QUOTED_TRUNCATES)) {
+      const m = parsed("20990101000610_x.sql", text("public.accounts"));
+      expect(m.problems, form).toEqual([]);
+      expect(m.risky.length, form).toBeGreaterThan(0);
+      expect(planMigrations(populated, [m])[0].action, form).toBe("refuse");
+    }
+  });
+
+  it("refuses a body it can't parse, and leaves temporary tables and safe single-quoted SQL alone", () => {
+    const broken = parsed("20990101000611_x.sql", "DO 'BEGIN EXECUTE ''TRUNCATE public.accounts; END';\n");
+    expect(broken.risky[0]).toMatch(/unparsable/);
+    expect(planMigrations(populated, [broken])[0].action).toBe("refuse");
+    const scratch = parsed("20990101000612_x.sql", "DO 'BEGIN CREATE TEMP TABLE scratch (id int); TRUNCATE scratch; DROP TABLE IF EXISTS scratch; END';\n");
+    const grant = parsed("20990101000613_x.sql", "DO E'BEGIN EXECUTE \\'grant select on public.t to anon\\'; END';\n");
+    for (const m of [scratch, grant]) expect([m.base, m.risky]).toEqual([m.base, []]);
+  });
 
   it("refuses a DO block that truncates through EXECUTE", () => {
     const m = parsed("20990101000600_fixture_dynamic.sql", TRUNCATE_DO);
@@ -662,6 +693,32 @@ describe.skipIf(!realUrl)("against a real, empty local Postgres", () => {
     }
     expect(await tables()).toEqual(["fixture_base"]);
     expect(await history()).toEqual(["0001"]);
+  });
+
+  it("refuses every quoting of a DO-block TRUNCATE once the database has data", async () => {
+    await db.query("insert into public.fixture_base values (3)");
+    let version = 20990101000800;
+    for (const [form, text] of Object.entries(QUOTED_TRUNCATES)) {
+      const result = await twoStep([file(`${(version += 1)}_fixture_quoted.sql`, text("public.fixture_base"))]);
+      expect(result.code, form).toBe(1);
+      expect(result.out, form).toMatch(/risky on a populated database/);
+    }
+    expect((await db.query("select count(*)::int as n from public.fixture_base")).rows[0].n).toBe(1);
+    expect(await history()).toEqual(["0001"]);
+    await db.query("delete from public.fixture_base");
+  });
+
+  it("does run each quoting as real PL/pgSQL, so the refusals above are of working SQL", async () => {
+    // On a fresh scratch table, each form really empties it: proof the guard isn't refusing dead text.
+    for (const [form, text] of Object.entries(QUOTED_TRUNCATES)) {
+      await db.query("create table public.fixture_scratch (id int); insert into public.fixture_scratch values (1)");
+      await db.query("begin");
+      await db.query(text("public.fixture_scratch"));
+      const n = (await db.query("select count(*)::int as n from public.fixture_scratch")).rows[0].n;
+      await db.query("rollback");
+      await db.query("drop function if exists public.fixture_wipe(); drop table public.fixture_scratch");
+      expect(n, form).toBe(0);
+    }
   });
 
   it("refuses a DO block that truncates through EXECUTE once the database has data", async () => {
