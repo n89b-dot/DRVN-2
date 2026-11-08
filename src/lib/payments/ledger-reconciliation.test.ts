@@ -237,6 +237,40 @@ const baseAnswers = (): Record<string, Answer[]> => ({
   "transfer_intents:select": [{ data: ledger().transfers, error: null }],
 });
 
+describe("the restore pass (N232)", () => {
+  it("starts where the operator says, not at the restored run history", () => {
+    const recoveryPoint = new Date(NOW - 10 * 86_400_000).toISOString();
+    const lastRestoredRun = new Date(NOW - 11 * 86_400_000).toISOString();
+    const { start, end } = reconciliationWindow(NOW, lastRestoredRun, recoveryPoint);
+    expect(start).toBe(Date.parse(recoveryPoint));
+    expect(end).toBe(NOW - 2 * 3_600_000);
+  });
+
+  it("refuses a since after the window's end, unparseable, or more than 35 days back", () => {
+    expect(() => reconciliationWindow(NOW, null, new Date(NOW - 3_600_000).toISOString())).toThrow(RangeError);
+    expect(() => reconciliationWindow(NOW, null, "yesterday-ish")).toThrow(RangeError);
+    expect(() => reconciliationWindow(NOW, null, new Date(NOW - 36 * 86_400_000).toISOString())).toThrow(/35 days/);
+  });
+
+  it("reads Stripe from the recovery point and records the run like any other", async () => {
+    const { admin, writes } = runAdmin(baseAnswers());
+    const since = new Date(NOW - 20 * 86_400_000).toISOString();
+    await expect(reconcileLedger(admin, { now: new Date(NOW), since })).resolves.toMatchObject({ complete: true });
+    expect(mocks.paymentIntentsList).toHaveBeenCalledWith({
+      created: { gte: Math.floor(Date.parse(since) / 1000), lte: Math.floor((NOW - 2 * 3_600_000) / 1000) },
+      limit: 100,
+    });
+    expect(writes[0]).toMatchObject({ table: "ledger_reconciliation_runs", op: "insert", value: { window_start: since } });
+  });
+
+  it("refuses a bad since before reading or writing anything", async () => {
+    const { admin, from } = runAdmin(baseAnswers());
+    await expect(reconcileLedger(admin, { now: new Date(NOW), since: "not a time" })).rejects.toBeInstanceOf(RangeError);
+    expect(from).not.toHaveBeenCalled();
+    expect(mocks.paymentIntentsList).not.toHaveBeenCalled();
+  });
+});
+
 describe("a reconciliation run", () => {
   it("reads Stripe's window, changes nothing when all agrees, and records a complete run", async () => {
     const { admin, writes } = runAdmin(baseAnswers());

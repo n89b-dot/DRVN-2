@@ -44,6 +44,9 @@ for file in supabase/migrations/*.sql; do
 done
 source_sql -q < scripts/fixtures/recovery-seed.sql
 source_sql -At < scripts/fixtures/recovery-fingerprint.sql > "$scratch/source.jsonl"
+# N232: photo references vs Storage's object rows, before and after. A restore
+# must not change which references have objects or which objects are named.
+source_sql -At -c 'select public.storage_reference_report(50)' > "$scratch/source-storage.json"
 docker exec "$source_name" pg_dump -U supabase_admin -d postgres -Fc --no-owner --schema=public --schema=private --schema=auth --schema=storage --schema=extensions > "$scratch/database.dump"
 # Database backups exclude Storage bytes. Archive them separately at the same
 # synthetic recovery point; the manifest also binds bytes to a restored row.
@@ -54,6 +57,8 @@ DRVN_RESTORE_DUMP="$scratch/database.dump" DRVN_RESTORE_DISPOSABLE=local-contain
 target_sql -q < supabase/tests/restore_integrity.sql
 target_sql -At < scripts/fixtures/recovery-fingerprint.sql > "$scratch/target.jsonl"
 cmp "$scratch/source.jsonl" "$scratch/target.jsonl"
+target_sql -At -c 'select public.storage_reference_report(50)' > "$scratch/target-storage.json"
+cmp "$scratch/source-storage.json" "$scratch/target-storage.json"
 [ "$(target_sql -At -c 'select count(*) from public.job_config')" = 0 ]
 [ "$(target_sql -At -c "select count(*) from storage.objects where bucket_id='dispute-evidence' and name='recovery-fixture/evidence.txt'")" = 1 ]
 # A fresh image may not install pg_cron at all. If present it must be idle.
@@ -67,6 +72,7 @@ const fs=require('node:fs');const crypto=require('node:crypto');
 const [scratch,report,migrations,started]=process.argv.slice(2);
 const hash=p=>crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
 const tables=fs.readFileSync(scratch+'/target.jsonl','utf8').trim().split('\n').map(JSON.parse);
-fs.writeFileSync(report,JSON.stringify({observedAt:new Date().toISOString(),scope:'Fresh synthetic local database and separate object archive; not hosted recovery, provider reconciliation or approved RPO/RTO',migrations:Number(migrations),elapsedSeconds:Math.round(Date.now()/1000-Number(started)),matchingTables:tables.length,matchingRows:tables.reduce((n,t)=>n+t.rows,0),databaseArchiveSha256:hash(scratch+'/database.dump'),object:{bucket:'dispute-evidence',path:'recovery-fixture/evidence.txt',sha256:hash(scratch+'/restored-objects/dispute-evidence/recovery-fixture/evidence.txt'),restoredReferenceVerified:true},outboundConfigCleared:true,activeSchedules:0,restoreIntegrity:'passed',tableFingerprints:'matched'},null,2)+'\n');
+const storage=JSON.parse(fs.readFileSync(scratch+'/target-storage.json','utf8'));
+fs.writeFileSync(report,JSON.stringify({observedAt:new Date().toISOString(),scope:'Fresh synthetic local database and separate object archive; storage references compared before and after; not hosted recovery, Stripe reconciliation or approved RPO/RTO',migrations:Number(migrations),elapsedSeconds:Math.round(Date.now()/1000-Number(started)),matchingTables:tables.length,matchingRows:tables.reduce((n,t)=>n+t.rows,0),databaseArchiveSha256:hash(scratch+'/database.dump'),object:{bucket:'dispute-evidence',path:'recovery-fixture/evidence.txt',sha256:hash(scratch+'/restored-objects/dispute-evidence/recovery-fixture/evidence.txt'),restoredReferenceVerified:true},storageReferences:{references:storage.references,missingObjects:storage.missingObjects,unreferencedObjects:storage.unreferencedObjects,matchedSource:true},outboundConfigCleared:true,activeSchedules:0,restoreIntegrity:'passed',tableFingerprints:'matched'},null,2)+'\n');
 JS
 printf 'Local coordinated database/object rehearsal passed: %s\n' "$report"

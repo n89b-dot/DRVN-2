@@ -373,6 +373,27 @@ Every money queue is durable and visible in **Admin → Payments**:
   URL unauthenticated must 400/403. (0027 self-checks assert this at apply
   time.)
 
+## 5c. Old photos that still carry metadata (one-off, N627)
+
+Message photos sent before 20261005100000 went into `message-photos` straight
+from the browser and may still hold EXIF with GPS. New uploads are
+re-encoded by the server. Run once per project, dry run first:
+
+```sh
+DRVN_MEDIA_PROJECT_URL=$NEXT_PUBLIC_SUPABASE_URL node scripts/owner/scrub-photo-metadata.mjs            # dry run: counts only
+DRVN_MEDIA_PROJECT_URL=$NEXT_PUBLIC_SUPABASE_URL node scripts/owner/scrub-photo-metadata.mjs --apply    # re-encode in place
+```
+
+It checks `message-photos` and `agent-chat-photos`, re-encodes any photo with
+EXIF/XMP/IPTC in place (same path and format, orientation applied) under the
+media cleanup's per-object lock (20261108120010), and records each outcome,
+so a rerun continues where the last stopped. Repeat `--apply` until it
+reports nothing left, then once more to confirm. `skipped` objects (a format
+it won't re-encode) are listed for a person to look at. Dispute evidence is
+never touched (kept as uploaded); public buckets use
+`scripts/public-media-backfill.mjs`. Not scheduled: new uploads can't carry
+metadata, so there is nothing for a repeat run to find.
+
 ## 6. Backups, and the rehearsed restore
 
 Use the backup and point-in-time recovery facilities actually enabled on the
@@ -420,13 +441,142 @@ Hosted acceptance still requires:
    and compare operation identities, immutable commercial snapshots, RLS,
    private object references and object checksums.
 3. Reconcile provider activity since the recovery point before restarting money
-   workers. Reapply deletion/retention tombstones. Hold ambiguous effects for
-   operator review instead of creating replacement operations.
+   workers (§6b). Reconcile storage references against objects and reapply
+   deletion/retention tombstones (§6a). Hold ambiguous effects for operator
+   review instead of creating replacement operations.
 4. Rehearse the previous compatible application with queued work, Auth,
    provider callbacks and private downloads. Use a forward fix if the previous
    application is incompatible; do not erase committed financial state.
 5. Record actual elapsed recovery time, unrecovered data and operator findings
    against approved targets. Obtain hosted acceptance before releasing invitations.
+
+### 6a. Storage objects: back up, restore, reconcile (N232)
+
+A database backup or point-in-time recovery does **not** contain photo bytes.
+Supabase keeps them in object storage outside Postgres; the database holds
+only the rows that name them (`car_images`, `listing_images`, `messages.attachments`,
+`dispute_evidence`, `agent_messages.images`, post bodies, order snapshots…)
+and Storage's own object rows (`storage.objects`). A database restore rolls
+both kinds of row back to the recovery point and leaves the bytes as they are
+now, so afterwards:
+
+| Since the recovery point… | After a database-only restore | What to do |
+|---|---|---|
+| a photo was uploaded | bytes in the bucket, no `storage.objects` row: invisible to the app | nothing for the app; it is an orphan. Delete it from the bucket only after step 5 below, never before |
+| a photo was deleted (cleanup, a member's deletion, a takedown) | row and reference back, bytes gone | restore that object's version from the object backup, **unless** the deletion was a member's or a takedown: then reapply the deletion (step 5) |
+| a photo was re-encoded (N627 job) | row back, bytes are the re-encoded ones | nothing: same path, metadata already gone |
+
+**Backup.** Keep a separate, versioned copy of every bucket in step with the
+database recovery points: at least `avatars`, `car-images`, `activity-images`,
+`listing-images`, `dispute-evidence`, `message-photos` and `agent-chat-photos`
+(and `account-exports` if exports must survive). Use Supabase's S3-compatible
+access (Storage → Settings → S3 access keys) with a sync tool into a bucket
+with object versioning on, on a schedule no longer than the database's backup
+interval, retained at least as long as the database backups. The private
+buckets hold personal data: the copy is private, encrypted, and deleted on the
+same schedule as the database backups (privacy page, deletion requests).
+Record the sync's last completion time; it is the object recovery point.
+
+**Restore, in order** (on the isolated target first, as in §6 step 1):
+
+1. Restore the database recovery point, outbound jobs disabled.
+2. Restore object versions as of the same moment (or the closest *later*
+   object snapshot: a later copy has extra bytes, which are harmless orphans;
+   an earlier one is missing photos) into the target's buckets, keeping paths.
+3. Run the reference check. It is read-only:
+
+   ```sh
+   DRVN_MEDIA_PROJECT_URL=$NEXT_PUBLIC_SUPABASE_URL node scripts/owner/storage-reference-check.mjs --verify-bytes
+   ```
+
+   It prints references whose object has no row (`storage_reference_report`,
+   20261108120020), member-media objects nothing names, and, with
+   `--verify-bytes`, every object row whose bytes Storage can't find (a HEAD
+   per object). It exits 1 when a reference or bytes are missing or a check
+   went unanswered. `--json` keeps the full result for the restore record.
+4. For each missing object: restore it from an older object version if one
+   exists; otherwise record it as lost in the restore record. Don't edit the
+   referencing rows to hide it: a missing listing photo shows as missing,
+   which is the truth, and order snapshots and dispute evidence are records.
+5. Reapply every deletion made since the recovery point before reopening:
+   account deletions (`account_deletion_requests`, the deletion worker),
+   copyright takedowns (`copyright_notices`), chat clears, and the media
+   cleanup's own work (`media_cleanup_queue` reruns by itself). A restored
+   photo a member had deleted must not come back. The operator's list comes
+   from the support/takedown log and the audit log export taken before the
+   incident, since the restored database no longer has those rows.
+6. Run the check again until it is clean, then delete orphans from step 2's
+   table only if they are not in step 5's list of photos to keep deleted.
+
+`scripts/local-recovery-rehearsal.sh` runs the report on the synthetic source
+and on the restored target and requires the two to be identical.
+
+### 6b. Stripe after a database restore (N232)
+
+A restore can roll the ledger back but not Stripe: payments captured, refunds
+made and payouts (transfers) sent after the recovery point still happened.
+The restored database doesn't know about them, so restarting the money
+workers on it can pay a seller twice or pay out an order that was refunded.
+**Money workers stay off until this section is done.** None of these steps
+moves money; corrections are the console's existing audited commands. The
+money rules (who is paid, when, refunds, holds, fees) don't change.
+
+1. **Keep the schedule off.** On the restored project leave every scheduled
+   job in §4 inactive and the `job_config` worker URLs empty, as the drill
+   does; above all `drvn-transfer-worker` (the whole money pass: captures,
+   payouts, refunds, returns, disputes) and `drvn-delivery-auto-confirm`.
+   Don't press "Run worker now". Note the recovery point T.
+2. **Replay Stripe's events since T.** Events Stripe delivered between T and
+   the restore were applied to the lost database and won't be sent again on
+   their own. List them (`stripe events list --created[gte]=<T − 1 hour as a
+   Unix time> --limit 100`, paging with `--starting-after`; Stripe keeps
+   events for 30 days) and resend each to the platform and Connect endpoints
+   (`stripe events resend <evt_id> --webhook-endpoint <we_id>`), or use
+   Admin → Payments → Replay for one retained here. Every handler is guarded
+   so a replay applies at most once (`dispatchStripeEvent`,
+   `src/lib/payments/settlement.ts`); one that can't apply stays unprocessed
+   or opens a recovery case, and step 3 lists it either way.
+3. **Run the ledger reconciliation from the recovery point** (#91, N115). The
+   daily run starts at the last complete run in its own history, which was
+   restored too, so give it the start explicitly (up to 35 days back):
+
+   ```sh
+   curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
+     "https://<domain>/api/jobs/ledger-reconciliation?since=<T − 48 hours, ISO 8601>"
+   ```
+
+   It is read-only and compares payments, refunds and transfers (order
+   payouts and credit payouts) both ways; each discrepancy becomes a
+   `ledger_discrepancy` case in Admin → Payments. A `503`/`complete: false`
+   means it couldn't read everything: run it again. Run it once more two
+   hours after the restore, because each pass stops two hours before now.
+4. **Resolve every case before restarting.** What the common restore cases
+   mean:
+   - `payment:…:missing` — Stripe captured a payment for an order the
+     restored database doesn't have (created after T). The buyer was charged:
+     refund it in the Stripe Dashboard, or rebuild the order from the
+     buyer's receipt; record which in the case.
+   - `transfer:…:missing` on an order — the seller was already paid. Before
+     the transfer worker runs, that order's `transfer_intents` row must
+     describe the transfer Stripe made, so the worker's own lookup finds and
+     records it instead of paying again: set `operation_key`
+     (the transfer's `transfer_operation` metadata), `dispatch_amount_cents`,
+     `dispatch_currency`, `dispatch_destination`, `dispatch_source_transaction`,
+     `dispatch_transfer_group` from the Stripe transfer, and
+     `provider_call_may_have_occurred = true`. Anything that doesn't match
+     exactly becomes an operator recovery case instead of a payout.
+   - `refund:…:missing` — Stripe refunded a payment the restored ledger
+     doesn't show refunded. Hold that order's payout (leave its intent's
+     `next_attempt_at` in the future) until the refund is recorded.
+   - `carry:…:missing` — a credit payout Stripe sent: same as a transfer.
+   - Stripe payouts to sellers' banks are Stripe's (Express accounts) and
+     follow the transfers; nothing in DRVN's ledger to restore.
+5. **Restart** the money jobs only when a fresh reconciliation pass (step 3)
+   opens no new case and every restore case is closed. Then watch Admin →
+   Settings → Background jobs for one full cycle.
+
+Record T, the restore time, every replayed event count, every case and how it
+closed in the restore record (the table below).
 
 | Date | Rehearsal | Evidence and limits |
 |---|---|---|

@@ -18,7 +18,21 @@ const state = vi.hoisted(() => ({
   auditCalls: [] as Record<string, unknown>[],
   profileLookups: [] as number[],
   failOnOrdersPage: 0,
+  // N531: the admin session's audit records, in order.
+  exportRecords: [] as Record<string, unknown>[],
+  failRecordPhase: null as string | null,
+  role: "admin" as "admin" | "viewer",
 }));
+
+// The admin's own session (RLS client): only record_admin_export goes here.
+const session = {
+  rpc: async (name: string, args: Record<string, unknown>) => {
+    if (name !== "record_admin_export") return { data: null, error: { message: `unexpected session rpc ${name}` } };
+    state.exportRecords.push(args);
+    if (state.failRecordPhase === args.p_phase) return { data: null, error: { message: "audit unavailable" } };
+    return { data: args.p_phase === "started" ? "11111111-1111-4111-8111-111111111111" : args.p_export, error: null };
+  },
+};
 
 function profilesBuilder() {
   const builder: Record<string, unknown> = {};
@@ -58,7 +72,7 @@ const client = {
 };
 
 vi.mock("@/lib/admin/guard", () => ({
-  getAdminContext: async () => ({ userId: "admin-1", role: "admin" }),
+  getAdminContext: async () => ({ userId: "admin-1", role: state.role, supabase: session }),
   requireAdminRead: async () => ({ userId: "admin-1", role: "admin" }),
   adminReadClient: async () => client,
 }));
@@ -98,6 +112,9 @@ beforeEach(() => {
   state.auditCalls = [];
   state.profileLookups = [];
   state.failOnOrdersPage = 0;
+  state.exportRecords = [];
+  state.failRecordPhase = null;
+  state.role = "admin";
   seedOrders(2500);
   state.audit = Array.from({ length: 1700 }, (_, i) => ({
     id: 1700 - i,
@@ -185,5 +202,88 @@ describe("audit export (N133)", () => {
     const response = await GET(new Request("https://drvn.test/admin/export?view=audit&actor=nobody"));
     expect(response.headers.get("x-drvn-export-rows")).toBe("0");
     expect(state.auditCalls[0]).toMatchObject({ p_actor: "nobody" });
+  });
+});
+
+describe("export audit (N531)", () => {
+  const EXPORT_ID = "11111111-1111-4111-8111-111111111111";
+
+  it("records who exported which view with which filters before reading, then the row count", async () => {
+    let readsWhenStarted = -1;
+    const original = session.rpc;
+    session.rpc = async (name, args) => {
+      if (args.p_phase === "started") readsWhenStarted = state.rpcCalls.length;
+      return original(name, args);
+    };
+    try {
+      const response = await GET(new Request("https://drvn.test/admin/export?view=orders&q=Buyer%20One&status=paid&min=10&ignored=x"));
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-drvn-export-rows")).toBe("2500");
+    } finally {
+      session.rpc = original;
+    }
+    // Recorded before a single page was read.
+    expect(readsWhenStarted).toBe(0);
+    expect(state.exportRecords).toEqual([
+      { p_phase: "started", p_view: "orders", p_filters: { q: "Buyer One", status: "paid", min: "10" } },
+      { p_phase: "completed", p_export: EXPORT_ID, p_rows: 2500 },
+    ]);
+  });
+
+  it("records each dispute scope and the audit view as its own view", async () => {
+    await GET(new Request("https://drvn.test/admin/export?view=disputes&scope=resolved&category=wrong_item"));
+    await GET(new Request("https://drvn.test/admin/export?view=audit&actor=dana&subject=order"));
+    expect(state.exportRecords.filter((r) => r.p_phase === "started")).toEqual([
+      { p_phase: "started", p_view: "disputes_resolved", p_filters: { category: "wrong_item" } },
+      { p_phase: "started", p_view: "audit", p_filters: { actor: "dana", subject: "order" } },
+    ]);
+    expect(state.exportRecords.filter((r) => r.p_phase === "completed")).toHaveLength(2);
+  });
+
+  it("records a failed export as failed, and sends no file", async () => {
+    state.failOnOrdersPage = 2;
+    const response = await GET(new Request("https://drvn.test/admin/export?view=orders"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("content-disposition")).toBeNull();
+    expect(state.exportRecords).toEqual([
+      { p_phase: "started", p_view: "orders", p_filters: {} },
+      { p_phase: "failed", p_export: EXPORT_ID, p_detail: "read_failed" },
+    ]);
+  });
+
+  it("records an export refused as too large as failed, with the reason", async () => {
+    state.audit = Array.from({ length: 100_501 }, (_, i) => ({ ...state.audit[0], id: 100_501 - i }));
+    const response = await GET(new Request("https://drvn.test/admin/export?view=audit"));
+    expect(response.status).toBe(413);
+    expect(state.exportRecords.at(-1)).toMatchObject({ p_phase: "failed", p_detail: expect.stringMatching(/^too_large: More than 100,000 rows/) });
+  });
+
+  it("makes no file and reads nothing when the start can't be recorded", async () => {
+    state.failRecordPhase = "started";
+    const response = await GET(new Request("https://drvn.test/admin/export?view=orders"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("content-disposition")).toBeNull();
+    expect(await response.text()).toMatch(/couldn't be recorded/);
+    expect(state.rpcCalls).toHaveLength(0);
+  });
+
+  it("sends no file when the completion can't be recorded", async () => {
+    state.failRecordPhase = "completed";
+    const response = await GET(new Request("https://drvn.test/admin/export?view=orders"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("content-disposition")).toBeNull();
+  });
+
+  it("still lets a read-only viewer export, and records it (who may export is unchanged, N135)", async () => {
+    state.role = "viewer";
+    const response = await GET(new Request("https://drvn.test/admin/export?view=disputes"));
+    expect(response.status).toBe(200);
+    expect(state.exportRecords.map((r) => r.p_phase)).toEqual(["started", "completed"]);
+  });
+
+  it("an unknown view is a 404 with nothing recorded", async () => {
+    const response = await GET(new Request("https://drvn.test/admin/export?view=members"));
+    expect(response.status).toBe(404);
+    expect(state.exportRecords).toHaveLength(0);
   });
 });

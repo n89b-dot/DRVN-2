@@ -391,17 +391,40 @@ export type LedgerReconciliationSummary = {
   skipped?: "stripe_unconfigured";
 };
 
+/** How far back an operator's restore pass may reach (N232). */
+export const MAX_RESTORE_LOOKBACK_MS = 35 * 24 * 60 * 60 * 1000;
+
 /** The window: from the last complete run's end (at least two days back,
- *  at most seven) to two hours ago. Pure, for tests. */
-export function reconciliationWindow(nowMs: number, lastCompleteEnd: string | null) {
+ *  at most seven) to two hours ago. Pure, for tests.
+ *
+ *  `since` is the operator's restore pass (N232, docs/production-runbook.md
+ *  §6): after a database restore the run history was restored too, so the
+ *  window starts where the operator says (the recovery point, less a margin)
+ *  rather than at the restored history's last run, up to 35 days back. */
+export function reconciliationWindow(nowMs: number, lastCompleteEnd: string | null, since?: string | null) {
   const end = nowMs - SETTLE_LAG_MS;
+  if (since != null) {
+    const from = Date.parse(since);
+    if (!Number.isFinite(from) || from >= end) {
+      throw new RangeError("since must be a time before the window's end (two hours ago)");
+    }
+    if (from < end - MAX_RESTORE_LOOKBACK_MS) {
+      throw new RangeError("since may reach back at most 35 days; reconcile older activity in the Stripe Dashboard");
+    }
+    return { start: from, end };
+  }
   const last = lastCompleteEnd ? Date.parse(lastCompleteEnd) : NaN;
   const start = Math.max(end - MAX_LOOKBACK_MS, Math.min(Number.isFinite(last) ? last : end, end - MIN_LOOKBACK_MS));
   return { start, end };
 }
 
-export async function reconcileLedger(admin: Admin, options: { now?: Date } = {}): Promise<LedgerReconciliationSummary> {
+export async function reconcileLedger(
+  admin: Admin,
+  options: { now?: Date; since?: string | null } = {}
+): Promise<LedgerReconciliationSummary> {
   const nowMs = (options.now ?? new Date()).getTime();
+  // Refuse a bad restore window before touching anything.
+  if (options.since != null) reconciliationWindow(nowMs, null, options.since);
   const { data: last, error: lastError } = await admin
     .from("ledger_reconciliation_runs")
     .select("window_end")
@@ -410,7 +433,7 @@ export async function reconcileLedger(admin: Admin, options: { now?: Date } = {}
     .limit(1)
     .maybeSingle();
   if (lastError) throw new Error("Ledger reconciliation history unavailable");
-  const window = reconciliationWindow(nowMs, last?.window_end ?? null);
+  const window = reconciliationWindow(nowMs, last?.window_end ?? null, options.since);
   const windowStart = new Date(window.start).toISOString();
   const windowEnd = new Date(window.end).toISOString();
   const empty = { paymentIntents: 0, refunds: 0, transfers: 0 };
