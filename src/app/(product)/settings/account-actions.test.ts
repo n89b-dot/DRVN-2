@@ -156,7 +156,8 @@ describe("account setting recovery", () => {
       email: "member@drvn.test",
       password: "old-password",
     });
-    expect(mocks.updateUser).toHaveBeenCalledWith({ password: "new-password" });
+    // Auth checks it too when "require current password" is on (N20 follow-up).
+    expect(mocks.updateUser).toHaveBeenCalledWith({ password: "new-password", current_password: "old-password" });
   });
 
   it("adopts a password already changed when the prior response was lost", async () => {
@@ -275,5 +276,28 @@ describe("set-password link", () => {
     mocks.resetPasswordForEmail.mockResolvedValue({ error: { code: "unexpected_failure", message: "smtp: 550 relay denied" } });
     const result = await sendPasswordSetupLink();
     expect(result.error).not.toContain("smtp");
+  });
+});
+
+// OS-W12 follow-up (N20 at the Auth boundary): Auth is handed the current
+// password, and its own refusal reads as ours.
+describe("password change at the Auth boundary", () => {
+  it("passes the current password to Auth with the new one", async () => {
+    mocks.signInWithPassword
+      .mockResolvedValueOnce({ error: null })
+      .mockResolvedValue({ error: { code: "invalid_credentials" } });
+    await changePassword({}, passwordForm("current-pass", "brand-new-pass"));
+    expect(mocks.updateUser).toHaveBeenCalledWith({ password: "brand-new-pass", current_password: "current-pass" });
+  });
+
+  it("explains Auth's current-password refusal without its wording", async () => {
+    mocks.signInWithPassword
+      .mockResolvedValueOnce({ error: null })
+      .mockResolvedValue({ error: { code: "invalid_credentials" } });
+    mocks.updateUser.mockResolvedValue({ error: { code: "current_password_mismatch", message: "Current password required when setting new password." } });
+    await expect(changePassword({}, passwordForm("current-pass", "brand-new-pass"))).resolves.toEqual({
+      error: "Your current password isn't right.",
+    });
+    expect(mocks.deliverNotification).not.toHaveBeenCalled();
   });
 });
