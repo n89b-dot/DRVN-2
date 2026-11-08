@@ -201,7 +201,7 @@ describe("processTrackerRegistrations", () => {
     const jobs = [{ id: "job-1", lease_id: "lease-1", payload: { shipment_id: "ship-1" } }];
     const { admin, rpc, writes } = fakeAdmin(shipped(), jobs);
     await expect(processTrackerRegistrations(admin, { provider: null })).resolves.toEqual({
-      claimed: 1, registered: 0, already: 0, skipped: 1, rejected: 0, failed: 0, untracked: true,
+      claimed: 1, evaluated: 0, registered: 0, already: 0, skipped: 1, rejected: 0, failed: 0, untracked: true,
     });
     expect(rpc).toHaveBeenCalledWith("finish_remediation_job", { p_id: "job-1", p_lease: "lease-1", p_error: undefined });
     expect(writes).toEqual([]);
@@ -220,7 +220,7 @@ describe("processTrackerRegistrations", () => {
       .mockResolvedValueOnce(summary("trk_1"))
       .mockRejectedValueOnce(new ShippingProviderError("EasyPost 503", { retryable: true, status: 503 }));
     const result = await processTrackerRegistrations(admin, { provider: provider(createTracker) });
-    expect(result).toEqual({ claimed: 2, registered: 1, already: 0, skipped: 0, rejected: 0, failed: 1 });
+    expect(result).toEqual({ claimed: 2, evaluated: 0, registered: 1, already: 0, skipped: 0, rejected: 0, failed: 1 });
     expect(createTracker).toHaveBeenCalledTimes(2);
     const finishes = rpc.mock.calls.filter(([name]) => name === "finish_remediation_job").map(([, args]) => args);
     expect(finishes).toEqual([

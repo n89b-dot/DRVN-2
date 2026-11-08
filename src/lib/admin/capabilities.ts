@@ -23,7 +23,7 @@ export type AdminCapability = {
 
 export const ADMIN_CAPABILITIES: AdminCapability[] = [
   { family: "order.", description: "Force refunds and message order parties", requires: "admin" },
-  { family: "dispute.", description: "Resolve disputes", requires: "admin" },
+  { family: "dispute.", description: "Resolve disputes, and reopen a resolved one (audited, history kept)", requires: "admin" },
   { family: "listing.", description: "Take down and restore listings", requires: "admin" },
   { family: "user.", description: "Suspend and unsuspend accounts", requires: "admin" },
   { family: "payments.", description: "Run workers, replay webhooks, close recoveries", requires: "admin" },

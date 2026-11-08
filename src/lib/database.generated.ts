@@ -1967,6 +1967,93 @@ export type Database = {
           },
         ]
       }
+      delivery_proofs: {
+        Row: {
+          carrier: string | null
+          carrier_delivered_at: string | null
+          created_at: string
+          deliver_by: string | null
+          destination_city: string | null
+          destination_match: string
+          destination_postcode: string | null
+          evaluated_at: string
+          evidence_at: string | null
+          first_scan_at: string | null
+          order_city: string | null
+          order_country: string | null
+          order_created_at: string
+          order_id: string
+          order_postcode: string | null
+          reasons: string[]
+          shipment_id: string
+          signature_required: boolean
+          signed_by: string | null
+          tracking_code: string | null
+          verdict: string
+        }
+        Insert: {
+          carrier?: string | null
+          carrier_delivered_at?: string | null
+          created_at?: string
+          deliver_by?: string | null
+          destination_city?: string | null
+          destination_match: string
+          destination_postcode?: string | null
+          evaluated_at?: string
+          evidence_at?: string | null
+          first_scan_at?: string | null
+          order_city?: string | null
+          order_country?: string | null
+          order_created_at: string
+          order_id: string
+          order_postcode?: string | null
+          reasons?: string[]
+          shipment_id: string
+          signature_required: boolean
+          signed_by?: string | null
+          tracking_code?: string | null
+          verdict: string
+        }
+        Update: {
+          carrier?: string | null
+          carrier_delivered_at?: string | null
+          created_at?: string
+          deliver_by?: string | null
+          destination_city?: string | null
+          destination_match?: string
+          destination_postcode?: string | null
+          evaluated_at?: string
+          evidence_at?: string | null
+          first_scan_at?: string | null
+          order_city?: string | null
+          order_country?: string | null
+          order_created_at?: string
+          order_id?: string
+          order_postcode?: string | null
+          reasons?: string[]
+          shipment_id?: string
+          signature_required?: boolean
+          signed_by?: string | null
+          tracking_code?: string | null
+          verdict?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_proofs_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_proofs_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: true
+            referencedRelation: "shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dispute_evidence: {
         Row: {
           created_at: string
@@ -3264,6 +3351,93 @@ export type Database = {
           },
         ]
       }
+      order_dispute_history: {
+        Row: {
+          actor_id: string | null
+          category: string | null
+          created_at: string
+          escalate_until: string | null
+          escalated_at: string | null
+          escalated_by: string | null
+          event: string
+          id: string
+          kind: string
+          note: string | null
+          opened_at: string | null
+          opened_by: string | null
+          order_id: string
+          outcome: string | null
+          pre_dispute_status: string | null
+          reason: string | null
+          reopened_from: string | null
+          resolved_at: string | null
+          resolved_to_status: string | null
+          respond_by: string | null
+          stripe_dispute_id: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          category?: string | null
+          created_at?: string
+          escalate_until?: string | null
+          escalated_at?: string | null
+          escalated_by?: string | null
+          event: string
+          id?: string
+          kind: string
+          note?: string | null
+          opened_at?: string | null
+          opened_by?: string | null
+          order_id: string
+          outcome?: string | null
+          pre_dispute_status?: string | null
+          reason?: string | null
+          reopened_from?: string | null
+          resolved_at?: string | null
+          resolved_to_status?: string | null
+          respond_by?: string | null
+          stripe_dispute_id?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          category?: string | null
+          created_at?: string
+          escalate_until?: string | null
+          escalated_at?: string | null
+          escalated_by?: string | null
+          event?: string
+          id?: string
+          kind?: string
+          note?: string | null
+          opened_at?: string | null
+          opened_by?: string | null
+          order_id?: string
+          outcome?: string | null
+          pre_dispute_status?: string | null
+          reason?: string | null
+          reopened_from?: string | null
+          resolved_at?: string | null
+          resolved_to_status?: string | null
+          respond_by?: string | null
+          stripe_dispute_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_dispute_history_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_dispute_history_reopened_from_fkey"
+            columns: ["reopened_from"]
+            isOneToOne: false
+            referencedRelation: "order_dispute_history"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_item_snapshot_images: {
         Row: {
           alt: string | null
@@ -3357,6 +3531,7 @@ export type Database = {
         Row: {
           accepted_checkout_shipping: Json | null
           analytics_consent_version: string | null
+          available_by: string | null
           buyer_id: string | null
           buyer_label: string | null
           cancel_reason: string | null
@@ -3366,13 +3541,18 @@ export type Database = {
           correlation_id: string | null
           created_at: string
           currency: string
+          deliver_by: string | null
           delivered_at: string | null
+          delivery_estimate_source: string | null
+          dispatch_by: string | null
           dispute_category: string | null
+          dispute_escalate_until: string | null
           dispute_escalated_at: string | null
           dispute_escalated_by: string | null
           dispute_outcome: string | null
           dispute_reason: string | null
           dispute_resolved_at: string | null
+          dispute_respond_by: string | null
           dispute_sla_alerted_at: string | null
           disputed_at: string | null
           disputed_by: string | null
@@ -3384,6 +3564,7 @@ export type Database = {
           platform_fee_refunded_cents: number
           pre_dispute_status: string | null
           refund_offer_cents: number | null
+          refund_offer_expires_at: string | null
           refund_offered_at: string | null
           refunded_at: string | null
           refunded_cents: number
@@ -3413,6 +3594,7 @@ export type Database = {
         Insert: {
           accepted_checkout_shipping?: Json | null
           analytics_consent_version?: string | null
+          available_by?: string | null
           buyer_id?: string | null
           buyer_label?: string | null
           cancel_reason?: string | null
@@ -3422,13 +3604,18 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string
           currency?: string
+          deliver_by?: string | null
           delivered_at?: string | null
+          delivery_estimate_source?: string | null
+          dispatch_by?: string | null
           dispute_category?: string | null
+          dispute_escalate_until?: string | null
           dispute_escalated_at?: string | null
           dispute_escalated_by?: string | null
           dispute_outcome?: string | null
           dispute_reason?: string | null
           dispute_resolved_at?: string | null
+          dispute_respond_by?: string | null
           dispute_sla_alerted_at?: string | null
           disputed_at?: string | null
           disputed_by?: string | null
@@ -3440,6 +3627,7 @@ export type Database = {
           platform_fee_refunded_cents?: number
           pre_dispute_status?: string | null
           refund_offer_cents?: number | null
+          refund_offer_expires_at?: string | null
           refund_offered_at?: string | null
           refunded_at?: string | null
           refunded_cents?: number
@@ -3469,6 +3657,7 @@ export type Database = {
         Update: {
           accepted_checkout_shipping?: Json | null
           analytics_consent_version?: string | null
+          available_by?: string | null
           buyer_id?: string | null
           buyer_label?: string | null
           cancel_reason?: string | null
@@ -3478,13 +3667,18 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string
           currency?: string
+          deliver_by?: string | null
           delivered_at?: string | null
+          delivery_estimate_source?: string | null
+          dispatch_by?: string | null
           dispute_category?: string | null
+          dispute_escalate_until?: string | null
           dispute_escalated_at?: string | null
           dispute_escalated_by?: string | null
           dispute_outcome?: string | null
           dispute_reason?: string | null
           dispute_resolved_at?: string | null
+          dispute_respond_by?: string | null
           dispute_sla_alerted_at?: string | null
           disputed_at?: string | null
           disputed_by?: string | null
@@ -3496,6 +3690,7 @@ export type Database = {
           platform_fee_refunded_cents?: number
           pre_dispute_status?: string | null
           refund_offer_cents?: number | null
+          refund_offer_expires_at?: string | null
           refund_offered_at?: string | null
           refunded_at?: string | null
           refunded_cents?: number
@@ -6645,6 +6840,18 @@ export type Database = {
         Args: { p_actor: string; p_reason: string; p_target: string }
         Returns: string
       }
+      begin_not_received_refund: {
+        Args: {
+          p_actor_role: string
+          p_dispute_outcome: string
+          p_disputed_at: string
+          p_order: string
+          p_payment_reference: string
+          p_reason: string
+          p_requested_by: string
+        }
+        Returns: Json
+      }
       begin_refund_operation: {
         Args: {
           p_actor_role: string
@@ -6950,6 +7157,10 @@ export type Database = {
         Args: { p_entity: string; p_id: string }
         Returns: undefined
       }
+      escalate_order_dispute: {
+        Args: { p_actor: string; p_order: string }
+        Returns: Json
+      }
       escalate_stale_disputes: { Args: never; Returns: number }
       execute_admin_command: {
         Args: {
@@ -6960,6 +7171,7 @@ export type Database = {
         }
         Returns: Json
       }
+      expire_refund_offers: { Args: { p_limit?: number }; Returns: number }
       explore_build_rows: {
         Args: { p_query: string }
         Returns: {
@@ -7727,6 +7939,14 @@ export type Database = {
       my_car_vin: { Args: { p_car: string }; Returns: string }
       my_default_offer_floor: { Args: never; Returns: number }
       my_listing_offer_floor: { Args: { p_listing: string }; Returns: number }
+      not_received_refund_due: { Args: { p_order: string }; Returns: boolean }
+      not_received_refunds_due: {
+        Args: { p_limit?: number }
+        Returns: {
+          disputed_at: string
+          order_id: string
+        }[]
+      }
       notification_href_target: { Args: { p_href: string }; Returns: string }
       notify: {
         Args: {
@@ -7791,11 +8011,21 @@ export type Database = {
         }
         Returns: Json
       }
+      open_order_dispute: {
+        Args: {
+          p_buyer: string
+          p_category: string
+          p_order: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       open_seller_carry_payouts: {
         Args: { p_limit?: number; p_quiet_hours?: number }
         Returns: number
       }
       order_buyer_reviewable: { Args: { p_order: string }; Returns: boolean }
+      order_has_valid_tracking: { Args: { p_order: string }; Returns: boolean }
       pause_account_deletion_hold: {
         Args: { p_job: string; p_lease: string; p_user: string }
         Returns: undefined
@@ -7975,6 +8205,21 @@ export type Database = {
       record_capture_recovery: {
         Args: { p_amount?: number; p_detail: string; p_key: string }
         Returns: string
+      }
+      record_delivery_proof: {
+        Args: {
+          p_carrier_delivered_at?: string
+          p_destination_city?: string
+          p_destination_match: string
+          p_destination_postcode?: string
+          p_evidence_at?: string
+          p_first_scan_at?: string
+          p_reasons: string[]
+          p_shipment: string
+          p_signed_by?: string
+          p_verdict: string
+        }
+        Returns: Json
       }
       record_listing_edit: {
         Args: {
