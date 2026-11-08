@@ -266,7 +266,9 @@ their own authenticator and take the console.
      '<your name>: phoned <member>, reference matched');
    ```
    The console opens for them on their next code. `admin_users` keeps who
-   confirmed it and when.
+   confirmed it and when. Only a sign-in stepped up with **that** factor is
+   an admin session (20261107200550): another authenticator on the same
+   account, even a verified one, opens nothing.
 
 If the confirmed factor is ever removed (a lost phone: the recovery steps in
 `docs/remediation-operations.md`), the membership is pending again until the

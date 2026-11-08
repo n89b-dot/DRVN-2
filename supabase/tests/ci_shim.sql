@@ -55,6 +55,17 @@ create table if not exists auth.mfa_factors (
   secret text
 );
 grant select on auth.mfa_factors to postgres, service_role;
+-- Likewise auth.sessions: which factor raised a session to AAL2 decides
+-- admin privilege (20261107200550). The real aal column is auth.aal_level.
+create table if not exists auth.sessions (
+  id uuid primary key,
+  user_id uuid not null,
+  factor_id uuid,
+  aal text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+grant select on auth.sessions to postgres, service_role;
 
 -- This disposable image includes legacy claim helpers. Normalize both JWT
 -- formats explicitly so fixture authentication matches the current Auth API.

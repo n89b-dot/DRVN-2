@@ -49,7 +49,8 @@ async function sendToVerify(): Promise<never> {
  * React cache() so the layout gate, generateMetadata and every read in one
  * request share one lookup instead of hitting auth + the RPC repeatedly.
  * A member awaiting the operator's confirmation of their authenticator, or
- * whose last TOTP check is over 15 minutes old, is sent to /admin-verify.
+ * whose last TOTP check is over 15 minutes old or was made with another
+ * factor than the confirmed one, is sent to /admin-verify.
  */
 export const getAdminContext = cache(async (): Promise<AdminContext | null> => {
   const supabase = await createClient();
@@ -72,6 +73,13 @@ export const getAdminContext = cache(async (): Promise<AdminContext | null> => {
   if (error || assurance?.currentLevel !== "aal2" || Date.now() / 1000 - verifiedAt > ADMIN_STEP_UP_SECONDS) {
     await sendToVerify();
   }
+  // The step-up must have used the CONFIRMED authenticator (20261107200550):
+  // a session raised to AAL2 with any other verified factor on the account is
+  // not an admin session. The database decides (is_admin() reads the factor
+  // Supabase Auth recorded for this session), and /admin-verify challenges
+  // the confirmed factor.
+  const { data: bound, error: boundError } = await supabase.rpc("is_admin");
+  if (boundError || bound !== true) await sendToVerify();
   return { userId: user.id, role, supabase };
 });
 
