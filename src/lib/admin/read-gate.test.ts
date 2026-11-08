@@ -78,6 +78,7 @@ const reads: [string, () => Promise<unknown>][] = [
   ["searchListings", () => queries.searchListings({})],
   ["searchUsers", () => queries.searchUsers("", "sellers")],
   ["getUserDetail", () => queries.getUserDetail(ID)],
+  ["getAccountDeletionCases", () => queries.getAccountDeletionCases()],
   ["getReports", () => queries.getReports("open")],
   ["getPaymentsOps", () => queries.getPaymentsOps()],
   ["getAuditLog", () => queries.getAuditLog()],

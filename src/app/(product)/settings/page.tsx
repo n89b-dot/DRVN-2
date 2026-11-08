@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import type { DeletionStatus } from "@/lib/account-deletion-status";
 import { AgentChatPrivacy } from "./agent-chat-privacy";
 import { AgentSection } from "./agent-section";
 import { loadAnalyticsConsent } from "./analytics-consent";
@@ -51,6 +52,7 @@ export default async function SettingsPage({
     { count: agentChatMessages },
     claims,
     google,
+    { data: deletionStatus },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -85,6 +87,8 @@ export default async function SettingsPage({
     // session's verified claims (no extra round trip; getViewer did the same).
     supabase.auth.getClaims().then(({ data }) => data?.claims ?? null, () => null),
     googleSignInEnabled(),
+    // N35: where an earlier deletion request stands, the member's own only.
+    supabase.rpc("my_account_deletion_status"),
   ]);
   // AG-7: the agent's mode and how many mandates are live, for the Agent
   // section — only while the Agent tab exists for members at all.
@@ -144,6 +148,7 @@ export default async function SettingsPage({
           notification_prefs: profile?.notification_prefs ?? {},
         }}
         logout={logout}
+        deletionStatus={(deletionStatus as unknown as DeletionStatus) ?? null}
         identityProof={{
           usesPassword: signsInWithPassword(claims?.app_metadata),
           google,

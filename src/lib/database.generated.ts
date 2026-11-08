@@ -7589,6 +7589,7 @@ export type Database = {
         Args: { p_brand: string; p_part_number: string; p_product: string }
         Returns: string
       }
+      my_account_deletion_status: { Args: never; Returns: Json }
       my_car_vin: { Args: { p_car: string }; Returns: string }
       my_default_offer_floor: { Args: never; Returns: number }
       my_listing_offer_floor: { Args: { p_listing: string }; Returns: number }

@@ -53,6 +53,7 @@ declare
     'listing_question_parent_matches(uuid,uuid)',      -- boolean: a reply's parent is on a listing the caller can see
     'my_car_vin(uuid)',                                -- the caller's own car's VIN (20261004160000)
     'my_default_offer_floor()',                        -- the caller's own default minimum
+    'my_account_deletion_status()',                    -- the caller's own deletion case: outcome, next step, owner (N35, 20261107220400)
     'my_listing_offer_floor(uuid)',                    -- the caller's own listing's minimum (20261017120000)
     'offer_move(uuid,text,integer,text,integer)',      -- a move on an offer the caller is party to, under the v2 rules (20261017160000)
     'offer_open(uuid,uuid,integer,text)',              -- the caller's own opening offer, under the v2 rules (20261017160000)

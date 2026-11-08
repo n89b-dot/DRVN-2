@@ -1311,8 +1311,10 @@ export async function deleteAccount(_prev: ActionState, formData: FormData): Pro
         reauth,
       };
     }
+    // N39: a suspension no longer stops a deletion request; only one
+    // already underway does (20261107220400).
     if (error.code === "42501" && /suspended/i.test(error.message ?? "")) {
-      return { error: "Your account is suspended, so deletion can't be requested here yet. Email hello@drvn.app and we'll handle it." };
+      return { error: "Your account's deletion is already underway." };
     }
     reportError("[settings] account deletion request failed", { userId: user.id, error });
     return { error: "Couldn't request deletion. Nothing was changed — try again." };

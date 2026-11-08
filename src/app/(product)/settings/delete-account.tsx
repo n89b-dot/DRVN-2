@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 
-import { Button, TextField, UnconfirmedOutcome } from "@/components/ui";
+import { Alert, Button, TextField, UnconfirmedOutcome } from "@/components/ui";
+import { deletionStatusNotice, type DeletionStatus } from "@/lib/account-deletion-status";
 import { useRecoverableAction } from "@/features/commerce/use-recoverable-action";
 
 import { deleteAccount, type ActionState } from "../garage/actions";
@@ -20,17 +21,26 @@ const UNCONFIRMED =
  * A lost response never puts "Delete permanently" back: the request may
  * already be in, so the member reloads to see where it stands.
  */
-export function DeleteAccount({ proof }: { proof: IdentityProof }) {
+export function DeleteAccount({ proof, status = null }: { proof: IdentityProof; status?: DeletionStatus }) {
   const [state, action, pending] = useRecoverableAction<ActionState>(deleteAccount, UNCONFIRMED);
   const [open, setOpen] = useState(false);
+  // N35: where an earlier request stands, in the member's own words.
+  const notice = deletionStatusNotice(status);
 
   if (state.error === UNCONFIRMED) return <UnconfirmedOutcome>{UNCONFIRMED}</UnconfirmedOutcome>;
 
   if (!open) {
     return (
-      <Button variant="quiet" onClick={() => setOpen(true)}>
-        Delete my account
-      </Button>
+      <>
+        {notice && (
+          <Alert title={notice.title} className="mb-3">
+            {notice.body}
+          </Alert>
+        )}
+        <Button variant="quiet" onClick={() => setOpen(true)}>
+          {notice ? "Ask again" : "Delete my account"}
+        </Button>
+      </>
     );
   }
 
