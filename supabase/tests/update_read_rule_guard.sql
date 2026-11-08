@@ -44,9 +44,11 @@ begin
 
   for v_reader in
     select * from (values
-      ('anon', null::uuid, array[u[1], u[3], u[6]]),
-      ('viewer', v_viewer, array[u[1], u[3], u[6]]),
-      ('author', v_author, array[u[1], u[2], u[3], u[4], u[6]]),
+      -- N59 (20261107220600): a suspended member's update with no car is
+      -- hidden too, from everyone but its author.
+      ('anon', null::uuid, array[u[1], u[3]]),
+      ('viewer', v_viewer, array[u[1], u[3]]),
+      ('author', v_author, array[u[1], u[2], u[3], u[4]]),
       ('suspended', v_suspended, array[u[1], u[3], u[5], u[6]])) r(who, id, expected)
   loop
     perform set_config('role', case when v_reader.id is null then 'anon' else 'authenticated' end, true);

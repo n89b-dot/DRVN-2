@@ -69,6 +69,24 @@ describe("public photo trust boundary", () => {
     expect((await POST(request(Buffer.from("x"), "avatars", ME, "message-photos"))).status).toBe(400);
     expect(fixture.staged).not.toHaveBeenCalled();
   });
+  it("R81: a chat photo goes to the private bucket, re-encoded, unlisted and with no public URL", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://proj.supabase.co";
+    const response = await POST(request(await gpsPhoto(), "agent-chat-photos", ME));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.path).toMatch(new RegExp(`^${ME}/[0-9a-f-]{36}\\.webp$`));
+    expect(body.url).toBe(`https://proj.supabase.co/storage/v1/object/authenticated/agent-chat-photos/${body.path}`);
+    expect(body.url).not.toContain("/object/public/");
+    expect((await sharp(fixture.bytes).metadata()).exif).toBeUndefined();
+    // Not on the public staging ledger: the agent sweep owns chat photos.
+    expect(fixture.staged).not.toHaveBeenCalled();
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  });
+  it("R81: chat photos go only into the uploader's own top folder", async () => {
+    const source = await gpsPhoto();
+    expect((await POST(request(source, "agent-chat-photos", THEM))).status).toBe(400);
+    expect((await POST(request(source, "agent-chat-photos", `${ME}/${THEM}`))).status).toBe(400);
+  });
   it("still refuses buckets it doesn't normalise, including evidence", async () => {
     expect((await POST(request(Buffer.from("x"), "dispute-evidence", ME))).status).toBe(400);
   });

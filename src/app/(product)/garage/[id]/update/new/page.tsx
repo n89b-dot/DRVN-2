@@ -6,6 +6,8 @@ import { normalizeBlocks } from "@/lib/activity-blocks";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { BuildStoryComposer } from "@/features/composer/composer";
 import type { TurnCard } from "@/lib/ai/run";
+import { publishChatPhotos } from "@/lib/agent/chat-photos";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isOwnedStorageUrl } from "@/lib/media-url";
 import { loadTaggableParts } from "@/features/composer/taggable-parts";
 
@@ -85,7 +87,9 @@ export default async function NewUpdatePage({
         const label = onCar.get(modId);
         if (label) seededBlocks.push({ type: "mod", action: "installed", modItemId: modId, label });
       }
-      const urls = card.images.filter((url) => isOwnedStorageUrl(url, user.id));
+      // R81: the chat's photos are private; the update gets public copies,
+      // made now, in the member's activity-images folder.
+      const urls = (await publishChatPhotos(createAdminClient(), user.id, card.images, "activity-images")).filter((url) => isOwnedStorageUrl(url, user.id));
       if (urls.length) seededBlocks.push({ type: "images", urls });
       seededBlocks.push({ type: "text", style: "normal", text: card.body });
     }
