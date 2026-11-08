@@ -2,10 +2,12 @@ import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
 import { SheetTabs } from "@/components/ui";
+import { adminUnhideCar } from "@/lib/admin/actions";
 import { getReports, REPORTS_PAGE_SIZE, type AdminReportRow } from "@/lib/admin/queries";
 import type { ReportReason } from "@/lib/database.types";
 import { cx } from "@/lib/format";
 
+import { ActionDialog } from "../_components/action-dialog";
 import { ConsoleEmpty } from "../_components/console-empty";
 import { Pager } from "../_components/pager";
 import { OpenReportsList } from "./open-reports-list";
@@ -19,6 +21,7 @@ const REASON_LABEL: Record<string, string> = {
   scam_or_fraud: "Scam or fraud",
   offensive_content: "Offensive content",
   wrong_category: "Wrong category",
+  copyright: "Copyright",
   other: "Other",
 };
 
@@ -110,6 +113,20 @@ function ResolvedReportsPanel({
             <p className="order__meta mt-1">
               {r.status} — “{r.resolution_note}”
             </p>
+            {r.subject_type === "car" && r.carHidden && (
+              <div className="mt-2 flex gap-2">
+                <ActionDialog
+                  action={adminUnhideCar}
+                  title="Lift the hold on this build"
+                  trigger="Lift hold"
+                  triggerClassName="relbtn !static"
+                  hidden={{ report_id: r.id, car_id: r.subject_id }}
+                  confirmNote="The owner can make the build public again; it stays private until they do. They're told the hold is lifted."
+                  fields={[{ kind: "reason" as const, name: "reason", label: "Reason — for the audit log" }]}
+                  submitLabel="Lift hold"
+                />
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -156,7 +173,7 @@ export default async function AdminReportsPage({
       <Rv as="header" className="pagehead">
         <h1>Reports</h1>
         <p className="pagehead__sub">
-          User-flagged listings and sellers. Oldest first — silence here is a policy breach left
+          User-flagged listings, sellers, posts, replies and builds. Oldest first — silence here is a policy breach left
           standing.
         </p>
       </Rv>

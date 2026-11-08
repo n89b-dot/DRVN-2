@@ -7,6 +7,7 @@ import { AgentPanel } from "@/features/agent/agent-panel";
 import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
 import { LiveInbox } from "@/features/commerce/live-messages";
 import { cartCount as getCartCount } from "@/lib/cart";
+import { loadHeldDeletion } from "@/lib/held-deletion";
 import { loadShellCounts } from "@/lib/shell-counts";
 import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 
@@ -24,8 +25,10 @@ export default async function ProductLayout({ children }: { children: ReactNode 
   // profile trigger skipped while invitations were enforced): it used to pass
   // straight through to pages that assume a profile. A failed read is not
   // "no profile", so it never sends anyone to onboarding.
+  // OS-W11: except a member whose deletion is paused on a hold. Cleanup may
+  // have cleared their handle; they are here to settle the order holding it.
   const { data: me, error: meError } = await supabase.from("profiles").select("username").eq("id", user.id).maybeSingle();
-  if (!meError && !me?.username) redirect("/onboarding");
+  if (!meError && !me?.username && !(await loadHeldDeletion(supabase, user.id))) redirect("/onboarding");
 
   // Both preferences are cookies so the shell renders correctly server-side —
   // no flash of the wrong palette or a rail snapping open on hydration.

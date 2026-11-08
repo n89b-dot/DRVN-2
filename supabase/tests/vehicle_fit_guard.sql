@@ -62,7 +62,6 @@ declare
   v_count int;
   v_denied boolean;
 begin
-  update public.beta_access_config set enforced = false where singleton;
 
   insert into auth.users(id, email) values
     (v_seller, 'fit-seller@drvn.test'), (v_suspended, 'fit-suspended@drvn.test'), (v_viewer, 'fit-viewer@drvn.test');

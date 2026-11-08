@@ -4,7 +4,6 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
-  beta: vi.fn(),
   orderRead: vi.fn(),
   freeze: vi.fn(),
   finalize: vi.fn(),
@@ -25,15 +24,39 @@ const mocks = vi.hoisted(() => ({
   paymentMapWrite: vi.fn(),
   paymentMapRead: vi.fn(),
   bindPayment: vi.fn(),
+  guestAdmit: vi.fn(),
+  guestBind: vi.fn(),
+  guestRelease: vi.fn(),
+  release: vi.fn(),
+  rememberKey: vi.fn(),
+  forgetKey: vi.fn(),
+  itemsRead: vi.fn(),
+  guestIdentity: vi.fn(),
+  guestBuyer: vi.fn(),
+  recordAge: vi.fn(),
+  setCart: vi.fn(),
+  shipWrite: vi.fn(),
+  quotesRead: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("next/headers", () => ({ headers: vi.fn() }));
-vi.mock("@/lib/abuse-identity", () => ({ abuseIdentity: vi.fn() }));
-vi.mock("@/lib/cart", () => ({ getCartIds: mocks.cartIds, removeCartIds: mocks.cartRemove }));
-vi.mock("@/lib/guest-checkout", () => ({ guestCheckoutIdentity: vi.fn(), isPlausibleEmail: vi.fn(), setGuestOrders: vi.fn() }));
-vi.mock("./guest-buyer", () => ({ resolveGuestBuyer: vi.fn(), sendOrderAccessLink: vi.fn() }));
+vi.mock("@/lib/abuse-identity", () => ({ abuseIdentity: vi.fn().mockReturnValue("network:203.0.113.9") }));
+vi.mock("@/lib/cart", () => ({ getCartIds: mocks.cartIds, removeCartIds: mocks.cartRemove, setCartIds: mocks.setCart }));
+vi.mock("@/lib/guest-checkout", () => ({
+  guestCheckoutIdentity: mocks.guestIdentity,
+  isPlausibleEmail: vi.fn(() => true),
+  setGuestOrders: vi.fn(),
+}));
+vi.mock("./guest-buyer", () => ({ resolveGuestBuyer: mocks.guestBuyer, sendOrderAccessLink: vi.fn() }));
+vi.mock("@/lib/checkout-key", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/checkout-key")>()),
+  rememberCheckoutKey: mocks.rememberKey,
+  forgetCheckoutKey: mocks.forgetKey,
+}));
+vi.mock("./checkout-release", () => ({ releaseCartCheckout: mocks.release }));
+vi.mock("@/lib/age-confirmation-record", () => ({ recordAgeConfirmation: mocks.recordAge }));
 vi.mock("./checkout-shipping", () => ({
   freezeOrderShipping: vi.fn(),
   hashDestination: vi.fn().mockReturnValue("destination-hash"),
@@ -47,10 +70,6 @@ vi.mock("@/lib/rate-limit", () => ({ RATE_LIMITS: {}, allowAction: vi.fn().mockR
 vi.mock("@/lib/analytics", () => ({ capture: vi.fn() }));
 vi.mock("@/lib/purchase-analytics", () => ({ bindCheckoutAnalytics: mocks.bindAnalytics }));
 vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
-vi.mock("@/lib/beta-access", () => ({
-  getBetaAccess: mocks.beta,
-  betaCommerceError: () => "Buying is limited to invited beta members.",
-}));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getUser: mocks.auth } }),
 }));
@@ -62,6 +81,14 @@ vi.mock("@/lib/supabase/admin", () => ({
         mocks.attemptEq(...args);
         return attemptQuery;
       },
+      not: (...args: unknown[]) => {
+        mocks.attemptEq("not", ...args);
+        return attemptQuery;
+      },
+      contains: (...args: unknown[]) => {
+        mocks.attemptEq("contains", ...args);
+        return attemptQuery;
+      },
       maybeSingle: mocks.attemptRead,
     };
     const orderQuery = {
@@ -69,7 +96,12 @@ vi.mock("@/lib/supabase/admin", () => ({
       eq: () => orderQuery,
       in: mocks.replayOrdersRead,
       maybeSingle: mocks.orderRead,
-      update: () => ({ eq: () => ({ select: () => ({ maybeSingle: mocks.paymentWrite }) }) }),
+      update: () => ({
+        // Awaited directly by the guest delivery write; chained by the rest.
+        eq: () => Object.assign(Promise.resolve().then(() => mocks.shipWrite()), {
+          select: () => ({ maybeSingle: mocks.paymentWrite }),
+        }),
+      }),
     };
     const listingQuery = {
       select: () => listingQuery,
@@ -88,12 +120,17 @@ vi.mock("@/lib/supabase/admin", () => ({
         if (name === "freeze_cart_checkout_shipping") return mocks.cartFreeze(args);
         if (name === "purchase_begin") return mocks.purchaseBegin(args);
         if (name === "bind_cart_checkout_payment") return mocks.bindPayment(args);
+        if (name === "guest_hold_admit") return mocks.guestAdmit(args);
+        if (name === "guest_hold_bind") return mocks.guestBind(args);
+        if (name === "guest_hold_release") return mocks.guestRelease(args);
         return mocks.finalize(args);
       },
       from: (table: string) => {
         if (table === "purchase_attempts") return attemptQuery;
         if (table === "listings") return listingQuery;
         if (table === "payments") return paymentQuery;
+        if (table === "order_items") return { select: () => ({ in: mocks.itemsRead }) };
+        if (table === "shipping_rate_quotes") return { select: () => ({ in: mocks.quotesRead }) };
         return orderQuery;
       },
     };
@@ -102,6 +139,11 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 import { checkoutCart, completeReservedOrder } from "./checkout-actions";
 import { getStripeCustomerId } from "@/lib/payments/customers";
+import { guestCheckoutIdentity, isPlausibleEmail, setGuestOrders } from "@/lib/guest-checkout";
+import { resolveGuestBuyer } from "./guest-buyer";
+import { freezeOrderShipping } from "./checkout-shipping";
+import { GUEST_HOLD_LIMIT_MESSAGE, GUEST_HOLD_TAKEN_MESSAGE } from "./guest-holds";
+import { cartCheckoutRequestKey } from "@/lib/checkout-key";
 
 const pendingOfferOrder = {
   id: "order-1",
@@ -128,8 +170,8 @@ function checkoutForm(includeAddress = true) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.recordAge.mockResolvedValue(true);
   mocks.auth.mockResolvedValue({ data: { user: { id: "buyer-1" } } });
-  mocks.beta.mockResolvedValue({ enforced: true, eligible: true });
   mocks.orderRead.mockResolvedValue({ data: pendingOfferOrder, error: null });
   mocks.freeze.mockResolvedValue({ data: { ok: true, applied: true, total_cents: 5500 }, error: null });
   mocks.finalize.mockResolvedValue({ data: { applied: true }, error: null });
@@ -168,7 +210,19 @@ beforeEach(() => {
     error: null,
   });
   mocks.bindPayment.mockResolvedValue({ data: { ok: true, mapped: 1 }, error: null });
+  mocks.guestAdmit.mockResolvedValue({ data: ["hold-1"], error: null });
+  mocks.guestBind.mockResolvedValue({ data: 1, error: null });
+  mocks.guestRelease.mockResolvedValue({ data: 1, error: null });
   mocks.redirect.mockImplementation((path: string) => { throw new Error(`redirect:${path}`); });
+  mocks.release.mockResolvedValue({ outcome: "released" });
+  mocks.rememberKey.mockResolvedValue(undefined);
+  mocks.forgetKey.mockResolvedValue(undefined);
+  mocks.itemsRead.mockResolvedValue({ data: [], error: null });
+  mocks.guestIdentity.mockResolvedValue("guest:browser-1");
+  mocks.guestBuyer.mockResolvedValue({ buyer: { id: "guest-1", created: false } });
+  mocks.setCart.mockResolvedValue(undefined);
+  mocks.shipWrite.mockResolvedValue({ error: null });
+  mocks.quotesRead.mockResolvedValue({ data: [], error: null });
 });
 
 function cartCheckoutForm(line1 = "10 Main Street") {
@@ -242,28 +296,224 @@ it("recovers the authenticated buyer's exact paid checkout before reading an emp
   expect(mocks.createPayment).not.toHaveBeenCalled();
 });
 
-it("refuses to replay a bound checkout when its shipping payload changed", async () => {
+// OS-W17 — checkout resume and reservations. The form carries the key the
+// page rendered from the checkout-key cookie; these cover what the server
+// does with an existing attempt under that key.
+const FORM_KEY = "33333333-3333-4333-8333-333333333333";
+
+it("N85: resumes the same reserved attempt after a reload instead of reporting nothing available", async () => {
+  const { form, attempt } = durableCartAttempt();
+  mocks.attemptRead.mockResolvedValue({ data: attempt, error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+
+  const result = await checkoutCart({}, form);
+
+  expect(mocks.release).not.toHaveBeenCalled();
+  expect(mocks.purchaseBegin).toHaveBeenCalledWith(expect.objectContaining({
+    p_idempotency_key: attempt.idempotency_key,
+    p_checkout_context: attempt.checkout_context,
+  }));
+  expect(mocks.createPayment).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: attempt.idempotency_key }));
+  expect(result.payment?.clientSecret).toBe("secret");
+  expect(mocks.rememberKey).toHaveBeenCalledWith(FORM_KEY);
+});
+
+it("N86: Edit address releases the buyer's own hold and restarts the checkout for the new address", async () => {
   const original = durableCartAttempt();
   mocks.attemptRead.mockResolvedValue({ data: original.attempt, error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
 
   const result = await checkoutCart({}, cartCheckoutForm("99 Changed Street"));
 
-  expect(result.error).toContain("details changed");
-  expect(mocks.replayOrdersRead).not.toHaveBeenCalled();
-  expect(mocks.cartIds).not.toHaveBeenCalled();
+  expect(mocks.release).toHaveBeenCalledWith(expect.anything(), {
+    buyerId: "buyer-1",
+    idempotencyKey: original.attempt.idempotency_key,
+    orderIds: ["order-1"],
+  });
+  // A new attempt: neither the old payment key nor the old browser binding.
+  const begun = mocks.purchaseBegin.mock.calls[0][0] as Record<string, unknown>;
+  expect(begun.p_idempotency_key).not.toBe(original.attempt.idempotency_key);
+  expect(begun.p_checkout_request_key).not.toBe(cartCheckoutRequestKey("buyer-1", FORM_KEY));
+  expect(begun.p_checkout_context).toEqual(expect.objectContaining({
+    shipping: expect.objectContaining({ line1: "99 Changed Street" }),
+  }));
+  expect(mocks.release.mock.invocationCallOrder[0]).toBeLessThan(mocks.purchaseBegin.mock.invocationCallOrder[0]);
+  expect(result.payment?.clientSecret).toBe("secret");
+  // The cookie now names the new attempt, so a reload resumes that one.
+  const remembered = mocks.rememberKey.mock.calls[0][0];
+  expect(remembered).not.toBe(FORM_KEY);
+  expect(cartCheckoutRequestKey("buyer-1", remembered)).toBe(begun.p_checkout_request_key);
+});
+
+it("N86: a different shipping service releases and restarts rather than refusing", async () => {
+  const original = durableCartAttempt("10 Main Street", "quote-original");
+  mocks.attemptRead.mockResolvedValue({ data: original.attempt, error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+
+  const result = await checkoutCart({}, durableCartAttempt("10 Main Street", "quote-changed").form);
+
+  expect(mocks.release).toHaveBeenCalledTimes(1);
+  expect(mocks.purchaseBegin).toHaveBeenCalledWith(expect.objectContaining({
+    p_idempotency_key: expect.not.stringMatching(original.attempt.idempotency_key),
+  }));
+  expect(result.payment).toBeDefined();
+});
+
+it("N86: a changed cart releases the old basket and reserves the new one", async () => {
+  const { form, attempt } = durableCartAttempt();
+  mocks.attemptRead.mockResolvedValue({ data: attempt, error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-1", "listing-2"]);
+
+  await checkoutCart({}, form);
+
+  expect(mocks.release).toHaveBeenCalledTimes(1);
+  expect(mocks.purchaseBegin).toHaveBeenCalledWith(expect.objectContaining({
+    p_listing_ids: ["listing-1", "listing-2"],
+  }));
+});
+
+it("N86: keeps the hold and starts nothing when the earlier payment can't be resolved", async () => {
+  const original = durableCartAttempt();
+  mocks.attemptRead.mockResolvedValue({ data: original.attempt, error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  mocks.release.mockResolvedValue({ outcome: "unresolved" });
+
+  const result = await checkoutCart({}, cartCheckoutForm("99 Changed Street"));
+
+  expect(result.error).toContain("still being confirmed");
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
   expect(mocks.createPayment).not.toHaveBeenCalled();
 });
 
-it("refuses a different service selection on a browser-bound checkout", async () => {
-  const original = durableCartAttempt("10 Main Street", "quote-original");
+it("N86: shows the order, not a second payment, when the released checkout had in fact been paid", async () => {
+  const original = durableCartAttempt();
   mocks.attemptRead.mockResolvedValue({ data: original.attempt, error: null });
-  const changed = durableCartAttempt("10 Main Street", "quote-changed").form;
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  mocks.release.mockResolvedValue({ outcome: "settled" });
 
-  const result = await checkoutCart({}, changed);
+  await expect(checkoutCart({}, cartCheckoutForm("99 Changed Street"))).rejects.toThrow("redirect:/orders/order-1?placed=1");
 
-  expect(result.error).toContain("shipping service changed");
-  expect(mocks.replayOrdersRead).not.toHaveBeenCalled();
+  expect(mocks.forgetKey).toHaveBeenCalled();
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
   expect(mocks.createPayment).not.toHaveBeenCalled();
+});
+
+it("N85: starts a new attempt when the remembered one has lapsed", async () => {
+  const { form, attempt } = durableCartAttempt();
+  mocks.attemptRead.mockResolvedValue({ data: attempt, error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "payment_failed" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+
+  const result = await checkoutCart({}, form);
+
+  expect(mocks.release).not.toHaveBeenCalled();
+  expect(mocks.purchaseBegin).toHaveBeenCalledWith(expect.objectContaining({
+    p_idempotency_key: expect.not.stringMatching(attempt.idempotency_key),
+  }));
+  expect(result.payment).toBeDefined();
+});
+
+it("N85: a guest's lapsed attempt is not replayed either", async () => {
+  mocks.auth.mockResolvedValue({ data: { user: null } });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  mocks.attemptRead.mockResolvedValue({ data: { result: { orders: [{ order_id: "order-1" }], skipped: [] } }, error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "payment_failed" }], error: null });
+  const form = cartCheckoutForm();
+  form.set("email", "guest@example.test");
+  form.set("age_confirmed", "yes");
+  const shipping = { name: "Buyer One", line1: "10 Main Street", line2: null, city: "Detroit", postcode: "48201", country: "US", state: null, phone: null, isCollection: false };
+  const lapsedKey = createHash("sha256")
+    .update(JSON.stringify(["guest:browser-1", FORM_KEY, shipping, ["listing-1"]]))
+    .digest("hex");
+
+  await checkoutCart({}, form);
+
+  expect(mocks.attemptEq).toHaveBeenCalledWith("idempotency_key", lapsedKey);
+  const begun = mocks.purchaseBegin.mock.calls[0][0] as Record<string, unknown>;
+  expect(begun.p_buyer_id).toBe("guest-1");
+  expect(begun.p_idempotency_key).not.toBe(lapsedKey);
+});
+
+it("N85: says the buyer's own checkout holds the parts, not that they sold", async () => {
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  mocks.purchaseBegin.mockResolvedValue({
+    data: { orders: [], skipped: [{ listing_id: "listing-1", reason: "unavailable" }] },
+    error: null,
+  });
+  mocks.replayOrdersRead.mockResolvedValue({
+    data: [{ id: "order-9", order_items: [{ listing_id: "listing-1" }] }],
+    error: null,
+  });
+
+  const result = await checkoutCart({}, cartCheckoutForm());
+
+  expect(result.error).toContain("Your checkout is already holding these parts");
+  expect(result.error).not.toContain("sold");
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+});
+
+it("N87: an empty cart on another device says the buyer's own checkout holds the parts", async () => {
+  mocks.cartIds.mockResolvedValue([]);
+  mocks.replayOrdersRead.mockResolvedValue({
+    data: [{ id: "order-9", order_items: [{ listing_id: "listing-1" }] }],
+    error: null,
+  });
+
+  const result = await checkoutCart({}, cartCheckoutForm());
+
+  expect(result.error).toContain("Your checkout is already holding these parts");
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
+});
+
+it("N88: explains the unfinished-checkout cap instead of a generic failure", async () => {
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  mocks.purchaseBegin.mockResolvedValue({ data: null, error: { code: "P0001", message: "Too many unresolved checkouts" } });
+
+  const result = await checkoutCart({}, cartCheckoutForm());
+
+  expect(result.error).toContain("5 checkouts waiting for payment");
+  expect(result.error).toContain("Nothing was charged");
+  expect(mocks.reportError).not.toHaveBeenCalled();
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+});
+
+it("N485: the payment step's breakdown is what the server reserved, not the page-load cart", async () => {
+  mocks.cartIds.mockResolvedValue(["listing-1", "listing-2"]);
+  mocks.listingRead.mockResolvedValue({
+    data: [{ id: "listing-1", title: "Intercooler" }, { id: "listing-2", title: "Downpipe" }],
+    error: null,
+  });
+  // listing-2 sold meanwhile and listing-1's price rose to $50 since the page loaded.
+  mocks.purchaseBegin.mockResolvedValue({
+    data: {
+      orders: [{
+        order_id: "order-1", seller_id: "seller-1", currency: "USD",
+        subtotal_cents: 5000, shipping_cents: 500, platform_fee_cents: 550, total_cents: 5500,
+        listing_ids: ["listing-1"],
+      }],
+      skipped: [{ listing_id: "listing-2", reason: "unavailable" }],
+    },
+    error: null,
+  });
+  mocks.itemsRead.mockResolvedValue({ data: [{ listing_id: "listing-1", title: "Intercooler", price_cents: 5000 }], error: null });
+
+  const result = await checkoutCart({}, cartCheckoutForm());
+
+  expect(result.payment).toEqual(expect.objectContaining({
+    amountCents: 5500,
+    breakdown: {
+      goodsCents: 5000,
+      shippingCents: 500,
+      lines: [{ id: "listing-1", title: "Intercooler", priceCents: 5000 }],
+      skipped: ["Downpipe"],
+    },
+  }));
 });
 
 it("journals and freezes authenticated delivery before crossing the provider boundary", async () => {
@@ -351,14 +601,6 @@ it("reports payment failure only after the reservation release is verified", asy
   expect(result.error).toContain("Payment failed");
   expect(result.error).not.toContain("reconciled");
   expect(mocks.cartRemove).not.toHaveBeenCalled();
-});
-
-it("enforces beta access before loading or charging an accepted offer", async () => {
-  mocks.beta.mockResolvedValue({ enforced: true, eligible: false });
-  const result = await completeReservedOrder({}, checkoutForm());
-  expect(result.error).toContain("invited beta");
-  expect(mocks.orderRead).not.toHaveBeenCalled();
-  expect(mocks.createPayment).not.toHaveBeenCalled();
 });
 
 it("refuses the accepted-offer payment route for an ordinary pending order", async () => {
@@ -466,6 +708,17 @@ it("says why a basket outside the card-charge bounds was refused, before anythin
   expect(mocks.reportError).not.toHaveBeenCalled();
 });
 
+it("says so when the database refuses a seller whose payouts are off (N244)", async () => {
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  mocks.purchaseBegin.mockResolvedValue({ data: null, error: { code: "LS001", message: "This seller can't take payment yet" } });
+
+  const result = await checkoutCart({}, cartCheckoutForm());
+
+  expect(result.error).toMatch(/payouts aren't set up. Nothing was charged/);
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+  expect(mocks.reportError).not.toHaveBeenCalled();
+});
+
 it("reserves nothing when the saved Stripe customer can't be read", async () => {
   mocks.cartIds.mockResolvedValue(["listing-1"]);
   vi.mocked(getStripeCustomerId).mockRejectedValueOnce(new Error("Stripe customer lookup failed"));
@@ -475,4 +728,334 @@ it("reserves nothing when the saved Stripe customer can't be read", async () => 
   expect(result.error).toContain("Nothing was charged");
   expect(mocks.purchaseBegin).not.toHaveBeenCalled();
   expect(mocks.createPayment).not.toHaveBeenCalled();
+});
+
+// OS-W31: guest checkout opens with the beta gone, so its holds are capped
+// (N89) and its DRVN Shipping path must work for a quote with no buyer.
+function asGuest() {
+  mocks.auth.mockResolvedValue({ data: { user: null } });
+  vi.mocked(guestCheckoutIdentity).mockResolvedValue("guest:device-1");
+  vi.mocked(isPlausibleEmail).mockReturnValue(true);
+  vi.mocked(resolveGuestBuyer).mockResolvedValue({ buyer: { id: "guest-buyer-1", created: false } } as never);
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+}
+
+function guestForm() {
+  const form = cartCheckoutForm();
+  form.set("email", "guest@example.com");
+  form.set("quote_listing-1", "quote-guest");
+  form.set("age_confirmed", "yes");
+  return form;
+}
+
+const buyerlessQuote = { id: "quote-guest", listing_id: "listing-1", buyer_id: null, amount_cents: 500 };
+
+it("guest DRVN Shipping: a buyer-less quote freezes through the guest path, never the signed-in buyer-matched freeze", async () => {
+  asGuest();
+  mocks.plan.mockResolvedValue({ plan: { overrides: { "listing-1": 500 }, quotes: new Map([["listing-1", buyerlessQuote]]) } });
+
+  const result = await checkoutCart({}, guestForm());
+
+  expect(mocks.plan).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+    buyerId: "guest-buyer-1",
+    quoteIds: { "listing-1": "quote-guest" },
+  }));
+  expect(mocks.purchaseBegin).toHaveBeenCalledWith(expect.objectContaining({ p_checkout_request_key: undefined }));
+  expect(mocks.cartFreeze).not.toHaveBeenCalled();
+  expect(vi.mocked(freezeOrderShipping)).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.arrayContaining([expect.objectContaining({ order_id: "order-1" })]),
+    new Map([["listing-1", buyerlessQuote]]),
+  );
+  expect(result.payment?.clientSecret).toBe("secret");
+});
+
+it("admits a guest's holds for this request before reserving anything, keyed by one-way digests of device and network", async () => {
+  asGuest();
+
+  await checkoutCart({}, guestForm());
+
+  const admit = mocks.guestAdmit.mock.calls[0][0] as Record<string, unknown>;
+  const begun = mocks.purchaseBegin.mock.calls[0][0] as Record<string, unknown>;
+  expect(admit).toMatchObject({ p_listing_ids: ["listing-1"], p_buyer: "guest-buyer-1" });
+  // The admission belongs to this request: purchase_begin binds it under the
+  // same key, in its own transaction (20261108130000).
+  expect(admit.p_request).toBe(begun.p_idempotency_key);
+  expect(admit.p_device).toMatch(/^[0-9a-f]{64}$/);
+  expect(admit.p_network).toMatch(/^[0-9a-f]{64}$/);
+  expect(JSON.stringify(admit)).not.toContain("device-1");
+  expect(JSON.stringify(admit)).not.toContain("203.0.113.9");
+  expect(mocks.guestAdmit.mock.invocationCallOrder[0]).toBeLessThan(mocks.purchaseBegin.mock.invocationCallOrder[0]);
+  expect(mocks.guestBind).not.toHaveBeenCalled();
+  expect(mocks.guestRelease).not.toHaveBeenCalled();
+});
+
+it("refuses a guest over the hold cap (GH429) or on a part another guest holds (GH409) before reserving or charging", async () => {
+  asGuest();
+  mocks.guestAdmit.mockResolvedValueOnce({ data: null, error: { code: "GH429", message: "cap" } });
+  expect(await checkoutCart({}, guestForm())).toEqual({ error: GUEST_HOLD_LIMIT_MESSAGE });
+  mocks.guestAdmit.mockResolvedValueOnce({ data: null, error: { code: "GH409", message: "taken" } });
+  expect(await checkoutCart({}, guestForm())).toEqual({ error: GUEST_HOLD_TAKEN_MESSAGE });
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+});
+
+it("gives back only this request's own admissions when nothing was reserved", async () => {
+  asGuest();
+  mocks.purchaseBegin.mockResolvedValue({ data: null, error: { code: "XX000", message: "purchase_begin failed" } });
+
+  await checkoutCart({}, guestForm());
+
+  const admit = mocks.guestAdmit.mock.calls[0][0] as Record<string, unknown>;
+  expect(mocks.guestRelease).toHaveBeenCalledWith({ p_request: admit.p_request });
+  expect(JSON.stringify(mocks.guestRelease.mock.calls)).not.toContain("hold-1");
+  expect(mocks.guestBind).not.toHaveBeenCalled();
+});
+
+// Codex review of #126 (P2): after purchase_begin reserved the order, a
+// failed delivery-address write is not "nothing reserved". The admissions
+// stay bound to the pending order and the guest keeps the receipt for it.
+it("a failed guest delivery write after reserving keeps the reservation: no admission is released", async () => {
+  asGuest();
+  mocks.shipWrite.mockResolvedValue({ error: { message: "write failed" } });
+
+  const result = await checkoutCart({}, guestForm());
+
+  expect(result.error).toContain("Couldn't confirm the delivery method");
+  expect(mocks.guestRelease).not.toHaveBeenCalled();
+  expect(vi.mocked(setGuestOrders)).toHaveBeenCalledWith(["order-1"]);
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+});
+
+it("never admits guest holds for a signed-in buyer", async () => {
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  await checkoutCart({}, cartCheckoutForm());
+  expect(mocks.guestAdmit).not.toHaveBeenCalled();
+});
+
+// R69-age: a guest confirms 18+ before any account is made or emailed.
+it("guest checkout refuses a post without the 18+ box and creates no account", async () => {
+  mocks.auth.mockResolvedValue({ data: { user: null } });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  const form = cartCheckoutForm();
+  form.set("email", "guest@drvn.test");
+
+  await expect(checkoutCart({}, form)).resolves.toEqual({ error: "Confirm you're 18 or over to continue." });
+  expect(mocks.guestBuyer).not.toHaveBeenCalled();
+  expect(mocks.recordAge).not.toHaveBeenCalled();
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
+});
+
+it("guest checkout records the 18+ confirmation against the guest account before the order", async () => {
+  mocks.auth.mockResolvedValue({ data: { user: null } });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  mocks.guestBuyer.mockResolvedValue({ buyer: { id: "guest-1", created: false } });
+  mocks.recordAge.mockResolvedValue(false);
+  const form = cartCheckoutForm();
+  form.set("email", "guest@drvn.test");
+  form.set("age_confirmed", "yes");
+
+  await expect(checkoutCart({}, form)).resolves.toEqual({ error: "We couldn't start that purchase. Nothing was charged." });
+  expect(mocks.recordAge).toHaveBeenCalledWith("guest-1", "guest_checkout");
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
+});
+
+// OS-W17 follow-up (GPT P2): a guest's DRVN-shipped checkout resumes after a
+// reload with the same address. Its parts are reserved by the guest now, so a
+// fresh plan has no active line and gives empty overrides, which
+// purchase_begin refuses against the attempt's fingerprint.
+it("guest DRVN checkout resumes after a reload: replays the frozen fulfilment, never a re-plan of reserved lines", async () => {
+  asGuest();
+  const shipping = { name: "Buyer One", line1: "10 Main Street", line2: null, city: "Detroit", postcode: "48201", country: "US", state: null, phone: null, isCollection: false };
+  const guestKey = createHash("sha256")
+    .update(JSON.stringify(["guest:device-1", FORM_KEY, shipping, ["listing-1"]]))
+    .digest("hex");
+  mocks.attemptRead.mockResolvedValue({
+    data: {
+      buyer_id: "guest-buyer-1",
+      request_fingerprint: { ids: ["listing-1"], shipping: { "listing-1": 500 } },
+      result: { orders: [{ order_id: "order-1", seller_id: "seller-1", currency: "USD", subtotal_cents: 5000, shipping_cents: 500, platform_fee_cents: 550, total_cents: 5500, listing_ids: ["listing-1"] }], skipped: [] },
+    },
+    error: null,
+  });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "pending" }], error: null });
+  // What planning would say now: the guest's own reservation isn't active.
+  mocks.plan.mockResolvedValue({ plan: { overrides: {}, quotes: new Map() } });
+  const frozenQuote = { ...buyerlessQuote, consumed_order_id: "order-1" };
+  mocks.quotesRead.mockResolvedValue({ data: [frozenQuote], error: null });
+  // A reload renders no rate picker for reserved lines, so no quote id is posted.
+  const form = cartCheckoutForm();
+  form.set("email", "guest@example.com");
+  form.set("age_confirmed", "yes");
+
+  const result = await checkoutCart({}, form);
+
+  expect(mocks.attemptEq).toHaveBeenCalledWith("idempotency_key", guestKey);
+  expect(mocks.plan).not.toHaveBeenCalled();
+  expect(mocks.purchaseBegin).toHaveBeenCalledWith(expect.objectContaining({
+    p_buyer_id: "guest-buyer-1",
+    p_idempotency_key: guestKey,
+    p_shipping_overrides: { "listing-1": 500 },
+  }));
+  expect(vi.mocked(freezeOrderShipping)).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.arrayContaining([expect.objectContaining({ order_id: "order-1" })]),
+    new Map([["listing-1", frozenQuote]]),
+  );
+  expect(mocks.createPayment).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: guestKey }));
+  expect(result.payment?.clientSecret).toBe("secret");
+  expect(mocks.rememberKey).toHaveBeenCalledWith(FORM_KEY);
+});
+
+it("guest resume fails closed, charging nothing, when its frozen DRVN quote can't be recovered", async () => {
+  asGuest();
+  mocks.attemptRead.mockResolvedValue({
+    data: {
+      buyer_id: "guest-buyer-1",
+      request_fingerprint: { ids: ["listing-1"], shipping: { "listing-1": 500 } },
+      result: { orders: [{ order_id: "order-1" }], skipped: [] },
+    },
+    error: null,
+  });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "pending" }], error: null });
+  // A quote consumed at another amount is not this attempt's.
+  mocks.quotesRead.mockResolvedValue({ data: [{ ...buyerlessQuote, consumed_order_id: "order-1", amount_cents: 900 }], error: null });
+  const form = cartCheckoutForm();
+  form.set("email", "guest@example.com");
+  form.set("age_confirmed", "yes");
+
+  const result = await checkoutCart({}, form);
+
+  expect(result.error).toContain("Nothing was charged");
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+});
+
+// OS-W17 follow-up (GPT P2): "Finish checkout" on another device. /checkout
+// there has neither the original key nor the cart, so the form carries the
+// order and the server resumes the attempt that reserved it.
+const ORDER_ID = "11111111-1111-4111-8111-111111111111";
+const OTHER_DEVICE_KEY = "44444444-4444-4444-8444-444444444444";
+
+function attemptFromOtherDevice(line1 = "10 Main Street") {
+  const { attempt } = durableCartAttempt();
+  const shipping = { ...attempt.checkout_context.shipping };
+  return {
+    ...attempt,
+    // Started under the first device's key, which this device never saw.
+    idempotency_key: createHash("sha256")
+      .update(JSON.stringify(["user:buyer-1", OTHER_DEVICE_KEY, { ...shipping, line1 }, ["listing-1"]]))
+      .digest("hex"),
+    checkout_request_key: cartCheckoutRequestKey("buyer-1", OTHER_DEVICE_KEY),
+    checkout_context: { ...attempt.checkout_context, shipping: { ...shipping, line1 } },
+    result: { ...attempt.result, orders: [{ ...attempt.result.orders[0], order_id: ORDER_ID }] },
+  };
+}
+
+it("Finish checkout on another device resumes that order's basket and payment after checking it is the buyer's", async () => {
+  const attempt = attemptFromOtherDevice();
+  mocks.attemptRead.mockResolvedValue({ data: attempt, error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: ORDER_ID, status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue([]); // this device's cart is empty
+  const form = cartCheckoutForm(); // this page's own fresh key
+  form.set("order_id", ORDER_ID);
+
+  const result = await checkoutCart({}, form);
+
+  expect(mocks.attemptEq).toHaveBeenCalledWith("buyer_id", "buyer-1");
+  expect(mocks.attemptEq).toHaveBeenCalledWith("contains", "result", { orders: [{ order_id: ORDER_ID }] });
+  expect(mocks.release).not.toHaveBeenCalled();
+  expect(mocks.purchaseBegin).toHaveBeenCalledWith(expect.objectContaining({
+    p_listing_ids: ["listing-1"],
+    p_idempotency_key: attempt.idempotency_key,
+    p_checkout_request_key: attempt.checkout_request_key,
+    p_checkout_context: attempt.checkout_context,
+  }));
+  expect(mocks.createPayment).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: attempt.idempotency_key }));
+  expect(result.payment?.clientSecret).toBe("secret");
+  expect(result.error).toBeUndefined();
+  // This device's random key never named the attempt; it isn't remembered.
+  expect(mocks.rememberKey).not.toHaveBeenCalled();
+});
+
+it("Finish checkout on another device with a new address releases and restarts the same basket there", async () => {
+  mocks.attemptRead.mockResolvedValue({ data: attemptFromOtherDevice(), error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: ORDER_ID, status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue([]);
+  const form = cartCheckoutForm("22 New Road");
+  form.set("order_id", ORDER_ID);
+
+  // The restarted basket resumes by its own order, so the page shows it.
+  await expect(checkoutCart({}, form)).rejects.toThrow("redirect:/checkout?order=order-1");
+
+  expect(mocks.release).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+    buyerId: "buyer-1",
+    orderIds: [ORDER_ID],
+  }));
+  expect(mocks.setCart).toHaveBeenCalledWith(["listing-1"]);
+  const begun = mocks.purchaseBegin.mock.calls[0][0] as Record<string, unknown>;
+  expect(begun.p_listing_ids).toEqual(["listing-1"]);
+  expect(begun.p_checkout_context).toMatchObject({ shipping: { line1: "22 New Road" } });
+  expect(mocks.createPayment).toHaveBeenCalled();
+  // The replacement's own key is remembered on this device (never the page's).
+  expect(mocks.rememberKey).toHaveBeenCalledTimes(1);
+  expect(mocks.rememberKey).not.toHaveBeenCalledWith(FORM_KEY);
+});
+
+// Codex fix-check of #152 (P2): the restart reserved its replacement, then
+// the shipping freeze failed. The replacement is what a reload or a retry
+// must recover, not the released order A.
+it("a restart whose freeze fails after reserving the replacement keeps that replacement recoverable", async () => {
+  mocks.attemptRead.mockResolvedValue({ data: attemptFromOtherDevice(), error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: ORDER_ID, status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-b"]);
+  mocks.cartFreeze.mockResolvedValue({ data: null, error: { message: "freeze failed" } });
+  const form = cartCheckoutForm("22 New Road");
+  form.set("order_id", ORDER_ID);
+
+  // The page moves to the replacement's order and says it didn't reach payment.
+  await expect(checkoutCart({}, form)).rejects.toThrow("redirect:/checkout?order=order-1&resume=incomplete");
+
+  const begun = mocks.purchaseBegin.mock.calls[0][0] as Record<string, unknown>;
+  expect(begun.p_listing_ids).toEqual(["listing-1"]);
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+  // The replacement's key is remembered, so the cookie path finds it too.
+  expect(mocks.rememberKey).toHaveBeenCalledTimes(1);
+  const remembered = mocks.rememberKey.mock.calls[0][0] as string;
+  expect(remembered).not.toBe(FORM_KEY);
+  expect(cartCheckoutRequestKey("buyer-1", remembered)).toBe(begun.p_checkout_request_key);
+});
+
+// Codex fix-check of #141 (P2): device B's cart holds an unrelated part. The
+// restart of order A after an address change buys A's basket only.
+it("restarting order A on another device never adds that device's unrelated cart lines to the payment", async () => {
+  mocks.attemptRead.mockResolvedValue({ data: attemptFromOtherDevice(), error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: ORDER_ID, status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-b"]); // unrelated part B on this device
+  const form = cartCheckoutForm("22 New Road");
+  form.set("order_id", ORDER_ID);
+
+  await expect(checkoutCart({}, form)).rejects.toThrow("redirect:/checkout?order=");
+
+  const begun = mocks.purchaseBegin.mock.calls[0][0] as Record<string, unknown>;
+  expect(begun.p_listing_ids).toEqual(["listing-1"]);
+  expect(JSON.stringify(begun)).not.toContain("listing-b");
+  expect(mocks.createPayment).toHaveBeenCalledWith(expect.objectContaining({ totalCents: 5500 }));
+  // B stays in the cart, untouched; A is kept beside it.
+  expect(mocks.setCart).toHaveBeenCalledWith(["listing-1", "listing-b"]);
+  expect(mocks.cartRemove).not.toHaveBeenCalled();
+});
+
+it("a Finish checkout order the buyer doesn't own resumes nothing", async () => {
+  mocks.attemptRead.mockResolvedValue({ data: null, error: null });
+  mocks.cartIds.mockResolvedValue([]);
+  const form = cartCheckoutForm();
+  form.set("order_id", ORDER_ID);
+
+  const result = await checkoutCart({}, form);
+
+  expect(mocks.attemptEq).toHaveBeenCalledWith("buyer_id", "buyer-1");
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+  expect(result.error).toBeDefined();
 });

@@ -9,7 +9,6 @@ import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 import { offerMoveCore, type OfferMoveKind } from "@/lib/capabilities/negotiation";
 import type { CommerceState } from "./action-types";
-import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 import { SUSPENDED_MESSAGE, isSuspended } from "@/lib/suspension";
 import {
   CHARGE_OUT_OF_BOUNDS_CODE,
@@ -17,6 +16,7 @@ import {
   MIN_CHARGE_CENTS,
   OFFER_OUT_OF_BOUNDS_MESSAGE,
 } from "@/lib/payments/charge-bounds";
+import { PAYOUTS_NOT_READY_CODE } from "@/lib/payments/payout-readiness";
 
 /** A below-minimum offer is refused without saying what the minimum is. */
 const OFFER_BELOW_MINIMUM_MESSAGE = "That's lower than the seller will accept. Try a higher offer.";
@@ -63,8 +63,6 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
   // Exact committed-response replay bypasses admission/rate consumption. The
   // RPC verifies the original buyer/listing/amount/message before returning.
   if (!existingRequest.data) {
-    const betaAccess = await getBetaAccess(user.id, "buyer");
-    if (!betaAccess.eligible) return { error: betaCommerceError("buyer") };
     if (!(await allowAction(RATE_LIMITS.makeOffer, user.id))) {
       return { error: rateLimitMessage(RATE_LIMITS.makeOffer) };
     }
@@ -162,8 +160,13 @@ function moveErrorMessage(code: string | undefined): string | null {
     case "OF005": return "That offer has already been settled.";
     case "OF007": return "That part is no longer available.";
     case "OF009": return "Too many offer moves in a short time. Try again in a few minutes.";
+    // N54: a block between the two, in either direction.
+    case "BL403": return "You can't make offers to this seller.";
     case "P0002": return "That offer no longer exists.";
     case CHARGE_OUT_OF_BOUNDS_CODE: return OFFER_OUT_OF_BOUNDS_MESSAGE;
+    // Accepting reserves the part, which the database refuses while the
+    // seller's payouts are off (20261107210000, N244).
+    case PAYOUTS_NOT_READY_CODE: return "This sale can't go ahead until the seller's payouts are set up. Nothing was charged.";
     default: return null;
   }
 }
@@ -211,10 +214,6 @@ export async function respondToOffer(
   const round = readRound(formData);
   if (!offerId || !["accepted", "declined", "countered"].includes(decision) || round === null) {
     return { error: "Pick accept, counter or decline." };
-  }
-  if (decision !== "declined") {
-    const betaAccess = await getBetaAccess(user.id, "seller");
-    if (!betaAccess.eligible) return { error: betaCommerceError("seller") };
   }
   const counter = decision === "countered" ? readAmount(formData, "counter_amount") : undefined;
   if (decision === "countered" && !counter) return { error: "Enter the amount you'd accept." };
@@ -294,8 +293,6 @@ export async function counterOffer(
   formData: FormData
 ): Promise<CommerceState> {
   const { supabase, user } = await requireUser();
-  const betaAccess = await getBetaAccess(user.id, "buyer");
-  if (!betaAccess.eligible) return { error: betaCommerceError("buyer") };
   const offerId = String(formData.get("offer_id") ?? "");
   const round = readRound(formData);
   const amount = readAmount(formData, "counter_amount");
@@ -318,8 +315,6 @@ export async function acceptCounter(
   formData: FormData
 ): Promise<CommerceState> {
   const { supabase, user } = await requireUser();
-  const betaAccess = await getBetaAccess(user.id, "buyer");
-  if (!betaAccess.eligible) return { error: betaCommerceError("buyer") };
   const offerId = String(formData.get("offer_id") ?? "");
   const round = readRound(formData);
   if (!offerId || round === null) return { error: "Missing offer." };

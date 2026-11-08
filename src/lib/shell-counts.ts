@@ -74,13 +74,14 @@ export async function loadUnreadNotificationCount(
   supabase: SupabaseClient<Database>,
   userId: string
 ): Promise<number> {
-  const { data: me } = await supabase.from("profiles").select("notification_prefs").eq("id", userId).maybeSingle();
+  // The column is closed to members (N62): the caller's own settings only.
+  const { data: prefs } = await supabase.rpc("my_notification_prefs");
   let query = supabase
     .from("notifications")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
     .is("read_at", null);
-  const muted = mutedKindFilter(me?.notification_prefs);
+  const muted = mutedKindFilter(prefs);
   if (muted) query = query.or(muted);
   const { count, error } = await query;
   if (error) {

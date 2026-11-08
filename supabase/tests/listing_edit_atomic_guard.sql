@@ -43,7 +43,6 @@ declare
   );
   rejected boolean := false;
 begin
-  update public.beta_access_config set enforced = false where singleton = true;
   -- Member photo writes need the storage origin recorded (20261107203000).
   insert into public.job_config(key, value) values ('media_storage_origin', 'https://proj.supabase.co')
     on conflict (key) do update set value = excluded.value;

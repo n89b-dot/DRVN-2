@@ -25,9 +25,17 @@ function Result({ state }: { state: CommerceState }) {
   );
 }
 
-/** Buyer-only. Only rendered by the page once dispatch has happened and the
- *  order isn't already disputed/refunded/cancelled — see order/[id]/page.tsx. */
-export function ReportProblemForm({ orderId }: { orderId: string }) {
+/** Buyer-only. Rendered once dispatch has happened, or — for "item never
+ *  arrived" only — once the latest delivery date frozen at purchase has
+ *  passed on an undispatched order; see order/[id]/page.tsx. The database
+ *  (open_order_dispute) re-checks the stage and window either way. */
+export function ReportProblemForm({
+  orderId,
+  categories = DISPUTE_CATEGORIES,
+}: {
+  orderId: string;
+  categories?: typeof DISPUTE_CATEGORIES;
+}) {
   const [state, setState] = useState<CommerceState>({});
   const [pending, setPending] = useState(false);
   const submitting = useRef(false);
@@ -64,11 +72,16 @@ export function ReportProblemForm({ orderId }: { orderId: string }) {
       <input type="hidden" name="order_id" value={orderId} />
       <label className="field">
         <span className="field__label">What went wrong</span>
-        <select name="category" required defaultValue="" className="ctl !max-w-none">
+        <select
+          name="category"
+          required
+          defaultValue={categories.length === 1 ? categories[0].value : ""}
+          className="ctl !max-w-none"
+        >
           <option value="" disabled>
             Choose one…
           </option>
-          {DISPUTE_CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <option key={c.value} value={c.value}>
               {c.label}
             </option>

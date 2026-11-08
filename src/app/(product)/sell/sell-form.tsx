@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from "motion/react";
 
 import {
   ActionFooter,
+  Alert,
   Badge,
   Button,
   Checkbox,
@@ -412,7 +413,7 @@ export function SellForm({
       variant="live"
       disabled={pending || uploading}
       aria-disabled={publishBlocked ? true : undefined}
-      aria-describedby={publishBlocked ? "publish-checklist" : undefined}
+      aria-describedby={publishBlocked ? "publish-blocked-note publish-checklist" : undefined}
       onClick={(e) => {
         if (publishBlocked) e.preventDefault();
       }}
@@ -572,6 +573,19 @@ export function SellForm({
           <input type="hidden" name="mod_item_id" value={prefill.modItemId} />
         )}
         {importReview && <input type="hidden" name="import_id" value={importReview.id} />}
+
+        {/* R-audit-sell: the one blocker no field can fix is said first, with
+            its fix, before the seller fills anything in — not discovered in
+            the checklist above the Publish button. */}
+        {publishBlocked && (
+          <Alert tone="live" ico="!" title="Set up payouts to publish">
+            A sale needs somewhere to send your money, so publishing waits until payouts are on.
+            You can fill this in and save it as a draft now.{" "}
+            <Link href="/payouts" className="jumplink">
+              Set up payouts →
+            </Link>
+          </Alert>
+        )}
 
         {importReview && (
           <div role="status" className="tile !mb-0">
@@ -1407,6 +1421,16 @@ export function SellForm({
             <span className="spec-note !mt-0 !border-t-0 !pt-0">
               {isEdit ? (
                 <>Changes go live on the market immediately.</>
+              ) : publishBlocked ? (
+                // Said beside the greyed-out button itself, not only in the
+                // checklist it points at (R-audit-sell).
+                <b id="publish-blocked-note">
+                  Publish is off until payouts are set up.{" "}
+                  <Link href="/payouts" className="jumplink">
+                    Set up payouts →
+                  </Link>{" "}
+                  Save draft keeps your work.
+                </b>
               ) : (
                 <b>Save a draft and nothing reaches the market until you publish.</b>
               )}
@@ -1448,7 +1472,7 @@ export function SellForm({
               ? `$${Number(price).toLocaleString("en-US", { maximumFractionDigits: 2 })}`
               : "Not set"
           }
-          ship={`${readyCount} of ${readiness.length} ready`}
+          ship={publishBlocked ? "Payouts needed to publish" : `${readyCount} of ${readiness.length} ready`}
         >
           {commitButton}
         </MobileActionBar>

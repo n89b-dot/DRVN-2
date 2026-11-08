@@ -1,6 +1,6 @@
 /**
  * Every job pg_cron must run, as `private.scheduled_job_inventory()`
- * (latest 20261107200300) lists them: name, exact schedule, the worker families it
+ * (latest 20261108100000) lists them: name, exact schedule, the worker families it
  * drives (recorded in worker_runs by the route or function it calls) and how
  * long it may go without a successful run. The database's copy is the one
  * health judges against; this copy lets the app and the independent monitor
@@ -26,6 +26,8 @@ export const JOB_INVENTORY: readonly ScheduledJob[] = [
   { job: "drvn-explore-trending", schedule: "*/2 * * * *", families: [], budgetMinutes: 30 },
   { job: "drvn-grow-products", schedule: "17 * * * *", families: [], budgetMinutes: 180 },
   { job: "drvn-grow-products-full", schedule: "47 4 * * *", families: [], budgetMinutes: 26 * 60 },
+  // Read-only Stripe ↔ ledger comparison (N115, lib/payments/ledger-reconciliation.ts).
+  { job: "drvn-ledger-reconciliation", schedule: "50 5 * * *", families: ["ledgerReconciliation"], budgetMinutes: 26 * 60 },
   { job: "drvn-listing-edit-sweep", schedule: "45 3 * * *", families: [], budgetMinutes: 26 * 60 },
   { job: "drvn-listing-import-sweep", schedule: "37 3 * * *", families: ["listingImports"], budgetMinutes: 26 * 60 },
   { job: "drvn-marketplace-counts", schedule: "30 seconds", families: [], budgetMinutes: 10 },
@@ -40,7 +42,7 @@ export const JOB_INVENTORY: readonly ScheduledJob[] = [
     job: "drvn-transfer-worker",
     schedule: "*/10 * * * *",
     // The whole money pass (runMoneyWorkerPass).
-    families: ["expiries", "captures", "transfers", "transferReconciliation", "refunds", "labelVoids", "returns", "disputes", "alerts", "receipts", "analytics"],
+    families: ["expiries", "captures", "transfers", "transferReconciliation", "refunds", "labelVoids", "returns", "disputes", "payoutDeadlines", "alerts", "receipts", "analytics"],
     budgetMinutes: 30,
   },
 ];

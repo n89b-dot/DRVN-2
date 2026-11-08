@@ -1,6 +1,25 @@
 import { randomUUID } from "node:crypto";
+import { inflateRawSync } from "node:zlib";
 import { expect, test } from "@playwright/test";
 import { cleanupFixtureUser, fixtureAdmin } from "./fixtures";
+
+/** The files in a ZIP, read from its central directory (N47: the export is one archive). */
+function unzip(zip: Buffer): Map<string, Buffer> {
+  const end = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  const count = zip.readUInt16LE(end + 10);
+  let at = zip.readUInt32LE(end + 16);
+  const files = new Map<string, Buffer>();
+  for (let i = 0; i < count; i += 1) {
+    const packed = zip.readUInt32LE(at + 20);
+    const nameLength = zip.readUInt16LE(at + 28);
+    const local = zip.readUInt32LE(at + 42);
+    const name = zip.subarray(at + 46, at + 46 + nameLength).toString("utf8");
+    const dataAt = local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
+    files.set(name, inflateRawSync(zip.subarray(dataAt, dataAt + packed)));
+    at += 46 + nameLength;
+  }
+  return files;
+}
 
 test("queued account export crosses media pages without including another member's images", async ({ page }) => {
   test.setTimeout(240_000);
@@ -83,28 +102,26 @@ test("queued account export crosses media pages without including another member
     expect(latest?.download_url).toBe(`/api/account/export/${requestId}/download`);
 
     const download = await page.request.get(latest!.download_url!);
-    expect(download.status(), await download.text()).toBe(200);
+    expect(download.status()).toBe(200);
     expect(download.headers()["content-disposition"]).toContain("attachment;");
-    const manifest = await download.json() as {
+    expect(download.headers()["content-disposition"]).toContain(".zip");
+    expect(download.headers()["content-type"]).toBe("application/zip");
+    // One archive with everything in it: no links that expire (N47).
+    const files = unzip(Buffer.from(await download.body()));
+    const manifest = JSON.parse(files.get("manifest.json")!.toString("utf8")) as {
       requester: { id: string };
       counts: Record<string, number>;
-      parts: Array<{
-        section_key: string;
-        row_count: number;
-        download_url: string;
-      }>;
+      files: Array<{ file: string; section: string; rows: number }>;
     };
     expect(manifest.requester.id).toBe(own.data.user.id);
     expect(manifest.counts.car_images).toBe(501);
     expect(manifest.counts.payments).toBe(0);
+    expect(JSON.stringify(manifest)).not.toContain("download_url");
+    expect(manifest.files.every((file) => files.has(file.file))).toBe(true);
 
-    const carParts = manifest.parts.filter((part) => part.section_key === "car_images");
-    expect(carParts.reduce((total, part) => total + part.row_count, 0)).toBe(501);
-    const packages = await Promise.all(carParts.map(async (part) => {
-      const response = await page.request.get(part.download_url);
-      expect(response.status()).toBe(200);
-      return await response.json() as { rows: Array<{ car_id: string }> };
-    }));
+    const carParts = manifest.files.filter((file) => file.section === "car_images");
+    expect(carParts.reduce((total, part) => total + part.rows, 0)).toBe(501);
+    const packages = carParts.map((part) => JSON.parse(files.get(part.file)!.toString("utf8")) as { rows: Array<{ car_id: string }> });
     const exportedImages = packages.flatMap((part) => part.rows);
     expect(exportedImages).toHaveLength(501);
     expect(exportedImages.every((image) => image.car_id === ownCar)).toBe(true);

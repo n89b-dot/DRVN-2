@@ -170,7 +170,6 @@ declare
   ids uuid[]; walk uuid[]; step record; last_at timestamptz; f record; step_count int;
   n int;
 begin
-  update public.beta_access_config set enforced = false where singleton;
   insert into auth.users(id, email) select x, 'agg-' || o || '@drvn.test' from unnest(u) with ordinality t(x, o);
   -- u[1..5] builders (u[4] suspended, u[5] without a username), u[6] a
   -- member who follows u[2], u[7] a seller, u[8] a suspended seller.

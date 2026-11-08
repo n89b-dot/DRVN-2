@@ -7,6 +7,7 @@ import {
   adminReplaceFailedRefund,
   adminResolveRecovery,
   adminRetryCarryPayout,
+  adminRetryTransfer,
   adminRunTransferWorker,
 } from "@/lib/admin/actions";
 import { payoutAlertChip, refundChip, transferChip } from "@/lib/admin/presentation";
@@ -31,6 +32,7 @@ const KIND_LABEL: Record<string, string> = {
   refund_lifecycle_unresolved: "Refund status needs reconciliation",
   refund_late_failure: "Refund failed after settlement",
   negative_balance: "Seller owes the platform",
+  ledger_discrepancy: "Ledger disagrees with Stripe",
 };
 
 const INTENT_LABEL: Record<string, string> = {
@@ -222,6 +224,24 @@ export default async function AdminPaymentsPage({
                       <span className="status-plain">{INTENT_LABEL[i.status] ?? i.status}</span>
                     )}
                     {i.last_error && <span className="order__meta mt-0.5 block">{i.last_error}</span>}
+                    {i.status === "failed" && i.attempts >= 8 && (
+                      <div className="mt-2">
+                        <ActionDialog
+                          action={adminRetryTransfer}
+                          title="Retry seller payout"
+                          trigger="Retry payout"
+                          triggerClassName="relbtn !static"
+                          hidden={{ order_id: i.order_id }}
+                          confirmNote={
+                            i.provider_call_may_have_occurred
+                              ? "Puts the payout back in the queue with its attempts reset. Stripe may already hold this transfer; the worker looks it up first and records it rather than sending again. Every payout rule still applies, and the recovery case stays open until you close it."
+                              : "Puts the payout back in the queue with its attempts reset. Every payout rule still applies; it fails back here if the cause remains. The recovery case stays open until you close it."
+                          }
+                          fields={[{ kind: "reason", placeholder: "e.g. Stripe outage over, seller fixed their account" }]}
+                          submitLabel="Queue again"
+                        />
+                      </div>
+                    )}
                   </td>
                   <td className="order__meta" data-label="Available">
                     {i.available_at ? new Date(i.available_at).toLocaleDateString() : "on delivery"}

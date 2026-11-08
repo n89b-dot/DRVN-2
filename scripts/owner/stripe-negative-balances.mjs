@@ -24,7 +24,7 @@
  */
 import { fileURLToPath } from "node:url";
 
-import { checkKey } from "./stripe-webhooks.mjs";
+import { STRIPE_API_VERSION, checkKey } from "./stripe-webhooks.mjs";
 
 export function parseArgs(argv) {
   const options = { apply: false, live: false, help: false };
@@ -83,7 +83,7 @@ async function main() {
   const { mode } = checkKey(key, options);
 
   const { default: Stripe } = await import("stripe");
-  const stripe = new Stripe(key, { timeout: 20_000, maxNetworkRetries: 2 });
+  const stripe = new Stripe(key, { apiVersion: STRIPE_API_VERSION, timeout: 20_000, maxNetworkRetries: 2 });
   console.log(`Stripe ${mode} mode${options.apply ? "" : " · DRY RUN"}`);
 
   const accounts = [];

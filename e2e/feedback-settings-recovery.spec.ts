@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 import { cleanupFixtureUser, fixtureAdmin } from "./fixtures";
-import { signIn, type TestUser } from "./helpers";
+import { signIn, type TestUser, FIXTURE_HANDLE, fixtureHandle } from "./helpers";
 
 async function createUser(label: string): Promise<TestUser & { id: string }> {
   const admin = fixtureAdmin();
@@ -10,7 +10,7 @@ async function createUser(label: string): Promise<TestUser & { id: string }> {
   const user = {
     email: `e2e-${label}-${token}@drvn.test`,
     password: `Feedback-${randomUUID()}!`,
-    username: `e2e${label}${token}`.slice(0, 24),
+    username: fixtureHandle(label, token),
     displayName: `E2E ${label}`,
   };
   const created = await admin.auth.admin.createUser({
@@ -26,6 +26,14 @@ async function createUser(label: string): Promise<TestUser & { id: string }> {
   if (named.error) throw named.error;
   return { ...user, id: created.data.user.id };
 }
+
+// The labels below carry hyphens; the handles built from them must still
+// pass the username rule, or the service-role write is refused (23514).
+test("N38: this file's fixture handles follow the username rule", () => {
+  for (const label of ["analytics", "profile-feedback", "question-buyer", "question-seller", "settings-invalid"]) {
+    expect(fixtureHandle(label, "0123456789abcdef0123456789abcdef")).toMatch(FIXTURE_HANDLE);
+  }
+});
 
 test("question draft survives a lost committed response and retry inserts only once", async ({ page }) => {
   const admin = fixtureAdmin();

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { unstable_rethrow, useRouter } from "next/navigation";
 import { useId, useRef, useState, useTransition } from "react";
 
@@ -7,13 +8,15 @@ import { Dialog } from "@/components/ui";
 
 import { fileReport, type ReportState } from "./actions";
 
-export type ReportSubject = "listing" | "user" | "post" | "comment";
+export type ReportSubject = "listing" | "user" | "post" | "comment" | "car";
 
 const SUBJECT_WORDS: Record<ReportSubject, { trigger: string; owner: string }> = {
   listing: { trigger: "Report this listing", owner: "seller" },
   user: { trigger: "Report this seller", owner: "user" },
   post: { trigger: "Report this post", owner: "author" },
   comment: { trigger: "Report", owner: "author" },
+  // N53: a build's name, description or photos (20261107220010).
+  car: { trigger: "Report this build", owner: "owner" },
 };
 
 const REASON_OPTIONS = [
@@ -23,6 +26,7 @@ const REASON_OPTIONS = [
   { value: "scam_or_fraud", label: "Scam or fraud" },
   { value: "offensive_content", label: "Offensive content" },
   { value: "wrong_category", label: "Miscategorised" },
+  { value: "copyright", label: "Uses my photos or work without permission" },
   { value: "other", label: "Something else" },
 ];
 
@@ -120,6 +124,17 @@ export function ReportButton({
                 ))}
               </select>
             </div>
+            {/* R69-dmca: a report flags it for review; a rights holder's
+                formal notice is what a takedown acts on. */}
+            {reason === "copyright" && (
+              <p className="field__hint">
+                Own the rights? Send a{" "}
+                <Link href="/copyright" className="jumplink">
+                  copyright notice
+                </Link>{" "}
+                as well, so we can act on it formally.
+              </p>
+            )}
             <div className="field">
               <label htmlFor={`${idBase}-detail`} className="microlabel">
                 Anything that helps — optional

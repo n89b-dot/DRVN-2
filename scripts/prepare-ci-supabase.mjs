@@ -28,3 +28,14 @@ const recorded = await fetch(`${origin}/rest/v1/job_config?on_conflict=key`, {
  body: JSON.stringify({ key: "media_storage_origin", value: origin }),
 });
 if (!recorded.ok) throw new Error(`Could not record the media storage origin (${recorded.status})`);
+// Stub-mode jobs: the database enforces payout readiness on publishing and
+// checkout unless it is told there is no money loop (20261107210000,
+// fail-closed). The Stripe test lane leaves the row out, as production does.
+if (process.env.PAYMENTS_MODE === "stub") {
+ const mode = await fetch(`${origin}/rest/v1/job_config?on_conflict=key`, {
+  method: "POST",
+  headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
+  body: JSON.stringify({ key: "payments_mode", value: "stub" }),
+ });
+ if (!mode.ok) throw new Error(`Could not record the stub payments mode (${mode.status})`);
+}

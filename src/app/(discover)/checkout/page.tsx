@@ -4,9 +4,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { ButtonLink, EmptyState, Foot, ObjectRow, PaymentModeNotice } from "@/components/ui";
-import { getBetaAccess } from "@/lib/beta-access";
-import { loadCartSummary, loadInFlightCheckout } from "@/lib/checkout-data";
+import { Alert, Foot, ObjectRow, PaymentModeNotice } from "@/components/ui";
+import {
+  loadCartSummary,
+  loadCheckoutResume,
+  loadCheckoutResumeForOrder,
+  loadInFlightCheckout,
+} from "@/lib/checkout-data";
+import { readCheckoutKey } from "@/lib/checkout-key";
 import { listSavedCards } from "@/lib/payments/customers";
 import { formatPrice } from "@/lib/payments/fee";
 import { paymentsAreLive } from "@/lib/payments/provider";
@@ -22,56 +27,46 @@ export const metadata = { title: "Checkout - DRVN" };
  * steps. Right: the persistent order summary rail. Reference pass: lululemon
  * (stepper, collapsing steps) + Etsy (secure chrome, review-at-right).
  */
-export default async function CheckoutPage() {
+export default async function CheckoutPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ order?: string | string[]; resume?: string | string[] }>;
+}) {
+  const { order, resume: resumeNote } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const betaAccess = await getBetaAccess(user?.id, "buyer");
-  if (betaAccess.unavailable) {
-    // The check failed — not a "no". Still no checkout, but the buyer is
-    // told to try again rather than that they aren't invited.
-    return (
-      <div className="wrap pb-10">
-        <EmptyState
-          mark="!"
-          title="We couldn't check your checkout access"
-          action={<ButtonLink href="/checkout">Try again</ButtonLink>}
-        >
-          Something went wrong on our side, so checkout is paused for a moment. Nothing new has been
-          charged.
-        </EmptyState>
-      </div>
-    );
-  }
-  if (betaAccess.enforced && !user) redirect("/login?next=%2Fcheckout");
-  if (!betaAccess.eligible) {
-    return (
-      <div className="wrap pb-10">
-        <EmptyState
-          mark="β"
-          title="Checkout is limited to invited members"
-          action={<ButtonLink href="/marketplace">Back to the marketplace</ButtonLink>}
-        >
-          Your account can still browse DRVN and access existing orders. New purchases require an active beta membership.
-        </EmptyState>
-      </div>
-    );
-  }
+
+  // OS-W17: "Finish checkout" on an order carries the order, so a signed-in
+  // buyer can finish on a device that has neither this checkout's key nor
+  // its cart. The order must be theirs and its cart checkout still live;
+  // anything else falls back to this device's own checkout.
+  const byOrder = await loadCheckoutResumeForOrder(user?.id ?? null, typeof order === "string" ? order : null);
 
   // Submitting the shipping step reserves every listing in the basket, and a
   // server action re-renders the route it ran on — so by the time this runs
   // again mid-payment the cart legitimately holds nothing `active`. Falling
   // back to the in-flight orders keeps the buyer on the Payment Element
   // instead of bouncing them to /cart with the charge already started.
-  const cart =
-    (await loadCartSummary().then((summary) =>
-      summary.lines.length ? summary : null
-    )) ?? (await loadInFlightCheckout(user?.id ?? null));
+  const cart = byOrder
+    ? await loadInFlightCheckout(user?.id ?? null, byOrder.orderIds)
+    : ((await loadCartSummary().then((summary) =>
+        summary.lines.length ? summary : null
+      )) ?? (await loadInFlightCheckout(user?.id ?? null)));
   if (!cart?.lines.length) redirect("/cart");
 
   // Guest checkout remains available outside the controlled-beta rollout.
   const savedCards = user ? await listSavedCards(user.id).catch(() => []) : [];
+
+  // OS-W17 (N85): one key per checkout, not per render. A checkout that has
+  // reserved the basket left its key in a cookie; rendering it back means a
+  // reload resumes that attempt (and its payment) instead of starting a
+  // second one that finds the buyer's own parts reserved. A member also gets
+  // the details it was started with, so resuming is one press.
+  const rememberedKey = await readCheckoutKey();
+  const idempotencyKey = rememberedKey ?? randomUUID();
+  const resume = byOrder?.resume ?? (await loadCheckoutResume(user?.id ?? null, rememberedKey));
 
   return (
     <div className="wrap wrap--wide pb-10">
@@ -79,6 +74,17 @@ export default async function CheckoutPage() {
         <span className="microlabel">Secure checkout · {cart.lines.length} part{cart.lines.length === 1 ? "" : "s"}</span>
         <h1>Nearly yours.</h1>
       </Rv>
+
+      {/* A restarted checkout reserved its parts but stopped before payment
+          (e.g. its delivery plan couldn't be finished): this is that
+          checkout, and continuing retries it. A fixed code, never query text. */}
+      {byOrder && resumeNote === "incomplete" && (
+        <Rv className="mb-4">
+          <Alert ico="!" role="alert" title="Your checkout restarted, but didn't reach payment">
+            Its parts are held for you. Continue with these details to try again. Nothing was charged.
+          </Alert>
+        </Rv>
+      )}
 
       <CheckoutTotalsProvider
         base={{ goodsCents: cart.goodsCents, flatShippingCents: cart.shippingCents, quotedLines: cart.drvnLines.length }}
@@ -133,9 +139,11 @@ export default async function CheckoutPage() {
           </Rv>
 
           <CheckoutSteps
-            idempotencyKey={randomUUID()}
+            idempotencyKey={idempotencyKey}
+            resume={resume}
+            orderId={byOrder && typeof order === "string" ? order : undefined}
             needsEmail={!user}
-            allowsCollection={cart.allowsCollection}
+            allowsCollection={cart.allowsCollection || Boolean(resume?.shipping.isCollection)}
             mixedFulfilment={cart.mixedFulfilment}
             items={cart.lines.map((line) => ({
               id: line.id,

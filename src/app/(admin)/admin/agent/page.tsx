@@ -1,6 +1,14 @@
-import { Alert, Button, ButtonLink, KeyValueTable, ObjectRow, PageHead, TextField, TileHead } from "@/components/ui";
+import { Alert, Badge, Button, ButtonLink, KeyValueTable, ObjectRow, PageHead, TextField, TileHead } from "@/components/ui";
 import { adminReadClient, requireAdminRead } from "@/lib/admin/guard";
-import { AGENT_MEASURES, formatMeasure } from "@/lib/agent/measures";
+import {
+  AGENT_MEASURES,
+  approximationNote,
+  explainReading,
+  formatReading,
+  MEASURE_MIN_SAMPLE,
+  readMeasure,
+  STATUS_TEXT,
+} from "@/lib/agent/measures";
 import { alertsToRaise, type AgentHealth } from "@/lib/agent/monitor";
 
 import { setAgentBetaStep, setAgentSpendLimits } from "./actions";
@@ -11,10 +19,15 @@ import { AGENT_SWITCH_SCOPES, switchLabel } from "./switches";
 
 export const dynamic = "force-dynamic";
 
-/** The first UTC day of the 7-day measures window. */
-function measureWindowStart(): string {
-  return new Date(Date.now() - 6 * 86_400_000).toISOString().slice(0, 10);
+/** The 7 UTC days of the measures window, oldest first. */
+function measureWindowDays(): string[] {
+  const now = Date.now();
+  return Array.from({ length: 7 }, (_, index) => new Date(now - (6 - index) * 86_400_000).toISOString().slice(0, 10));
 }
+
+/** Measures with a number behind them, and those without (unavailable or not computed). */
+const COMPUTED_MEASURES = AGENT_MEASURES.filter((def) => def.basis.kind === "computed" || def.basis.kind === "approximation");
+const UNMEASURED = AGENT_MEASURES.filter((def) => def.basis.kind === "unavailable_instrumentation" || def.basis.kind === "missing_computation");
 
 const AGENTS_BETA_STEPS = [
   { step: "seller", label: "A3a · Seller negotiation", what: "Let DRVN handle offers, the Agent tab, offer history with via agent." },
@@ -44,7 +57,8 @@ const HEALTH_LABEL: Record<string, string> = {
 export default async function AdminAgentPage() {
   const context = await requireAdminRead();
   const admin = await adminReadClient();
-  const since = measureWindowStart();
+  const days = measureWindowDays();
+  const since = days[0];
   const [controls, health, steps, limits, spend, metrics] = await Promise.all([
     admin.from("agent_controls").select("id, scope, subject_id, reason, set_at").is("cleared_at", null).order("set_at", { ascending: false }),
     admin.rpc("agent_health"),
@@ -55,8 +69,8 @@ export default async function AdminAgentPage() {
   ]);
   const stepOpen = new Map((steps.data ?? []).map((row) => [row.step, row]));
   const globalSpend = (spend.data as { global_usd?: number } | null)?.global_usd ?? 0;
-  const days = [...new Set((metrics.data ?? []).map((row) => row.day))].sort();
-  const valueOf = (day: string, scope: string, measure: string) =>
+  const computedDays = new Set((metrics.data ?? []).map((row) => row.day));
+  const rowOf = (day: string, scope: string, measure: string) =>
     (metrics.data ?? []).find((row) => row.day === day && row.scope === scope && row.measure === measure);
   // A failed read is "unknown", never "nothing is paused" (R-audit-killstate):
   // the page offers no Pause or Lift until the switches load.
@@ -193,7 +207,7 @@ export default async function AdminAgentPage() {
               { label: "Everyone, per day", value: `$${Number(limits.data?.global_daily_usd ?? 0).toFixed(2)}` },
             ]}
           />
-          <p className="order__meta mt-3">A turn past either cap is refused before the model is called. Usage is stored per task, never the conversation.</p>
+          <p className="order__meta mt-3">A turn past either cap is refused before the model is called. Usage is stored per model call (model, tokens, cost), never the conversation.</p>
           {canAct ? (
             <div className="mt-4">
               <AgentActionForm
@@ -224,8 +238,12 @@ export default async function AdminAgentPage() {
       </div>
 
       <section className="tile mb-8" aria-label="Measures">
-        <TileHead label="Measures, last 7 days" end={<span className="chip">aggregates · fewer than 5 shown as —</span>} />
-        {days.length ? (
+        <TileHead label="Measures, last 7 days" end={<Badge>aggregates · under {MEASURE_MIN_SAMPLE} cases suppressed</Badge>} />
+        {metrics.error ? (
+          <Alert tone="live" role="alert" title="Measures couldn't be read" className="mb-4">
+            agent_metrics_daily didn&apos;t load, so no day is shown as measured. Reload to try again.
+          </Alert>
+        ) : (
           <div className="overflow-x-auto">
             <table className="spec w-full">
               <thead>
@@ -237,24 +255,54 @@ export default async function AdminAgentPage() {
                 </tr>
               </thead>
               <tbody>
-                {AGENT_MEASURES.map((def) => (
-                  <tr key={`${def.scope}:${def.measure}`}>
-                    <th scope="row" title={def.definition}>
-                      {def.label}
-                      {def.role === "gate" ? <span className="chip ml-2">gate</span> : null}
-                    </th>
-                    {days.map((day) => {
-                      const row = valueOf(day, def.scope, def.measure);
-                      return <td key={day}>{row ? formatMeasure(def.kind, row.value as number | null) : "—"}</td>;
-                    })}
-                  </tr>
-                ))}
+                {COMPUTED_MEASURES.map((def) => {
+                  const note = approximationNote(def);
+                  return (
+                    <tr key={`${def.scope}:${def.measure}`}>
+                      <th scope="row" title={note ? `${def.definition} Approximation: ${note}` : def.definition}>
+                        {def.label}
+                        {def.role === "gate" ? <Badge className="ml-2">gate</Badge> : null}
+                        {note ? <Badge className="ml-2">approx.</Badge> : null}
+                      </th>
+                      {days.map((day) => {
+                        const row = rowOf(day, def.scope, def.measure);
+                        const reading = readMeasure(
+                          def,
+                          row ? { value: row.value == null ? null : Number(row.value), sample: row.sample } : undefined,
+                          computedDays.has(day),
+                        );
+                        return (
+                          <td key={day} title={explainReading(reading)} data-status={reading.status}>
+                            {formatReading(def, reading)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        ) : (
-          <p className="order__meta">No measures yet. The agent job writes them on each pass (agent_metrics_daily).</p>
         )}
+        <p className="order__meta mt-3">
+          A number is shown only when it was measured. {STATUS_TEXT.insufficient_sample}: fewer than {MEASURE_MIN_SAMPLE} cases. {STATUS_TEXT.missing_computation}: the agent job hasn&apos;t computed that day. Hover a cell for why.
+        </p>
+
+        <h3 className="order__meta mt-6 mb-2">Approximations</h3>
+        <KeyValueTable
+          rows={COMPUTED_MEASURES.flatMap((def) => {
+            const note = approximationNote(def);
+            return note ? [{ label: def.label, value: note }] : [];
+          })}
+        />
+
+        <h3 className="order__meta mt-6 mb-2">Not measured</h3>
+        <KeyValueTable
+          rows={UNMEASURED.map((def) => {
+            const reading = readMeasure(def, undefined, false);
+            return { label: def.label, value: `${formatReading(def, reading)}. ${explainReading(reading)}` };
+          })}
+        />
         <p className="order__meta mt-3">Definitions: docs/site/agent-measures.md. Hover a measure for its definition.</p>
       </section>
     </>

@@ -34,7 +34,7 @@ export default async function ProfilePage({
   // One parallel round: these were four steps in a row (profile → view →
   // banner cars → for-sale count), with the view itself seven deep.
   const [{ data: profile }, view, { data: bannerCars }, partsForSale] = await Promise.all([
-    supabase.from("profiles").select("id, username, display_name, headline, bio, location, links, avatar_url, profile_type, notification_prefs, payouts_enabled, main_car_id, store_note, created_at, updated_at").eq("id", user!.id).single(),
+    supabase.from("profiles").select("id, username, display_name, headline, bio, location, links, avatar_url, profile_type, payouts_enabled, main_car_id, store_note, created_at, updated_at").eq("id", user!.id).single(),
     loadProfileView(supabase, user!.id, {
       publicOnly: false,
       listingsPage: parsePageParam(listingsPageParam),

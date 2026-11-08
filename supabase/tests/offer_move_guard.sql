@@ -36,7 +36,6 @@ declare
   first_expiry timestamptz;
   c text;
 begin
-  update public.beta_access_config set enforced = false where singleton = true;
   insert into auth.users(id, email) values
     (seller, 'move-seller@drvn.test'), (buyer, 'move-buyer@drvn.test'), (other, 'move-other@drvn.test');
   insert into public.listings(id, seller_id, title, category, price_cents, shipping_cents, status)

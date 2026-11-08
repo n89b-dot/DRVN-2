@@ -107,6 +107,7 @@ Neil ruled in chat. GPT (Codex) then checked every build against the code and co
 | R73 | Stop advertising | Remove `read_product`, `fitment_evidence` and `price_comparables` from the model's allow-list, starters and copy until graph answers exist. (OS-R73) |
 | R-usage, R-measures | Approved | Compute what the records support. Label approximations precisely, and mark the rest unavailable. (OS-R-usage, OS-R-measures) |
 | R-w3 | Keep the picker | Amend PRD W-3 to remove the link-paste requirement. Build nothing. (OS-R-w3) |
+| Deletion + chargeback (8 Nov) | An open bank chargeback on a completed order also pauses account deletion | Both parties to the order are held until the bank decides (`won`, `warning_closed` or `lost` in the dispute journal). The status pages say the bank is deciding it rather than asking the member to settle. (`20261108140000`) |
 
 **Not now**
 

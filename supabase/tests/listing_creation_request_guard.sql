@@ -52,32 +52,18 @@ begin
   -- Member photo writes need the storage origin recorded (20261107203000).
   insert into public.job_config(key, value) values ('media_storage_origin', 'https://proj.supabase.co')
     on conflict (key) do update set value = excluded.value;
-  update public.beta_access_config set enforced=false where singleton=true;
   insert into auth.users(id,email,raw_user_meta_data)
   values
     (seller,'listing-request-seller@drvn.test','{}'),
     (other_seller,'listing-request-other@drvn.test','{}'),
     (uninvited,'listing-request-uninvited@drvn.test','{}');
-  insert into public.beta_invitations(
-    id,email_normalized,roles,token_hash,expires_at,consumed_at,consumed_by
-  ) values
-    (seller_invite,'listing-request-seller@drvn.test',array['seller'],repeat('1',64),now()+interval '1 hour',now(),seller),
-    (other_invite,'listing-request-other@drvn.test',array['seller'],repeat('2',64),now()+interval '1 hour',now(),other_seller);
-  insert into public.beta_memberships(user_id,invitation_id,email_normalized,roles)
-  values
-    (seller,seller_invite,'listing-request-seller@drvn.test',array['seller']),
-    (other_seller,other_invite,'listing-request-other@drvn.test',array['seller']);
-  update public.beta_access_config set enforced=true where singleton=true;
-
+  -- OS-W31: the invite-only beta is gone, so a member with no invitation
+  -- may start a listing too.
   perform set_config('role','authenticated',true);
   perform set_config('request.jwt.claims',jsonb_build_object('sub',uninvited,'role','authenticated')::text,true);
-  begin
-    perform public.claim_listing_creation(gen_random_uuid(),repeat('d',64));
-  exception when insufficient_privilege then
-    rejected := true;
-  end;
-  if not rejected then raise exception 'Uninvited seller claimed listing creation'; end if;
-  rejected := false;
+  if (public.claim_listing_creation(gen_random_uuid(),repeat('d',64)))->>'listing_id' is null then
+    raise exception 'A member without an invitation could not claim listing creation';
+  end if;
 
   perform set_config('request.jwt.claims',jsonb_build_object('sub',seller,'role','authenticated')::text,true);
   first_claim := public.claim_listing_creation(request_id, repeat('a',64));
@@ -87,12 +73,19 @@ begin
     raise exception 'Exact request replay did not return its original pending listing';
   end if;
 
-  begin
-    perform public.claim_listing_creation(request_id, repeat('b',64));
-  exception when invalid_parameter_value then
-    rejected := true;
-  end;
-  if not rejected then raise exception 'Changed payload reused a listing request'; end if;
+  -- N72: a claim with no listing behind it was refused or abandoned, so a
+  -- changed request takes it over (same listing id) instead of trapping the
+  -- form. Once its listing exists, a changed payload is refused (below).
+  replay_claim := public.claim_listing_creation(request_id, repeat('b',64));
+  if replay_claim->>'listing_id' <> first_claim->>'listing_id'
+     or (replay_claim->>'completed')::boolean
+     or (replay_claim->>'fresh')::boolean then
+    raise exception 'Changed request did not take over its unused claim';
+  end if;
+  replay_claim := public.claim_listing_creation(request_id, repeat('a',64));
+  if replay_claim->>'listing_id' <> first_claim->>'listing_id' then
+    raise exception 'Rebinding an unused claim changed its listing';
+  end if;
 
   perform set_config('request.jwt.claims',jsonb_build_object('sub',other_seller,'role','authenticated')::text,true);
   other_claim := public.claim_listing_creation(request_id, repeat('c',64));
@@ -121,6 +114,14 @@ begin
   if not (replay_claim->>'completed')::boolean then
     raise exception 'Completed request did not remain completed on replay';
   end if;
+  rejected := false;
+  begin
+    perform public.claim_listing_creation(request_id, repeat('b',64));
+  exception when invalid_parameter_value then
+    rejected := true;
+  end;
+  if not rejected then raise exception 'Changed payload reused a completed listing request'; end if;
+  rejected := false;
 
   atomic_claim := public.claim_listing_creation(atomic_request,repeat('f',64));
   saved := public.save_listing_creation(
@@ -179,6 +180,13 @@ begin
   exception when serialization_failure then rejected:=true;
   end;
   if not rejected then raise exception 'Pending replay overwrote a changed listing'; end if;
+  rejected:=false;
+  -- Its listing exists, so the request is spent: a changed payload can't take it.
+  begin
+    perform public.claim_listing_creation(changed_request,repeat('6',64));
+  exception when invalid_parameter_value then rejected:=true;
+  end;
+  if not rejected then raise exception 'Changed payload took over a request whose listing exists'; end if;
   rejected:=false;
 
   denied_claim := public.claim_listing_creation(denied_request,repeat('5',64));

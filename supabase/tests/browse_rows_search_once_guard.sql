@@ -27,7 +27,6 @@ declare
   v_query text;
   v_checked int := 0;
 begin
-  update public.beta_access_config set enforced = false where singleton;
   insert into auth.users(id, email) values (v_seller, 'browse-once-seller@drvn.test');
   insert into public.profiles(id, username) values (v_seller, 'browse_once_seller')
     on conflict (id) do update set username = excluded.username;

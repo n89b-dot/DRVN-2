@@ -75,7 +75,7 @@ export async function processDisputeSla(admin: Admin): Promise<DisputeSlaSummary
 
   const { data: stale } = await admin
     .from("orders")
-    .select("id")
+    .select("id, dispute_category")
     .eq("status", "disputed")
     .lt("disputed_at", cutoff)
     .is("refund_offered_at", null)
@@ -92,6 +92,14 @@ export async function processDisputeSla(admin: Admin): Promise<DisputeSlaSummary
     // by accident — the return's own deadlines govern until it resolves.
     if (await orderHasActiveReturn(admin, order.id)) {
       continue;
+    }
+    // N6 (20261107210300): adding valid tracking is the seller's answer to a
+    // not-received case, so it isn't silence. The case is with support.
+    // Unknown reads as answered, like the return check above.
+    if (order.dispute_category === "item_not_received") {
+      const { data: tracked, error: trackedError } = await admin.rpc("order_has_valid_tracking", { p_order: order.id });
+      if (trackedError) reportError("[dispute-sla] tracking check failed", { orderId: order.id, trackedError });
+      if (trackedError || tracked) continue;
     }
     const outcome = await refundOrder(admin, {
       orderId: order.id,

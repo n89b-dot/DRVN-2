@@ -21,7 +21,6 @@ declare
     'cars.catalog_model_id', 'reference catalogue, never deleted; public reads use cars_catalog_model_idx',
     'product_fitments.catalog_model_id', 'reference catalogue, never deleted; reads use product_fitments_vehicle_idx',
     'product_fitments.generation_id,catalog_model_id', 'reference catalogue, never deleted; reads use product_fitments_vehicle_idx',
-    'beta_access_config.updated_by', 'one-row settings table',
     'agent_spend_limits.changed_by', 'one-row settings table',
     'agent_beta_steps.changed_by', 'four-row settings table');
   bad text;

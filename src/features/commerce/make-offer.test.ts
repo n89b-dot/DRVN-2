@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
   listing: vi.fn(),
   rpc: vi.fn(),
   allow: vi.fn(),
-  beta: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -18,10 +17,6 @@ vi.mock("@/lib/rate-limit", () => ({
   RATE_LIMITS: { makeOffer: {} },
   allowAction: mocks.allow,
   rateLimitMessage: () => "limited",
-}));
-vi.mock("@/lib/beta-access", () => ({
-  getBetaAccess: mocks.beta,
-  betaCommerceError: () => "beta denied",
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
@@ -69,7 +64,6 @@ beforeEach(() => {
     price_cents: 10000,
     shipping_mode: "seller",
   }, error: null });
-  mocks.beta.mockResolvedValue({ eligible: true });
   mocks.allow.mockResolvedValue(true);
   mocks.rpc.mockResolvedValue({ data: { offer_id: offerId, replayed: false, outcome: "sent" }, error: null });
 });
@@ -89,7 +83,6 @@ it("replays the same committed identity without consuming admission again", asyn
   mocks.existing.mockResolvedValue({ data: { id: offerId }, error: null });
   mocks.rpc.mockResolvedValue({ data: { offer_id: offerId, replayed: true, outcome: "sent" }, error: null });
   await expect(makeOffer({}, form())).resolves.toHaveProperty("ok");
-  expect(mocks.beta).not.toHaveBeenCalled();
   expect(mocks.allow).not.toHaveBeenCalled();
   expect(mocks.listing).not.toHaveBeenCalled();
 });

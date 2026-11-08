@@ -381,11 +381,27 @@ export type Order = {
   dispute_outcome: DisputeOutcome | null;
   /** Once-only marker for the ops webhook alert on SLA breach (migration 0022). */
   dispute_sla_alerted_at: string | null;
-  /** Status to restore on resolution — always shipped/delivered/completed. */
+  /** Status to restore on resolution: paid (a not-received case on an
+   *  undispatched order), shipped, delivered or completed. */
   pre_dispute_status: OrderStatus | null;
   /** The seller's outstanding refund offer, awaiting buyer acceptance. */
   refund_offer_cents: number | null;
   refund_offered_at: string | null;
+  /** refund_offered_at + 48 hours, set by the database (20261107210300). */
+  refund_offer_expires_at: string | null;
+  /** Frozen when the order became paid (20261107210300): the seller's
+   *  dispatch deadline and the latest delivery date (shipping orders), or the
+   *  date the item must be available (collection). */
+  dispatch_by: string | null;
+  deliver_by: string | null;
+  available_by: string | null;
+  /** Where deliver_by's transit came from: the rated quote, the documented
+   *  fallback, or 'collection'. */
+  delivery_estimate_source: string | null;
+  /** The open case's seller-response deadline (3 business days) and the
+   *  last moment either party can escalate (21 business days). */
+  dispute_respond_by: string | null;
+  dispute_escalate_until: string | null;
   /** Stripe Transfer that moved this order's net to the seller (migration 0016). */
   transfer_reference: string | null;
   transferred_at: string | null;
@@ -422,6 +438,9 @@ export type DisputeCategory =
   | "item_not_as_described"
   | "damaged_in_transit"
   | "wrong_item"
+  /** R-disputecats (20261107210300): both take the not-as-described path. */
+  | "counterfeit"
+  | "does_not_fit"
   | "other";
 
 export type OrderItem = {
@@ -905,7 +924,7 @@ export type AdminUser = {
   created_at: string;
 };
 
-export type AdminAuditSubjectType = "order" | "listing" | "user" | "report" | "dispute" | "payment" | "product_review" | "agent";
+export type AdminAuditSubjectType = "order" | "listing" | "user" | "report" | "dispute" | "payment" | "product_review" | "agent" | "copyright_notice" | "export";
 
 export type AdminAuditLogEntry = {
   id: number;
@@ -926,13 +945,18 @@ export type ReportReason =
   | "scam_or_fraud"
   | "offensive_content"
   | "wrong_category"
+  /** 20261107231002: a member's report that a listing or photo copies someone's work. */
+  | "copyright"
   | "other";
+
+/** 'post' and 'comment' since 20260928182300 (a post, or a reply on one);
+ *  'car' since 20261107220010 (N53). */
+export type ReportSubjectType = "listing" | "user" | "post" | "comment" | "car";
 
 export type Report = {
   id: string;
   reporter_id: string | null;
-  /** 'post' and 'comment' since 20260928182300 (a post, or a reply on one). */
-  subject_type: "listing" | "user" | "post" | "comment";
+  subject_type: ReportSubjectType;
   subject_id: string;
   reason: ReportReason;
   detail: string | null;
@@ -981,6 +1005,9 @@ export type TransferIntent = {
   source_transaction: string | null;
   /** Frozen at dispatch (20260905173052): what the transfer actually sent. */
   dispatch_amount_cents: number | null;
+  /** The provider may already hold this transfer (20260905173052): the
+   *  worker looks Stripe up before it sends anything. */
+  provider_call_may_have_occurred?: boolean;
   attempts: number;
   last_error: string | null;
   /** Lease fields (0026): who claimed the row and until when. */
@@ -1108,7 +1135,9 @@ export type PaymentRecoveryKind =
   | "capture_unresolved"
   | "transfer_unresolved"
   | "refund_lifecycle_unresolved"
-  | "refund_late_failure";
+  | "refund_late_failure"
+  /** Daily Stripe ↔ ledger reconciliation (20261107210100, N115). */
+  | "ledger_discrepancy";
 
 export type PaymentRecovery = {
   id: string;
@@ -1259,8 +1288,8 @@ type RefinedRow<K extends keyof GeneratedTables> = {
 /** PostgreSQL function argument nullability is not emitted by Supabase's generator.
  * These explicit domain exceptions match the verified SQL contracts. */
 type NullableArgs = {
-  beta_access_status: "p_user_id";
   begin_admin_external_operation: "p_order";
+  scrub_deleted_account: "p_email_digest" | "p_digest_key";
   begin_refund_operation: "p_amount_cents" | "p_payment_reference" | "p_refund_reference";
   begin_request_refund_operation: "p_amount_cents";
   complete_transfer_intent: "p_operation_key";

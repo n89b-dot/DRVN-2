@@ -22,11 +22,12 @@ export type UploadImagesResult = { uploaded: UploadedImage[]; failed: UploadFail
 /**
  * Buckets whose photos are re-encoded on the server (/api/media/public-photo),
  * which is what actually strips EXIF/GPS: Sharp decodes and re-encodes every
- * file, however small. The public buckets and message photos both go there;
+ * file, however small. The public buckets, message photos and agent chat
+ * photos (R81) all go there;
  * the database refuses browser uploads into any of them. Dispute evidence is
  * deliberately not in this list — it is kept exactly as uploaded, as a record.
  */
-const SERVER_NORMALIZED_BUCKETS = ["avatars", "car-images", "activity-images", "listing-images", "message-photos"];
+const SERVER_NORMALIZED_BUCKETS = ["avatars", "car-images", "activity-images", "listing-images", "message-photos", "agent-chat-photos"];
 
 /**
  * Client-side pre-shrink for photography (brief §S4): correct orientation,

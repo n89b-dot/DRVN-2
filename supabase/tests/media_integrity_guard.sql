@@ -41,7 +41,6 @@ declare
   token_a uuid;
   token_b uuid;
 begin
-  update public.beta_access_config set enforced = false where singleton;
   insert into auth.users(id, email) values
     (buyer, 'media-guard-buyer@drvn.test'),
     (seller, 'media-guard-seller@drvn.test'),

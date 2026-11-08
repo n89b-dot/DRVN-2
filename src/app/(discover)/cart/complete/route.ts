@@ -1,10 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { removeCartIds } from "@/lib/cart";
+import { forgetCheckoutKey } from "@/lib/checkout-key";
 import { readGuestOrders } from "@/lib/guest-checkout";
 import { getPaymentProvider } from "@/lib/payments/provider";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+
+import { CART_ERROR } from "../cart-errors";
 
 /**
  * Stripe's return_url after the buyer confirms. Verifies the intent's status
@@ -60,7 +63,7 @@ export async function GET(request: NextRequest) {
   if (paymentError || payments?.length !== ownOrderIds.length || payments.some((payment) => {
     const order = orders?.find((order) => order.id === payment.order_id);
     return payment.provider_reference !== intentId || !order || payment.amount_cents !== order.total_cents || payment.currency !== order.currency;
-  })) return NextResponse.redirect(new URL("/cart?error=Payment+reference+could+not+be+verified", request.url));
+  })) return NextResponse.redirect(new URL(`/cart?error=${CART_ERROR.paymentUnverified}`, request.url));
   const providerStatus = await getPaymentProvider().getStatus(intentId);
   const locallySettled = orders?.filter((order) => ownOrderIds.includes(order.id)).every((order) => ["paid", "shipped", "delivered", "completed", "disputed", "refunded"].includes(order.status));
   const status = providerStatus === "succeeded" && !locallySettled ? "requires_action" : providerStatus;
@@ -77,6 +80,8 @@ export async function GET(request: NextRequest) {
       .map((i) => i.listing_id)
       .filter((id): id is string => Boolean(id));
     if (listingIds.length) await removeCartIds(listingIds);
+    // OS-W17: this checkout is paid; the next one gets a key of its own.
+    await forgetCheckoutKey();
   }
 
   if (status === "succeeded") {
@@ -95,7 +100,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL(dest, request.url));
   }
 
-  return NextResponse.redirect(
-    new URL(`/cart?error=${encodeURIComponent("Payment didn't go through — try again.")}`, request.url)
-  );
+  return NextResponse.redirect(new URL(`/cart?error=${CART_ERROR.paymentFailed}`, request.url));
 }
