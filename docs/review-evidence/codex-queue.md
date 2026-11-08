@@ -116,3 +116,7 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #166 | 2026-11-08 | OS-W11: chargeback hold guard proves the seller is held by the char… | full | 2026-11-08 | clean |
 | #167 | 2026-11-08 | docs: remediation record, staging catch-up cells, shared dev's 12 h… | skipped | — | docs only (ruling, 7 Nov) |
 | #169 | 2026-11-08 | test(ci): migrations are added in date order and never renamed (#97) | owed | owed | — |
+| #168 | 2026-11-08 | OS-W36 N677 N680: approval guard fails deterministically; job inventory … | full | 2026-11-08 | P2 found (FAIL 7 null-safe; fixed in the next PR) |
+| #170 | 2026-11-08 | test(ci): the crosswalk cites only files that exist; advisory floors … | owed | owed | — |
+| #171 | 2026-11-08 | docs: the Codex review queue moves into the repository (#95) | owed | owed | — |
+| #172 | 2026-11-08 | OS-W37 R-rcconfig R-staging-behind: guest hold caps is the 15th release … | full | 2026-11-08 | P2 found (legacy prose rows outside the staging rule; filed) |
