@@ -43,7 +43,7 @@ export default async function OrderPlacedPage({
   const orderIds = await readGuestOrders();
   if (!orderIds.length) redirect("/marketplace");
 
-  const admin = createAdminClient();
+  const admin = createAdminClient({ signPhotos: true }); // N455: shows listing photos
   const { data: orders } = await admin
     .from("orders")
     .select("id, status, total_cents, currency, ship_name, is_collection")
