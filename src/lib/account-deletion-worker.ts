@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { removeMediaObject } from "@/lib/media-lifecycle";
 import { reportError } from "@/lib/monitoring";
 import { purgeAccountExportsForUser } from "@/lib/account-export-worker";
-import { deletionOutcome, type DeletionBlockers } from "@/lib/account-deletion-policy";
+import type { DeletionBlockers } from "@/lib/account-deletion-policy";
 
 type Job = { id: string; lease_id: string; payload: { user_id: string; stripe_customer_id?: string | null } };
 const buckets = ["avatars", "car-images", "activity-images", "listing-images"];
@@ -69,6 +69,37 @@ async function pauseOnHold(admin: Admin, job: Job, uid: string, banned: boolean)
     if (lifted.error) throw new Error("Could not restore account access for a held deletion");
   }
   await admin.rpc("pause_account_deletion_hold", { p_job: job.id, p_lease: job.lease_id, p_user: uid }).throwOnError();
+}
+
+/** How a deletion that has to keep transaction records ends (operator_attention). */
+export const RETAINED_IDENTITY_RECORD = {
+  blocker_code: "immutable_retained_identity",
+  affected_data_classes: ["orders", "financial records", "audit or reporting references"],
+  next_action: "An operator must apply the approved retained-identity anonymization and retention policy.",
+  responsible_owner: "operations and policy owner",
+  policy_decisions_pending: ["financial record retention duration", "audit/log retention", "eventual identity anonymization", "backup expiry"],
+};
+
+type Finalised = DeletionBlockers & { held: boolean; hold_order_id?: string | null; outcome?: "operator_attention" | "hard_delete_eligible" };
+
+/**
+ * The last hold check after cleanup and the outcome with it, atomically
+ * (account_deletion_finalise): held; retained identity, recorded with the
+ * job finished; or deletable outright, which the caller then finishes.
+ */
+async function finalise(admin: Admin, job: Job, uid: string): Promise<Finalised> {
+  const { data, error } = await admin.rpc("account_deletion_finalise", {
+    p_job: job.id,
+    p_lease: job.lease_id,
+    p_user: uid,
+    p_retained: RETAINED_IDENTITY_RECORD,
+  });
+  if (error || !data || typeof data !== "object") throw new Error("Deletion outcome could not be recorded");
+  const result = data as unknown as Finalised;
+  if (!result.held && result.outcome !== "operator_attention" && result.outcome !== "hard_delete_eligible") {
+    throw new Error("Deletion outcome could not be recorded");
+  }
+  return result;
 }
 
 function isBanned(user: { banned_until?: string | null } | null | undefined): boolean {
@@ -136,28 +167,21 @@ export async function processAccountDeletions() {
         return { completed, continued: 1 };
       }
       await heartbeat();
-      const blockersAfterCleanup = await holdGate(admin, job, uid);
-      if (blockersAfterCleanup.held) {
+      // Exports go before the outcome is recorded: finalise finishes a
+      // retained-identity job itself, so nothing may follow it.
+      await purgeAccountExportsForUser(uid);
+      await heartbeat();
+      // OS-W11 (Codex on #157): the last check and the outcome in one
+      // transaction under the deletion lock. A hold that commits later
+      // (a buyer's return, a dispute) puts the case back in the queue
+      // itself (20261108130400), and the next pass gives sign-in back.
+      const final = await finalise(admin, job, uid);
+      if (final.held) {
         await pauseOnHold(admin, job, uid, Boolean(account.user));
         return { completed, continued: 1, outcome: "temporary_financial_hold" as const };
       }
-      const outcome = deletionOutcome(blockersAfterCleanup);
-      await purgeAccountExportsForUser(uid);
-      if (outcome === "operator_attention") {
-        const retained = await admin.from("account_deletion_requests").update({
-          outcome: "operator_attention",
-          blocker_code: "immutable_retained_identity",
-          affected_data_classes: ["orders", "financial records", "audit or reporting references"],
-          next_action: "An operator must apply the approved retained-identity anonymization and retention policy.",
-          responsible_owner: "operations and policy owner",
-          review_at: null,
-          policy_decisions_pending: ["financial record retention duration", "audit/log retention", "eventual identity anonymization", "backup expiry"],
-          updated_at: new Date().toISOString(),
-        }).eq("user_id", uid);
-        if (retained.error) throw new Error("Could not record retained identity outcome");
+      if (final.outcome === "operator_attention") {
         completed++;
-        const acknowledged = await admin.rpc("finish_remediation_job", { p_id: job.id, p_lease: job.lease_id, p_error: undefined });
-        if (acknowledged.error) throw new Error("Deletion outcome acknowledgement failed");
         return { completed, outcome: "operator_attention" as const };
       }
       if (job.payload.stripe_customer_id) {

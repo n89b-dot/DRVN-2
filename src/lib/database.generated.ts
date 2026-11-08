@@ -6693,6 +6693,15 @@ export type Database = {
     }
     Functions: {
       account_deletion_blockers: { Args: { p_user: string }; Returns: Json }
+      account_deletion_finalise: {
+        Args: {
+          p_job: string
+          p_lease: string
+          p_retained: Json
+          p_user: string
+        }
+        Returns: Json
+      }
       account_deletion_hold_gate: {
         Args: { p_job: string; p_lease: string; p_user: string }
         Returns: Json

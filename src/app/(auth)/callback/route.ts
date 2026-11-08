@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { authErrorCode, oauthReturnNotice, type LoginNotice } from "@/lib/auth-errors";
-import { onboardingPath, safeRedirectPath } from "@/lib/safe-redirect";
+import { landingWithoutUsername, loadHeldDeletion } from "@/lib/held-deletion";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import { siteUrl } from "@/lib/site";
 import { createClient, type SupabaseCookie } from "@/lib/supabase/server";
 
@@ -55,9 +56,10 @@ export async function GET(request: Request) {
         // destination travels with it so onboarding can finish the journey.
         // An account with no profile row at all goes there too (N40):
         // onboarding is where it is either completed or signed out.
+        // OS-W11: a held deletion goes to its order instead.
         const destination = profile?.username
           ? next || "/home"
-          : onboardingPath(next);
+          : landingWithoutUsername(await loadHeldDeletion(supabase, user.id), next);
         return redirectWithCookies(destination, authCookies);
       }
     }

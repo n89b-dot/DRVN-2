@@ -9,6 +9,7 @@ import { headers } from "next/headers";
 import { attributedNetworkIdentity } from "@/lib/abuse-identity";
 import { allowAction, RATE_LIMITS, type RateLimitRule } from "@/lib/rate-limit";
 import { siteUrl } from "@/lib/site";
+import { landingWithoutUsername, loadHeldDeletion } from "@/lib/held-deletion";
 import { onboardingPath, safeRedirectPath } from "@/lib/safe-redirect";
 import { DISPLAY_NAME_MAX } from "@/lib/limits";
 import { AGE_CONFIRMATION_REQUIRED, ageConfirmedIn } from "@/lib/age-confirmation";
@@ -46,7 +47,9 @@ async function destinationForUser(userId: string, requested?: unknown): Promise<
     .eq("id", userId)
     .single();
 
-  if (!profile?.username) return onboardingPath(requested);
+  // OS-W11: a member whose deletion is paused on a hold goes to the order to
+  // settle, not to onboarding, even with the handle cleanup cleared.
+  if (!profile?.username) return landingWithoutUsername(await loadHeldDeletion(supabase, userId), requested);
   return safeRedirectPath(requested, "/home");
 }
 
