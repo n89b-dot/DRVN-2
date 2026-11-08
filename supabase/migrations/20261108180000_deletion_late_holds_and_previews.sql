@@ -1,5 +1,6 @@
 -- N418 (OS-W34 follow-up, Codex post-merge review of #149): account deletion
--- keeps personal data. Four defects, each ruled by Neil.
+-- keeps personal data. Four defects; the rulings are the orchestrating
+-- session's, 8 Nov 2026, under Neil's standing go-ahead for the plan.
 --
 -- 1. A late hold after the scrub (P1-1). A return or chargeback can open
 --    after scrub_deleted_account has committed. The worker then lifted the
