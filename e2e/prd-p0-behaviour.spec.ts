@@ -113,6 +113,8 @@ test("M-4 — the marketplace grid is four, three or two cards across by breakpo
     [768, 3],
     [390, 2],
     [360, 2],
+    // The smallest supported phone keeps two across too.
+    [320, 2],
   ] as const) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/marketplace");

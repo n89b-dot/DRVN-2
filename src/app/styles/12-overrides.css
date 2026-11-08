@@ -1328,7 +1328,7 @@ a.byline:hover {
 .marketplace-grid { container: mktgrid / inline-size; }
 @container mktgrid (max-width: 819px) { .marketplace-grid .mosaic { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @container mktgrid (max-width: 559px) { .marketplace-grid .mosaic { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@container mktgrid (max-width: 307px) { .marketplace-grid .mosaic { grid-template-columns: minmax(0, 1fr); } }
+@container mktgrid (max-width: 239px) { .marketplace-grid .mosaic { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 1279px) { .marketplace-loading .mkt { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 899px) { .marketplace-loading .mkt { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* M-4 asks for four / three / two across, and the phone column stayed at one
@@ -1336,15 +1336,16 @@ a.byline:hover {
    that: 163.5px columns, 523–571px cards, one and a half per screen. With
    the title clamped to two lines and the meta stack tightened the card fits,
    so the phone gets its two columns: at 375px with 16px gutters and a 12px
-   gap each column is 165px, which is what the proof measured. Below 340px it
-   drops back to one — 320px would give 146px columns, where the price and
-   the cart square start fighting for the same row. */
+   gap each column is 165px, which is what the proof measured. The smallest
+   supported phone (320px, a 288px grid) keeps two as well: 138px columns,
+   where the price has its own line and Save and the cart share the floor
+   (88px of a 114px row). Only a grid under 240px — never a supported phone,
+   at most a cramped embed — goes to one. */
 @media (max-width: 479px) {
   .marketplace-grid .mosaic, .marketplace-loading .mkt { gap: 12px; }
   .marketplace-grid .marketplace-card__body { padding: 12px; gap: 8px; }
   .marketplace-grid .marketplace-card__foot { padding: 0 12px 12px; }
 }
-@media (max-width: 339px) { .marketplace-loading .mkt { grid-template-columns: minmax(0, 1fr); } }
 
 .marketplace-vehicle { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 0 0 16px; font-size: var(--text-micro); }
 .marketplace-vehicle button { min-height: var(--touch); }
