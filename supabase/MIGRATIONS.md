@@ -28,11 +28,27 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 8 — staging caught up to main; shared dev history gaps
+
+**Staging, 2026-11-08.** The ten files staging lacked were applied with the runner, each with its PR's `--pr`. They were #133 `110200`, #141 `110300`, #148 `120000`–`120020`, #152 `130000`, #154 `130100`, #156 `130300`, #157 `130400` and #158 `130500`. Their cells here say so. Afterwards `--status` on staging showed 277 applied, none missing and none extra, at main 4c28663. A read-only comparison with shared dev matched on 128 tables, 145 policies, 21 cron jobs and 536 `public`/`private` functions, with identical `pg_get_functiondef` and policy fingerprints. The first two files merged without rows, so they get them here. Both were already on shared dev, which `--status` reported on 8 Nov.
+
+| File | Applied to |
+|---|---|
+| `20261108110200_mod_sheet_lock_everywhere.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+| `20261108110300_guest_cart_checkout_release.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+
+**Shared dev's history, known extras.** Five rows are on shared dev but not on disk: `20260913014536`, `20260913014621`, `20260913134641`, `20260913135341` and `20260913144516`. They are the 13 Sept marketplace files, recorded under their timestamps from before the rename. `20260913144516` is the file now named `20260913144218`. These rows stay; nothing is deleted on dev.
+
+**Shared dev's history, known gaps.** Twelve files on main have no history row on shared dev. Each was applied in Sept–Oct 2026 per its row below, before the runner recorded history: `20260905011618`, `20260905143949`, `20260905224929`, `20260913144218`, `20260919203000`, `20260919204000`, `20260928120000`, `20260928181000`, `20261004100000`, `20261006100200`, `20261011121000` and `20261017140000`. A `--record-only` dry run on 8 Nov refused all twelve, so none was recorded, and none will be without a stronger check. The reasons it gave:
+- `20260905011618`: not checkable, since a DO block creates `deletion_write_guard` through dynamic SQL. Its `worker_runs` table was created identically by `20260913132451`.
+- `20260905224929` and `20260919203000`: nothing left to check, because later files drop every object they create.
+- The other nine create nothing the check can probe; it reads them as data, grants or comments only. `20260913144218` is on dev as `20260913144516`.
+
 ## November 8 — account deletion checks financial holds before banning sign-in: OS-W11 (#157, not applied anywhere)
 
 | File | Applied to |
 |---|---|
-| `20261108130400_deletion_hold_before_ban.sql` | shared-dev 2026-11-08 |
+| `20261108130400_deletion_hold_before_ban.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
 
 Apply after every earlier migration, together with the app from #157: the new worker calls `account_deletion_hold_gate` and `account_deletion_finalise`, which the old database doesn't have, and the old worker still runs against the new database (its RPCs are unchanged or restated). New `account_deletion_requests.hold_order_id` (FK to orders, `on delete set null`, partial index), `private.account_deletion_lock_key`, `private.account_deletion_hold_order`, `private.account_deletion_lease_held`, `private.requeue_account_deletion_for_hold`, `private.account_deletion_hold_appeared` and the deferred constraint trigger `account_deletion_hold_watch` on `orders`, `returns`, `refund_operations`, `payment_recoveries`, `transfer_intents` and `payment_requests`. Restated: `pause_account_deletion_hold` (from `20260905185725`; records and names the order to settle) and `block_deleted_account_writes` (from `20260905130250`; a member whose deletion is paused on a hold may write). What holds a deletion (`account_deletion_blockers`) is unchanged. Guards: `deletion_hold_before_ban_guard.sql`, `deletion_hold_race_guard.sql` (two sessions over dblink).
 
@@ -42,10 +58,10 @@ These four merged on 8 Nov 2026 after `tests/ci/migrations-md.test.ts` (#143) an
 
 | File | Applied to |
 |---|---|
-| `20261108130000_guest_holds_by_request.sql` | shared-dev 2026-11-08 |
-| `20261108130100_social_moderation_races.sql` | shared-dev 2026-11-08 |
-| `20261108130300_dispute_evidence_attach_cap.sql` | shared-dev 2026-11-08 |
-| `20261108130500_agent_redact_skips_ids.sql` | shared-dev 2026-11-08 |
+| `20261108130000_guest_holds_by_request.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+| `20261108130100_social_moderation_races.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+| `20261108130300_dispute_evidence_attach_cap.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+| `20261108130500_agent_redact_skips_ids.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
 
 - **`130000`** — OS-W17/N89 checkout follow-up (#152); see that PR.
 - **`130100`** — OS-W21 follow-up (#154): a moderation hold always takes the car's row lock; the dispute-evidence upload count locks the uploader's folder; `listing_save` notifications are de-duplicated; `take_down_reported_content` closes every report on a post and its replies in one transaction. Guards: `social_moderation_guard.sql`, `social_moderation_race_guard.sql`.
@@ -56,9 +72,9 @@ These four merged on 8 Nov 2026 after `tests/ci/migrations-md.test.ts` (#143) an
 
 | File | Applied to |
 |---|---|
-| `20261108120000_admin_export_audit.sql` | shared-dev 2026-11-08 |
-| `20261108120010_photo_metadata_scrub.sql` | shared-dev 2026-11-08 |
-| `20261108120020_storage_reference_report.sql` | shared-dev 2026-11-08 |
+| `20261108120000_admin_export_audit.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+| `20261108120010_photo_metadata_scrub.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+| `20261108120020_storage_reference_report.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
 
 Apply in order, after every earlier migration, **before the app from #148 serves the console**: the new export route records every download through `record_admin_export` and refuses to send a file it can't record, so without `120000` every CSV export answers 503.
 
