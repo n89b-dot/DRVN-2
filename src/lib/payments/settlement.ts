@@ -199,27 +199,29 @@ export async function listChargeRefunds(chargeId: string): Promise<Stripe.Refund
   throw new Error("Stripe refund collection exceeded the safe reconciliation bound");
 }
 
-/** Statuses of a local refund operation whose money is not in refunded_cents
- *  yet and which the refund state machine is still driving. */
-const IN_FLIGHT_REFUND_STATUSES = ["requested", "provider_pending", "provider_succeeded", "effects_pending"];
-
 /**
- * How many of the outstanding cents belong to local refund operations that
- * are still applying their effects: refunds of this charge Stripe reports
- * succeeded, whose operation exists but hasn't booked refunded_cents yet. The
- * operation is the durable owner of that money (resumeIncompleteRefunds drives
- * it, the refunds health queue pages if it sticks), so it is not unattributed.
+ * The booked refund total of this payment and the cents of its listed
+ * refunds whose local operation is still booking them, read in ONE database
+ * statement (refund_gap_snapshot, 20261107210150). Two separate reads could
+ * straddle a refund settling between them and count it in neither, which
+ * opened a false "unattributed" case. A refund's operation is the durable
+ * owner of in-flight money (resumeIncompleteRefunds drives it, the refunds
+ * health queue pages if it sticks).
  */
-async function inFlightRefundCents(admin: Admin, succeededRefundIds: string[]): Promise<number> {
-  if (!succeededRefundIds.length) return 0;
-  const { data, error } = await admin
-    .from("refund_operations")
-    .select("refund_reference, amount_cents, status, effects_completed_at")
-    .in("refund_reference", succeededRefundIds);
-  if (error) persistenceFailure("in-flight refund lookup failed", { error });
-  return (data ?? [])
-    .filter((op) => op.effects_completed_at == null && IN_FLIGHT_REFUND_STATUSES.includes(op.status))
-    .reduce((sum, op) => sum + op.amount_cents, 0);
+async function refundGapSnapshot(
+  admin: Admin,
+  intentId: string,
+  succeededRefundIds: string[]
+): Promise<{ bookedCents: number; inFlightCents: number }> {
+  const { data, error } = await admin.rpc("refund_gap_snapshot", {
+    p_payment_reference: intentId,
+    p_refund_references: succeededRefundIds,
+  });
+  const snapshot = data as { booked_cents?: unknown; in_flight_cents?: unknown } | null;
+  if (error || !snapshot || typeof snapshot.booked_cents !== "number" || typeof snapshot.in_flight_cents !== "number") {
+    persistenceFailure("refund gap snapshot failed", { intentId, error });
+  }
+  return { bookedCents: snapshot.booked_cents as number, inFlightCents: snapshot.in_flight_cents as number };
 }
 
 /**
@@ -387,14 +389,7 @@ export async function applyChargeRefund(
   // Every refund object now has its own journal/operation identity. Verify the
   // cumulative successful provider amount is present locally before acking the
   // charge event; never derive missing lifecycle state from the charge counter.
-  const { data: fresh, error: freshError } = await admin
-    .from("payments")
-    .select("id, order_id, amount_cents, refunded_cents, status")
-    .eq("provider_reference", intentId);
-  if (freshError) {
-    persistenceFailure("refund attribution lookup failed", { intentId, charge: charge.id, freshError });
-  }
-  const alreadyRecorded = (fresh ?? []).reduce((sum, p) => sum + (p.refunded_cents ?? 0), 0);
+  //
   // What Stripe says has succeeded, from the current list. Not the event's
   // charge.amount_refunded: that counter includes refunds still pending and,
   // on a delivery that arrives out of order, describes an older charge (one
@@ -402,20 +397,20 @@ export async function applyChargeRefund(
   // "unattributed refund" cases for normal refunds (N105).
   const succeeded = refunds.filter((refund) => refund.status === "succeeded");
   const successfulTotal = succeeded.reduce((sum, refund) => sum + refund.amount, 0);
-  const outstanding = successfulTotal - alreadyRecorded;
-  if (outstanding > 0 && !sawRecovery) {
-    // Local refunds still booking their effects own their share of the gap;
-    // only what no operation accounts for is a case.
-    const inFlight = await inFlightRefundCents(admin, succeeded.map((refund) => refund.id));
-    const unowned = outstanding - inFlight;
-    if (unowned <= 0) return "committed";
-    await recordUnattributedRefundRecovery(
-      admin,
-      charge,
-      unowned,
-      `Charge ${charge.id} (intent ${intentId}) has ${unowned} successful provider refund cents absent from the local ledger.`
-    );
-    return "recovery_recorded";
+  if (successfulTotal > 0 && !sawRecovery) {
+    // Booked and still-booking cents from one snapshot; only what neither
+    // accounts for is a case.
+    const { bookedCents, inFlightCents } = await refundGapSnapshot(admin, intentId, succeeded.map((refund) => refund.id));
+    const unowned = successfulTotal - bookedCents - inFlightCents;
+    if (unowned > 0) {
+      await recordUnattributedRefundRecovery(
+        admin,
+        charge,
+        unowned,
+        `Charge ${charge.id} (intent ${intentId}) has ${unowned} successful provider refund cents absent from the local ledger.`
+      );
+      return "recovery_recorded";
+    }
   }
   return sawRecovery ? "recovery_recorded" : "committed";
 }

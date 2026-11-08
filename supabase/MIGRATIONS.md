@@ -35,6 +35,14 @@ Checked on a fresh `supabase/postgres:17.6.1.165` with the CI shim: every migrat
 
 Apply after every earlier migration. Neil, 7 Nov 2026: the fallbacks follow his 2-day rule. `settlement_settings.payout_hold_days` defaults to 2 (was 7), and `payout_available_at()` (restated from `20261006100000`, the only change being the coalesce's 7 → 2) treats a missing settings row as a fixed 2 days. The deployed row is already fixed, 2 days (`20261009100000`), so no payout date changes; dates already set never move. The app's `DEFAULT_PAYOUT_HOLD` changes to 2 in the same PR. Guard: `payout_hold_setting_guard.sql` check 7 (missing row and a new row both mean 2 days), which fails on the schema before this migration.
 
+## November 7 — Refund gap snapshot, OS-W20 follow-up (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261107210150_refund_gap_snapshot.sql` | not applied |
+
+Apply after `20261107210100`. New `refund_gap_snapshot(payment_reference, refund_references[])` (service role only, read-only): a payment's booked refund total and the cents of the listed refunds whose operation is still booking, from one statement. `applyChargeRefund` opens an "unattributed refund" case only on this result, so a refund settling while `charge.refunded` is handled can't be counted in neither place. Redefines nothing. Guard: `supabase/tests/refund_gap_snapshot_guard.sql` (fails before this migration: the function doesn't exist). Checked on a fresh native PostgreSQL 17 with the CI shim: every migration applies and every guard passes except `job_inventory_health_guard.sql` (needs real pg_cron).
+
 ## November 7 — Settlement correctness and reconciliation, OS-W20 (not applied anywhere)
 
 | File | Applied to |

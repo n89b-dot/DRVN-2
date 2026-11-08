@@ -53,7 +53,14 @@ function adminWithRpc(rpcResults: QueryResult[], ...results: QueryResult[]) {
   const admin = adminWith(...results);
   return {
     ...admin,
-    rpc: vi.fn(async () => {
+    rpc: vi.fn(async (name: string) => {
+      if (name === "refund_gap_snapshot") {
+        // The booked total and in-flight operations from one snapshot: the
+        // next queued result stands for the payment rows at that instant.
+        const rows = (await (admin.from() as unknown as PromiseLike<QueryResult>)).data as Array<{ refunded_cents: number | null }> | null;
+        const booked = (rows ?? []).reduce((sum, row) => sum + (row.refunded_cents ?? 0), 0);
+        return { data: { payments: rows?.length ?? 0, booked_cents: booked, in_flight_cents: 0 }, error: null };
+      }
       const next = rpcResults.shift();
       if (!next) throw new Error("Unexpected RPC call");
       return next;
@@ -101,9 +108,8 @@ describe("webhook persistence failures", () => {
     const admin = adminWithRpc(
       [{ data: { action: "settle", operation_id: "op_1" }, error: null }],
       { data: [row], error: null },
+      // The gap snapshot: nothing booked, nothing still booking.
       { data: [row], error: null },
-      // No local operation is still booking re_1.
-      { data: [], error: null },
       { data: { id: "recovery_1" }, error: null }
     );
     stripeMocks.listRefunds.mockResolvedValue({
@@ -206,7 +212,7 @@ describe("webhook persistence failures", () => {
     const charge = refundedCharge({ amount_refunded: 500 });
 
     await expect(applyChargeRefund(admin as never, charge)).resolves.toBe("committed");
-    expect(admin.rpc).toHaveBeenCalledTimes(2);
+    expect(admin.rpc.mock.calls.filter(([name]) => name === "record_refund_provider_event")).toHaveLength(2);
     expect(paymentMocks.runRefundOperation).toHaveBeenCalledTimes(2);
     expect(paymentMocks.recordExternalRefund).not.toHaveBeenCalled();
   });
@@ -232,7 +238,9 @@ describe("webhook persistence failures", () => {
 
     await expect(applyChargeRefund(admin as never, charge)).resolves.toBe("recovery_recorded");
     expect(paymentMocks.runRefundOperation).not.toHaveBeenCalled();
-    expect(admin.from).toHaveBeenCalledTimes(2);
+    // The payment lookup only: a refund already in recovery skips the gap check.
+    expect(admin.from).toHaveBeenCalledTimes(1);
+    expect(admin.rpc).not.toHaveBeenCalledWith("refund_gap_snapshot", expect.anything());
   });
 
   it("handles charge.refunded before the matching refund event without double settlement", async () => {

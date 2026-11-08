@@ -37,6 +37,14 @@ import { stripeClient, stripeSecretKey } from "./stripe";
  *             credit payout transfer is its recorded carry payout.
  * And ledger → Stripe: every payout recorded as transferred in the window
  * exists at Stripe.
+ *
+ * Reversals are found by when they happened, not by when their transfer was
+ * created: a payout created a week ago and reversed today is checked today
+ * (Stripe's transfer_refund balance transactions in the window, and the
+ * ledger's reversals completed in the window). A transfer is called absent
+ * only on Stripe's own 404; one the run could not look up, and any local
+ * read it could not finish, make the run 'incomplete' instead (follow-up to
+ * N115).
  */
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -101,6 +109,9 @@ export type LedgerSnapshot = {
   carryPayouts: LocalCarryPayout[];
   /** Payouts the ledger recorded as transferred in the window. */
   transferredInWindow: LocalTransfer[];
+  /** Transfer references Stripe answered 404 for. Only these are absent: a
+   *  reference the run didn't look up is unknown, not missing. */
+  confirmedAbsent: Set<string>;
   /** Recovery keys of cases already open. */
   openRecoveryKeys: Set<string>;
   /** Now, for "in flight long enough to be late". */
@@ -230,12 +241,19 @@ export function findLedgerDiscrepancies(stripe: StripeSnapshot, local: LedgerSna
     }
   }
 
-  // Ledger → Stripe: payouts recorded as sent must exist there.
-  for (const intent of local.transferredInWindow) {
-    if (!intent.transfer_reference || seenAtStripe.has(intent.transfer_reference)) continue;
-    const owner = local.openRecoveryKeys.has(`transfer-unresolved:${intent.order_id}`) ? `transfer-unresolved:${intent.order_id}` : undefined;
-    add({ key: `transfer:${intent.transfer_reference}:absent`, check: "transfer", orderId: intent.order_id, amountCents: intent.dispatch_amount_cents ?? intent.amount_cents,
-      detail: `The ledger records ${intent.transfer_reference} as order ${intent.order_id}'s payout, but Stripe has no such transfer.`, ownedBy: owner });
+  // Ledger → Stripe: a payout recorded as sent must exist there. Only a
+  // reference Stripe confirmed missing (404) is absent.
+  const recorded = new Map<string, LocalTransfer>();
+  for (const intent of [...local.transfers, ...local.transferredInWindow]) {
+    if (intent.transfer_reference) recorded.set(intent.transfer_reference, intent);
+  }
+  for (const reference of local.confirmedAbsent) {
+    if (seenAtStripe.has(reference)) continue;
+    const intent = recorded.get(reference);
+    const orderId = intent?.order_id ?? null;
+    const owner = orderId && local.openRecoveryKeys.has(`transfer-unresolved:${orderId}`) ? `transfer-unresolved:${orderId}` : undefined;
+    add({ key: `transfer:${reference}:absent`, check: "transfer", orderId, amountCents: intent ? intent.dispatch_amount_cents ?? intent.amount_cents : null,
+      detail: `The ledger records ${reference}${orderId ? ` as order ${orderId}'s payout` : " as a transfer"}, but Stripe has no such transfer.`, ownedBy: owner });
   }
   return found;
 }
@@ -286,28 +304,79 @@ async function listWindow<T extends { id: string }>(
   return { items, complete: false };
 }
 
+/** PostgREST returns at most this many rows a request, whatever the limit. */
+const LOCAL_PAGE = 1_000;
+/** Per local read per run. Past it the read is unfinished: 'incomplete'. */
+const MAX_LOCAL_PAGES = 50;
+
+type Page<Row> = PromiseLike<{ data: Row[] | null; error: unknown }>;
+
+/**
+ * Every row a local read matches, by keyset pages on a unique key (ordered,
+ * then `key > last`), so no row is skipped or read twice and a server row
+ * cap can't silently truncate the answer. `complete` is false when the read
+ * stopped at its bound.
+ */
+async function readAll<Row extends Record<string, unknown>>(
+  label: string,
+  key: keyof Row & string,
+  page: (after: string | null, size: number) => Page<Row>
+): Promise<{ rows: Row[]; complete: boolean }> {
+  const rows: Row[] = [];
+  let after: string | null = null;
+  for (let n = 0; n < MAX_LOCAL_PAGES; n += 1) {
+    const { data, error } = await page(after, LOCAL_PAGE);
+    if (error) throw new Error(`Ledger read failed: ${label}`);
+    const batch = data ?? [];
+    rows.push(...batch);
+    if (batch.length < LOCAL_PAGE) return { rows, complete: true };
+    after = String(batch[batch.length - 1][key]);
+  }
+  return { rows, complete: false };
+}
+
 function chunks<T>(values: T[]): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < values.length; i += IN_CHUNK) out.push(values.slice(i, i + IN_CHUNK));
   return out;
 }
 
-async function selectIn<Row>(
+type LooseQuery<Row> = {
+  in(column: string, values: string[]): LooseQuery<Row>;
+  eq(column: string, value: unknown): LooseQuery<Row>;
+  gte(column: string, value: string): LooseQuery<Row>;
+  lte(column: string, value: string): LooseQuery<Row>;
+  not(column: string, operator: string, value: unknown): LooseQuery<Row>;
+  gt(column: string, value: string): LooseQuery<Row>;
+  order(column: string, options: { ascending: boolean }): LooseQuery<Row>;
+  limit(count: number): Page<Row>;
+};
+
+function table<Row>(admin: Admin, name: string, columns: string): LooseQuery<Row> {
+  return (admin.from(name as never) as unknown as { select(columns: string): LooseQuery<Row> }).select(columns);
+}
+
+/** Rows whose `column` is one of `values`, every page of every chunk. */
+async function selectIn<Row extends Record<string, unknown>>(
   admin: Admin,
-  table: string,
+  name: string,
   columns: string,
+  key: keyof Row & string,
   column: string,
   values: string[]
-): Promise<Row[]> {
+): Promise<{ rows: Row[]; complete: boolean }> {
   const rows: Row[] = [];
+  let complete = true;
   for (const part of chunks([...new Set(values)])) {
-    const { data, error } = await (admin.from(table as never) as unknown as {
-      select(columns: string): { in(column: string, values: string[]): PromiseLike<{ data: Row[] | null; error: unknown }> };
-    }).select(columns).in(column, part);
-    if (error) throw new Error(`Ledger read failed: ${table}`);
-    rows.push(...(data ?? []));
+    const read = await readAll<Row>(name, key, (after, size) => {
+      let query = table<Row>(admin, name, columns).in(column, part);
+      if (after) query = query.gt(key, after);
+      return query.order(key, { ascending: true }).limit(size);
+    });
+    rows.push(...read.rows);
+    complete &&= read.complete;
   }
-  return rows;
+  return { rows, complete };
 }
 
 export type LedgerReconciliationSummary = {
@@ -365,75 +434,103 @@ export async function reconcileLedger(admin: Admin, options: { now?: Date } = {}
     const intents = await listWindow((p) => stripe.paymentIntents.list(p), gte, lte);
     const refunds = await listWindow((p) => stripe.refunds.list(p), gte, lte);
     const transfers = await listWindow((p) => stripe.transfers.list(p), gte, lte);
+    // Reversals made in the window, whenever their transfer was created: on
+    // the platform's balance each is a transfer_refund whose source is the
+    // reversal, which names its transfer.
+    const reversalActivity = await listWindow(
+      (p) => stripe.balanceTransactions.list({ ...p, type: "transfer_refund", expand: ["data.source"] }),
+      gte,
+      lte
+    );
+    let complete = intents.complete && refunds.complete && transfers.complete && reversalActivity.complete;
+
+    const transferColumns = "order_id, status, transfer_reference, amount_cents, dispatch_amount_cents, dispatch_destination";
+    const sent = await readAll<LocalTransfer & Record<string, unknown>>("transferred payouts", "order_id", (after, size) => {
+      let query = table<LocalTransfer & Record<string, unknown>>(admin, "transfer_intents", transferColumns)
+        .eq("status", "transferred").gte("updated_at", windowStart).lte("updated_at", windowEnd);
+      if (after) query = query.gt("order_id", after);
+      return query.order("order_id", { ascending: true }).limit(size);
+    });
+    // Reversals the ledger completed in the window, whenever the transfer was made.
+    const localReversalActivity = await readAll<{ id: string; reversal_transfer_reference: string | null } & Record<string, unknown>>(
+      "reversals completed", "id", (after, size) => {
+        let query = table<{ id: string; reversal_transfer_reference: string | null } & Record<string, unknown>>(
+          admin, "refund_operations", "id, reversal_transfer_reference")
+          .gte("reversal_completed_at", windowStart).lte("reversal_completed_at", windowEnd);
+        if (after) query = query.gt("id", after);
+        return query.order("id", { ascending: true }).limit(size);
+      });
+    complete &&= sent.complete && localReversalActivity.complete;
+
+    // Transfers to look at that the window's list didn't include: payouts
+    // recorded as sent, and transfers with reversal activity on either side.
+    const listed = new Set(transfers.items.map((transfer) => transfer.id));
+    const wanted = new Set<string>();
+    for (const row of sent.rows) if (row.transfer_reference) wanted.add(row.transfer_reference);
+    for (const row of localReversalActivity.rows) if (row.reversal_transfer_reference) wanted.add(row.reversal_transfer_reference);
+    for (const balance of reversalActivity.items) {
+      const source = balance.source as Stripe.TransferReversal | string | null;
+      const transferId = source && typeof source === "object" ? id(source.transfer) : null;
+      if (transferId) wanted.add(transferId);
+      else complete = false; // a reversal whose transfer the run can't name
+    }
+    const toRetrieve = [...wanted].filter((reference) => !listed.has(reference));
+    if (toRetrieve.length > MAX_RETRIEVES) complete = false; // the rest stay unchecked, never "absent"
+    const confirmedAbsent = new Set<string>();
+    for (const reference of toRetrieve.slice(0, MAX_RETRIEVES)) {
+      try {
+        transfers.items.push(await stripe.transfers.retrieve(reference));
+      } catch (error) {
+        if ((error as { statusCode?: number }).statusCode !== 404) throw error;
+        confirmedAbsent.add(reference);
+      }
+    }
 
     const intentIds = [
       ...intents.items.map((intent) => intent.id),
       ...refunds.items.map((refund) => id(refund.payment_intent)).filter((value): value is string => Boolean(value)),
     ];
-    const transferIds = transfers.items.map((transfer) => transfer.id);
-    const payments = await selectIn<LocalPayment>(admin, "payments", "order_id, provider_reference, amount_cents, refunded_cents, status", "provider_reference", intentIds);
-    const localRefunds = await selectIn<LocalRefund>(admin, "refund_operations",
+    const transferIds = [...new Set([...transfers.items.map((transfer) => transfer.id), ...confirmedAbsent])];
+    const payments = await selectIn<LocalPayment & Record<string, unknown>>(admin, "payments",
+      "id, order_id, provider_reference, amount_cents, refunded_cents, status", "id", "provider_reference", intentIds);
+    const localRefunds = await selectIn<LocalRefund & Record<string, unknown>>(admin, "refund_operations",
       "id, order_id, refund_reference, amount_cents, status, provider_status, effects_completed_at, updated_at",
-      "refund_reference", refunds.items.map((refund) => refund.id));
-    const reversals = await selectIn<LocalReversal>(admin, "refund_operations",
-      "reversal_transfer_reference, reversal_amount_cents, reversal_reference", "reversal_transfer_reference", transferIds);
-    const transferColumns = "order_id, status, transfer_reference, amount_cents, dispatch_amount_cents, dispatch_destination";
-    const localTransfers = await selectIn<LocalTransfer>(admin, "transfer_intents", transferColumns, "transfer_reference", transferIds);
-    const carryPayouts = await selectIn<LocalCarryPayout>(admin, "seller_carry_payouts",
-      "id, transfer_reference, amount_cents, destination, status", "transfer_reference", transferIds);
+      "id", "refund_reference", refunds.items.map((refund) => refund.id));
+    const reversals = await selectIn<LocalReversal & { id: string } & Record<string, unknown>>(admin, "refund_operations",
+      "id, reversal_transfer_reference, reversal_amount_cents, reversal_reference", "id", "reversal_transfer_reference", transferIds);
+    const localTransfers = await selectIn<LocalTransfer & Record<string, unknown>>(admin, "transfer_intents",
+      transferColumns, "order_id", "transfer_reference", transferIds);
+    const carryPayouts = await selectIn<LocalCarryPayout & Record<string, unknown>>(admin, "seller_carry_payouts",
+      "id, transfer_reference, amount_cents, destination, status", "id", "transfer_reference", transferIds);
+    complete &&= payments.complete && localRefunds.complete && reversals.complete && localTransfers.complete && carryPayouts.complete;
 
-    const { data: sent, error: sentError } = await admin
-      .from("transfer_intents")
-      .select(transferColumns)
-      .eq("status", "transferred")
-      .gte("updated_at", windowStart)
-      .lte("updated_at", windowEnd)
-      .limit(5_000);
-    if (sentError) throw new Error("Ledger read failed: transferred payouts");
-
-    // A payout the window's list didn't include may simply have been created
-    // just outside it: look those up one by one before calling them absent.
-    const listed = new Set(transferIds);
-    let complete = intents.complete && refunds.complete && transfers.complete;
-    const unlisted = (sent ?? []).filter((row) => row.transfer_reference && !listed.has(row.transfer_reference));
-    if (unlisted.length > MAX_RETRIEVES) complete = false;
-    for (const row of unlisted.slice(0, MAX_RETRIEVES)) {
-      try {
-        const transfer = await stripe.transfers.retrieve(row.transfer_reference!);
-        transfers.items.push(transfer);
-        localTransfers.push(row as LocalTransfer);
-      } catch (error) {
-        if ((error as { statusCode?: number }).statusCode !== 404) throw error;
-      }
-    }
-    // Reversals for transfers fetched one by one.
-    const extraIds = unlisted.map((row) => row.transfer_reference!).filter((ref) => !listed.has(ref));
-    reversals.push(...await selectIn<LocalReversal>(admin, "refund_operations",
-      "reversal_transfer_reference, reversal_amount_cents, reversal_reference", "reversal_transfer_reference", extraIds));
-
-    const { data: openCases, error: casesError } = await admin
-      .from("payment_recoveries")
-      .select("recovery_key")
-      .eq("status", "open")
-      .not("recovery_key", "is", null)
-      .limit(5_000);
-    if (casesError) throw new Error("Ledger read failed: recovery cases");
+    const openCases = await readAll<{ id: string; recovery_key: string } & Record<string, unknown>>("recovery cases", "id", (after, size) => {
+      let query = table<{ id: string; recovery_key: string } & Record<string, unknown>>(admin, "payment_recoveries", "id, recovery_key")
+        .eq("status", "open").not("recovery_key", "is", null);
+      if (after) query = query.gt("id", after);
+      return query.order("id", { ascending: true }).limit(size);
+    });
+    // Without every open case, a discrepancy another case owns would be
+    // reported twice: record nothing new until the read finishes.
+    const ownershipKnown = openCases.complete;
+    complete &&= ownershipKnown;
 
     const discrepancies = findLedgerDiscrepancies(
       { paymentIntents: intents.items, refunds: refunds.items, transfers: transfers.items },
       {
-        payments,
-        refunds: localRefunds,
-        reversals,
-        transfers: localTransfers,
-        carryPayouts,
-        transferredInWindow: (sent ?? []) as LocalTransfer[],
-        openRecoveryKeys: new Set((openCases ?? []).map((row) => row.recovery_key as string)),
+        payments: payments.rows,
+        refunds: localRefunds.rows,
+        reversals: reversals.rows,
+        transfers: localTransfers.rows,
+        carryPayouts: carryPayouts.rows,
+        transferredInWindow: sent.rows,
+        confirmedAbsent,
+        openRecoveryKeys: new Set(openCases.rows.map((row) => row.recovery_key)),
         nowMs,
       }
     );
 
-    const fresh = discrepancies.filter((d) => !d.ownedBy);
+    const fresh = ownershipKnown ? discrepancies.filter((d) => !d.ownedBy) : [];
     let newCases = 0;
     for (const discrepancy of fresh) {
       // Insert-only: an open case stays as it is, and one an operator
@@ -471,7 +568,7 @@ export async function reconcileLedger(admin: Admin, options: { now?: Date } = {}
         finished_at: new Date().toISOString(),
         checked,
         discrepancies: discrepancies.length,
-        detail: complete ? null : "A Stripe collection or the payout lookups exceeded this run's bound; the next run covers the window again.",
+        detail: complete ? null : "A Stripe collection, a payout lookup or a ledger read didn't finish within this run's bound; the next run covers the window again.",
       })
       .eq("id", run.id);
     if (finishError) throw new Error("Ledger reconciliation run could not be completed");

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   refundsList: vi.fn(),
   transfersList: vi.fn(),
   transfersRetrieve: vi.fn(),
+  balanceTransactionsList: vi.fn(),
   stripeSecretKey: vi.fn(() => "fixture-key"),
   sendAdminAlert: vi.fn(),
 }));
@@ -22,6 +23,7 @@ vi.mock("./stripe", () => ({
     paymentIntents: { list: mocks.paymentIntentsList },
     refunds: { list: mocks.refundsList },
     transfers: { list: mocks.transfersList, retrieve: mocks.transfersRetrieve },
+    balanceTransactions: { list: mocks.balanceTransactionsList },
   }),
   stripeSecretKey: mocks.stripeSecretKey,
 }));
@@ -54,6 +56,7 @@ function ledger(overrides: Partial<LedgerSnapshot> = {}): LedgerSnapshot {
     transfers: [{ order_id: ORDER, status: "transferred", transfer_reference: "tr_1", amount_cents: 9_000, dispatch_amount_cents: 9_000, dispatch_destination: "acct_1" }],
     carryPayouts: [],
     transferredInWindow: [],
+    confirmedAbsent: new Set(),
     openRecoveryKeys: new Set(),
     nowMs: NOW,
     ...overrides,
@@ -146,7 +149,9 @@ describe("what the reconciliation compares", () => {
     });
     it("a payout the ledger says it sent that Stripe doesn't have", () => {
       const sent = { order_id: "order-9", status: "transferred", transfer_reference: "tr_gone", amount_cents: 500, dispatch_amount_cents: 500, dispatch_destination: "acct_1" };
-      expect(keys(stripe(), ledger({ transferredInWindow: [sent] }))).toEqual(["transfer:tr_gone:absent"]);
+      expect(keys(stripe(), ledger({ transferredInWindow: [sent], confirmedAbsent: new Set(["tr_gone"]) }))).toEqual(["transfer:tr_gone:absent"]);
+      // Not looked up is not missing.
+      expect(keys(stripe(), ledger({ transferredInWindow: [sent] }))).toEqual([]);
     });
     it("credit payouts by their own record", () => {
       const carry = transfer({ id: "tr_carry", amount: 300, metadata: { carry_payout_id: "cp_1", transfer_operation: "carry-payout:cp_1" } });
@@ -195,7 +200,7 @@ function runAdmin(answers: Record<string, Answer[]>) {
       const queue = answers[`${table}:${op}`] ?? [];
       return queue.length > 1 ? queue.shift()! : queue[0] ?? { data: op === "select" ? [] : null, error: null };
     };
-    for (const method of ["select", "eq", "in", "is", "not", "gte", "lte", "order", "limit"]) builder[method] = vi.fn(() => builder);
+    for (const method of ["select", "eq", "in", "is", "not", "gt", "gte", "lte", "order", "limit"]) builder[method] = vi.fn(() => builder);
     for (const write of ["insert", "update", "upsert"]) {
       builder[write] = vi.fn((v: unknown, o?: unknown) => {
         op = write;
@@ -220,6 +225,8 @@ beforeEach(() => {
   mocks.paymentIntentsList.mockResolvedValue(page([intent()]));
   mocks.refundsList.mockResolvedValue(page([]));
   mocks.transfersList.mockResolvedValue(page([transfer()]));
+  mocks.balanceTransactionsList.mockResolvedValue(page([]));
+  mocks.transfersRetrieve.mockReset();
   mocks.sendAdminAlert.mockResolvedValue(undefined);
 });
 
@@ -290,14 +297,16 @@ describe("a reconciliation run", () => {
   it("looks up a recorded payout outside the listed window before calling it absent", async () => {
     const answers = baseAnswers();
     const sent = { order_id: "order-9", status: "transferred", transfer_reference: "tr_edge", amount_cents: 500, dispatch_amount_cents: 500, dispatch_destination: "acct_1" };
-    answers["transfer_intents:select"] = [{ data: ledger().transfers, error: null }, { data: [sent], error: null }];
+    // The payouts sent in the window are read first, then the ledger's
+    // record of every transfer looked at.
+    answers["transfer_intents:select"] = [{ data: [sent], error: null }, { data: [...ledger().transfers, sent], error: null }];
     mocks.transfersRetrieve.mockResolvedValue(transfer({ id: "tr_edge", amount: 500, metadata: { order_id: "order-9" } }));
     const { admin } = runAdmin(answers);
     await expect(reconcileLedger(admin, { now: new Date(NOW) })).resolves.toMatchObject({ discrepancies: 0 });
     expect(mocks.transfersRetrieve).toHaveBeenCalledWith("tr_edge");
 
     mocks.transfersRetrieve.mockRejectedValue(Object.assign(new Error("No such transfer"), { statusCode: 404 }));
-    answers["transfer_intents:select"] = [{ data: ledger().transfers, error: null }, { data: [sent], error: null }];
+    answers["transfer_intents:select"] = [{ data: [sent], error: null }, { data: [...ledger().transfers, sent], error: null }];
     answers["payment_recoveries:upsert"] = [{ data: [{ id: "case-2" }], error: null }];
     const second = runAdmin(answers);
     await expect(reconcileLedger(second.admin, { now: new Date(NOW) })).resolves.toMatchObject({ discrepancies: 1, newCases: 1 });
@@ -316,5 +325,190 @@ describe("a reconciliation run", () => {
     await expect(reconcileLedger(admin, { now: new Date(NOW) })).resolves.toMatchObject({ skipped: "stripe_unconfigured", runId: null });
     expect(writes).toEqual([]);
     expect(mocks.paymentIntentsList).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Follow-up to #91 (GPT's post-merge review): reversals found by when they
+// happen, absence only on Stripe's 404, and local reads that can't truncate.
+// This stand-in applies the filters, keyset paging and PostgREST's 1,000-row
+// cap to real rows.
+// ---------------------------------------------------------------------------
+
+type Row = Record<string, unknown>;
+
+function tableAdmin(tables: Record<string, Row[]>) {
+  const writes: { table: string; op: string; value: unknown }[] = [];
+  const from = vi.fn((name: string) => {
+    const filters: Array<(row: Row) => boolean> = [];
+    let orderBy: string | null = null;
+    let limit = Infinity;
+    let op = "select";
+    let value: unknown;
+    const run = () => {
+      if (op !== "select") {
+        writes.push({ table: name, op, value });
+        if (name === "ledger_reconciliation_runs" && op === "insert") return { data: { id: "run-1" }, error: null };
+        if (name === "payment_recoveries" && op === "upsert") return { data: [{ id: "case" }], error: null };
+        return { data: null, error: null };
+      }
+      let rows = (tables[name] ?? []).filter((row) => filters.every((f) => f(row)));
+      if (orderBy) rows = [...rows].sort((a, b) => String(a[orderBy!]).localeCompare(String(b[orderBy!])));
+      return { data: rows.slice(0, Math.min(limit, 1_000)), error: null };
+    };
+    const builder: Record<string, unknown> = {
+      select: () => builder,
+      eq: (c: string, v: unknown) => (filters.push((r) => r[c] === v), builder),
+      in: (c: string, v: unknown[]) => (filters.push((r) => v.includes(r[c])), builder),
+      gte: (c: string, v: string) => (filters.push((r) => String(r[c]) >= v), builder),
+      lte: (c: string, v: string) => (filters.push((r) => String(r[c]) <= v), builder),
+      gt: (c: string, v: string) => (filters.push((r) => String(r[c]) > v), builder),
+      not: (c: string) => (filters.push((r) => r[c] != null), builder),
+      is: (c: string, v: unknown) => (filters.push((r) => r[c] === v), builder),
+      order: (c: string) => ((orderBy = c), builder),
+      limit: (n: number) => ((limit = n), builder),
+      insert: (v: unknown) => ((op = "insert"), (value = v), builder),
+      update: (v: unknown) => ((op = "update"), (value = v), builder),
+      upsert: (v: unknown) => ((op = "upsert"), (value = v), builder),
+      maybeSingle: async () => { const r = run(); return { ...r, data: Array.isArray(r.data) ? r.data[0] ?? null : r.data }; },
+      single: async () => run(),
+      then: (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) => Promise.resolve(run()).then(resolve, reject),
+    };
+    return builder;
+  });
+  return { admin: { from } as never, writes };
+}
+
+const IN_WINDOW = new Date(NOW - 10 * 3_600_000).toISOString();
+const sentPayout = (n: number) => ({
+  order_id: `order-${String(n).padStart(5, "0")}`, status: "transferred", transfer_reference: `tr_sent_${n}`,
+  amount_cents: 500, dispatch_amount_cents: 500, dispatch_destination: "acct_1", updated_at: IN_WINDOW,
+});
+const casesOf = (writes: { table: string; op: string; value: unknown }[]) =>
+  writes.filter((w) => w.table === "payment_recoveries").map((w) => (w.value as { recovery_key: string }).recovery_key);
+const lastRun = (writes: { table: string; op: string; value: unknown }[]) =>
+  writes.filter((w) => w.table === "ledger_reconciliation_runs" && w.op === "update").at(-1)!.value as Record<string, unknown>;
+
+describe("reversals made in the window, whenever the transfer was created", () => {
+  const oldPayout = { order_id: "order-old", status: "transferred", transfer_reference: "tr_old", amount_cents: 9_000,
+    dispatch_amount_cents: 9_000, dispatch_destination: "acct_1", updated_at: "2026-10-30T00:00:00Z" };
+
+  it("checks a week-old payout Stripe reversed today", async () => {
+    // Not in the window's transfer list (created a week ago), its intent
+    // unchanged — only the reversal is new.
+    mocks.paymentIntentsList.mockResolvedValue(page([]));
+    mocks.transfersList.mockResolvedValue(page([]));
+    mocks.balanceTransactionsList.mockResolvedValue(page([
+      { id: "txn_rev", type: "transfer_refund", source: { id: "trr_1", object: "transfer_reversal", transfer: "tr_old", amount: 1_800 } },
+    ]));
+    mocks.transfersRetrieve.mockResolvedValue(transfer({ id: "tr_old", amount_reversed: 1_800, metadata: { order_id: "order-old" } }));
+    const { admin, writes } = tableAdmin({ transfer_intents: [oldPayout] });
+
+    await expect(reconcileLedger(admin, { now: new Date(NOW) })).resolves.toMatchObject({ discrepancies: 1, complete: true });
+    expect(mocks.balanceTransactionsList).toHaveBeenCalledWith(expect.objectContaining({ type: "transfer_refund", expand: ["data.source"] }));
+    expect(mocks.transfersRetrieve).toHaveBeenCalledWith("tr_old");
+    expect(casesOf(writes)).toEqual(["ledger:transfer:tr_old:reversed"]);
+  });
+
+  it("agrees when the ledger booked that reversal", async () => {
+    mocks.paymentIntentsList.mockResolvedValue(page([]));
+    mocks.transfersList.mockResolvedValue(page([]));
+    mocks.balanceTransactionsList.mockResolvedValue(page([{ id: "txn_rev", source: { id: "trr_1", transfer: "tr_old" } }]));
+    mocks.transfersRetrieve.mockResolvedValue(transfer({ id: "tr_old", amount_reversed: 1_800, metadata: { order_id: "order-old" } }));
+    const { admin, writes } = tableAdmin({
+      transfer_intents: [oldPayout],
+      refund_operations: [{ id: "op-1", reversal_transfer_reference: "tr_old", reversal_amount_cents: 1_800, reversal_reference: "trr_1", reversal_completed_at: IN_WINDOW }],
+    });
+    await expect(reconcileLedger(admin, { now: new Date(NOW) })).resolves.toMatchObject({ discrepancies: 0, complete: true });
+    expect(casesOf(writes)).toEqual([]);
+  });
+
+  it("checks a reversal the ledger booked today that Stripe never made", async () => {
+    mocks.paymentIntentsList.mockResolvedValue(page([]));
+    mocks.transfersList.mockResolvedValue(page([]));
+    mocks.transfersRetrieve.mockResolvedValue(transfer({ id: "tr_old", amount_reversed: 0, metadata: { order_id: "order-old" } }));
+    const { admin, writes } = tableAdmin({
+      transfer_intents: [oldPayout],
+      refund_operations: [{ id: "op-1", reversal_transfer_reference: "tr_old", reversal_amount_cents: 1_800, reversal_reference: "trr_1", reversal_completed_at: IN_WINDOW }],
+    });
+    await reconcileLedger(admin, { now: new Date(NOW) });
+    expect(casesOf(writes)).toEqual(["ledger:transfer:tr_old:reversed"]);
+  });
+
+  it("is incomplete when a reversal doesn't name its transfer", async () => {
+    mocks.balanceTransactionsList.mockResolvedValue(page([{ id: "txn_rev", source: "trr_unexpanded" }]));
+    const { admin, writes } = tableAdmin({ payments: [{ id: "pay-1", ...ledger().payments[0] }], transfer_intents: [{ ...ledger().transfers[0], updated_at: "2026-10-01T00:00:00Z" }] });
+    await expect(reconcileLedger(admin, { now: new Date(NOW) })).resolves.toMatchObject({ complete: false });
+    expect(lastRun(writes)).toMatchObject({ status: "incomplete" });
+  });
+});
+
+describe("absence only on Stripe's own answer", () => {
+  it("never calls the 101st unchecked payout absent; the run is incomplete instead", async () => {
+    mocks.paymentIntentsList.mockResolvedValue(page([]));
+    mocks.transfersList.mockResolvedValue(page([]));
+    const payouts = Array.from({ length: 101 }, (_, i) => sentPayout(i));
+    mocks.transfersRetrieve.mockImplementation(async (reference: string) => {
+      const row = payouts.find((p) => p.transfer_reference === reference)!;
+      return transfer({ id: reference, amount: 500, metadata: { order_id: row.order_id } });
+    });
+    const { admin, writes } = tableAdmin({ transfer_intents: payouts });
+
+    await expect(reconcileLedger(admin, { now: new Date(NOW) })).resolves.toMatchObject({ discrepancies: 0, newCases: 0, complete: false });
+    expect(mocks.transfersRetrieve).toHaveBeenCalledTimes(100);
+    expect(casesOf(writes)).toEqual([]);
+    expect(lastRun(writes)).toMatchObject({ status: "incomplete" });
+  });
+
+  it("opens a case for a payout Stripe answers 404 for", async () => {
+    mocks.paymentIntentsList.mockResolvedValue(page([]));
+    mocks.transfersList.mockResolvedValue(page([]));
+    mocks.transfersRetrieve.mockRejectedValue(Object.assign(new Error("No such transfer"), { statusCode: 404 }));
+    const { admin, writes } = tableAdmin({ transfer_intents: [sentPayout(1)] });
+    await expect(reconcileLedger(admin, { now: new Date(NOW) })).resolves.toMatchObject({ newCases: 1, complete: true });
+    expect(casesOf(writes)).toEqual(["ledger:transfer:tr_sent_1:absent"]);
+  });
+});
+
+describe("local reads past PostgREST's 1,000-row cap", () => {
+  it("reads every open case before deciding a discrepancy is new", async () => {
+    // 1,200 open cases; the one that owns this refund is the 1,100th.
+    mocks.refundsList.mockResolvedValue(page([refund()]));
+    const cases = Array.from({ length: 1_200 }, (_, i) => ({
+      id: `case-${String(i).padStart(5, "0")}`, status: "open",
+      recovery_key: i === 1_100 ? "refund-lifecycle:re_1" : `other:${i}`,
+    }));
+    const { admin, writes } = tableAdmin({
+      payments: [{ id: "pay-1", ...ledger().payments[0] }],
+      transfer_intents: [{ ...ledger().transfers[0], updated_at: "2026-10-01T00:00:00Z" }],
+      payment_recoveries: cases,
+    });
+    await expect(reconcileLedger(admin, { now: new Date(NOW) })).resolves.toMatchObject({ discrepancies: 1, alreadyOwned: 1, newCases: 0, complete: true });
+    expect(casesOf(writes)).toEqual([]);
+  });
+
+  it("pages local rows by key, so none past the cap is lost", async () => {
+    // 1,500 payment rows for this PaymentIntent (a fixture, not a real basket):
+    // a truncated read would see 1,000 and report a different captured amount.
+    mocks.paymentIntentsList.mockResolvedValue(page([intent({ amount_received: 1_500 })]));
+    mocks.transfersList.mockResolvedValue(page([]));
+    const rows = Array.from({ length: 1_500 }, (_, i) => ({
+      id: `pay-${String(i).padStart(5, "0")}`, order_id: ORDER, provider_reference: "pi_1", amount_cents: 1, refunded_cents: 0, status: "succeeded",
+    }));
+    const { admin } = tableAdmin({ payments: rows });
+    await expect(reconcileLedger(admin, { now: new Date(NOW) })).resolves.toMatchObject({ discrepancies: 0, complete: true });
+  });
+
+  it("marks a local read it couldn't finish incomplete and records nothing it can't attribute", async () => {
+    mocks.refundsList.mockResolvedValue(page([refund()]));
+    const cases = Array.from({ length: 50_001 }, (_, i) => ({ id: `case-${String(i).padStart(6, "0")}`, status: "open", recovery_key: `other:${i}` }));
+    const { admin, writes } = tableAdmin({
+      payments: [{ id: "pay-1", ...ledger().payments[0] }],
+      transfer_intents: [{ ...ledger().transfers[0], updated_at: "2026-10-01T00:00:00Z" }],
+      payment_recoveries: cases,
+    });
+    await expect(reconcileLedger(admin, { now: new Date(NOW) })).resolves.toMatchObject({ complete: false, newCases: 0 });
+    expect(casesOf(writes)).toEqual([]);
+    expect(lastRun(writes)).toMatchObject({ status: "incomplete" });
   });
 });
