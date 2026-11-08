@@ -81,6 +81,18 @@ jobs:
           SUPABASE_SECRET_KEY: sb_secret_placeholder
           NEXT_PUBLIC_SITE_URL: https://example.com
 
+      # JUnit for the Intelligence OS: every job's files share the prefix
+      # test-results-<sha>- (docs/ids.md). Kept on red runs too.
+      - name: Retain JUnit results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-results-${{ github.sha }}-verify
+          path: |
+            test-results/vitest.xml
+          if-no-files-found: warn
+          retention-days: 30
+
   # RR-23: no credential in the code or its history — two lanes.
   #
   # `secrets` is the INCREMENTAL lane: gitleaks-action scans only what this
@@ -292,6 +304,18 @@ jobs:
           PGPASSWORD: postgres
         run: bash scripts/test-sql-guards.sh
 
+      # JUnit for the Intelligence OS: every job's files share the prefix
+      # test-results-<sha>- (docs/ids.md). Kept on red runs too.
+      - name: Retain JUnit results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-results-${{ github.sha }}-sql-guard
+          path: |
+            test-results/sql-guards.xml
+          if-no-files-found: warn
+          retention-days: 30
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22.22.0
@@ -409,6 +433,20 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      # JUnit for the Intelligence OS: every job's files share the prefix
+      # test-results-<sha>- (docs/ids.md). Kept on red runs too.
+      - name: Retain JUnit results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-results-${{ github.sha }}-e2e
+          path: |
+            test-results/operations.xml
+            test-results/playwright.xml
+            test-results/playwright-diagnostic.xml
+          if-no-files-found: warn
+          retention-days: 30
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
@@ -489,6 +527,18 @@ jobs:
         name: Stripe test-mode integration
         run: npm run test:stripe
 
+      # JUnit for the Intelligence OS: every job's files share the prefix
+      # test-results-<sha>- (docs/ids.md). Kept on red runs too.
+      - name: Retain JUnit results
+        if: always() && steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-results-${{ github.sha }}-stripe-integration
+          path: |
+            test-results/stripe.xml
+          if-no-files-found: warn
+          retention-days: 30
+
   release-gate:
     if: always()
     runs-on: ubuntu-24.04
@@ -550,5 +600,6 @@ jobs:
             echo "| SQL guards (all registered suites) | ${{ needs.sql-guard.result }} |"
             echo "| Required browser regression suite | ${{ needs.e2e.result }}; executed=${{ needs.e2e.outputs.ran }}; first attempt passed=${{ needs.e2e.outputs.first_attempt_passed || 'false' }} |"
             echo "| Stripe test-mode integration | ${{ needs.stripe-integration.result }}; executed=${{ needs.stripe-integration.outputs.ran }} |"
+            echo "| JUnit results (one artifact per job, prefix \`test-results-${{ github.sha }}-\`) | verify, sql-guard, e2e, stripe-integration; see docs/ids.md |"
             echo "| Provider coverage | Stripe test API covers multi-seller capture and late compensation; browser checkout uses stubs. Connected payout/dispute and 3DS browser proof remain open |"
           } >> "$GITHUB_STEP_SUMMARY"
