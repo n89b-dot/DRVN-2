@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { deletionStatusNotice } from "./account-deletion-status";
+import { deletionReferenceNotice, deletionStatusNotice } from "./account-deletion-status";
 
 describe("N35 a member can see where their deletion stands", () => {
   it("says a held request is on hold, why, and that nothing was deleted", () => {
@@ -17,5 +17,20 @@ describe("N35 a member can see where their deletion stands", () => {
   it("says nothing when there is no request or it's done", () => {
     expect(deletionStatusNotice(null)).toBeNull();
     expect(deletionStatusNotice({ outcome: "completed", next_action: null, updated_at: "x" })).toBeNull();
+  });
+});
+
+describe("OS-W11 follow-up: the same case for a member who can no longer sign in", () => {
+  it("names every state the worker records, including completion", () => {
+    for (const outcome of ["cleanup_pending", "temporary_financial_hold", "operator_attention", "completed"]) {
+      expect(deletionReferenceNotice(outcome)?.title).toBeTruthy();
+    }
+    expect(deletionReferenceNotice("unknown")).toBeNull();
+  });
+
+  it("never tells a signed-out member to keep using the account", () => {
+    for (const outcome of ["cleanup_pending", "temporary_financial_hold", "operator_attention", "completed"]) {
+      expect(deletionReferenceNotice(outcome)?.body).not.toMatch(/keep using your account/i);
+    }
   });
 });
