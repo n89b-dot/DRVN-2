@@ -92,18 +92,26 @@ const TYPE_ALIASES = new Map([
 
 /**
  * A type as one function signature string, the same for the file's spelling
- * and the catalog's `format_type`: aliases resolved, typmods and schema
- * qualifiers dropped (a signature ignores both), arrays as one `[]`.
+ * and the catalog's `format_type` read with `search_path = public`: built-in
+ * aliases resolved, typmods dropped (a signature ignores them), arrays as one
+ * `[]`. A schema qualifier is kept, so `private.kind` and `public.kind` stay
+ * different types; only `public.` and `pg_catalog.` are dropped, because
+ * format_type leaves those unqualified under that search_path. An unqualified
+ * name is one the migration resolved through its search_path; if the catalog
+ * names a different schema, the signatures don't match and the file is
+ * refused, never wrongly verified.
  */
 export function canonicalType(raw) {
   let text = raw.trim().replace(/\s+/g, " ");
   const array = /(\[\s*\d*\s*\])+$/.test(text) || /\sarray$/i.test(text);
   text = text.replace(/(\s*\[\s*\d*\s*\])+$/, "").replace(/\sarray$/i, "");
   text = text.replace(/\s*\([^)]*\)/g, "").trim();
-  const parts = splitTop(text, ".");
-  let name = ident(parts.at(-1) ?? text).replace(/\s+/g, " ");
-  name = TYPE_ALIASES.get(name) ?? name;
-  return array ? `${name}[]` : name;
+  const parts = splitTop(text, ".").map((part) => ident(part).replace(/\s+/g, " "));
+  const schema = parts.length > 1 && !["public", "pg_catalog"].includes(parts.at(-2)) ? parts.at(-2) : null;
+  let name = parts.at(-1) ?? ident(text);
+  if (!schema) name = TYPE_ALIASES.get(name) ?? name;
+  const qualifiedName = schema ? `${schema}.${name}` : name;
+  return array ? `${qualifiedName}[]` : qualifiedName;
 }
 
 const MULTI_WORD_TYPE = /^(double\s+precision|(character|char|bit)\s+varying|(timestamp|time)(\s*\(\s*\d+\s*\))?\s+with(out)?\s+time\s+zone|interval\b|national\s)/i;
@@ -202,7 +210,9 @@ function alterTableOps(schema, table, actions) {
   const ops = [];
   for (const action of splitTop(actions)) {
     let m;
-    if ((m = action.match(rx(`^add\\s+constraint\\s+(${ID})`)))) {
+    if ((m = action.match(/^add\s+(primary\s+key|unique|check|foreign\s+key|exclude)\b/i))) {
+      ops.push({ op: "uncheckable", note: `an unnamed ${m[1].toLowerCase().replace(/\s+/g, " ")} constraint added to ${t}, which the check can't identify` });
+    } else if ((m = action.match(rx(`^add\\s+constraint\\s+(${ID})`)))) {
       const con = ident(m[1]);
       ops.push(create(keys.constraint(schema, table, con), `constraint ${con} on ${t}`, { table: t }));
     } else if ((m = action.match(rx(`^add\\s+(?:column\\s+)?(?:if\\s+not\\s+exists\\s+)?(${ID})(?:\\s|$)`)))) {
@@ -244,8 +254,8 @@ export function statementOps(code, literals, depth = 0) {
     return ops;
   }
   if ((m = c.match(rx(`^create\\s+(?:unique\\s+)?index\\s+(?:concurrently\\s+)?(?:if\\s+not\\s+exists\\s+)?(?:(${ID})\\s+)?on\\s+(?:only\\s+)?(${QN})`)))) {
-    if (!m[1]) return [];
     const table = qualified(m[2]);
+    if (!m[1]) return [{ op: "uncheckable", note: `an unnamed index on ${table.schema}.${table.name}, which the check can't identify` }];
     const name = ident(m[1]);
     return [create(keys.relation(table.schema, name), `index ${table.schema}.${name}`, { relkinds: RELKINDS.index, table: `${table.schema}.${table.name}` })];
   }
@@ -378,7 +388,6 @@ export function statementOps(code, literals, depth = 0) {
 
 const DDL_START = /\b(create|alter|drop)\s/gi;
 const FORMAT_MARK = "drvn_format_placeholder";
-const CREATES = /^\s*(create\b|alter\s+table\b[\s\S]*\b(add|rename)\b|alter\s+(type|policy|index|view|sequence|function|procedure)\b[\s\S]*\b(add|rename)\b)/i;
 
 /** Objects a DO block creates with static DDL; dynamic DDL that creates something can't be checked. */
 function doBlockOps(c, literals, depth) {
@@ -395,26 +404,33 @@ function doBlockOps(c, literals, depth) {
     }
     const exec = code.match(/\bexecute\s+(?!(on|function|procedure)\b)/i);
     if (exec) {
-      const after = code.slice(exec.index + exec[0].length);
-      const index = placeholdersBefore(code, exec.index + exec[0].length);
-      const staticLiteral = /^(E?''|\$\$)\s*(using\b.*)?$/i.test(after.trim());
-      const leading = /^(format\s*\(\s*)?(E?''|\$\$)/i.test(after.trim()) ? inner.literals[index] : null;
-      if (staticLiteral && leading != null) {
-        for (const statement of splitStatements(leading)) ops.push(...statementOps(statement.code, statement.literals, depth + 1));
-      } else if (leading == null) {
-        ops.push({ op: "uncheckable", note: `a DO block runs SQL built at run time (execute ${after.slice(0, 50)})` });
-      } else if (CREATES.test(leading)) {
-        // format('alter table t add constraint c check (%s)', …) still names its object:
-        // usable when every name is static. A function body built this way can't be compared.
-        // Each format placeholder becomes a marker name, so an object named by one is never taken as static.
-        const template = leading.replace(/%(\d+\$)?-?\d*[sIL%]/g, (spec) => (spec === "%%" ? "%" : FORMAT_MARK));
+      const expr = code.slice(exec.index + exec[0].length).trim();
+      const literal = inner.literals[placeholdersBefore(code, exec.index + exec[0].length)];
+      // Only two shapes are read: a lone literal, or one whole format('…', args) call. Anything
+      // else (a literal || something, a variable, a function's result) is SQL built at run time.
+      const lone = /^(E?''|\$\$)\s*(using\b.*)?$/i.test(expr);
+      let whole = false;
+      if (/^format\s*\(\s*(E?''|\$\$)\s*[,)]/i.test(expr)) {
+        const close = closeParen(expr, expr.indexOf("("));
+        whole = close >= 0 && /^\s*(using\b.*)?$/i.test(expr.slice(close + 1));
+      }
+      if (lone && literal != null) {
+        for (const statement of splitStatements(literal)) ops.push(...statementOps(statement.code, statement.literals, depth + 1));
+      } else if (whole && literal != null) {
+        // format('alter table t add constraint c check (%s)', …) still names its object: usable when
+        // every name it creates is static. Each placeholder becomes a marker name, so an object named
+        // by one is never taken as static. A function body built this way can't be compared.
+        const template = literal.replace(/%(\d+\$)?-?\d*[sIL%]/g, (spec) => (spec === "%%" ? "%" : FORMAT_MARK));
         const parsed = splitStatements(template).flatMap((statement) => statementOps(statement.code, statement.literals, depth + 1));
-        const named = parsed.filter((op) => op.op !== "uncheckable" && !op.key.includes(FORMAT_MARK));
-        if (named.length && named.length === parsed.length) {
-          ops.push(...named.map((op) => (op.kind === "function" ? { ...op, body: null } : op)));
+        const dynamicName = (op) => op.op === "uncheckable" || (op.op === "create" && op.key.includes(FORMAT_MARK));
+        if (parsed.some(dynamicName)) {
+          ops.push({ op: "uncheckable", note: `a DO block creates objects through dynamic SQL (${literal.replace(/\s+/g, " ").trim().slice(0, 60)})` });
         } else {
-          ops.push({ op: "uncheckable", note: `a DO block creates objects through dynamic SQL (${leading.replace(/\s+/g, " ").trim().slice(0, 60)})` });
+          // A drop of a placeholder-named object is unknown, so it supersedes nothing.
+          ops.push(...parsed.filter((op) => !op.key.includes(FORMAT_MARK)).map((op) => (op.kind === "function" ? { ...op, body: null } : op)));
         }
+      } else {
+        ops.push({ op: "uncheckable", note: `a DO block runs SQL built at run time (execute ${expr.slice(0, 50)})` });
       }
       continue;
     }
