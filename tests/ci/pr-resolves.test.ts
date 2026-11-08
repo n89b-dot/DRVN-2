@@ -88,7 +88,11 @@ describe("CI hands this check the pull request", () => {
     expect(tests?.env).toMatchObject({
       PR_TITLE: "${{ github.event.pull_request.title }}",
       PR_BODY: "${{ github.event.pull_request.body }}",
+      PR_DIFF_BASE: "HEAD^1",
     });
+    type Checkout = { uses?: string; with?: Record<string, unknown> };
+    const checkout = (ci.jobs.verify.steps as Checkout[]).find((s) => s.uses?.startsWith("actions/checkout@"));
+    expect(checkout?.with?.["fetch-depth"], "verify fetches the merge commit's base parent").toBe(2);
   });
 });
 
