@@ -30,8 +30,12 @@ export type PayoutHoldPolicy = {
   holdDays: number;
 };
 
-/** What the database uses when the settings row is missing — today's rule. */
-export const DEFAULT_PAYOUT_HOLD: PayoutHoldPolicy = { mode: "fixed", holdDays: 7 };
+/**
+ * What a missing settings row means, here and in the SQL: the owner's rule,
+ * a fixed 2 days after delivery (Neil, 4 October 2026, set on the row by
+ * 20261009100000; the fallbacks followed on 7 November 2026, 20261107220900).
+ */
+export const DEFAULT_PAYOUT_HOLD: PayoutHoldPolicy = { mode: "fixed", holdDays: 2 };
 
 const DAY_MS = 86_400_000;
 

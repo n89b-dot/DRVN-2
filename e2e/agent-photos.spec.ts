@@ -12,8 +12,8 @@ const PIXEL = Buffer.from(
 
 /**
  * A3d's photo jobs. With the jobs step open a member can add photos to a
- * message: uploaded as their own (re-encoded), stored on their message, sent
- * with it. CI has no model, so the agent's photo drafts are stored as the
+ * message: uploaded privately (re-encoded, R81), stored on their message,
+ * and sent to the model only for the photo job they choose (R-photos). CI has no model, so the agent's photo drafts are stored as the
  * chat action stores them (agent_chat_append, as the server); the test opens
  * each card: "Listing from photos" fills in the sell form (title, brand,
  * part number, the photo; never a price), "Post an update" fills in the
@@ -44,11 +44,14 @@ test("photos go with a message, and the agent's photo drafts open the real pages
     const modId = randomUUID();
     await admin.from("mod_items").insert({ id: modId, car_id: carId, group_label: "Performance", brand: "Garrett", product: "G25-660 turbo", category: "turbo", raw_text: "Garrett G25-660 turbo", position: 0, status: "installed" }).throwOnError();
 
-    // A photo of the member's own, as the chat's upload leaves it.
-    const path = `${memberId}/${randomUUID()}.png`;
-    const upload = await admin.storage.from("listing-images").upload(path, PIXEL, { contentType: "image/png" });
+    // A photo of the member's own, as the chat's upload leaves it: in the
+    // private chat bucket, named by its Storage "authenticated" address (R81).
+    const path = `${memberId}/${randomUUID()}.webp`;
+    const upload = await admin.storage.from("agent-chat-photos").upload(path, PIXEL, { contentType: "image/webp" });
     if (upload.error) throw upload.error;
-    const photoUrl = admin.storage.from("listing-images").getPublicUrl(path).data.publicUrl;
+    const photoUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL!.replace(/\/+$/, "")}/storage/v1/object/authenticated/agent-chat-photos/${path}`;
+    // Nobody signed out can read it.
+    expect((await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/agent-chat-photos/${path}`)).ok).toBe(false);
     const listingDraft = randomUUID();
     const updateDraft = randomUUID();
     await db.query("select public.agent_chat_append($1, 'agent', 'Here''s a start on the listing.', $2::jsonb)", [
@@ -66,24 +69,29 @@ test("photos go with a message, and the agent's photo drafts open the real pages
     await page.getByRole("button", { name: /log in|sign in/i }).click();
     await page.waitForURL(/\/home/);
 
-    // A photo goes with the message, stored on it as the member's own.
+    // A photo goes with the message, stored on it as the member's own
+    // private chat photo — only once the member says which job it's for.
     await page.goto("/agent");
     const chat = page.getByRole("region", { name: "Chat with your agent" });
     await chat.locator('input[type="file"]').setInputFiles({ name: "part.png", mimeType: "image/png", buffer: PIXEL });
     await expect(chat.locator(".chatbox__thumb img")).toHaveCSS("opacity", "1");
     await chat.getByLabel("Message your agent").fill("What is this?");
     await chat.getByRole("button", { name: /send/i }).click();
+    await expect(chat.getByText("Choose what the photos are for: a listing or an update.")).toBeVisible();
+    await chat.getByRole("group", { name: "What are these photos for?" }).getByRole("button", { name: "List this part" }).click();
+    await chat.getByRole("button", { name: /send/i }).click();
     await expect(chat.getByText(/Chat isn't switched on here yet|can't reach the model/)).toBeVisible();
     const sent = await db.query<{ images: string[] }>("select images from public.agent_messages where owner_id = $1 and role = 'member'", [memberId]);
     expect(sent.rows[0].images).toHaveLength(1);
-    expect(sent.rows[0].images[0]).toContain(`/listing-images/${memberId}/`);
+    expect(sent.rows[0].images[0]).toContain(`/object/authenticated/agent-chat-photos/${memberId}/`);
 
-    // Listing from photos: the sell form, filled in; no price.
+    // Listing from photos: the sell form, filled in, with the listing's own
+    // public copy of the chat photo; no price.
     await chat.getByRole("link", { name: /Garrett G25-660 turbo/ }).first().click();
     await page.waitForURL(new RegExp(`/sell\\?agent=${listingDraft}`));
     await expect(page.locator("#main").getByLabel("Title")).toHaveValue("Garrett G25-660 turbo");
     await expect(page.locator("#main").getByLabel(/^Brand/)).toHaveValue("Garrett");
-    await expect(page.locator(`#main img[src*="${path.split("/")[1]}"]`).first()).toBeAttached();
+    await expect(page.locator(`#main img[src*="chat-${path.split("/")[1]}"]`).first()).toBeAttached();
     await expect(page.locator("#main").getByLabel("Asking price")).toHaveValue("");
 
     // Post an update: the composer, filled in; nothing published.

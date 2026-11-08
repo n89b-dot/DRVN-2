@@ -17,7 +17,8 @@ export const dynamic = "force-dynamic";
  *
  * With no email provider configured (R-email: none chosen yet) digests are
  * still admitted and recorded in saved_search_email_digests; nothing is sent,
- * the log says so, and a digest not sent on its day expires.
+ * the log says so, and a digest not sent on its day is carried into the next
+ * day's window.
  */
 async function run() {
   const admin = createAdminClient();

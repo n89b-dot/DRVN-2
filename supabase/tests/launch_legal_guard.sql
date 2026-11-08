@@ -49,6 +49,9 @@ begin
     values (gen_random_uuid(), v_admin, 'guard', 'totp', 'verified', now(), now());
   insert into public.admin_users (user_id, role, mfa_factor_id)
     select v_admin, 'admin', id from auth.mfa_factors where user_id = v_admin;
+  -- …and a session signed in with that factor (20261107200550).
+  insert into auth.sessions (id, user_id, factor_id, aal, created_at, updated_at)
+    select f.user_id, f.user_id, f.id, 'aal2', now(), now() from auth.mfa_factors f where f.user_id = v_admin;
 
   -- ------------------------------------------------------------------
   -- 1. Age confirmation
@@ -153,7 +156,7 @@ begin
 
   -- An admin without a fresh step-up: refused.
   perform set_config('role', 'authenticated', true);
-  perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated', 'aal', 'aal2',
+  perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated', 'aal', 'aal2', 'session_id', v_admin,
     'amr', json_build_array(json_build_object('method', 'totp', 'timestamp', extract(epoch from now() - interval '1 hour')::bigint)))::text, true);
   v_failed := false;
   begin
@@ -163,7 +166,7 @@ begin
   if not v_failed then raise exception 'A stale admin session took content down'; end if;
 
   -- An admin with a fresh step-up.
-  v_claims := json_build_object('sub', v_admin, 'role', 'authenticated', 'aal', 'aal2',
+  v_claims := json_build_object('sub', v_admin, 'role', 'authenticated', 'aal', 'aal2', 'session_id', v_admin,
     'amr', json_build_array(json_build_object('method', 'totp', 'timestamp', extract(epoch from now())::bigint)))::text;
   perform set_config('request.jwt.claims', v_claims, true);
   v_result := public.copyright_takedown(v_notice, array[v_listing], '{}', 'Rights holder notice');

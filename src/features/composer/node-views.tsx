@@ -10,6 +10,7 @@ import { useUploadQueue } from "@/lib/use-upload-queue";
 import { cx } from "@/lib/format";
 
 import type { ComposerContext } from "./extensions";
+import { modBlockSellHref } from "./sell-link";
 
 /**
  * React node views for the composer's block set. Every block sits in the
@@ -218,6 +219,7 @@ export function ModChangeView(props: NodeViewProps) {
     label: string;
     detail: string | null;
   };
+  const sellHref = modBlockSellHref(action, modItemId, ctx(props).carId);
 
   return (
     <BlockShell props={props} label="modification">
@@ -277,14 +279,12 @@ export function ModChangeView(props: NodeViewProps) {
           />
         </label>
       </div>
-      {(action === "removed" || action === "replaced") && modItemId && (
+      {sellHref && (
         // The Build → Marketplace bridge (brief §I): everything DRVN knows
         // about this part prefills the listing. Quiet link, never a prompt.
-        // "Replaced" earns it as much as "removed" (A-3) — a replaced part is
-        // exactly the one sitting in a box waiting to be sold.
         <a
           className="jumplink mt-2 inline-block"
-          href={`/sell?car=${ctx(props).carId}&mod=${modItemId}`}
+          href={sellHref}
           target="_blank"
           rel="noreferrer"
         >

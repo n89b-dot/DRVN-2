@@ -5,6 +5,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { TurnCard } from "@/lib/ai/run";
 import type { Database } from "@/lib/database.types";
 
+import { signChatPhotos } from "@/lib/agent/chat-photos";
+import { createAdminClient } from "@/lib/supabase/admin";
+
 import { resolveCards } from "./cards";
 import type { ChatMessage } from "./chat";
 
@@ -21,12 +24,14 @@ export async function loadChat(supabase: SupabaseClient<Database>, ownerId: stri
     .order("created_at", { ascending: false })
     .limit(50);
   const cards = await resolveCards(supabase, (rows ?? []).flatMap((row) => (row.cards ?? []) as TurnCard[]));
+  // R81: private chat photos are shown through short-lived signed links.
+  const signed = await signChatPhotos(createAdminClient(), (rows ?? []).flatMap((row) => row.images ?? []));
   return [...(rows ?? [])].reverse().map((row) => ({
     id: row.id,
     role: row.role as ChatMessage["role"],
     body: row.body,
     cards: ((row.cards ?? []) as TurnCard[]).flatMap((card) => (cards.has(card.id) ? [cards.get(card.id)!] : [])),
-    images: row.images ?? [],
+    images: (row.images ?? []).flatMap((url) => (signed.has(url) ? [signed.get(url)!] : [])),
     created_at: row.created_at,
   }));
 }

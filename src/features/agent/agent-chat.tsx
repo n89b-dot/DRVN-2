@@ -14,6 +14,7 @@ import type { ChatAbout } from "./chat-load";
 import { mergeMessages, waitForReply } from "./reply-wait";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { uploadImages } from "@/lib/media-upload";
+import type { PhotoJob } from "@/lib/agent/photo-job";
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 
@@ -25,6 +26,9 @@ const REPLY_WAIT_MS = 150_000;
 /** A3d's jobs, once their step is open. */
 const JOB_STARTERS = ["Paste my build", "List the parts that came off", "List this part from my photos", "Post an update"];
 const MAX_PHOTOS = 4;
+/** R-photos: photos go to the model only for one of these jobs, chosen here. */
+const PHOTO_JOB_STARTERS: Record<string, PhotoJob> = { "List this part from my photos": "listing", "Post an update": "update" };
+const PHOTO_JOB_LABEL: Record<PhotoJob, string> = { listing: "List this part", update: "Post an update" };
 function startersFor(about: ChatAbout | null, jobs: boolean): string[] {
   if (!about) return jobs ? [...STARTERS.slice(0, 3), ...JOB_STARTERS, ...STARTERS.slice(3)] : STARTERS;
   if (about.kind === "car") return ["Update my build", "Find parts for my car", "What's on this car?"];
@@ -90,6 +94,10 @@ export function AgentChat({
     photosRef.current = photos;
   }, [photos]);
   useEffect(() => () => photosRef.current.forEach((photo) => URL.revokeObjectURL(photo.preview)), []);
+  // R-photos: which photo job the attached photos are for. Chosen by the
+  // job's starter or the choice above the composer; without one, photos
+  // can't be sent.
+  const [photoJob, setPhotoJob] = useState<PhotoJob | null>(null);
   const uploading = photos.some((photo) => !photo.url && !photo.error);
   const ready = photos.flatMap((photo) => (photo.url ? [photo.url] : []));
 
@@ -101,7 +109,8 @@ export function AgentChat({
     const staged = chosen.map((file) => ({ id: crypto.randomUUID(), preview: URL.createObjectURL(file), url: null }));
     setPhotos((current) => [...current, ...staged]);
     setError(files.length > chosen.length ? `Up to ${MAX_PHOTOS} photos per message — the rest were left out.` : null);
-    const { uploaded, failed } = await uploadImages({ files: chosen, bucket: "listing-images", pathPrefix: userId, normalize: true });
+    // R81: chat photos are private, never a public listing photo.
+    const { uploaded, failed } = await uploadImages({ files: chosen, bucket: "agent-chat-photos", pathPrefix: userId, normalize: true });
     setPhotos((current) =>
       current.map((photo) => {
         const index = staged.findIndex((s) => s.id === photo.id);
@@ -164,9 +173,13 @@ export function AgentChat({
   function send() {
     const text = draft.trim();
     if ((!text && !ready.length) || pending || uploading) return;
+    if (ready.length && !photoJob) {
+      setError("Choose what the photos are for: a listing or an update.");
+      return;
+    }
     setError(null);
     setCleared(null);
-    const key = JSON.stringify([text, ready]);
+    const key = JSON.stringify([text, ready, ready.length ? photoJob : null]);
     if (attempt.current?.key !== key) attempt.current = { key, id: crypto.randomUUID() };
     const requestId = attempt.current.id;
     const sentIn = generation.current;
@@ -178,7 +191,7 @@ export function AgentChat({
     };
     startTransition(async () => {
       try {
-        const first = await sendAgentMessage({ text, about: context ? { kind: context.kind, id: context.id } : undefined, images: ready, requestId });
+        const first = await sendAgentMessage({ text, about: context ? { kind: context.kind, id: context.id } : undefined, images: ready, photoJob: ready.length ? (photoJob ?? undefined) : undefined, requestId });
         // Cleared while it ran: nothing from the old conversation comes back.
         if (!current() || first.cleared) return;
         // Only a pending send waits; an answered one is shown straight away.
@@ -200,6 +213,7 @@ export function AgentChat({
           setDraft("");
           photos.forEach((photo) => URL.revokeObjectURL(photo.preview));
           setPhotos([]);
+          setPhotoJob(null);
         }
       } catch (caught) {
         unstable_rethrow(caught);
@@ -282,7 +296,13 @@ export function AgentChat({
 
       <div className="agentchat__starters mt-4 flex flex-wrap gap-2" role="group" aria-label="Starters">
         {startersFor(context, jobs).map((starter) => (
-          <FilterButton key={starter} onClick={() => setDraft(starter)}>
+          <FilterButton
+            key={starter}
+            onClick={() => {
+              setDraft(starter);
+              if (PHOTO_JOB_STARTERS[starter]) setPhotoJob(PHOTO_JOB_STARTERS[starter]);
+            }}
+          >
             {starter}
           </FilterButton>
         ))}
@@ -311,6 +331,16 @@ export function AgentChat({
                   <Button variant="quiet" onClick={() => setContext(null)} aria-label={`Stop asking about ${context.label}`}>
                     ✕
                   </Button>
+                </div>
+              )}
+              {photos.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2" role="group" aria-label="What are these photos for?">
+                  <span className="text-micro text-dim">Photos for:</span>
+                  {(Object.keys(PHOTO_JOB_LABEL) as PhotoJob[]).map((job) => (
+                    <FilterButton key={job} pressed={photoJob === job} onClick={() => setPhotoJob(job)}>
+                      {PHOTO_JOB_LABEL[job]}
+                    </FilterButton>
+                  ))}
                 </div>
               )}
               {photos.length > 0 && (

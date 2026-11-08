@@ -7,6 +7,7 @@ import type { PaymentProvider, PaymentRequest, PaymentResult, RefundOptions, Ref
 import { reportError } from "@/lib/monitoring";
 import { chargeWithinBounds } from "./charge-bounds";
 import { readSettlementRisk } from "./payout-hold";
+import { PAYOUTS_NOT_READY_CODE } from "./payout-readiness";
 import { STRIPE_API_VERSION } from "./stripe-api-version";
 
 /**
@@ -99,6 +100,9 @@ export function provablyNotCreated(error: unknown): error is Stripe.errors.Strip
   );
 }
 
+/** The buyer-facing half of "Payment failed: …" when the seller can't be paid. */
+export const SELLER_PAYOUTS_OFF_REASON = "the seller can't take payment yet (their payouts aren't set up). Nothing was charged";
+
 /** The buyer-facing half of "Payment failed: …" for a refused create. */
 export function rejectionReason(error: Stripe.errors.StripeInvalidRequestError): string {
   return error.code === "amount_too_small" || error.code === "amount_too_large"
@@ -123,6 +127,10 @@ export class StripePaymentProvider implements PaymentProvider {
       const operationKey = `checkout:${createHash("sha256").update(orderIds.join(",")).digest("hex")}`;
       const immutable = { orderIds, buyerId: request.buyerId, sellerId: request.sellerId, totalCents: request.totalCents, currency: request.currency.toLowerCase(), customerId: request.customerId ?? null };
       const { data, error } = await admin.rpc("prepare_payment_request", { p_key: operationKey, p_request: immutable as Json });
+      // The database refuses a NEW payment for a seller whose payouts are off
+      // (20261107210050): nothing was persisted and Stripe was never called,
+      // so this is a refusal, not an unknown outcome.
+      if (error?.code === PAYOUTS_NOT_READY_CODE) return { status: "failed", reason: SELLER_PAYOUTS_OFF_REASON };
       if (error || !data) throw new Error("Payment attempt could not be persisted");
       const saved = data as { correlation_id: string; reference: string | null; created_at: string; rejected?: boolean };
       // Stripe already refused this exact request; its orders were released.

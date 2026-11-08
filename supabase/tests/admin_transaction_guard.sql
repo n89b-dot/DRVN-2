@@ -9,8 +9,10 @@ begin
  -- A confirmed authenticator (20261107200500): without one no admin privilege.
  insert into auth.mfa_factors(id, user_id, friendly_name, factor_type, status, created_at, updated_at) values (gen_random_uuid(), actor, 'guard', 'totp', 'verified', now(), now());
  insert into public.admin_users(user_id, mfa_factor_id) select actor, id from auth.mfa_factors where user_id = actor;
+ -- Its session was raised to AAL2 with that factor (20261107200550); the claims carry it.
+ insert into auth.sessions(id, user_id, factor_id, aal, created_at, updated_at) select f.user_id, f.user_id, f.id, 'aal2', now(), now() from auth.mfa_factors f where f.user_id = actor;
  perform set_config('role','authenticated',true);
- perform set_config('request.jwt.claims',json_build_object('sub',actor,'role','authenticated','aal','aal2','amr',json_build_array(json_build_object('method','totp','timestamp',extract(epoch from now())::bigint)))::text,true);
+ perform set_config('request.jwt.claims',json_build_object('sub',actor,'role','authenticated','aal','aal2','session_id',actor,'amr',json_build_array(json_build_object('method','totp','timestamp',extract(epoch from now())::bigint)))::text,true);
  begin
   perform public.execute_admin_command('user.suspend',subject,'injected audit outage');
   raise exception 'Audit outage incorrectly succeeded';
