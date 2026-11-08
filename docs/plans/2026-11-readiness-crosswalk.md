@@ -75,7 +75,7 @@ Notes:
 
 ## Social
 
-Proof PR: opened from `cloud/os-proof-sweep-social`.
+Proof PR: #99, from `cloud/os-proof-sweep-social`.
 
 | Item | Title | Status | Plan id / batch | PR / commit | Proving test (file › test name) |
 |---|---|---|---|---|---|
