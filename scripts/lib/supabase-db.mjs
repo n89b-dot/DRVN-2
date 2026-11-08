@@ -67,6 +67,21 @@ export function loadTargets(file = TARGETS_PATH) {
 }
 
 /**
+ * Files allowed to run risky SQL (truncate or drop a table, dynamic SQL the
+ * text doesn't show to be safe) on a populated database: `{ <file name>:
+ * { sha256, reason } }`. An entry covers only those exact bytes.
+ */
+export function loadDynamicSqlAllowed(file = TARGETS_PATH) {
+  const allowed = JSON.parse(readFileSync(file, "utf8"))?.dynamicSqlAllowed ?? {};
+  for (const [name, entry] of Object.entries(allowed)) {
+    if (!/^[0-9a-f]{64}$/.test(entry?.sha256 ?? "") || !entry?.reason) {
+      throw new Error(`${file}: dynamicSqlAllowed.${name} needs a sha256 and a reason`);
+    }
+  }
+  return allowed;
+}
+
+/**
  * The named target, only when it is on the allow-list AND is the project the
  * env file points at. Naming the target is the operator's explicit choice;
  * the env file alone never decides where a script writes.

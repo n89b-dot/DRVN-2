@@ -1697,21 +1697,40 @@ that runner (OS-W10, readiness N131 and N246):
   The dry run doesn't execute the SQL: to rehearse what a file does, run it
   against a copy.
 - **History in the same transaction.** Each file runs inside one transaction
-  the runner opens (a file's own outer `begin;`/`commit;` is removed; a file
-  with any other transaction control, `CONCURRENTLY` or `VACUUM` is refused),
+  the runner opens. Statements are found with a PostgreSQL-aware lexer
+  (`scripts/lib/sql-statements.mjs`: strings, quoted identifiers, nested
+  comments, dollar quotes), so a file's own outer `begin;`/`commit;` (or
+  `end;`) is removed, and any other top-level `COMMIT`, `END`, `ROLLBACK`,
+  `ABORT`, `BEGIN`, `START TRANSACTION`, `SAVEPOINT`, `RELEASE`,
+  `PREPARE TRANSACTION` or `COMMIT/ROLLBACK PREPARED` refuses the file, as do
+  `CONCURRENTLY`, `VACUUM` and `BEGIN ATOMIC`,
   under an advisory lock, and its row goes into
   `supabase_migrations.schema_migrations` (version, name, the file's text) in
   that transaction. A failing file leaves neither its changes nor a row. The
   runner creates the history table (the CLI's shape) on first apply.
 - **No replay.** A version already in the history is skipped.
 - **No baseline on a populated database.** A file that is marked
-  `-- DESTRUCTIVE`, drops a schema, or drops/truncates tables it finds at run
-  time (0001) is refused when `public` has any table, both in the dry run and
-  again inside the apply transaction.
+  `-- DESTRUCTIVE` or drops a schema (0001) is refused when `public` has any
+  table, both in the dry run and again inside the apply transaction. Nothing
+  overrides this.
+- **Risky SQL needs an allow-list entry on a populated database.** A
+  top-level `TRUNCATE` or `DROP TABLE`, the same run directly inside a `DO`
+  block or a function the file creates and then calls, or dynamic SQL
+  (`EXECUTE` there) that destroys data or can't be classified from its
+  leading literal, is risky. Bodies are read in any quoting (dollar quotes,
+  `'…'` with doubled quotes, `E'…'` escapes, nested `DO`s), and a body that
+  doesn't parse counts as risky; temporary tables the body creates are
+  exempt. A risky file is refused when `public` has tables unless `supabase/migration-targets.json` `dynamicSqlAllowed`
+  names the file, the sha256 of its exact bytes and a reason. The tree has one
+  entry, `20261011100000_listing_vehicle_fit.sql` (it empties and rebuilds a
+  derived table); a test fails if a risky file has no entry or an entry goes
+  stale.
 
 Several files can go in one run (they are sorted by name and each gets its own
-transaction; the run stops at the first failure). After anything is applied,
-PostgREST is told to reload its schema. `scripts/import-vehiclesdb.mjs` uses
+transaction; the run stops at the first failure). PostgREST is told to
+reload its schema after each committed file, so a later failure can't leave
+an applied file unannounced, and once on an apply run that finds everything
+already recorded. `scripts/import-vehiclesdb.mjs` uses
 the same target check and TLS.
 
 The SQL Editor in the dashboard is the alternative for a one-off, but it records

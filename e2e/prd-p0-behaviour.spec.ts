@@ -254,6 +254,8 @@ test("A-4 — List it saves the sheet, opens the sell form prefilled, keeps the 
   await expect(page.getByLabel("Brand")).toHaveValue("Tein");
   await expect(page.getByRole("combobox", { name: "Fitment 1 make" })).toHaveValue("Mazda");
   await expect(page.getByRole("combobox", { name: "Fitment 1 model" })).toHaveValue("RX-7");
+  await expect(page.getByRole("textbox", { name: "Fitment 1 first year" })).toHaveValue("1993");
+  await expect(page.getByRole("textbox", { name: "Fitment 1 last year" })).toHaveValue("1993");
 
   // Abandon the form: the part waits under Came off this car, with List it.
   await page.goto(editUrl);

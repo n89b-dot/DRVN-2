@@ -365,14 +365,31 @@ export function PurchaseActions({
         </Button>
         {/* Offer takes its own width and Buy takes the rest, so the
             visitor's "Sign in to buy" keeps its bracket furniture instead of
-            being squeezed to half the bar. */}
-        <Button
-          variant="ghost"
-          onClick={() => guard("offer", () => setOfferOpen(true))}
-          className="flex-none !px-5"
-        >
-          Offer
-        </Button>
+            being squeezed to half the bar. R-audit-buybar: one live offer per
+            part, here as on desktop — a buyer who already has one is taken
+            to it, never into a second offer. */}
+        {myOffer ? (
+          <ButtonLink
+            variant="ghost"
+            href={`/offers/${myOffer.id}`}
+            className="flex-none !px-5"
+            aria-label={
+              myOffer.counterCents
+                ? `Seller countered ${formatPrice(myOffer.counterCents)} — view offer`
+                : `You offered ${formatPrice(myOffer.amountCents)} — view offer`
+            }
+          >
+            {myOffer.counterCents ? "Countered" : "Your offer"}
+          </ButtonLink>
+        ) : (
+          <Button
+            variant="ghost"
+            onClick={() => guard("offer", () => setOfferOpen(true))}
+            className="flex-none !px-5"
+          >
+            Offer
+          </Button>
+        )}
       </div>
     </div>
   );

@@ -231,6 +231,13 @@ enable_confirmations = false
 # (Settings verifies the current password; /login/reset needs a reset-link
 # session under an hour old). Set the same in the hosted dashboard:
 # Authentication -> Providers -> Email -> "Secure password change".
+# This alone does NOT stop a stolen session under 24 hours old from calling
+# Auth's updateUser({ password }) directly. Auth's
+# GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD does (current
+# password required unless the session came from an emailed link), and the
+# app already sends current_password from Settings. CLI 2.116.0 (the CI pin)
+# has no config.toml key for it, so it is off locally; turn it on in the
+# hosted project (docs/production-runbook.md section 1, step 4).
 secure_password_change = true
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
 max_frequency = "1s"
