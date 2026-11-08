@@ -12,6 +12,7 @@ import type { z } from "zod";
 import type { draftBuildList, draftCarUpdate, draftListingFromPhotos, findPartsToList, proposeBuildChange } from "@/lib/capabilities/build";
 import type { browseMarketplace } from "@/lib/capabilities/reads";
 import { JOB_TOOLS, modelToolsFor } from "@/lib/capabilities/registry";
+import { photoToolAllowed, type PhotoJob } from "@/lib/agent/photo-job";
 import { CapabilityError, invokeCapability, type MemberClient } from "@/lib/capabilities/types";
 import { reportError } from "@/lib/monitoring";
 
@@ -277,6 +278,9 @@ export async function runAgentTurn(options: {
   halted?: (ownerId: string) => Promise<boolean>;
   /** The jobs step is open (A3d): its tools join the model's. */
   jobs?: boolean;
+  /** R-photos: the photo job this message is, if any. Only then are `images`
+   *  sent, and then only that job's photo tool is offered. */
+  photoJob?: PhotoJob;
   /** The member's photos on this message (A3d), already loaded: sent with it, and the only photos a draft may use. */
   images?: TurnImage[];
   /** The caller's own deadline (epoch ms), when it is sooner than TURN_TIMEOUT_MS from now. */
@@ -341,8 +345,11 @@ export async function runAgentTurn(options: {
   const budgetUsd = TURN_CAP_USD;
   const roundFits = () => spentUsd + unresolvedUsd + roundCeilingUsd(config.model, nextInputBound) <= budgetUsd;
 
+  // R-photos: no photo job, no photos — whatever a caller passed.
+  const turnImages = options.photoJob ? (options.images ?? []) : [];
   const tools = modelToolsFor(options.context.scope)
     .filter((capability) => options.jobs || !JOB_TOOLS.has(capability.name))
+    .filter((capability) => photoToolAllowed(capability.name, options.photoJob))
     .map((capability) =>
     betaZodTool({
       name: capability.name,
@@ -362,7 +369,7 @@ export async function runAgentTurn(options: {
           }
           try {
             const result = await Promise.race([
-              invokeCapability(capability, { context: options.context, supabase: options.supabase, attachments: (options.images ?? []).map((image) => image.url), signal: controller.signal }, args),
+              invokeCapability(capability, { context: options.context, supabase: options.supabase, attachments: turnImages.map((image) => image.url), signal: controller.signal }, args),
               abortedPromise(),
             ]);
             toolCalls.push({ name: capability.name, ok: true });
@@ -422,11 +429,11 @@ export async function runAgentTurn(options: {
   // The first round's input, bounded from the request itself. Older history
   // goes first if even one round wouldn't fit.
   const system = agentSystemPrompt(options.context.scope, Boolean(options.jobs));
-  const current: Anthropic.Beta.BetaMessageParam = { role: "user", content: userContent(options.message, options.images) };
+  const current: Anthropic.Beta.BetaMessageParam = { role: "user", content: userContent(options.message, turnImages) };
   let history = redactHistory(options.history ?? []);
   const historyBytes = history.map((entry) => bytes(withoutImageData([entry])));
   nextInputBound =
-    bytes(system) + bytes(tools) + bytes(withoutImageData([current])) + (options.images?.length ?? 0) * IMAGE_TOKEN_CEILING + historyBytes.reduce((sum, n) => sum + n, 0);
+    bytes(system) + bytes(tools) + bytes(withoutImageData([current])) + turnImages.length * IMAGE_TOKEN_CEILING + historyBytes.reduce((sum, n) => sum + n, 0);
   let dropped = 0;
   while (!roundFits() && dropped < history.length) {
     // Oldest first, and never leave the history opening on the agent's turn.

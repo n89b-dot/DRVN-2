@@ -6418,6 +6418,12 @@ export type Database = {
       }
       agent_chat_card_ok: { Args: { p_card: Json }; Returns: boolean }
       agent_chat_message_json: { Args: { p_id: string }; Returns: Json }
+      agent_chat_photos_expired: {
+        Args: { p_limit?: number; p_older_than?: string }
+        Returns: {
+          name: string
+        }[]
+      }
       agent_chat_turn_begin: {
         Args: {
           p_body: string
