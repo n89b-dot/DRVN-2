@@ -84,17 +84,18 @@ every table in `public`.
    `SUPABASE_DB_PASSWORD=<staging password>`. The runner reads `.env.local`
    from the current directory — doing this in your normal checkout would
    target the dev project.
-2. Apply every migration in order, stopping on the first failure:
+2. Dry-run, then apply every migration in order (the run stops on the first
+   failure; `staging` is in `supabase/migration-targets.json`):
    ```bash
-   for f in supabase/migrations/*.sql; do
-     echo "== $f"; node scripts/apply-migration.mjs "$f" || break
-   done
+   node scripts/apply-migration.mjs --target staging supabase/migrations/*.sql
+   node scripts/apply-migration.mjs --target staging --apply --confirm <code from the dry run> supabase/migrations/*.sql
    ```
    Do **not** apply `supabase/tests/ci_shim.sql` — it is CI-only and rewrites
-   auth helpers.
-3. Seed the CLI migration history from the same files —
-   `docs/production-runbook.md` §3 has the generator. Re-run it after every
-   later migration.
+   auth helpers (the runner only takes files from `supabase/migrations/`).
+3. The runner records each file in the CLI migration history as it applies
+   it. Staging's first 229 files went in before it did, and their history was
+   seeded by hand (`docs/production-runbook.md` §3); later files are recorded
+   by the runner.
 4. Verify in the SQL editor:
    - `select extname from pg_extension where extname in ('pg_cron','pg_net');`
      → both. (0020 swallows a pg_net install failure with a NOTICE; if it is

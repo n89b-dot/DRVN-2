@@ -46,27 +46,31 @@ baselined migration history, rehearsed restore.
 
 On a **fresh, empty** project the whole migration tree applies cleanly in
 filename order. 0001 drops every table in `public` — it is only safe on an
-empty database. **Never replay the tree (or 0001) against a project that
-already has a schema**; for an existing project apply only the reviewed,
-unapplied files, as recorded in `supabase/MIGRATIONS.md`.
+empty database, and the runner refuses it on a database that has any table in
+`public`. For an existing project apply only the reviewed, unapplied files, as
+recorded in `supabase/MIGRATIONS.md`.
 
-`scripts/apply-migration.mjs` is the committed runner: it reads
-`SUPABASE_DB_PASSWORD` and `NEXT_PUBLIC_SUPABASE_URL` from `.env.local`,
-connects directly to `db.<ref>.supabase.co:5432` (IPv6 unless the project has
-the IPv4 add-on), runs one file and notifies PostgREST to reload its schema.
-Point `.env.local` at the target project first, then:
+`scripts/apply-migration.mjs` is the committed runner (details in
+`supabase/MIGRATIONS.md`, "Applying without Docker or psql"). It reads
+`SUPABASE_DB_PASSWORD` and `NEXT_PUBLIC_SUPABASE_URL` from `.env.local` (or
+`--env-file`), connects directly to `db.<ref>.supabase.co:5432` (IPv6 unless
+the project has the IPv4 add-on) over TLS verified against Supabase's root CA,
+and only to a `--target` that is listed in `supabase/migration-targets.json`
+and matches the env file. **Add the production project to that file in a
+reviewed PR before its first migration.** Then, from the repo root:
 
 ```bash
-# from the repo root, against a FRESH project only
-for f in supabase/migrations/*.sql; do
-  echo "== $f"
-  node scripts/apply-migration.mjs "$f" || break
-done
+# 1. dry run: checks the target, prints each file's plan and a confirmation code
+node scripts/apply-migration.mjs --target production supabase/migrations/*.sql
+# 2. read the plan, then apply exactly those files
+node scripts/apply-migration.mjs --target production --apply --confirm <code> supabase/migrations/*.sql
 ```
 
-Each file is a transaction with its own self-checks; a failing self-check
-raises and the loop stops. The dashboard SQL editor is the alternative.
-`supabase db push` is not used (see §3 for why history is seeded instead).
+Each file runs in one transaction with its row in
+`supabase_migrations.schema_migrations`; a failing self-check raises, rolls
+back that file (and its row) and stops the run. Rerunning the same command
+skips what is recorded. The dashboard SQL editor is the alternative, but
+records no history. `supabase db push` is not used.
 
 Then verify:
 
@@ -85,11 +89,14 @@ Then verify:
 
 ## 3. Seed the migration history
 
-So the Supabase CLI recognises what has been applied (and never tries to run
-0001), record every applied file in `supabase_migrations.schema_migrations`.
-The version is the filename up to the first underscore (`0001`, …,
-`20261004150000`); the name is the rest. Generate the statement from the
-files actually applied rather than maintaining a list by hand:
+The runner records every file it applies in
+`supabase_migrations.schema_migrations` (version = the filename up to the
+first underscore, `0001`, …, `20261004150000`; name = the rest), so a project
+built with it needs no seeding. Only a project whose files were applied some
+other way (the SQL editor, or the runner before OS-W10) has gaps: shared dev
+records 16 files (0001–0011 and five from 13 September) and staging was seeded
+with 229 by hand. To fill gaps there, generate the statement from the files
+actually applied rather than maintaining a list by hand:
 
 ```bash
 {
@@ -103,11 +110,11 @@ files actually applied rather than maintaining a list by hand:
 } > /tmp/drvn-migration-history.sql
 ```
 
-Review the file, then run it in the SQL editor (or with
-`node scripts/apply-migration.mjs /tmp/drvn-migration-history.sql`). Re-run
-it after each later migration lands; `on conflict do nothing` makes it
-idempotent. Keep `supabase/MIGRATIONS.md` as the human record of what was
-applied where and when.
+Edit it down to the files that really are applied (probe the objects; never
+infer from the file list), review it, then run it in the SQL editor. The
+runner only runs files from `supabase/migrations/`, so it won't run this one.
+`on conflict do nothing` makes it safe to repeat. Keep `supabase/MIGRATIONS.md`
+as the human record of what was applied where and when.
 
 ## 4. Wire the app
 

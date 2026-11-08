@@ -1,5 +1,22 @@
 # Applying migrations
 
+**The runner** (OS-W10): `scripts/apply-migration.mjs`. A run is a dry run
+unless it says `--apply` with the code that dry run printed:
+
+```bash
+node scripts/apply-migration.mjs --target shared-dev supabase/migrations/<file>.sql
+node scripts/apply-migration.mjs --target shared-dev --apply --confirm <code> supabase/migrations/<file>.sql
+```
+
+`--target` names a project in `supabase/migration-targets.json` and must be
+the project `.env.local` (or `--env-file`) points at. The connection verifies
+the server's certificate against Supabase's root CA
+(`supabase/certs/supabase-root-2021-ca.crt`) and its hostname. Each file runs
+in one transaction with its row in `supabase_migrations.schema_migrations`; a
+recorded file is skipped, and a destructive baseline (0001) is refused on a
+database with any table in `public`. Details: "Applying without Docker or
+psql" below.
+
 ## November 7 — Settlement correctness and reconciliation, OS-W20 (not applied anywhere)
 
 | File | Applied to |
@@ -1571,34 +1588,51 @@ the record of how, and what to do for the next environment. For standing up a
 
 `supabase db dump` and `supabase db start` need Docker; `supabase db query`
 can't take a multi-statement file (it uses a prepared statement, which Postgres
-refuses for multiple commands). Neither was available here, so the files were
-applied over the direct IPv6 connection with `node-postgres`, which uses the
-simple query protocol and accepts whole scripts including `DO` blocks:
+refuses for multiple commands). So files are applied over the direct IPv6
+connection with `node-postgres`, which uses the simple query protocol and
+accepts whole scripts including `DO` blocks. `scripts/apply-migration.mjs` is
+that runner (OS-W10, readiness N131 and N246):
 
-```js
-// scratch runner — node apply.mjs <file.sql>
-import { readFileSync } from "node:fs";
-import { Client } from "pg";
-const client = new Client({
-  connectionString: process.env.DB_URL,       // postgresql://postgres:<pwd>@db.<ref>.supabase.co:5432/postgres
-  ssl: { rejectUnauthorized: false },
-});
-client.on("notice", (n) => console.log(n.message));  // migration assertions arrive as NOTICEs
-await client.connect();
-await client.query(readFileSync(process.argv[2], "utf8"));
-await client.end();
-```
+- **Target.** `--target <name>` is required, must be in
+  `supabase/migration-targets.json` (shared dev and staging today; production
+  is added by a reviewed PR), and must be the project the env file points at.
+  `.env.local` alone never decides where a migration goes.
+- **TLS.** The connection trusts only Supabase Root 2021 CA (shipped in
+  `supabase/certs/`, pinned by SHA-256 in `scripts/lib/supabase-db.mjs`) and
+  checks the hostname against the certificate. A certificate from anywhere
+  else, one for another host, or a server that won't do TLS fails the
+  connection. There is no switch to turn this off.
+- **Dry run first.** Without `--apply` the runner connects, reads in a
+  read-only transaction (who it is, Postgres version, TLS, how many tables
+  `public` has, the recorded history) and prints each file's plan (apply,
+  skip, refuse) and a confirmation code. `--apply --confirm <code>` only runs
+  when the code matches the same target and the same files byte for byte.
+  The dry run doesn't execute the SQL: to rehearse what a file does, run it
+  against a copy.
+- **History in the same transaction.** Each file runs inside one transaction
+  the runner opens (a file's own outer `begin;`/`commit;` is removed; a file
+  with any other transaction control, `CONCURRENTLY` or `VACUUM` is refused),
+  under an advisory lock, and its row goes into
+  `supabase_migrations.schema_migrations` (version, name, the file's text) in
+  that transaction. A failing file leaves neither its changes nor a row. The
+  runner creates the history table (the CLI's shape) on first apply.
+- **No replay.** A version already in the history is skipped.
+- **No baseline on a populated database.** A file that is marked
+  `-- DESTRUCTIVE`, drops a schema, or drops/truncates tables it finds at run
+  time (0001) is refused when `public` has any table, both in the dry run and
+  again inside the apply transaction.
 
-The SQL Editor in the dashboard does all of this without the plumbing — prefer
-it unless you're scripting.
+Several files can go in one run (they are sorted by name and each gets its own
+transaction; the run stops at the first failure). After anything is applied,
+PostgREST is told to reload its schema. `scripts/import-vehiclesdb.mjs` uses
+the same target check and TLS.
+
+The SQL Editor in the dashboard is the alternative for a one-off, but it records
+no history.
 
 **Do not use `supabase db push`.** 0001–0005 were applied by hand, so the CLI has
-no `supabase_migrations.schema_migrations` history and would try to run 0001 —
-which drops every table in `public`.
-
-**A wrapping transaction won't make a dry run safe.** Each file ends with its own
-`commit;`, so an outer `begin` is closed by the file itself and a following
-`rollback` does nothing. To rehearse a migration, run it against a copy.
+no complete `supabase_migrations.schema_migrations` history and would try to run
+0001, which drops every table in `public`.
 
 ## Order
 
