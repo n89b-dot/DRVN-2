@@ -14,6 +14,7 @@ import {
   readPayoutHoldPolicy,
   readPublicRiskControls,
 } from "@/lib/payments/payout-hold";
+import { deliveryLabel } from "@/lib/marketplace/delivery";
 import { paymentsAreLive } from "@/lib/payments/provider";
 import { createPublicClient } from "@/lib/supabase/public";
 
@@ -23,7 +24,7 @@ export const metadata = {
   alternates: { canonical: "/terms" },
 };
 
-const UPDATED = "18 October 2026";
+const UPDATED = "7 November 2026";
 
 /**
  * Plain-language terms covering what DRVN actually does today.
@@ -160,8 +161,11 @@ export default async function TermsPage() {
         <h2>5. Buying</h2>
         <p>
           Placing an order is a commitment to pay. Prices are in US dollars. The buyer pays the
-          asking price plus the seller&apos;s shipping, both shown before you pay — nothing is
-          added at checkout. Starting checkout holds the part for you for 15 minutes.
+          asking price plus shipping. When the seller sets the shipping, the listing shows it;
+          when the listing says &ldquo;{deliveryLabel({ shipping_mode: "drvn" })}&rdquo;, checkout
+          shows the rates once you&apos;ve entered your address. Either way you see the total
+          before you pay, and DRVN&apos;s fee is never added to it. Starting checkout holds the
+          part for you for 15 minutes.
         </p>
         <p>
           An offer is a promise you intend to keep, so only offer what you would pay. Offers lapse

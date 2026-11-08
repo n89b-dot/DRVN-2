@@ -181,5 +181,7 @@ The money model is documented where it's operated: `README.md` (the money
 model), `docs/production-runbook.md` (setup, reconciliation, recovery),
 `tests/stripe/README.md` (what the integration suite proves and what remains
 stub-covered). The webhook is the settlement authority; every refund is a
-`refund_operations` state machine row; transfers move on delivery + 7-day
-clearing via leased intents.
+`refund_operations` state machine row; transfers move via leased intents once
+delivery plus the clearing hold has passed: 2 days after delivery, or at once
+on a plausible buyer confirmation (an owner setting in
+`public.settlement_settings`; `docs/decisions/payout-hold.md`).

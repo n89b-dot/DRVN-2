@@ -52,6 +52,12 @@ describe("the pinned Stripe API version", () => {
     for (const version of named) expect(version).toBe(STRIPE_API_VERSION);
   });
 
+  it("is what the negative-balances owner script sends (N539)", () => {
+    const script = readFileSync(resolve(__dirname, "../../../scripts/owner/stripe-negative-balances.mjs"), "utf8");
+    expect(script).toContain('import { STRIPE_API_VERSION, checkKey } from "./stripe-webhooks.mjs";');
+    expect(script).toContain("new Stripe(key, { apiVersion: STRIPE_API_VERSION,");
+  });
+
   it("is written in the runbook's webhook instructions", () => {
     const runbook = readFileSync(resolve(__dirname, "../../../docs/production-runbook.md"), "utf8");
     expect(runbook).toContain(STRIPE_API_VERSION);
