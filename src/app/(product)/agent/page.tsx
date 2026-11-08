@@ -18,6 +18,8 @@ import { capture } from "@/lib/analytics";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
+import { agentStatusLine } from "./status-line";
+
 export const metadata = { title: "Agent - DRVN" };
 /** A chat turn may run up to TURN_TIMEOUT_MS (run.ts); the action that serves it gets twice that. */
 export const maxDuration = 180;
@@ -172,16 +174,7 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
   const handling = new Set((mandates ?? []).filter((m) => m.status === "active" && m.scope === "seller").map((m) => m.listing_id)).size;
   const buying = (mandates ?? []).filter((m) => m.status === "active" && m.scope === "buyer").length;
 
-  const status =
-    handling || buying || pending.length
-      ? [
-          handling ? `Handling offers on ${handling} listing${handling === 1 ? "" : "s"}` : null,
-          buying ? `Negotiating ${buying} part${buying === 1 ? "" : "s"} for you` : null,
-          pending.length ? `${pending.length} need${pending.length === 1 ? "s" : ""} you` : null,
-        ]
-          .filter(Boolean)
-          .join(" · ")
-      : "Nothing running yet";
+  const status = agentStatusLine({ handling, buying, needsYou: pending.length });
 
   const taskRow = (task: Task) => {
     const offer = task.offer_id ? offerById.get(task.offer_id) : undefined;
