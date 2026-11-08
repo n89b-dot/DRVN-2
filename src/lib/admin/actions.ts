@@ -23,7 +23,14 @@ import { scheduleMediaCleanup } from "@/lib/media-lifecycle";
 import { takedownTargets } from "@/lib/copyright/notice";
 import { copyrightHosts } from "@/lib/copyright/hosts";
 import type { ReportSubjectType } from "@/lib/database.types";
-import { closeSiblingReports, outcomeForResolution, reporterNotice, type ReporterOutcome } from "./report-outcome";
+import {
+  closeSiblingReports,
+  notifyReporters,
+  outcomeForResolution,
+  reporterNotice,
+  type ClosedReport,
+  type ReporterOutcome,
+} from "./report-outcome";
 
 /**
  * Admin mutations. Every action:
@@ -773,8 +780,11 @@ export async function adminRemoveReportedContent(
   }
   const isPost = report.subject_type === "post";
 
+  // Every report the takedown closed, kept out of the audit record (which
+  // gets the count) so it doesn't grow with the thread.
+  let closed: ClosedReport[] = [];
   try {
-    const { removed, replyIds } = await auditedAction(
+    const { removed } = await auditedAction(
       ctx.admin,
       {
         actorId: ctx.userId,
@@ -785,44 +795,25 @@ export async function adminRemoveReportedContent(
         metadata: { subjectType: report.subject_type, subjectId: report.subject_id },
       },
       async () => {
-        const snapshot = isPost
-          ? await ctx.admin
-              .from("activity_posts")
-              .select("id, author_id, car_id, title, intro, body, published_at")
-              .eq("id", report.subject_id)
-              .maybeSingle()
-          : await ctx.admin
-              .from("activity_comments")
-              .select("id, author_id, post_id, body, created_at")
-              .eq("id", report.subject_id)
-              .maybeSingle();
-        if (snapshot.error) throw new Error(snapshot.error.message);
-        const row = snapshot.data as { author_id: string; title?: string | null; body: unknown } | null;
-        if (!row) throw new Error(isPost ? "That post is already gone." : "That reply is already gone.");
-        // A post's replies go with it; their open reports are settled too (N140).
-        const { data: replies } = isPost
-          ? await ctx.admin.from("activity_comments").select("id").eq("post_id", report.subject_id)
-          : { data: [] as { id: string }[] };
-
-        const { error } = await ctx.admin
-          .from(isPost ? "activity_posts" : "activity_comments")
-          .delete()
-          .eq("id", report.subject_id);
+        // One transaction (20261108130100): every open report on the thing
+        // and, for a post, on all of its replies is closed through a join
+        // before the delete takes the replies with it. Listing the replies
+        // here first was capped at PostgREST's max_rows (1,000), which left
+        // reports on a big thread open and their reporters untold.
+        const { data, error } = await ctx.admin.rpc("take_down_reported_content", {
+          p_actor: ctx.userId,
+          p_report: reportId,
+          p_reason: reason,
+        });
         if (error) throw new Error(error.message);
-
-        await ctx.admin
-          .from("reports")
-          .update({
-            status: "actioned",
-            resolved_by: ctx.userId,
-            resolved_at: new Date().toISOString(),
-            resolution_note: `Removed: ${reason}`,
-          })
-          .eq("id", reportId)
-          .eq("status", "open");
+        const result = data as unknown as {
+          removed: { author_id: string };
+          replyCount: number;
+          closed: ClosedReport[];
+        };
 
         const { error: noteError } = await ctx.admin.from("notifications").insert({
-          user_id: row.author_id,
+          user_id: result.removed.author_id,
           kind: isPost ? "post_removed" : "comment_removed",
           section: "engagement",
           title: isPost ? "A post of yours was removed" : "A reply of yours was removed",
@@ -831,22 +822,20 @@ export async function adminRemoveReportedContent(
           actor_id: null,
         });
         if (noteError) reportError("[admin] removal notification failed", { reportId, noteError });
-        return { removed: row, replyIds: (replies ?? []).map((reply) => reply.id) };
+        closed = result.closed;
+        return { removed: result.removed, replyCount: result.replyCount, closedReports: result.closed.length };
       }
     );
     // Deleting the post queued its photos (20261107203000, N51); taken-down
     // content shouldn't stay reachable by link until the daily job.
     if (isPost) scheduleMediaCleanup(removed.author_id);
-    await notifyReporter(ctx.admin, reportId, "removed");
-    await settleSiblingReports(
-      ctx,
-      [
-        { type: report.subject_type, ids: [report.subject_id] },
-        { type: "comment", ids: replyIds },
-      ],
-      reportId,
-      `Removed: ${reason}`
-    );
+    // The report this ran from is told even if it had already been closed.
+    if (!closed.some((r) => r.id === reportId)) await notifyReporter(ctx.admin, reportId, "removed");
+    try {
+      await notifyReporters(ctx.admin, closed, "removed");
+    } catch (error) {
+      reportError("[admin] reporter notifications failed", { reportId, closed: closed.length, error });
+    }
     revalidatePath("/admin", "layout");
     revalidatePath("/home");
     revalidatePath("/explore");

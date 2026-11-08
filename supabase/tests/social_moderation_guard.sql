@@ -4,6 +4,11 @@
 --   N53   builds can be reported and hidden; the owner can't undo the hold
 --   N62   notification settings are readable only by their owner
 -- Migrations 20261107220000, 20261107220010, 20261107220020.
+-- Follow-up 20261108130100 (Codex on PR #95): listing saves are de-duplicated
+-- too (FAIL 23); a post takedown closes every reply's report, past 1,000
+-- replies, in one call (FAIL 24–28); the hold and evidence-count definitions
+-- take the locks the two-session checks in social_moderation_race_guard.sql
+-- prove (FAIL 29–30).
 begin;
 
 do $$
@@ -15,13 +20,21 @@ declare
   part uuid := gen_random_uuid();
   hidden_car uuid := gen_random_uuid();
   order_id uuid := gen_random_uuid();
+  admin_id uuid := gen_random_uuid();
+  reporter uuid := gen_random_uuid();
+  big_post uuid := gen_random_uuid();
+  post_report uuid;
+  stray_report uuid;
+  takedown jsonb;
   refused boolean;
   n int;
   quota_tables text[];
 begin
   insert into auth.users(id, email, raw_user_meta_data) values
     (member, 'w21-member@drvn.test', '{}'),
-    (seller, 'w21-seller@drvn.test', '{}');
+    (seller, 'w21-seller@drvn.test', '{}'),
+    (admin_id, 'w21-admin@drvn.test', '{}'),
+    (reporter, 'w21-reporter@drvn.test', '{}');
   insert into public.cars(id, owner_id, slug, name, is_public) values
     (car, seller, 'w21-car', 'W21 build', true),
     (hidden_car, seller, 'w21-hidden-car', 'W21 hidden build', true);
@@ -228,6 +241,83 @@ begin
     raise exception 'FAIL 22: a member can no longer save their notification settings';
   end if;
   perform set_config('role', 'none', true);
+
+  -- ---------- Follow-up: save, unsave, save a part notifies once a day ----------
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', member, 'role', 'authenticated')::text, true);
+  perform public.set_social_relationship('save', 'listing', part, true);
+  perform public.set_social_relationship('save', 'listing', part, false);
+  perform public.set_social_relationship('save', 'listing', part, true);
+  perform public.set_social_relationship('save', 'listing', part, false);
+  perform public.set_social_relationship('save', 'listing', part, true);
+  perform set_config('role', 'none', true);
+  select count(*) into n from public.notifications where user_id = seller and actor_id = member and kind = 'listing_save';
+  if n <> 1 then raise exception 'FAIL 23: re-saving a part sent % listing_save notifications, not 1', n; end if;
+
+  -- ---------- Follow-up: a post takedown closes every reply's report ----------
+  -- 1,001 replies, each reported, plus a report on the post: more than one
+  -- PostgREST read (max_rows = 1000) returns. Trusted inserts, no quota.
+  perform set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
+  insert into public.admin_users(user_id, role, note) values (admin_id, 'admin', 'w21 follow-up guard');
+  insert into public.activity_posts(id, car_id, author_id, title, body, published_at)
+    values (big_post, car, seller, 'W21 big thread', '{"type":"doc","content":[]}', now());
+  insert into public.activity_comments(post_id, author_id, body)
+    select big_post, member, 'big reply ' || g from generate_series(1, 1001) g;
+  insert into public.reports(reporter_id, subject_type, subject_id, reason)
+    select reporter, 'comment', c.id, 'spam' from public.activity_comments c where c.post_id = big_post;
+  insert into public.reports(reporter_id, subject_type, subject_id, reason)
+    values (reporter, 'post', big_post, 'spam') returning id into post_report;
+  -- A report on a reply elsewhere must stay open.
+  insert into public.reports(reporter_id, subject_type, subject_id, reason)
+    select reporter, 'comment', c.id, 'spam' from public.activity_comments c where c.post_id = post limit 1
+    returning id into stray_report;
+
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', admin_id, 'role', 'authenticated')::text, true);
+  refused := false;
+  begin
+    perform public.take_down_reported_content(admin_id, post_report, 'Spam thread');
+  exception when insufficient_privilege then refused := true;
+  end;
+  if not refused then raise exception 'FAIL 24: a signed-in member can call take_down_reported_content'; end if;
+  perform set_config('role', 'none', true);
+  perform set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
+  refused := false;
+  begin
+    perform public.take_down_reported_content(member, post_report, 'Spam thread');
+  exception when insufficient_privilege then refused := true;
+  end;
+  if not refused then raise exception 'FAIL 25: a non-admin actor took down a post'; end if;
+
+  takedown := public.take_down_reported_content(admin_id, post_report, 'Spam thread');
+  if jsonb_array_length(takedown -> 'closed') <> 1002 or (takedown ->> 'replyCount')::int <> 1001 then
+    raise exception 'FAIL 26: the takedown closed % reports for % replies, not 1002 for 1001',
+      jsonb_array_length(takedown -> 'closed'), takedown ->> 'replyCount';
+  end if;
+  if exists (select 1 from public.activity_posts where id = big_post)
+     or exists (select 1 from public.activity_comments where post_id = big_post) then
+    raise exception 'FAIL 27: the post or its replies survived the takedown';
+  end if;
+  select count(*) into n from public.reports
+   where reporter_id = reporter and status = 'actioned' and resolved_by = admin_id
+     and resolution_note = 'Removed: Spam thread';
+  if n <> 1002 then raise exception 'FAIL 28: % of the post''s 1002 reports were closed', n; end if;
+  if (select status from public.reports where id = stray_report) <> 'open' then
+    raise exception 'FAIL 28b: a report on another post''s reply was closed';
+  end if;
+  if (takedown -> 'removed' ->> 'author_id')::uuid is distinct from seller then
+    raise exception 'FAIL 28c: the takedown did not return the removed post''s author';
+  end if;
+
+  -- ---------- Follow-up: the lock-taking definitions ----------
+  if position('and is_public' in pg_get_functiondef('private.car_moderation_hold_apply()'::regprocedure)) > 0
+     or (select provolatile from pg_proc where oid = 'private.car_moderation_hold_keeps_private()'::regprocedure) <> 'v' then
+    raise exception 'FAIL 29: placing a hold can skip the car''s row lock, or the publish check can''t re-read after waiting';
+  end if;
+  if (select provolatile from pg_proc where oid = 'public.my_dispute_evidence_upload_count(uuid)'::regprocedure) <> 'v'
+     or position('pg_advisory_xact_lock' in pg_get_functiondef('public.my_dispute_evidence_upload_count(uuid)'::regprocedure)) = 0 then
+    raise exception 'FAIL 30: the evidence count does not lock the folder before it counts';
+  end if;
 
   raise notice 'all social moderation checks passed';
 end $$;
