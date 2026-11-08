@@ -104,6 +104,8 @@ export function CheckoutSteps({
   savedCards: SavedCard[];
   /** Defaults to cart checkout; a reserved order passes its own action. */
   action?: (prev: CommerceState, formData: FormData) => Promise<CommerceState>;
+  /** A reserved order to pay (accepted offer), or, for cart checkout, the
+   *  order "Finish checkout" resumes on a device without its key (OS-W17). */
   orderId?: string;
   /** DRVN-Shipping lines (0053): the address submit first fetches live rates
    *  for these, and payment waits for a service selection. */

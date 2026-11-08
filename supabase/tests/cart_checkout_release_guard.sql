@@ -1,5 +1,6 @@
 -- OS-W17: a buyer restarting their own unconfirmed cart checkout releases
--- exactly that basket, and nothing that has been (or may be) paid.
+-- exactly that basket, and nothing that has been (or may be) paid. A guest's
+-- checkout releases the same way (20261108110300).
 -- Disposable local DB only.
 begin;
 
@@ -11,6 +12,10 @@ declare
   other_buyer_id uuid := gen_random_uuid();
   listing_a uuid;
   listing_b uuid;
+  listing_c uuid;
+  guest_id uuid := gen_random_uuid();
+  guest_begun jsonb;
+  guest_order uuid;
   order_id uuid;
   begun jsonb;
   released jsonb;
@@ -31,13 +36,20 @@ begin
     raise exception 'FAIL: a client role can release checkouts';
   end if;
 
+  -- No payments_mode row: the production default (Stripe), where payout
+  -- readiness is enforced. The fixture seller is payout-ready, so the guard
+  -- does not depend on the runner's stub mode to reach the release.
+  delete from public.job_config where key = 'payments_mode';
+
   insert into auth.users (id, email) values
     (seller_id, 'release-seller@example.test'),
     (buyer_id, 'release-buyer@example.test'),
-    (other_buyer_id, 'release-other@example.test');
+    (other_buyer_id, 'release-other@example.test'),
+    (guest_id, 'release-guest@example.test');
   update public.profiles set username = 'release_seller' where id = seller_id;
   update public.profiles set username = 'release_buyer' where id = buyer_id;
   update public.profiles set username = 'release_other' where id = other_buyer_id;
+  update public.profiles set payouts_enabled = true where id = seller_id;
 
   insert into public.listings (seller_id, title, category, price_cents, shipping_cents, status, currency)
   values (seller_id, 'Release intercooler', 'engine', 25000, 1200, 'active', 'USD')
@@ -50,7 +62,17 @@ begin
     buyer_id, array[listing_a, listing_b], 'release-key-1', interval '15 minutes',
     '{}'::jsonb, 'release-browser-1', context
   );
+  -- The release below is only proven if this first reservation holds both
+  -- parts in one order; a skipped basket would make every later check vacuous.
+  if jsonb_array_length(coalesce(begun -> 'orders', '[]'::jsonb)) <> 1
+     or jsonb_array_length(coalesce(begun -> 'skipped', '[]'::jsonb)) <> 0 then
+    raise exception 'FAIL: the first checkout did not reserve both parts in one order: %', begun;
+  end if;
   order_id := (begun -> 'orders' -> 0 ->> 'order_id')::uuid;
+  if order_id is null
+     or (select count(*) from public.listings where id in (listing_a, listing_b) and status = 'reserved') <> 2 then
+    raise exception 'FAIL: the first checkout reserved no order: %', begun;
+  end if;
   perform public.bind_cart_checkout_payment(buyer_id, 'release-key-1', array[order_id], 'stripe', 'pi_release_1');
 
   -- Another buyer cannot release it.
@@ -123,6 +145,35 @@ begin
   if (select status from public.orders where id = order_id) <> 'paid'
      or (select count(*) from public.listings where id in (listing_a, listing_b) and status = 'sold') <> 2 then
     raise exception 'FAIL: a refused release changed a paid order';
+  end if;
+
+  -- 20261108110300: a guest's checkout (no checkout_request_key) is
+  -- released by its own buyer too, and by nobody else.
+  insert into public.listings (seller_id, title, category, price_cents, shipping_cents, status, currency)
+  values (seller_id, 'Release guest wheel', 'engine', 30000, 1500, 'active', 'USD')
+  returning id into listing_c;
+  guest_begun := public.purchase_begin(guest_id, array[listing_c], 'release-guest-key', interval '15 minutes');
+  if jsonb_array_length(coalesce(guest_begun -> 'orders', '[]'::jsonb)) <> 1 then
+    raise exception 'FAIL: the guest checkout reserved no order: %', guest_begun;
+  end if;
+  guest_order := (guest_begun -> 'orders' -> 0 ->> 'order_id')::uuid;
+  if (select checkout_request_key from public.purchase_attempts where idempotency_key = 'release-guest-key') is not null then
+    raise exception 'FAIL: the guest fixture is bound like a signed-in checkout';
+  end if;
+  perform public.bind_cart_checkout_payment(guest_id, 'release-guest-key', array[guest_order], 'stripe', 'pi_release_guest');
+
+  rejected := false;
+  begin
+    perform public.release_cart_checkout(buyer_id, 'release-guest-key', 'pi_release_guest');
+  exception when sqlstate '42501' then rejected := true;
+  end;
+  if not rejected then raise exception 'FAIL: another buyer released a guest checkout'; end if;
+
+  released := public.release_cart_checkout(guest_id, 'release-guest-key', 'pi_release_guest');
+  if (released ->> 'released')::int <> 1
+     or (select status from public.orders where id = guest_order) <> 'payment_failed'
+     or (select status from public.listings where id = listing_c) <> 'active' then
+    raise exception 'FAIL: the guest''s own unconfirmed checkout was not released: %', released;
   end if;
 
   raise notice 'PASS: only the buyer''s own unconfirmed checkout is released, and the parts can be reserved again';

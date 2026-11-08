@@ -1,4 +1,5 @@
 import type { ShippingDetails } from "@/features/commerce/action-types";
+import type { Json } from "@/lib/database.types";
 import { getCartIds } from "@/lib/cart";
 import { cartCheckoutRequestKey } from "@/lib/checkout-key";
 import { readGuestOrders } from "@/lib/guest-checkout";
@@ -55,9 +56,15 @@ export type CartSummary = {
  * strictly: a signed-in buyer sees their own pending orders, a guest sees only
  * the ones named in their HMAC-signed checkout receipt.
  */
-export async function loadInFlightCheckout(userId: string | null): Promise<CartSummary | null> {
+export async function loadInFlightCheckout(
+  userId: string | null,
+  /** OS-W17: only these orders (one checkout attempt's basket, resumed by
+   *  order on another device). Still scoped to the signed-in buyer. */
+  onlyOrderIds?: string[]
+): Promise<CartSummary | null> {
   const guestOrderIds = userId ? [] : await readGuestOrders();
   if (!userId && !guestOrderIds.length) return null;
+  if (onlyOrderIds && !onlyOrderIds.length) return null;
 
   const admin = createAdminClient();
   // Cart orders only: an accepted offer's pending order is finished on its
@@ -68,6 +75,7 @@ export async function loadInFlightCheckout(userId: string | null): Promise<CartS
     .eq("status", "pending")
     .is("origin_offer_id", null);
   query = userId ? query.eq("buyer_id", userId) : query.in("id", guestOrderIds);
+  if (onlyOrderIds) query = query.in("id", onlyOrderIds);
 
   const { data: orders } = await query;
   if (!orders?.length) return null;
@@ -165,7 +173,60 @@ export async function loadCheckoutResume(
     .eq("buyer_id", userId)
     .maybeSingle();
   if (error || !attempt) return null;
+  return (await liveResume(admin, userId, attempt))?.resume ?? null;
+}
 
+const ORDER_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** An order id as a URL or form carries it (anything else is ignored). */
+export function isOrderId(value: unknown): value is string {
+  return typeof value === "string" && ORDER_ID_PATTERN.test(value);
+}
+
+/** The columns a cart checkout attempt is resumed from. */
+export const CART_ATTEMPT_COLUMNS =
+  "idempotency_key, request_fingerprint, result, checkout_context, checkout_request_key" as const;
+
+/**
+ * OS-W17: the signed-in buyer's own cart checkout attempt that reserved
+ * `orderId`. "Finish checkout" on an order carries the order, because another
+ * device has neither the checkout-key cookie nor the cart. Ownership is the
+ * attempt's buyer; only a cart checkout (one bound to a request key) is
+ * found, so an accepted offer's order never resumes here.
+ */
+export async function findOwnCartAttemptForOrder(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  orderId: string
+) {
+  return admin
+    .from("purchase_attempts")
+    .select(CART_ATTEMPT_COLUMNS)
+    .eq("buyer_id", userId)
+    .not("checkout_request_key", "is", null)
+    .contains("result", { orders: [{ order_id: orderId }] })
+    .maybeSingle();
+}
+
+/** OS-W17: what "Finish checkout" on `orderId` resumes on this device — its
+ *  attempt's live orders and the details it was started with. Null when the
+ *  order isn't the buyer's, isn't a cart checkout, or is no longer live. */
+export async function loadCheckoutResumeForOrder(
+  userId: string | null,
+  orderId: string | null
+): Promise<{ resume: CheckoutResume; orderIds: string[] } | null> {
+  if (!userId || !isOrderId(orderId)) return null;
+  const admin = createAdminClient();
+  const { data: attempt, error } = await findOwnCartAttemptForOrder(admin, userId, orderId);
+  if (error || !attempt) return null;
+  return liveResume(admin, userId, attempt);
+}
+
+async function liveResume(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  attempt: { checkout_context: Json | null; result: Json }
+): Promise<{ resume: CheckoutResume; orderIds: string[] } | null> {
   const context = attempt.checkout_context;
   if (!context || typeof context !== "object" || Array.isArray(context) || context.version !== 1) return null;
   const shipping = context.shipping;
@@ -204,7 +265,9 @@ export async function loadCheckoutResume(
     .eq("buyer_id", userId)
     .in("status", ["pending", "requires_action"])
     .in("id", orderIds);
-  return live?.length ? { shipping: resumeShipping, quoteIds } : null;
+  return live?.length
+    ? { resume: { shipping: resumeShipping, quoteIds }, orderIds: live.map((order) => order.id) }
+    : null;
 }
 
 /**
@@ -226,7 +289,14 @@ export async function loadOwnCheckoutHolds(userId: string | null): Promise<Map<s
   const { data, error } = await query;
   if (error || !data) return holds;
   for (const order of data) {
-    const href = order.origin_offer_id ? `/orders/${order.id}/checkout` : "/checkout";
+    // A signed-in buyer's cart checkout resumes by its order, so the link
+    // works whether or not this device started it. A guest's resumes from
+    // this device's checkout-key cookie.
+    const href = order.origin_offer_id
+      ? `/orders/${order.id}/checkout`
+      : userId
+        ? `/checkout?order=${order.id}`
+        : "/checkout";
     for (const item of order.order_items ?? []) {
       if (item.listing_id) holds.set(item.listing_id, href);
     }
