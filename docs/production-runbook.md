@@ -81,7 +81,7 @@ Then verify:
   suites; each must print `all … checks passed`). Confirm that job is green
   for the exact commit you applied.
 - On the hosted project: every file's self-check NOTICEs appeared with no
-  error; `select jobname, schedule from cron.job order by 1;` lists the nine
+  error; `select jobname, schedule from cron.job order by 1;` lists the twenty-one
   jobs in §4; `select id, public from storage.buckets order by 1;` lists the
   buckets the migrations create (avatars, car-images, activity-images,
   listing-images public; dispute-evidence, message-photos, account-exports
@@ -127,7 +127,7 @@ if any is missing or invalid.
 | Variable | Live-money production | Notes |
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | required | production project URL |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or legacy `…_ANON_KEY`) | required | browser-safe key |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or legacy `NEXT_PUBLIC_SUPABASE_ANON_KEY`) | required | browser-safe key |
 | `SUPABASE_SECRET_KEY` (or legacy `SUPABASE_SERVICE_ROLE_KEY`) | required | server only; bypasses RLS |
 | `PAYMENTS_MODE` | recommended `stripe` | unset = `stripe` when `STRIPE_SECRET_KEY` is set. Production refuses stub mode (or a missing key) unless `PAYMENTS_ALLOW_STUB_IN_PRODUCTION=true`, which is for non-public sandboxes only |
 | `STRIPE_SECRET_KEY` | required | `sk_live_…` flips `paymentsAreLive()`; the terms' and fees page's test-mode notices disappear at the same moment |
@@ -136,15 +136,26 @@ if any is missing or invalid.
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | required (live) | live publishable key |
 | `SENTRY_DSN` | required (live) | must be an `https:` DSN with a key and a numeric project path (`https://<key>@<host>/<project id>`) |
 | `ADMIN_ALERT_WEBHOOK_URL` | required (live), `https:` | operator alerts (Slack-compatible body). Outside live-money mode it may be unset; alerts then accumulate as `disabled` outbox rows in Admin → Payments |
-| `NEXT_PUBLIC_SITE_URL` | required (live), `https:` | the canonical origin only — no path, query, fragment or credentials |
+| `NEXT_PUBLIC_SITE_URL` | required (live), `https:` | the canonical origin only — no path, query, fragment or credentials. Unset, links fall back to `https://` + Vercel's `VERCEL_PROJECT_PRODUCTION_URL` (set by the platform), then `http://localhost:3000` |
 | `CRON_SECRET` | required (live), ≥ 32 chars | bearer for every `/api/jobs/*` route and `/api/health/workers`; the same value goes in `job_config.transfer_worker_secret` and the monitor's `DRVN_MONITOR_SECRET` |
 | `GUEST_RECEIPT_SECRET` | required (live), ≥ 32 chars | signs guest receipt and checkout-identity cookies and keys the hashed network identity used for guest abuse limits. Any production build without it throws on the first guest checkout or anonymous rate-limit check. Rotating it invalidates outstanding guest receipts |
 | `TRUST_PROXY_HEADERS` | unset on Vercel; `true` only behind another verified proxy; `false` to disable | identifies signed-out visitors (hashed, never stored raw) for checkout, sign-in, password-reset and error-report rate limits. **On Vercel** (`VERCEL=1`, set by the platform) the app trusts `X-Vercel-Forwarded-For`, then `X-Forwarded-For`, with no setting: Vercel documents that it overwrites `X-Forwarded-For` and does not forward client-supplied addresses ([request headers](https://vercel.com/docs/headers/request-headers)). **Elsewhere** set `true` only once you have confirmed (host docs plus a test request with a forged header) that the ingress replaces client `X-Forwarded-For`. With no trusted source every signed-out visitor shares one `unattributed` bucket — safe, but one busy visitor can rate-limit all guests, so live-money production logs a `[startup]` warning. Sign-in and reset limits per address are skipped in that state (a shared bucket would let one attacker lock everyone out); the per-email limits still apply |
 | `FLAG_INTEGRATED_SHIPPING_V1`, `EASYPOST_API_KEY`, `EASYPOST_WEBHOOK_SECRET` | optional | DRVN Shipping; see §10. `SHIPPING_MODE` / `SHIPPING_ALLOW_STUB_IN_PRODUCTION` override |
-| `ANTHROPIC_API_KEY` (+ `LISTING_IMPORT_MODEL`, `LISTING_IMPORT_AI_MODE`) | optional | listing importer; unset in production = importing shows "temporarily unavailable" |
+| `ANTHROPIC_API_KEY` | optional; needed for the agent and the importer to call the model | one key serves both `src/lib/ai` (the agent) and the listing importer. Unset in production = both report `disabled` (the agent's chat says it isn't switched on; importing shows "temporarily unavailable"). Zero data retention is arranged on the Anthropic account, not in code (`docs/legal-review-checklist.md`) |
+| `LISTING_IMPORT_MODEL`, `LISTING_IMPORT_AI_MODE` | optional | importer model (default `claude-sonnet-5`) and mode override `anthropic` \| `stub` \| `disabled`. `LISTING_IMPORT_ALLOW_STUB_IN_PRODUCTION=true` lets a non-public sandbox run the stub extractor in production; never set it on a public deployment |
+| `LISTING_IMPORT_ALLOW_PRIVATE_HOSTS`, `LISTING_IMPORT_PUBLIC_BROWSER_ENABLED` | never in production | test-only: relax the importer's SSRF guard for local fixture servers, and enable the Playwright page-render fallback. Both are ignored when `NODE_ENV=production`, whatever their value |
+| `AGENT_MODEL` | optional (default `claude-opus-5-5`) | the agent's model. Must be one of the priced models in `src/lib/ai/config.ts` `MODEL_PRICES` (`claude-opus-5-5`, `claude-sonnet-5-5`, `claude-sonnet-5`, `claude-haiku-5-5`), because spend caps sum each call's priced cost. An unpriced model turns the agent `disabled`, and with `AGENTS_BETA=on` in production the server refuses to start (`validatePaymentsEnv`, "Agent configuration is invalid") |
+| `AGENT_AI_MODE` | optional | `anthropic` \| `stub` \| `disabled`. Unset = `anthropic` with a key, `stub` without one outside production, `disabled` without one in production. `stub` in production is read as `disabled` |
+| `AGENT_MAX_ITERATIONS` | optional (default 8) | hard stop on one agent run's tool loop; integers 1–20, anything else = 8 |
+| `AGENTS_BETA` | required (`on`) for the agent to show to members | the environment's master switch for the agent beta. With it off no member sees agent controls, whatever `/admin/agent` says (§13e). With it on in production, boot checks `AGENT_MODEL` and the shape of `AGENT_WORKER_DATABASE_URL`, and logs a `[startup]` warning if `ANTHROPIC_API_KEY` is missing (chat and sentence-to-filters then say they're switched off; negotiation runs without the model) |
+| `AGENT_WORKER_DATABASE_URL` | required for the agent to act | the `agent_worker` login through the transaction pooler, `postgresql://agent_worker.<ref>:<password>@<pooler-host>:6543/postgres` (§13a). Without it `/api/jobs/agent` still runs reconcile, retention and the health check, but no worker pass: queued jobs wait. A malformed URL fails boot when `AGENTS_BETA=on` in production, and the worker refuses a connection whose user isn't `agent_worker` |
+| `E2E_TEST_PROJECT_REF` | never in production | `local-drvn-remediation` marks the isolated e2e stack: only together with an `http://localhost` site and a Supabase URL on `localhost:54321` does it relax secure cookies and the https-only media check |
+| `DRVN_PUBLIC_CACHE` | optional | `off` disables the public-read cache (`src/lib/supabase/public-cache.ts`) for a host that needs every read fresh, as the isolated e2e stack does. Leave unset in production |
+| `DRVN_SITE_ORIGIN` | optional (operator shell) | read only by `scripts/owner/stripe-webhooks.mjs` as the default for `--origin` (then `NEXT_PUBLIC_SITE_URL`); not read by the app |
+| `DRVN_MONITOR_ALERT_URL`, `DRVN_MONITOR_HEARTBEAT_URL`, `DRVN_MONITOR_STATE_FILE`, `DRVN_MONITOR_INTERVAL_MS` | monitor host only | `scripts/check-worker-health.mjs --watch` (§9b): transition alerts, dead-man heartbeats, where it keeps state, and the poll interval (default 60000 ms). Together with `DRVN_MONITOR_ORIGIN` and `DRVN_MONITOR_SECRET` these are set where the monitor runs, never on the app's deployment |
 | `TYPESENSE_URL`, `TYPESENSE_API_KEY` | optional | both set = Typesense search; unset = Postgres search, and the `search` health family reports disabled |
 | `POSTHOG_KEY`, `POSTHOG_HOST` | optional | consented analytics only; unset = the `analytics` health family reports disabled |
-| `SENTRY_RELEASE` | optional | release tag; falls back to the platform's commit SHA |
+| `SENTRY_RELEASE` | optional | release tag; falls back to `VERCEL_GIT_COMMIT_SHA` (set by Vercel), then `GIT_COMMIT_SHA`. Error reports are tagged with the deployment from `VERCEL_DEPLOYMENT_ID`, then `DEPLOY_ID`; set `GIT_COMMIT_SHA` and `DEPLOY_ID` on a host that isn't Vercel |
 
 Stripe (live mode). `scripts/owner/stripe-webhooks.mjs --live` creates or
 updates both endpoints below (dry run by default; `docs/owner/README.md`).
@@ -220,7 +231,11 @@ on conflict (key) do update set value = excluded.value, updated_at = now();
 CI's stub jobs and the SQL guard runner record it; the Stripe test lane
 doesn't. Never set it on a database that takes real payments.
 
-Confirm the nine pg_cron jobs (times are the database's UTC):
+Confirm the twenty-one pg_cron jobs (times are the database's UTC). This is
+`private.scheduled_job_inventory()` (latest `20261107210100`), mirrored in
+`src/lib/job-inventory.ts`; `job-inventory.test.ts` holds both copies and
+every migration's `cron.schedule` call to the same set, and worker health
+judges each job against its budget:
 
 | Job | Schedule | Runs |
 |---|---|---|
@@ -234,11 +249,21 @@ Confirm the nine pg_cron jobs (times are the database's UTC):
 | `drvn-saved-search-worker` | `*/30 * * * *` | `invoke_remediation_worker('saved-searches')` → `/api/jobs/saved-searches` |
 | `drvn-saved-search-digests` | `41 * * * *` | `invoke_remediation_worker('saved-search-digests')` → `/api/jobs/saved-search-digests` (20261107200300) |
 | `drvn-listing-import-sweep` | `37 3 * * *` | `invoke_remediation_worker('listing-imports')` → `/api/jobs/listing-imports` (20261004150000) |
+| `drvn-delivery-auto-confirm` | `23 * * * *` | `auto_confirm_untracked_deliveries()` (SQL) — the 21-day untracked auto-confirm (20261006100100) |
+| `drvn-marketplace-counts` | `30 seconds` | `refresh_marketplace_facet_counts()` (SQL) — the Marketplace's precomputed facet counts (20261011120000) |
+| `drvn-explore-trending` | `*/2 * * * *` | `refresh_explore_trending()` (SQL) — Explore's trending rows (20261011120000) |
+| `drvn-explore-builders` | `*/10 * * * *` | `refresh_explore_builders()` (SQL) — Explore's builders rows (20261011120000) |
+| `drvn-search-words` | `23 * * * *` | `refresh_search_words()` (SQL) — the search vocabulary (20261011130000) |
+| `drvn-grow-products` | `17 * * * *` | `grow_products()` (SQL) — incremental products growth from new part keys (20261020120000) |
+| `drvn-grow-products-full` | `47 4 * * *` | `grow_products(true)` (SQL) — the daily full pass (20261020120000) |
+| `drvn-agent-worker` | `*/5 * * * *` | `invoke_remediation_worker('agent')` → `/api/jobs/agent` (reconcile, retention, one worker pass, health; §13d) (20261026100000) |
+| `drvn-listing-edit-sweep` | `45 3 * * *` | `prune_listing_edit_requests()` (SQL) — `private.listing_edit_requests` rows older than 7 days (20261026100000) |
+| `drvn-cron-history-prune` | `27 4 * * *` | `private.prune_cron_history()` (SQL) — `cron.job_run_details` older than 14 days (20261107191000) |
 | `drvn-ledger-reconciliation` | `50 5 * * *` | `invoke_remediation_worker('ledger-reconciliation')` → `/api/jobs/ledger-reconciliation` (20261107210100): read-only Stripe ↔ ledger comparison; discrepancies open `ledger_discrepancy` cases in Admin → Payments |
 
 `select jobname, schedule from cron.job order by 1;` must return exactly
-these. Without the `job_config` rows the SQL jobs still run, but every HTTP
-worker returns immediately without calling the app.
+these twenty-one. Without the `job_config` rows the SQL jobs still run, but every
+HTTP worker returns immediately without calling the app.
 
 ## 5. Seed the first admin (and every later one)
 
@@ -718,9 +743,11 @@ countered or expires; an accepted offer's order runs its normal course.
 retention sweep (`agent_retention_sweep`: jobs and monitoring after 30 days;
 events, finished tasks, ended mandates and idle chats after 12 months) and the
 health check, which reports to monitoring when a threshold trips. It also runs
-one worker pass when `AGENT_WORKER_DATABASE_URL` is set. Schedule it every
-5 minutes beside the transfer worker once A3a starts; until then it is not
-scheduled.
+one worker pass when `AGENT_WORKER_DATABASE_URL` is set.
+`20261026100000_agent_hosted_schedule.sql` schedules it as `drvn-agent-worker`
+every 5 minutes (`invoke_remediation_worker('agent')`, in §4's table) and
+adds the `agent` family to worker health on a 30-minute budget; the same
+migration adds the daily `drvn-listing-edit-sweep`.
 It also applies the usage retention (`agent_usage_retention_sweep`, 12 months)
 and recomputes today's and yesterday's measures (`agent_compute_metrics` →
 `agent_metrics_daily`; definitions in `docs/site/agent-measures.md`).
