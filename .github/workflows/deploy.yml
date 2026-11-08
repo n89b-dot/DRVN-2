@@ -1,0 +1,192 @@
+# The deploy pipeline (N634, N528; remediation plan D2 and C3).
+#
+# Staging: every push to main, once that commit's release-gate check has
+# passed and staging's database has every migration on disk. The host builds
+# and serves exactly that commit, and the job waits until staging's
+# /api/version reports it.
+# Production: by hand only (workflow_dispatch), for an annotated release tag
+# rc-YYYYMMDD[-n] on main whose release-gate passed, through the "production"
+# environment (the owner sets its required reviewers), with the same
+# migration check and the sandbox overrides absent from the host (N540).
+#
+# Neither job applies a migration: migrations are applied by the session that
+# merges them, before the merge (supabase/MIGRATIONS.md). A missing file stops
+# the deploy so a person applies it with the runner.
+#
+# Off until the owner sets it up (docs/staging-setup.md §4, §11): the staging
+# job runs only when the repository variable DRVN_DEPLOY_STAGING is 'true'.
+# Secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_STAGING_PROJECT_ID,
+# VERCEL_PRODUCTION_PROJECT_ID, STAGING_SUPABASE_DB_PASSWORD,
+# PRODUCTION_SUPABASE_DB_PASSWORD, ADMIN_ALERT_WEBHOOK_URL. Variables:
+# DRVN_DEPLOY_STAGING, DRVN_STAGING_ORIGIN, DRVN_PRODUCTION_ORIGIN,
+# DRVN_STAGING_SUPABASE_URL, DRVN_PRODUCTION_SUPABASE_URL.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to deploy to production (rc-YYYYMMDD or rc-YYYYMMDD-n, signed off in the release packet)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# One deploy per environment at a time, and a newer main never cancels a
+# deploy already under way (it waits, then deploys the newer commit).
+concurrency:
+  group: deploy-${{ github.event_name == 'workflow_dispatch' && 'production' || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  staging:
+    if: github.event_name == 'push' && vars.DRVN_DEPLOY_STAGING == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment: staging
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.22.0
+          cache: npm
+
+      - run: npm ci
+
+      - name: Wait for release-gate on this commit
+        run: node scripts/deploy.mjs gate "$GITHUB_SHA"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Staging has every migration
+        env:
+          SUPABASE_URL: ${{ vars.DRVN_STAGING_SUPABASE_URL }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.STAGING_SUPABASE_DB_PASSWORD }}
+        run: |
+          umask 077
+          printf 'NEXT_PUBLIC_SUPABASE_URL=%s\nSUPABASE_DB_PASSWORD=%s\n' "$SUPABASE_URL" "$SUPABASE_DB_PASSWORD" > "$RUNNER_TEMP/target.env"
+          node scripts/apply-migration.mjs --target staging --env-file "$RUNNER_TEMP/target.env" --status > "$RUNNER_TEMP/status.json"
+          rm -f "$RUNNER_TEMP/target.env"
+          node scripts/deploy.mjs migrations "$RUNNER_TEMP/status.json"
+
+      - name: Build and deploy this commit
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_STAGING_PROJECT_ID }}
+        run: |
+          npx --yes vercel@65.2.0 pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx --yes vercel@65.2.0 build --prod --token="$VERCEL_TOKEN"
+          npx --yes vercel@65.2.0 deploy --prebuilt --prod --env GIT_COMMIT_SHA="$GITHUB_SHA" --token="$VERCEL_TOKEN"
+
+      - name: Staging reports this commit
+        run: node scripts/deploy.mjs version "$ORIGIN" "$GITHUB_SHA"
+        env:
+          ORIGIN: ${{ vars.DRVN_STAGING_ORIGIN }}
+
+      - name: Tell the alert channel
+        if: always()
+        run: |
+          node scripts/deploy.mjs alert "DRVN staging deploy of ${GITHUB_SHA::7}: $STATUS"
+        env:
+          STATUS: ${{ job.status }}
+          ADMIN_ALERT_WEBHOOK_URL: ${{ secrets.ADMIN_ALERT_WEBHOOK_URL }}
+
+  production:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    # The owner gives this environment required reviewers in GitHub, so a
+    # production deploy waits for a person's approval as well as the tag.
+    environment: production
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 0
+
+      - name: The tag is an annotated release tag on main
+        id: tag
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          node scripts/deploy.mjs tag "$TAG"
+          if [ "$(git cat-file -t "refs/tags/$TAG")" != "tag" ]; then
+            echo "::error::$TAG must be an annotated tag: the release packet signs one"
+            exit 1
+          fi
+          git merge-base --is-ancestor HEAD origin/main || { echo "::error::$TAG is not on main"; exit 1; }
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.22.0
+          cache: npm
+
+      - run: npm ci
+
+      - name: release-gate passed on the tagged commit
+        run: node scripts/deploy.mjs gate "$SHA"
+        env:
+          SHA: ${{ steps.tag.outputs.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Production has every migration
+        env:
+          SUPABASE_URL: ${{ vars.DRVN_PRODUCTION_SUPABASE_URL }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.PRODUCTION_SUPABASE_DB_PASSWORD }}
+        run: |
+          umask 077
+          printf 'NEXT_PUBLIC_SUPABASE_URL=%s\nSUPABASE_DB_PASSWORD=%s\n' "$SUPABASE_URL" "$SUPABASE_DB_PASSWORD" > "$RUNNER_TEMP/target.env"
+          node scripts/apply-migration.mjs --target production --env-file "$RUNNER_TEMP/target.env" --status > "$RUNNER_TEMP/status.json"
+          rm -f "$RUNNER_TEMP/target.env"
+          node scripts/deploy.mjs migrations "$RUNNER_TEMP/status.json"
+
+      - name: The sandbox overrides are absent from the host (N540)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PRODUCTION_PROJECT_ID }}
+        run: |
+          npx --yes vercel@65.2.0 env ls production --token="$VERCEL_TOKEN" > "$RUNNER_TEMP/hosted-env.txt"
+          npx --yes vercel@65.2.0 env ls preview --token="$VERCEL_TOKEN" >> "$RUNNER_TEMP/hosted-env.txt"
+          node scripts/release-candidate.mjs hosted-env "$RUNNER_TEMP/hosted-env.txt"
+
+      - name: Build and deploy the tagged commit
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PRODUCTION_PROJECT_ID }}
+          SHA: ${{ steps.tag.outputs.sha }}
+        run: |
+          npx --yes vercel@65.2.0 pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx --yes vercel@65.2.0 build --prod --token="$VERCEL_TOKEN"
+          npx --yes vercel@65.2.0 deploy --prebuilt --prod --env GIT_COMMIT_SHA="$SHA" --token="$VERCEL_TOKEN"
+
+      - name: Production reports the tagged commit
+        run: node scripts/deploy.mjs version "$ORIGIN" "$SHA"
+        env:
+          ORIGIN: ${{ vars.DRVN_PRODUCTION_ORIGIN }}
+          SHA: ${{ steps.tag.outputs.sha }}
+
+      - name: Tell the alert channel
+        if: always()
+        run: |
+          node scripts/deploy.mjs alert "DRVN production deploy of $TAG: $STATUS"
+        env:
+          TAG: ${{ inputs.tag }}
+          STATUS: ${{ job.status }}
+          ADMIN_ALERT_WEBHOOK_URL: ${{ secrets.ADMIN_ALERT_WEBHOOK_URL }}
