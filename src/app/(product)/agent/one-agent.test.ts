@@ -23,7 +23,11 @@ describe("one agent per member (AG-1)", () => {
   it("covers selling, buying and the Garage, each with tools of its own", () => {
     expect(Object.keys(MODEL_TOOLS).sort()).toEqual([...SCOPES].sort());
     const names = (scope: AgentScope) => modelToolsFor(scope).map((tool) => tool.name);
-    expect(names("seller")).toContain("price_comparables");
+    // Selling: the member's own listings' questions (read_listing_messages).
+    // price_comparables was the seller's own tool until OS-R73 (Neil, 7 Nov):
+    // it only ever answered "not enough sales", so it is no longer advertised.
+    expect(names("seller")).toEqual(expect.arrayContaining(["read_listing_messages", "browse_marketplace"]));
+    for (const scope of SCOPES) for (const stub of ["read_product", "fitment_evidence", "price_comparables"]) expect(names(scope)).not.toContain(stub);
     expect(names("buyer")).toEqual(expect.arrayContaining(["search_parts", "browse_marketplace"]));
     expect(names("garage")).toEqual(expect.arrayContaining(["propose_build_change", "draft_car_update", "list_my_cars"]));
   });

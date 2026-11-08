@@ -6820,6 +6820,8 @@ export type Database = {
         Args: { p_approval: string; p_choice: string }
         Returns: Json
       }
+      agent_audit_ids_valid: { Args: { p_ids: Json }; Returns: boolean }
+      agent_audit_vocabulary: { Args: { p_list: string }; Returns: string[] }
       agent_authority: {
         Args: {
           p_job: Database["public"]["Tables"]["agent_jobs"]["Row"]
