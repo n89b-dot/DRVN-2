@@ -59,7 +59,7 @@ beforeEach(() => {
   db.reads = 0;
 });
 
-describe("deletion status for a member who can't sign in", () => {
+describe("deletion status for a member who can't sign in (OS-W11)", () => {
   it("shows an operator step the worker recorded after banning the sign-in", async () => {
     db.result = status("operator_attention");
     const html = await render();
@@ -112,7 +112,7 @@ describe("deletion status for a member who can't sign in", () => {
   });
 });
 
-describe("the login notice after a deletion request", () => {
+describe("the login notice after a deletion request (OS-W11)", () => {
   const login = async (params: Record<string, string>) =>
     renderToStaticMarkup(await LoginPage({ searchParams: Promise.resolve(params) }));
 

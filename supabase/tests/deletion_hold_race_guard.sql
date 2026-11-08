@@ -41,7 +41,7 @@ begin
   delete from public.remediation_jobs where dedup_key = any(array(select 'delete:' || u::text from unnest(v_users) u));
   delete from auth.users where id = any(v_users);
   if exists (select 1 from auth.users where email like 'w11-race-%@example.test') then
-    raise exception 'Cleanup: the committed fixtures were not removed';
+    raise exception 'Cleanup: the committed fixtures were not removed (OS-W11)';
   end if;
 end $$;
 
@@ -270,7 +270,7 @@ begin
   if v_fail is not null then
     perform pg_temp.w11r_cleanup();
     commit;
-    raise exception '%', v_fail;
+    raise exception '% (OS-W11)', v_fail;
   end if;
   raise notice 'PASS: % two-session checks (control; a return in flight during finalise requeues the case; a return committing during finalise waits, then requeues)', checks;
 end $$;
