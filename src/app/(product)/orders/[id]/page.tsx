@@ -16,6 +16,7 @@ import {
   disputeCategoriesFor,
 } from "@/features/commerce/disputes";
 import { addBusinessDays } from "@/lib/domain/business-days";
+import { pickupHandoffState } from "@/lib/domain/pickup-handoff";
 import { fitmentLabel, readCommercialSnapshot } from "@/features/commerce/snapshot";
 import { signEvidenceUrls } from "@/lib/evidence-urls";
 import { formatPrice } from "@/lib/payments/fee";
@@ -372,6 +373,11 @@ export default async function OrderDetailPage({
   // A not-received case on an order never dispatched: the seller can still
   // dispatch (or make a collection available) while it is open.
   const caseBeforeDispatch = order.status === "disputed" && order.pre_dispute_status === "paid";
+  // The pass and the scan during a case follow the same rule as the scan page
+  // and pickup_redeem. The chargeback part is the database's: a pass it
+  // refuses says so on mint or redemption.
+  const caseHandoffOpen =
+    caseBeforeDispatch && pickupHandoffState(order, { chargebackOpen: false }) === "redeemable";
 
   // Stripe sent the buyer back before its webhook settled the order: the
   // money is on its way, so don't ask them to pay again.
@@ -946,7 +952,7 @@ export default async function OrderDetailPage({
                   : "The buyer reported it never arrived. Make it available now, or offer a refund in the dispute below."}
               </p>
               <div className="mt-3">
-                {order.pickup_ready_at ? (
+                {caseHandoffOpen ? (
                   <RedeemPickupForm orderId={id} />
                 ) : (
                   <ReadyForPickupButton orderId={id} />
@@ -956,7 +962,7 @@ export default async function OrderDetailPage({
           )}
 
           {isBuyer &&
-            (order.status === "paid" || caseBeforeDispatch) &&
+            (order.status === "paid" || caseHandoffOpen) &&
             order.is_collection &&
             order.pickup_ready_at && (
               <Rv className="tile" stagger={3}>
