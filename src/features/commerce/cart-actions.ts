@@ -3,8 +3,11 @@
 import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 import { getCartIds, MAX_CART_ITEMS, removeCartIds, setCartIds } from "@/lib/cart";
+import { readGuestOrders } from "@/lib/guest-checkout";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { CommerceState } from "./action-types";
+import { releaseCheckoutHolding } from "./checkout-release";
 
 async function optionalUser() {
   const supabase = await createClient();
@@ -56,9 +59,33 @@ export async function addToCart(formData: FormData): Promise<CommerceState> {
 export async function removeFromCart(formData: FormData): Promise<CommerceState> {
   const id = String(formData.get("listing_id") ?? "");
   if (!id) return { error: "Missing listing." };
+
+  // OS-W17 ("Edit cart"): a part the buyer's own unfinished checkout holds
+  // can be removed too. That checkout's basket is released first (its
+  // payment cancelled under the expiry rule), so what's left in the cart
+  // checks out again straight away rather than reading "held" for 15 minutes.
+  const { user } = await optionalUser();
+  const guestOrderIds = user ? [] : await readGuestOrders();
+  const released = await releaseCheckoutHolding(
+    createAdminClient(),
+    user ? { listingId: id, buyerId: user.id } : { listingId: id, guestOrderIds }
+  );
+  if (released.outcome === "settled") {
+    return { error: "That checkout has already been paid, so this part is yours. Check your orders." };
+  }
+  if (released.outcome === "unresolved") {
+    return { error: "Your payment for this checkout is still being confirmed, so its parts stay held for now. Check your orders, then try again." };
+  }
+
   try { await removeCartIds([id]); }
   catch { return { error: "Couldn't remove that part. Try again." }; }
   revalidatePath("/cart");
+  if (released.outcome === "released") {
+    revalidatePath("/checkout");
+    revalidatePath("/marketplace");
+    revalidatePath(`/listings/${id}`);
+    return { ok: "Removed. Your checkout was released, so check out again with what's left." };
+  }
   return { ok: "Removed from cart." };
 }
 

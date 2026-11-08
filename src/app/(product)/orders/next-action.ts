@@ -93,7 +93,14 @@ export function nextAction(order: NextActionInput, isSale: boolean): string | nu
  * offer is paid on its own page; a cart order resumes the cart checkout. The
  * button used to send both to the offer page, which refuses a cart order
  * ("This checkout link is no longer valid").
+ *
+ * A cart order carries its id: on another device /checkout has neither the
+ * checkout's key cookie nor its cart, so it resumes the attempt that
+ * reserved this order (after checking it is the buyer's) instead of
+ * answering "Your checkout is already holding these parts".
  */
 export function finishCheckoutHref(order: { id: string; origin_offer_id: string | null }): string {
-  return order.origin_offer_id ? `/orders/${order.id}/checkout` : "/checkout";
+  return order.origin_offer_id
+    ? `/orders/${order.id}/checkout`
+    : `/checkout?order=${encodeURIComponent(order.id)}`;
 }

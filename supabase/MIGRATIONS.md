@@ -17,6 +17,11 @@ recorded file is skipped, and a destructive baseline (0001) is refused on a
 database with any table in `public`. Details: "Applying without Docker or
 psql" below.
 
+**Recording files that already ran** (OS-R-migrations): `--record-only` writes
+history rows without running the files, only for files whose every object it
+verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
+TLS. Details: "Recording without running" below.
+
 ## November 8 — Payout setup: started to sell, 14 days to finish, N244 (not applied anywhere)
 
 | File | Applied to |
@@ -26,6 +31,24 @@ psql" below.
 Apply after every earlier migration, then deploy the app from the same PR: the new app writes `payout_details_submitted` on every Connect sync and calls the two new RPCs from the money worker. The old app keeps working against the new database (it never writes the new column, so sellers stay "not started" until the new app syncs them, which is the old rule). Owner ruling 8 Nov 2026, "go with the eBay approach, 14 days" (`docs/decisions/seller-payout-setup.md`). New `profiles.payout_details_submitted` (Stripe's `details_submitted`, backfilled true where payouts are already enabled) and `profiles.payout_restricted_at`, both server-only (no client grant; `guard_profile_columns` restated from `0018_admin.sql`, keeping the search_path `20260905143949` pinned). `private.seller_can_take_payment` (latest `20261107210000`) now says yes for payouts enabled, or a connected account with details submitted and no restriction, so publishing, reserving, `purchase_begin`'s skip and `prepare_payment_request` all follow the new rule unchanged. New `claim_payout_deadline_cancellations(limit)` and `settle_payout_deadline_cancellation(order)` (service role only), tables `private.payout_deadline_cancellations` / `private.payout_deadline_paused_listings`, the `orders_payout_deadline_dispatch_guard` trigger (LS002) and two `profiles` triggers that clear the restriction and restore the paused listings when payouts are enabled. `private.scheduled_job_inventory()` restated from `20261107210100` with only the `payoutDeadlines` family added to `drvn-transfer-worker`; no cron job changes. Anything that restates the inventory later must keep `payoutDeadlines` (and `drvn-ledger-reconciliation`). Payout release is unchanged (`blocked_unpayable` until payouts are enabled). Guard: `supabase/tests/payout_setup_started_guard.sql` (new; fails on the schema before this migration: the columns don't exist).
 
 Checked on a fresh `supabase/postgres:17.6.1.165` with the CI shim: every migration applies and every SQL guard passes.
+
+## November 7 — 18+ confirmation, copyright takedown, policy announcements: R69-age, R69-dmca, N629
+
+| File | Applied to |
+|---|---|
+| `20261107231001_age_confirmation.sql` | shared dev project (2026-11-08) |
+| `20261107231002_copyright_takedown.sql` | shared dev project (2026-11-08) |
+| `20261107231003_policy_announcements.sql` | shared dev project (2026-11-08) |
+
+From #117. Apply in order, after every earlier migration, **before the app from #117 serves traffic**: without `231001` every new account is stuck at onboarding (its age record can't be saved, so onboarding answers "We couldn't save that") and guest checkout refuses; without `231002` `/copyright` and Admin → Copyright fail.
+
+- **`231001`** — `public.age_confirmations (user_id, age_confirmed_at, source)`: when and where an account confirmed it is 18 or over, never a date of birth. Service role writes only; a member reads their own row; rows are never rewritten. The `profiles_require_age_confirmation` trigger refuses a member's first `username` (finishing onboarding) without a row; server writers are exempt. Existing members aren't backfilled.
+- **`231002`** — the `copyright` report reason (`reports_reason_check` restated); `public.copyright_notices` (filed from `/copyright`, admins read); `public.copyright_blocked_media` (objects a takedown removed; the proxy answers 451 for their `/_next/image` copies); `media_cleanup_queue_reason_check` gains `copyright_takedown`; `admin_audit_log_subject_type_check` gains `copyright_notice` (rebuilt from the constraint as it stands). New `copyright_takedown(notice, listing_ids, media_urls, note)` and `reject_copyright_notice(notice, note)`: an admin with a fresh step-up only, one transaction each, audited. A takedown removes the listings and purges the photos from every gallery, avatar, cover, hotspot and buyers' order snapshots (`order_item_snapshot_images`, otherwise immutable since 0049).
+- **`231003`** — `public.policy_announcements` and `announce_policy_update(key, title, body, href)` (service role only, idempotent per key). **Applying it notifies every member with a username** (`policy_updated`: "We updated our Terms and Privacy Policy", linking to `/terms#changes`).
+
+**Shared dev, 2026-11-08**: reported applied by the owner (not probed from the cloud session that recorded it, which can't reach the database). Applying `231003` sent that project's members the policy notification. Not applied to staging or production.
+
+Guard: `supabase/tests/launch_legal_guard.sql` (fails before these migrations). Checked on a fresh `supabase/postgres:17.6.1.165` with the CI shim: every migration applies and every SQL guard passes.
 
 ## November 7 — payout hold fallbacks become 2 days, R-hold (not applied anywhere)
 
@@ -1753,6 +1776,52 @@ the same target check and TLS.
 
 The SQL Editor in the dashboard is the alternative for a one-off, but it records
 no history.
+
+### Recording without running (`--record-only`)
+
+Shared dev's history table only has 0001–0011 (and five 13 September versions
+no file has) plus what was applied after the runner existed; about 230 files
+that did run there show as pending, so a whole-tree apply would replay them.
+`--record-only` closes that gap without running anything:
+
+```bash
+node scripts/apply-migration.mjs --target shared-dev --record-only supabase/migrations/*.sql
+node scripts/apply-migration.mjs --target shared-dev --record-only --apply --confirm <code> supabase/migrations/*.sql
+```
+
+- **What it verifies.** `scripts/lib/migration-objects.mjs` reads each file
+  with the same lexer for the objects it creates: functions (schema, name and
+  identity argument types), tables, columns, views, sequences, indexes,
+  triggers, policies, named constraints, types and enum values, schemas,
+  extensions and roles, at top level or as static DDL in a `DO` block
+  (including a `format()` whose object names are static). It walks the whole
+  tree in name order, so it knows the last thing any file does to each
+  object. Each object must be in the target's catalog (read in a read-only
+  transaction); an object a later file drops isn't expected. For a function
+  the file is the tree's **latest** definition of, `pg_proc.prosrc` (the body
+  `pg_get_functiondef` prints) must equal the file's body byte for byte (CRLF
+  aside); an earlier definition, replaced later, only has to exist.
+- **What it refuses.** A file with any object missing, a latest function body
+  that differs, or something it can't check (dynamic DDL that names objects
+  at run time, a kind of object it doesn't read, a `%TYPE` argument) is not
+  recorded and is listed with every reason. So is a file with nothing to
+  check: data changes, grants, comments and `ALTER … SET` aren't objects, and
+  a file of only those (or whose objects were all dropped later) can't be
+  verified this way. Refused files stay pending; record them by hand only
+  after reading them.
+- **Limits.** It proves the objects are there, not who made them: a file is
+  verified if a later file created the same objects. Data changes, grants and
+  comments in a verified file are not checked. Most files here wrap
+  themselves in one `begin; … commit;`, so for those, objects present means
+  the whole file committed, unless a later file made the same objects.
+- **Two steps, one transaction.** The dry run prints `record`, `skip` or
+  `refuse` for each file and a code bound to the target and the exact files
+  it would record (its own code, so an apply's code never confirms it, nor
+  the reverse). `--apply --confirm <code>` takes the run lock, verifies again
+  inside one transaction, refuses everything if the set that verifies isn't
+  the one the code was printed for, and inserts the rows. Each row's
+  `statements` is the file's text after a comment line saying it was recorded
+  by `--record-only` and not run.
 
 **Do not use `supabase db push`.** 0001–0005 were applied by hand, so the CLI has
 no complete `supabase_migrations.schema_migrations` history and would try to run

@@ -106,3 +106,71 @@ export async function releaseCartCheckout(
   }
   return { outcome: "released" };
 }
+
+const LIVE_STATUSES = ["pending", "requires_action"] as const;
+
+/** The purchase attempt (cart checkout) that reserved `orderId` for this
+ *  buyer, signed-in or guest. Only purchase_begin writes attempts, so this
+ *  is always a cart basket, never an accepted offer. */
+async function attemptHoldingOrder(admin: Admin, buyerId: string, orderId: string) {
+  return admin
+    .from("purchase_attempts")
+    .select("idempotency_key, result")
+    .eq("buyer_id", buyerId)
+    .contains("result", { orders: [{ order_id: orderId }] })
+    .maybeSingle();
+}
+
+/**
+ * OS-W17 ("Edit cart"): Remove on a part the buyer's own unfinished checkout
+ * holds. The whole basket that checkout reserved is released under the same
+ * rule as a restart (payment cancelled first, a paid one settled, an
+ * uncertain one kept), so the parts left in the cart can check out again at
+ * once instead of being "held by your checkout" for 15 minutes.
+ *
+ * Who the buyer is comes from the caller: the signed-in account, or, for a
+ * guest, the orders named in this browser's signed checkout receipt.
+ * `none` means no live checkout of theirs holds the part; nothing changed.
+ */
+export async function releaseCheckoutHolding(
+  admin: Admin,
+  input: { listingId: string } & ({ buyerId: string } | { guestOrderIds: string[] }),
+  deps: CheckoutReleaseDeps = stripeDeps
+): Promise<CheckoutReleaseOutcome | { outcome: "none" }> {
+  if ("guestOrderIds" in input && !input.guestOrderIds.length) return { outcome: "none" };
+  let query = admin
+    .from("orders")
+    .select("id, buyer_id, order_items(listing_id)")
+    .is("origin_offer_id", null)
+    .in("status", [...LIVE_STATUSES]);
+  query = "buyerId" in input ? query.eq("buyer_id", input.buyerId) : query.in("id", input.guestOrderIds);
+  const { data: orders, error } = await query;
+  if (error || !Array.isArray(orders)) {
+    reportError("[checkout] held-part lookup failed", { error });
+    return { outcome: "unresolved" };
+  }
+  const holding = orders.find((order) =>
+    (order.order_items ?? []).some((item) => item.listing_id === input.listingId)
+  );
+  if (!holding?.buyer_id) return { outcome: "none" };
+  const buyerId = holding.buyer_id;
+
+  const { data: attempt, error: attemptError } = await attemptHoldingOrder(admin, buyerId, holding.id);
+  if (attemptError) {
+    reportError("[checkout] held-part attempt lookup failed", { buyerId, attemptError });
+    return { outcome: "unresolved" };
+  }
+  if (!attempt) return { outcome: "none" };
+  const result = attempt.result;
+  const orderIds =
+    result && typeof result === "object" && !Array.isArray(result) && Array.isArray(result.orders)
+      ? result.orders.flatMap((order) =>
+          order && typeof order === "object" && !Array.isArray(order) && typeof order.order_id === "string"
+            ? [order.order_id]
+            : []
+        )
+      : [];
+  if (!orderIds.includes(holding.id)) return { outcome: "unresolved" };
+
+  return releaseCartCheckout(admin, { buyerId, idempotencyKey: attempt.idempotency_key, orderIds }, deps);
+}

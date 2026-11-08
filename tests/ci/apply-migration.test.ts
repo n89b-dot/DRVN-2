@@ -19,6 +19,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { dynamicExecutes, splitStatements } from "../../scripts/lib/sql-statements.mjs";
+import { catalogFromRows } from "../../scripts/lib/migration-objects.mjs";
 import {
   allowedFor,
   confirmationCode,
@@ -70,6 +71,8 @@ function fakeClient(options: {
     queries,
     recorded,
     ended: false,
+    /** The transaction the next query would run in. */
+    txn: () => txn,
     on() {},
     async connect() {},
     async end() {
@@ -516,6 +519,125 @@ describe("running", () => {
   });
 });
 
+// OS-R-migrations: --record-only writes history rows for files that already
+// ran, without running them, and only for files whose objects all verify.
+describe("recording without running (--record-only)", () => {
+  let recDir: string;
+  const REC_A = "begin;\ncreate table public.rec_a (id int);\ncreate function public.rec_fn(p int) returns int language sql as $$ select p $$;\ncommit;\n";
+  const REC_B = "create table public.rec_b (id int);\n";
+  const REC_C = "grant select on public.rec_a to anon;\n";
+  const present = {
+    relations: [{ schema: "public", name: "rec_a", relkind: "r" }],
+    columns: [{ schema: "public", table: "rec_a", name: "id" }],
+    functions: [{ schema: "public", name: "rec_fn", args: ["integer"], body: " select p " }],
+  };
+  const files = () => [
+    ["20990201000000_rec_a.sql", REC_A],
+    ["20990201000100_rec_b.sql", REC_B],
+    ["20990201000200_rec_c.sql", REC_C],
+  ].map(([name, text]) => {
+    const p = path.join(recDir, name);
+    fs.writeFileSync(p, text);
+    return p;
+  });
+  /** A catalog reader that notes the transaction it ran in; `rows` may differ per call. */
+  const catalogReader = (...rows: (typeof present)[]) => {
+    const calls: string[] = [];
+    let n = 0;
+    const read = async (client: ReturnType<typeof fakeClient>) => {
+      calls.push(client.txn());
+      return catalogFromRows(rows[Math.min(n++, rows.length - 1)]);
+    };
+    return { calls, read };
+  };
+  const rec = (argv: string[], client: ReturnType<typeof fakeClient> | null, readCatalog?: unknown) =>
+    runner(["--target", "fixture-dev", "--record-only", ...argv], client, { migrationsDir: recDir, ...(readCatalog ? { readCatalog } : {}) });
+
+  beforeAll(() => {
+    recDir = path.join(dir, "rec/supabase/migrations");
+    fs.mkdirSync(recDir, { recursive: true });
+  });
+
+  it("dry-runs read-only: verifies each file against the catalog and lists every refusal with its reason", async () => {
+    const client = fakeClient({ publicTables: 40 });
+    const reader = catalogReader(present);
+    const result = await rec(files(), client, reader.read);
+    expect(result.code).toBe(0);
+    expect(result.out).toMatch(/record +20990201000000_rec_a\.sql .*\(3 object\(s\) verified\)/);
+    expect(result.out).toMatch(/refuse 20990201000100_rec_b\.sql .*\n\s+missing: table public\.rec_b/);
+    expect(result.out).toMatch(/refuse 20990201000200_rec_c\.sql .*\n\s+nothing to check: .*grants or comments only/);
+    expect(result.out).toMatch(/1 file\(s\) to record without running them, 2 refused, 0 already recorded\. Nothing was changed\./);
+    expect(result.out).toMatch(/--record-only --apply --confirm [0-9a-f]{12} /);
+    expect(reader.calls).toEqual(["read"]);
+    expect(client.queries.every((q) => q.txn !== "write")).toBe(true);
+    expect(client.recorded.size).toBe(0);
+    expect(result.configs[0]).toMatchObject({ ssl: { ca: "fixture-ca", rejectUnauthorized: true, servername: `db.${REF}.supabase.co` } });
+  });
+
+  it("records only the verified files, in one transaction under the run lock, and runs none of them", async () => {
+    const dry = await rec(files(), fakeClient({}), catalogReader(present).read);
+    const code = confirmFrom(dry.out)!;
+    const client = fakeClient({});
+    const reader = catalogReader(present);
+    const result = await rec(["--apply", "--confirm", code, ...files()], client, reader.read);
+    expect(result.code).toBe(0);
+    expect([...client.recorded]).toEqual(["20990201000000"]);
+    expect(result.out).toMatch(/recorded: 20990201000000_rec_a\.sql \(not run\)/);
+    expect(reader.calls).toEqual(["read", "write"]);
+    const writes = client.queries.filter((q) => q.txn === "write").map((q) => q.text);
+    expect(writes[0]).toBe("select pg_advisory_xact_lock($1)");
+    expect(writes.filter((t) => t.startsWith("insert into supabase_migrations"))).toHaveLength(1);
+    expect(client.queries.at(-1)?.text).toBe("commit");
+    const insert = client.queries.find((q) => q.text.startsWith("insert into supabase_migrations"))!;
+    expect(insert.values?.slice(0, 2)).toEqual(["20990201000000", "rec_a"]);
+    expect((insert.values?.[2] as string[])[0]).toMatch(/^-- recorded by scripts\/apply-migration\.mjs --record-only: .*not run\n[\s\S]*create table public\.rec_a/);
+    expect(client.queries.some((q) => q.text.includes("rec_a") || q.text.includes("rec_fn"))).toBe(false);
+  });
+
+  it("records nothing when what verifies changes between the dry run and the confirmed run", async () => {
+    const code = confirmFrom((await rec(files(), fakeClient({}), catalogReader(present).read)).out)!;
+    // Gone before the run starts: refused before any write.
+    const gone = { ...present, functions: [] };
+    const early = fakeClient({});
+    const before = await rec(["--apply", "--confirm", code, ...files()], early, catalogReader(gone).read);
+    expect(before.code).toBe(1);
+    expect(before.err).toMatch(/doesn't match what verifies on this target now/);
+    expect(early.queries.every((q) => q.txn !== "write")).toBe(true);
+    // Gone between the read-only check and the lock: the recheck inside the transaction refuses.
+    const late = fakeClient({});
+    const during = await rec(["--apply", "--confirm", code, ...files()], late, catalogReader(present, gone).read);
+    expect(during.code).toBe(1);
+    expect(during.err).toMatch(/isn't what the dry run verified/);
+    expect(late.recorded.size).toBe(0);
+    expect(late.queries.at(-1)?.text).toBe("rollback");
+  });
+
+  it("keeps its confirmation codes apart from an apply's, and needs one", async () => {
+    const applyCode = confirmFrom((await runner(["--target", "fixture-dev", ...files()], fakeClient({}), { migrationsDir: recDir })).out)!;
+    const crossed = fakeClient({});
+    const asRecord = await rec(["--apply", "--confirm", applyCode, ...files()], crossed, catalogReader(present).read);
+    expect(asRecord.code).toBe(1);
+    expect(crossed.recorded.size).toBe(0);
+
+    const recordCode = confirmFrom((await rec(files(), fakeClient({}), catalogReader(present).read)).out)!;
+    const asApply = await runner(["--target", "fixture-dev", "--apply", "--confirm", recordCode, ...files()], null, { migrationsDir: recDir });
+    expect(asApply.code).toBe(1);
+    expect(asApply.configs).toEqual([]);
+
+    const bare = await rec(["--apply", ...files()], null);
+    expect(bare.code).toBe(1);
+    expect(bare.err).toMatch(/--apply needs --confirm/);
+    expect(bare.configs).toEqual([]);
+  });
+
+  it("skips a file already recorded", async () => {
+    const result = await rec(files(), fakeClient({ recorded: ["20990201000000"] }), catalogReader(present).read);
+    expect(result.out).toMatch(/skip +20990201000000_rec_a\.sql .*\n\s+already recorded/);
+    expect(result.out).toMatch(/0 file\(s\) to record/);
+    expect(result.out).not.toMatch(/--confirm/);
+  });
+});
+
 describe("TLS to the database", () => {
   let certDir: string;
   const pem = (name: string) => fs.readFileSync(path.join(certDir, name), "utf8");
@@ -728,6 +850,73 @@ describe.skipIf(!realUrl)("against a real, empty local Postgres", () => {
     expect(result.code).toBe(1);
     expect((await db.query("select count(*)::int as n from public.fixture_base")).rows[0].n).toBe(2);
     expect(await history()).toEqual(["0001"]);
+  });
+
+  it("records files that really ran, without running them, and refuses one that never ran or differs", async () => {
+    const table = file(
+      "20990102000000_fixture_rec_table.sql",
+      `begin;
+create table public.fixture_rec (id int not null, note text, constraint fixture_rec_id_positive check (id > 0));
+create index fixture_rec_note_idx on public.fixture_rec (note);
+alter table public.fixture_rec enable row level security;
+create policy "fixture rec readable" on public.fixture_rec for select using (true);
+commit;
+`,
+    );
+    const fn = file(
+      "20990102000100_fixture_rec_fn.sql",
+      `begin;
+create or replace function public.fixture_rec_fn(p_id integer, p_label text default 'x') returns integer language sql as $$ select p_id $$;
+create function public.fixture_rec_touch() returns trigger language plpgsql as $$ begin return new; end $$;
+create trigger fixture_rec_touch before update on public.fixture_rec for each row execute function public.fixture_rec_touch();
+commit;
+`,
+    );
+    const restated = file(
+      "20990102000200_fixture_rec_restated.sql",
+      `begin;
+alter table public.fixture_rec add column if not exists amount numeric(10,2);
+create or replace function public.fixture_rec_fn(p_id int, p_label text default 'y') returns integer language sql as $$ select p_id + 1 $$;
+commit;
+`,
+    );
+    const ran = [table, fn, restated];
+    const versions = ["20990102000000", "20990102000100", "20990102000200"];
+    expect((await twoStep(ran)).code).toBe(0);
+    // The tracking gap: the objects are there, the history rows aren't.
+    await db.query("delete from supabase_migrations.schema_migrations where version = any($1)", [versions]);
+    const neverRan = file("20990102000300_fixture_rec_never_ran.sql", "begin;\ncreate table public.fixture_rec_missing (id int);\ncommit;\n");
+    // The tree's latest definition of fixture_rec_touch, which the target doesn't have.
+    const differs = file(
+      "20990102000400_fixture_rec_differs.sql",
+      "begin;\ncreate or replace function public.fixture_rec_touch() returns trigger language plpgsql as $$ begin new.note := 'changed'; return new; end $$;\ncommit;\n",
+    );
+    const all = [...ran, neverRan, differs];
+    const before = await history();
+
+    const dry = await runner(["--target", "fixture-dev", "--record-only", ...all], real());
+    expect(dry.code).toBe(0);
+    expect(dry.out).toMatch(/record +20990102000000_fixture_rec_table\.sql .*\(6 object\(s\) verified\)/);
+    expect(dry.out).toMatch(/record +20990102000100_fixture_rec_fn\.sql .*\(3 object\(s\) verified\)/);
+    expect(dry.out).toMatch(/record +20990102000200_fixture_rec_restated\.sql .*\(2 object\(s\) verified\)/);
+    expect(dry.out).toMatch(/refuse 20990102000300_fixture_rec_never_ran\.sql .*\n\s+missing: table public\.fixture_rec_missing/);
+    expect(dry.out).toMatch(/refuse 20990102000400_fixture_rec_differs\.sql .*\n\s+differs: function public\.fixture_rec_touch\(\)/);
+    expect(await history()).toEqual(before);
+
+    const done = await runner(["--target", "fixture-dev", "--record-only", "--apply", "--confirm", confirmFrom(dry.out)!, ...all], real());
+    expect(done.code).toBe(0);
+    expect(await history()).toEqual([...before, ...versions].sort());
+    const rows = await db.query("select statements[1] as text from supabase_migrations.schema_migrations where version = any($1)", [versions]);
+    for (const row of rows.rows) expect(row.text).toMatch(/^-- recorded by scripts\/apply-migration\.mjs --record-only/);
+    // Nothing ran: no new table, and the trigger function keeps the body that was applied.
+    expect(await tables()).not.toContain("fixture_rec_missing");
+    const body = await db.query("select prosrc from pg_proc where proname = 'fixture_rec_touch'");
+    expect(body.rows[0].prosrc).not.toMatch(/changed/);
+
+    const again = await runner(["--target", "fixture-dev", "--record-only", ...all], real());
+    expect(again.out).toMatch(/0 file\(s\) to record without running them, 2 refused, 3 already recorded/);
+    await db.query("drop table public.fixture_rec; drop function public.fixture_rec_fn(int, text), public.fixture_rec_touch()");
+    await db.query("delete from supabase_migrations.schema_migrations where version = any($1)", [versions]);
   });
 
   it("applies a file once, then skips it", async () => {
