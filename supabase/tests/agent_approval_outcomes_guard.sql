@@ -74,7 +74,6 @@ declare
   m record;
   expected numeric;
 begin
-  update public.beta_access_config set enforced = false where singleton = true;
   update public.agent_controls set cleared_at = now() where scope = 'all' and cleared_at is null;
   update public.agent_beta_steps set open = true where step in ('seller', 'buyer');
   insert into auth.users(id, email) values (seller, 'outcome-guard-seller@drvn.test'), (buyer, 'outcome-guard-buyer@drvn.test');

@@ -11,14 +11,14 @@ import { SignupForm } from "./signup-form";
 // it to Google sign-in too.
 describe("sign-up keeps the return target (F-3)", () => {
   it("posts next=/garage and carries it to Sign in and Google", () => {
-    const html = renderToStaticMarkup(<SignupForm next="/garage" betaEnforced={false} google />);
+    const html = renderToStaticMarkup(<SignupForm next="/garage" google />);
     expect(html).toMatch(/<input type="hidden" name="next" value="\/garage"\/>/);
     expect(html).toContain('href="/login?next=%2Fgarage"');
     expect(html).toContain('data-oauth-next="/garage"');
   });
 
   it("posts no destination when there is none", () => {
-    const html = renderToStaticMarkup(<SignupForm betaEnforced={false} />);
+    const html = renderToStaticMarkup(<SignupForm />);
     expect(html).not.toContain('name="next"');
   });
 });
