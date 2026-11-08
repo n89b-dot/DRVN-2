@@ -60,9 +60,11 @@ export function outcomeForResolution(outcome: "actioned" | "dismissed"): Reporte
 }
 
 /**
- * After a takedown, closes every other open report on the same thing — and,
- * for a removed post, the open reports on its replies, which went with it.
- * Returns the ids it closed so each reporter can be told.
+ * After a listing takedown or a hidden build, closes every other open report
+ * on the same thing. Returns the ids it closed so each reporter can be told.
+ * A removed post or reply doesn't come here: take_down_reported_content
+ * (20261108130100) closes its reports, and its replies', in the same
+ * transaction, since a post's reply ids can outnumber one PostgREST read.
  */
 export async function closeSiblingReports(
   admin: SupabaseClient<Database>,
@@ -93,4 +95,52 @@ export async function closeSiblingReports(
     closed.push(...(data ?? []));
   }
   return closed;
+}
+
+/** A report a takedown closed, as take_down_reported_content returns it. */
+export type ClosedReport = { id: string; subject_type: string; reporter_id: string | null };
+
+/** Notifications inserted per request: well under PostgREST's body limits. */
+const REPORTER_NOTICE_CHUNK = 500;
+
+/**
+ * The "we reviewed your report" notices for every report a takedown closed —
+ * one per reporter and kind of thing, so someone who reported a post and ten
+ * of its replies hears twice, not eleven times. Reports with no reporter
+ * (their account is gone) are skipped.
+ */
+export function reporterNotifications(closed: ClosedReport[], outcome: ReporterOutcome) {
+  const seen = new Set<string>();
+  const rows: Database["public"]["Tables"]["notifications"]["Insert"][] = [];
+  for (const report of closed) {
+    if (!report.reporter_id) continue;
+    const key = `${report.reporter_id}:${report.subject_type}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const notice = reporterNotice(report.subject_type, outcome);
+    rows.push({
+      user_id: report.reporter_id,
+      kind: "report_reviewed",
+      section: notice.section,
+      title: notice.title,
+      body: notice.body,
+      href: null,
+      actor_id: null,
+    });
+  }
+  return rows;
+}
+
+/** Tells every reporter whose report a takedown closed, in batches. */
+export async function notifyReporters(
+  admin: SupabaseClient<Database>,
+  closed: ClosedReport[],
+  outcome: ReporterOutcome
+): Promise<number> {
+  const rows = reporterNotifications(closed, outcome);
+  for (let start = 0; start < rows.length; start += REPORTER_NOTICE_CHUNK) {
+    const { error } = await admin.from("notifications").insert(rows.slice(start, start + REPORTER_NOTICE_CHUNK));
+    if (error) throw new Error(error.message);
+  }
+  return rows.length;
 }

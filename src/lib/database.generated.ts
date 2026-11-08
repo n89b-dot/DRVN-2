@@ -8988,6 +8988,10 @@ export type Database = {
         Args: { p_listing_ids: string[]; p_post_id: string }
         Returns: undefined
       }
+      take_down_reported_content: {
+        Args: { p_actor: string; p_reason: string; p_report: string }
+        Returns: Json
+      }
       trending_models: {
         Args: { p_days?: number; p_limit?: number }
         Returns: {
