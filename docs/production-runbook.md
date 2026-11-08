@@ -183,6 +183,7 @@ if any is missing or invalid.
 | `TYPESENSE_URL`, `TYPESENSE_API_KEY` | optional | both set = Typesense search; unset = Postgres search, and the `search` health family reports disabled |
 | `POSTHOG_KEY`, `POSTHOG_HOST` | optional | consented analytics only; unset = the `analytics` health family reports disabled |
 | `SENTRY_RELEASE` | optional | release tag; falls back to `VERCEL_GIT_COMMIT_SHA` (set by Vercel), then `GIT_COMMIT_SHA`. Error reports are tagged with the deployment from `VERCEL_DEPLOYMENT_ID`, then `DEPLOY_ID`; set `GIT_COMMIT_SHA` and `DEPLOY_ID` on a host that isn't Vercel |
+| `NEXT_BUILD_ID`, `DRVN_NEXT_DIST_DIR` | optional | read by the public `GET /api/version` (`{sha, buildId, newestMigrationOnDisk, startedAt}`, no-store): `buildId` is `NEXT_BUILD_ID` if the host sets it, else the build's own `BUILD_ID` file in `DRVN_NEXT_DIST_DIR` (default `.next`); `sha` is `VERCEL_GIT_COMMIT_SHA`, then `GIT_COMMIT_SHA`. Leave both unset on Vercel |
 
 Stripe (live mode). `scripts/owner/stripe-webhooks.mjs --live` creates or
 updates both endpoints below (dry run by default; `docs/owner/README.md`).

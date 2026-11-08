@@ -24,7 +24,8 @@
     "test:operations": "vitest run --config vitest.operations.config.ts",
     "test:monitor": "node --test scripts/check-worker-health.test.mjs scripts/release-candidate.test.mjs scripts/owner/stripe-webhooks.test.mjs scripts/owner/rotate-seed-password.test.mjs scripts/owner/stripe-negative-balances.test.mjs",
     "preview:build": "node scripts/build-interface-preview.mjs",
-    "docs:crosswalk": "node scripts/crosswalk-json.mjs"
+    "docs:crosswalk": "node scripts/crosswalk-json.mjs",
+    "build-info": "node scripts/build-info.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",
