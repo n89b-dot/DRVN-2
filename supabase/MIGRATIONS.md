@@ -17,6 +17,14 @@ recorded file is skipped, and a destructive baseline (0001) is refused on a
 database with any table in `public`. Details: "Applying without Docker or
 psql" below.
 
+## November 7 — payout hold fallbacks become 2 days, R-hold (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261107220900_payout_hold_fallback_two_days.sql` | not applied |
+
+Apply after every earlier migration. Neil, 7 Nov 2026: the fallbacks follow his 2-day rule. `settlement_settings.payout_hold_days` defaults to 2 (was 7), and `payout_available_at()` (restated from `20261006100000`, the only change being the coalesce's 7 → 2) treats a missing settings row as a fixed 2 days. The deployed row is already fixed, 2 days (`20261009100000`), so no payout date changes; dates already set never move. The app's `DEFAULT_PAYOUT_HOLD` changes to 2 in the same PR. Guard: `payout_hold_setting_guard.sql` check 7 (missing row and a new row both mean 2 days), which fails on the schema before this migration.
+
 ## November 7 — Settlement correctness and reconciliation, OS-W20 (not applied anywhere)
 
 | File | Applied to |
@@ -818,9 +826,8 @@ were diffed against a fresh database: only the intended lines changed.
 `claim_window` (7-day floor) and auto-confirm after 21 days. Guards that test
 the fixed 7-day mechanism pin it inside their own rolled-back transaction.
 (Superseded: `20261009100000` sets the live rule to `fixed`, 2 days after
-delivery; `docs/decisions/payout-hold.md`. The code and SQL fallback for a
-missing settings row is still 7 here; Neil ruled on 7 Nov 2026 that it
-becomes 2, in the R-hold follow-up.)
+delivery; `docs/decisions/payout-hold.md`. `20261107220900` makes the column
+default and the missing-row fallback 2 days as well.)
 `20261006100300` adds `seller_payout_dates()`: a seller reads the payout date
 already set on their own orders, so the ledger shows the date the database
 pays on rather than re-dating delivered orders with whatever the setting is
