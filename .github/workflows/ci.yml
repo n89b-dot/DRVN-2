@@ -490,6 +490,7 @@ jobs:
     needs: [verify, secrets, secrets-full, sql-guard, e2e, stripe-integration]
     steps:
       - name: Require executed verification
+        id: require
         env:
           VERIFY: ${{ needs.verify.result }}
           SECRETS: ${{ needs.secrets.result }}
@@ -502,15 +503,21 @@ jobs:
           STRIPE_RAN: ${{ needs.stripe-integration.outputs.ran }}
         # Every requirement is checked and named, so a red gate says which
         # suite it is waiting on rather than failing on the first bare test.
+        # Each outcome is also kept for the per-commit record below.
         run: |
           failed=0
+          : > "$RUNNER_TEMP/requirements.jsonl"
           require() {
             if [ "$2" = "$3" ]; then
               echo "ok: $1"
+              ok=true
             else
               echo "::error title=release-gate::$1 is '${2:-unset}', needs '$3'"
               failed=1
+              ok=false
             fi
+            jq -cn --arg name "$1" --arg value "${2:-unset}" --arg needs "$3" --argjson ok "$ok" \
+              '{($name): {value: $value, needs: $needs, ok: $ok}}' >> "$RUNNER_TEMP/requirements.jsonl"
           }
           require verify "$VERIFY" success
           require secrets "$SECRETS" success
@@ -522,6 +529,55 @@ jobs:
           require stripe-integration "$STRIPE" success
           require "stripe-integration executed" "$STRIPE_RAN" true
           exit "$failed"
+
+      # The per-commit record for the Intelligence OS (docs/ids.md): one file
+      # that says whether this commit got a finished green gate, and why not.
+      # Written and kept on every outcome, red included.
+      - name: Fetch the browser summary for the record
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: browser-release-summary-${{ github.sha }}
+          path: ${{ runner.temp }}/browser-summary
+
+      - name: Write the release-gate record
+        if: always()
+        env:
+          SHA: ${{ github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          REF: ${{ github.ref }}
+          EVENT: ${{ github.event_name }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RESULT: ${{ steps.require.outcome }}
+          E2E_FIRST_ATTEMPT: ${{ needs.e2e.outputs.first_attempt_passed }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/release-gate"
+          summary="$RUNNER_TEMP/browser-summary/browser-release-$SHA.json"
+          counts=null
+          if [ -s "$summary" ]; then counts=$(jq -c '.counts' "$summary"); fi
+          requirements='{}'
+          if [ -s "$RUNNER_TEMP/requirements.jsonl" ]; then requirements=$(jq -cs 'add' "$RUNNER_TEMP/requirements.jsonl"); fi
+          jq -n \
+            --arg sha "$SHA" --arg head_sha "$HEAD_SHA" --arg ref "$REF" --arg event "$EVENT" \
+            --arg result "${RESULT:-unknown}" --argjson run_id "$RUN_ID" --argjson run_attempt "$RUN_ATTEMPT" \
+            --argjson requirements "$requirements" \
+            --argjson first_attempt_passed "$([ "$E2E_FIRST_ATTEMPT" = true ] && echo true || echo false)" \
+            --argjson browser_counts "$counts" \
+            '{sha: $sha, head_sha: $head_sha, ref: $ref, event: $event, run_id: $run_id, run_attempt: $run_attempt,
+              result: $result, requirements: $requirements, first_attempt_passed: $first_attempt_passed,
+              browser_counts: $browser_counts}' > "$RUNNER_TEMP/release-gate/release-gate-$SHA.json"
+          cat "$RUNNER_TEMP/release-gate/release-gate-$SHA.json"
+
+      - name: Retain the release-gate record
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-gate-${{ github.sha }}
+          path: ${{ runner.temp }}/release-gate/release-gate-${{ github.sha }}.json
+          if-no-files-found: error
+          retention-days: 30
 
   # The honest green: says out loud what did and didn't run, so a passing
   # build can't be mistaken for full coverage.
