@@ -11,13 +11,13 @@ export const PHOTO_REQUIRED =
 export const MAX_SHIPPING_CENTS = 10_000_000;
 
 export const PAYOUTS_REQUIRED =
-  "Publishing needs payouts set up first (Selling → Payouts), so a sale has somewhere to send your money. You can still save this as a draft.";
+  "Publishing needs your payout details sent to Stripe first (Selling → Payouts) — and, once a sale is 14 days old, payouts switched on — so a sale has somewhere to send your money. You can still save this as a draft.";
 
 /**
  * The database's refusals of a listing write, in the seller's words. Since
  * 20261107210000 the rules the sell form checks are held there too, so a
  * write the form let through (or one made around it) is refused with a code:
- * LS001 payouts aren't set up, 23514 a live listing needs a photo, 54000 too
+ * LS001 payout setup not started (or restricted at day 14), 23514 a live listing needs a photo, 54000 too
  * many photos or fitment rows, 55000 the listing is held or sold. Null for
  * anything else, which the caller reports.
  */

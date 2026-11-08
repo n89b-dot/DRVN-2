@@ -48,6 +48,9 @@ export type RefundInitiator =
   | { kind: "seller_cancel"; sellerId: string }
   | { kind: "card_dispute_lost" }
   | { kind: "dispute_sla" }
+  /** Payouts still off 14 days after the sale; the order wasn't dispatched
+   *  (20261108100000, ./payout-deadline.ts). */
+  | { kind: "payout_deadline" }
   /** A completed RMA (0055) executing its agreed refund. The requested_by
    *  label ("return:<id>") is how the return row finds its operation. */
   | { kind: "return_completed"; returnId: string };
@@ -115,6 +118,8 @@ function initiatorLabel(initiator: RefundInitiator): string {
       return "stripe:dispute_lost";
     case "dispute_sla":
       return "scheduler:dispute_sla";
+    case "payout_deadline":
+      return "scheduler:payout_deadline";
     case "return_completed":
       return `return:${initiator.returnId}`;
   }

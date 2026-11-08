@@ -17,6 +17,16 @@ recorded file is skipped, and a destructive baseline (0001) is refused on a
 database with any table in `public`. Details: "Applying without Docker or
 psql" below.
 
+## November 8 — Payout setup: started to sell, 14 days to finish, N244 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261108100000_payout_setup_started.sql` | — |
+
+Apply after every earlier migration, then deploy the app from the same PR: the new app writes `payout_details_submitted` on every Connect sync and calls the two new RPCs from the money worker. The old app keeps working against the new database (it never writes the new column, so sellers stay "not started" until the new app syncs them, which is the old rule). Owner ruling 8 Nov 2026, "go with the eBay approach, 14 days" (`docs/decisions/seller-payout-setup.md`). New `profiles.payout_details_submitted` (Stripe's `details_submitted`, backfilled true where payouts are already enabled) and `profiles.payout_restricted_at`, both server-only (no client grant; `guard_profile_columns` restated from `0018_admin.sql`, keeping the search_path `20260905143949` pinned). `private.seller_can_take_payment` (latest `20261107210000`) now says yes for payouts enabled, or a connected account with details submitted and no restriction, so publishing, reserving, `purchase_begin`'s skip and `prepare_payment_request` all follow the new rule unchanged. New `claim_payout_deadline_cancellations(limit)` and `settle_payout_deadline_cancellation(order)` (service role only), tables `private.payout_deadline_cancellations` / `private.payout_deadline_paused_listings`, the `orders_payout_deadline_dispatch_guard` trigger (LS002) and two `profiles` triggers that clear the restriction and restore the paused listings when payouts are enabled. `private.scheduled_job_inventory()` restated from `20261107210100` with only the `payoutDeadlines` family added to `drvn-transfer-worker`; no cron job changes. Anything that restates the inventory later must keep `payoutDeadlines` (and `drvn-ledger-reconciliation`). Payout release is unchanged (`blocked_unpayable` until payouts are enabled). Guard: `supabase/tests/payout_setup_started_guard.sql` (new; fails on the schema before this migration: the columns don't exist).
+
+Checked on a fresh `supabase/postgres:17.6.1.165` with the CI shim: every migration applies and every SQL guard passes.
+
 ## November 7 — payout hold fallbacks become 2 days, R-hold (not applied anywhere)
 
 | File | Applied to |

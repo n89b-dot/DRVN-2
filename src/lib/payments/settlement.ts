@@ -615,9 +615,11 @@ export async function applyAccountUpdate(
   account: Stripe.Account
 ): Promise<"committed" | "retry" | "irrelevant"> {
   const payable = account.payouts_enabled === true;
+  // Setup started (details sent to Stripe) is what lets a seller list and
+  // sell (20261108100000); payouts enabled is what releases the money.
   const { data: sellers, error } = await admin
     .from("profiles")
-    .update({ payouts_enabled: payable })
+    .update({ payouts_enabled: payable, payout_details_submitted: account.details_submitted === true })
     .eq("stripe_account_id", account.id)
     .select("id");
   if (error) {

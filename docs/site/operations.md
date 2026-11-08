@@ -18,7 +18,7 @@ DRVN's async architecture is **Postgres-owned**, deliberately:
   - `/api/jobs/transfers` — one money pass (`runMoneyWorkerPass`,
     `src/lib/money-worker.ts`): expired holds, capture reconciliation, due
     transfers, transfer reconciliation, refund resume, label voids, return
-    timers, dispute SLA, alert outbox, purchase analytics and receipts, each
+    timers, dispute SLA, payout setup deadline, alert outbox, purchase analytics and receipts, each
     recorded in `worker_runs`. The retry heartbeat for every durable money
     queue. The console's "Run worker now" runs exactly this pass.
   - `/api/jobs/search` and `/api/jobs/account-deletions` — search index

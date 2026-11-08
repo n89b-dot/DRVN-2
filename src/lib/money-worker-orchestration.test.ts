@@ -12,7 +12,7 @@ const jobs = vi.hoisted(() => {
   const ok = () => vi.fn<() => Promise<unknown>>(async () => ({ failed: 0 }));
   return {
     expiries: ok(), captures: ok(), transfers: ok(), carry: ok(), transferReconciliation: ok(), refunds: ok(),
-    labelVoids: ok(), trackers: ok(), returns: ok(), disputes: ok(), alerts: ok(), analytics: ok(), receipts: ok(), autoConfirm: ok(),
+    labelVoids: ok(), trackers: ok(), returns: ok(), disputes: ok(), payoutDeadlines: ok(), alerts: ok(), analytics: ok(), receipts: ok(), autoConfirm: ok(),
   };
 });
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
@@ -22,6 +22,7 @@ vi.mock("@/features/commerce/returns", () => ({ processReturnTimers: () => jobs.
 vi.mock("@/lib/payments/capture-reconciliation", () => ({ reconcileCapturedPayments: () => jobs.captures() }));
 vi.mock("@/lib/payments/dispute-sla", () => ({ processDisputeSla: () => jobs.disputes() }));
 vi.mock("@/lib/payments/carry-payout-worker", () => ({ processCarryPayouts: () => jobs.carry() }));
+vi.mock("@/lib/payments/payout-deadline", () => ({ processPayoutDeadlines: () => jobs.payoutDeadlines() }));
 vi.mock("@/lib/payments/refunds", () => ({ resumeIncompleteRefunds: () => jobs.refunds() }));
 vi.mock("@/lib/payments/reservation-expiry", () => ({ processReservationExpiries: () => jobs.expiries() }));
 vi.mock("@/lib/payments/transfer-worker", () => ({

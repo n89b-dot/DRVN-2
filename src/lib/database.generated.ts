@@ -4622,6 +4622,8 @@ export type Database = {
           location: string | null
           main_car_id: string | null
           notification_prefs: Json
+          payout_details_submitted: boolean
+          payout_restricted_at: string | null
           payouts_enabled: boolean
           profile_type: string
           region: string | null
@@ -4648,6 +4650,8 @@ export type Database = {
           location?: string | null
           main_car_id?: string | null
           notification_prefs?: Json
+          payout_details_submitted?: boolean
+          payout_restricted_at?: string | null
           payouts_enabled?: boolean
           profile_type?: string
           region?: string | null
@@ -4674,6 +4678,8 @@ export type Database = {
           location?: string | null
           main_car_id?: string | null
           notification_prefs?: Json
+          payout_details_submitted?: boolean
+          payout_restricted_at?: string | null
           payouts_enabled?: boolean
           profile_type?: string
           region?: string | null
@@ -7090,6 +7096,10 @@ export type Database = {
         Args: { p_shipment: string; p_worker: string }
         Returns: Json
       }
+      claim_payout_deadline_cancellations: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
       claim_refund_replacement_provider: {
         Args: { p_operation: string }
         Returns: string
@@ -8804,6 +8814,10 @@ export type Database = {
           p_reference: string
           p_source: string
         }
+        Returns: Json
+      }
+      settle_payout_deadline_cancellation: {
+        Args: { p_order: string }
         Returns: Json
       }
       settle_refund_operation: {
