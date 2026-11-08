@@ -105,8 +105,14 @@ begin
   insert into public.agent_events(owner_id, kind, inputs, result)
   values (member, 'tool_call', jsonb_build_object('tool', 'read_listing', 'ids', jsonb_build_object('listingId', '4242 4242 4242 4242')), '{}'::jsonb),
          (member, 'status', jsonb_build_object('note', 'card 4242 4242 4242 4242'), jsonb_build_object('id', cardlike::text));
-  if exists (select 1 from public.agent_events where owner_id = member and (inputs::text ~ '4242 4242 4242 4242' or (kind = 'status' and result::text ~ cardlike::text))) then
+  if exists (select 1 from public.agent_events where owner_id = member and inputs::text ~ '4242 4242 4242 4242') then
     raise exception 'FAIL 3h: the card scrub no longer covers the rest of an event';
+  end if;
+  -- Since 20261108130500 a uuid is never scanned, in any kind of event: the
+  -- status event's id is kept whole (it used to be scrubbed as a card).
+  if (select result->>'id' from public.agent_events where owner_id = member and kind = 'status'
+        and inputs->>'note' = 'card [card number removed]') is distinct from cardlike::text then
+    raise exception 'FAIL 3h2: the card scrub corrupted an id outside a tool call';
   end if;
   c := pg_temp.code(format($q$select public.agent_record_tool_calls(%L, %L, 'ok', '[{"tool":"read_listing","outcome":"maybe"}]')$q$, member, gen_random_uuid()));
   if c <> '22023' then raise exception 'FAIL 3c: a bad outcome was accepted (%)', c; end if;
