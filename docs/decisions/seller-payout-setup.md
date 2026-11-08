@@ -53,14 +53,14 @@ With the stub payment provider there is no money to move, so there is no gate
   the listings the rule paused (not ones the seller paused themselves). The
   parked payouts are released as before.
 
-## Not yet ruled: an order dispatched before day 14
+## Set aside: an order dispatched before day 14
 
 If the seller dispatched (or the buyer has received) the part by day 14 and
 payouts are still off, nothing is refunded: the buyer has the part, and the
 payout keeps waiting until Stripe enables payouts. The seller's listings
-still come down. This was proposed to Neil on 8 November and he didn't
-object, but it isn't a ruling yet. Until he rules, no dispatched order is
-refunded by this rule.
+still come down. Neil, 8 November: there are no orders to dispatch yet, so
+the case doesn't arise and needs no ruling now. It stays as built (no
+refund); revisit it if live orders make it real.
 
 ## What eBay does
 
