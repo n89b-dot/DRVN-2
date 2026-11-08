@@ -22,9 +22,30 @@ export const AGE_CONFIRMATION_HINT = "DRVN is for adults. We only keep that you 
 export const AGE_CONFIRMATION_REQUIRED = "Confirm you're 18 or over to continue.";
 
 /** Where the confirmation was given (the table's `source`). */
-export type AgeConfirmationSource = "email_signup" | "onboarding" | "guest_checkout";
+export type AgeConfirmationSource = "email_signup" | "onboarding" | "guest_checkout" | "returning_member";
 
 /** True only when the box was ticked: absent, empty or any other value is no. */
 export function ageConfirmedIn(formData: FormData): boolean {
   return formData.get(AGE_CONFIRMATION_FIELD) === AGE_CONFIRMATION_VALUE;
 }
+
+/**
+ * N686: members who joined before the confirmation existed (#117, merged
+ * 2026-11-08 02:03:15 UTC) have no record. Each is asked once, the next time
+ * they sign in. Accounts created since always answer on the way in (sign-up,
+ * onboarding or guest checkout), so only the earlier ones are asked here;
+ * an account a server created later (a fixture, a repair) is not.
+ */
+export const AGE_CONFIRMATION_SINCE = "2026-11-08T02:03:15Z";
+
+/** True for an account created before the 18+ confirmation shipped. An unknown date reads as earlier: asking is harmless. */
+export function joinedBeforeAgeConfirmation(createdAt: string | null | undefined): boolean {
+  const at = createdAt ? Date.parse(createdAt) : NaN;
+  return Number.isNaN(at) || at < Date.parse(AGE_CONFIRMATION_SINCE);
+}
+
+/** Where an earlier member confirms, keeping where they were going. */
+export function ageConfirmationPath(next?: string): string {
+  return next ? `/confirm-age?next=${encodeURIComponent(next)}` : "/confirm-age";
+}
+
