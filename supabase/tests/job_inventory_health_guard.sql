@@ -1,5 +1,7 @@
 -- 20261107191000: one job inventory, health judged by running, webhook retries.
 --   A. The inventory and cron.job agree both ways: name, schedule, command (N226, N245).
+--   A2. The families, job by job, equal the runbook's list, and every worker
+--       route the jobs call is accepted (N680).
 --   B. The snapshot reports every inventory job; no fixed row count anywhere.
 --   C. A job is judged by its runs: never succeeded, fresh, failing, overdue,
 --      stuck, and by its schedule row: not scheduled, inactive, changed.
@@ -71,6 +73,53 @@ begin
      or not exists (select 1 from private.scheduled_job_inventory() where job = 'drvn-grow-products-full')
      or not exists (select 1 from private.scheduled_job_inventory() where job = 'drvn-transfer-worker' and 'refunds' = any(families)) then
     raise exception 'FAIL 4: the inventory leaves out a family';
+  end if;
+  -- The families, job by job, as docs/production-runbook.md §4 lists them
+  -- (N680). A restatement of the inventory that drops or moves a family fails
+  -- here by name; tests/ci/job-families.test.ts holds this list, the
+  -- runbook's and src/lib/job-inventory.ts's to the same set.
+  create temporary table pg_temp.expected_families(job text, family text) on commit drop;
+  insert into pg_temp.expected_families(job, family) values
+    ('drvn-agent-worker', 'agent'),
+    ('drvn-deletion-worker', 'deletions'),
+    ('drvn-delivery-auto-confirm', 'deliveryAutoConfirm'),
+    ('drvn-ledger-reconciliation', 'ledgerReconciliation'),
+    ('drvn-listing-import-sweep', 'listingImports'),
+    ('drvn-media-gc', 'media'),
+    ('drvn-saved-search-digests', 'savedSearchDigests'),
+    ('drvn-saved-search-worker', 'savedSearches'),
+    ('drvn-search-worker', 'search'),
+    ('drvn-transfer-worker', 'expiries'),
+    ('drvn-transfer-worker', 'captures'),
+    ('drvn-transfer-worker', 'transfers'),
+    ('drvn-transfer-worker', 'transferReconciliation'),
+    ('drvn-transfer-worker', 'refunds'),
+    ('drvn-transfer-worker', 'labelVoids'),
+    ('drvn-transfer-worker', 'returns'),
+    ('drvn-transfer-worker', 'disputes'),
+    ('drvn-transfer-worker', 'payoutDeadlines'),
+    ('drvn-transfer-worker', 'alerts'),
+    ('drvn-transfer-worker', 'receipts'),
+    ('drvn-transfer-worker', 'analytics');
+  select string_agg(e.job || ':' || e.family, ', ' order by e.job, e.family) into missing
+  from pg_temp.expected_families e
+  where not exists (select 1 from private.scheduled_job_inventory() i where i.job = e.job and e.family = any(i.families));
+  if missing is not null then raise exception 'FAIL 4b: the inventory lost the families % (N680)', missing; end if;
+  select string_agg(i.job || ':' || f, ', ' order by i.job, f) into missing
+  from private.scheduled_job_inventory() i, unnest(i.families) f
+  where not exists (select 1 from pg_temp.expected_families e where e.job = i.job and e.family = f);
+  if missing is not null then raise exception 'FAIL 4c: the inventory has families the runbook does not list: % (N680)', missing; end if;
+  -- Every route the inventory's jobs call is one invoke_remediation_worker
+  -- accepts (with no worker URL it returns before calling anything).
+  delete from public.job_config where key in ('transfer_worker_url', 'transfer_worker_secret');
+  select string_agg(r.route, ', ' order by r.route) into missing
+  from (select distinct (regexp_match(i.command, 'invoke_remediation_worker\(''([a-z-]+)''\)'))[1] as route
+        from private.scheduled_job_inventory() i) r
+  where r.route is not null
+    and pg_temp.code(format('select public.invoke_remediation_worker(%L)', r.route)) <> 'ok';
+  if missing is not null then raise exception 'FAIL 4d: invoke_remediation_worker refuses the routes % (N680)', missing; end if;
+  if (select count(distinct (regexp_match(i.command, 'invoke_remediation_worker\(''([a-z-]+)''\)'))[1]) from private.scheduled_job_inventory() i) <> 8 then
+    raise exception 'FAIL 4e: the inventory no longer calls the eight worker routes (N680)';
   end if;
   raise notice 'PASS A: inventory and cron.job agree by name, schedule and command';
 
