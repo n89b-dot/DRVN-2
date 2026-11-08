@@ -142,15 +142,18 @@ describe("account deletion and financial holds (OS-W11 follow-up)", () => {
     for (const step of DESTRUCTIVE) expect(state.events).not.toContain(step);
   });
 
-  it("lifts the ban when a hold appears during cleanup, and never deletes the sign-in", async () => {
+  // N418 (ruled 8 Nov 2026): this used to lift the ban. After the scrub the
+  // sign-in email and phone are gone, so the member is never reinstated: the
+  // ban stays and the case goes to an operator (late_hold_after_scrub).
+  it("N418: keeps the ban when a hold appears during cleanup, after the scrub, and never deletes the sign-in", async () => {
     state.answers = [CLEAR, CLEAR, HOLD];
-    await processAccountDeletions();
+    await expect(processAccountDeletions()).resolves.toMatchObject({ outcome: "operator_attention" });
     const events = state.events;
-    expect(events.indexOf("lift-ban")).toBeGreaterThan(events.indexOf("scrub_deleted_account"));
-    expect(events.indexOf("lift-ban")).toBeLessThan(events.indexOf("pause_account_deletion_hold"));
+    expect(events).not.toContain("lift-ban");
+    expect(events.indexOf("scrub_deleted_account")).toBeLessThan(events.indexOf("pause_account_deletion_hold"));
     expect(events).not.toContain("delete-auth-user");
     // The hold came from the last check, finalise, which recorded nothing.
-    expect(events.indexOf("finalise")).toBeLessThan(events.indexOf("lift-ban"));
+    expect(events.indexOf("finalise")).toBeLessThan(events.indexOf("pause_account_deletion_hold"));
   });
 
   it("keeps the job's lease and retries, rather than pausing with the member locked out, if the ban can't be lifted", async () => {

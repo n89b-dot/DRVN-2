@@ -974,6 +974,8 @@ export type AccountDeletionCase = {
   userId: string | null;
   person: PartyRef | null;
   outcome: "temporary_financial_hold" | "cleanup_pending" | "operator_attention";
+  /** Why it waits (blocker_code), such as late_hold_after_scrub (N418). */
+  blockerCode: string | null;
   nextAction: string | null;
   owner: string | null;
   pendingDecisions: string[];
@@ -1000,7 +1002,7 @@ export async function getAccountDeletionCases(page = 0): Promise<{ rows: Account
   const from = Math.max(0, page) * size;
   const { data, error, count } = await a
     .from("account_deletion_requests")
-    .select("id, user_id, outcome, next_action, responsible_owner, policy_decisions_pending, updated_at, requested_at, review_at, retain_until", { count: "exact" })
+    .select("id, user_id, outcome, blocker_code, next_action, responsible_owner, policy_decisions_pending, updated_at, requested_at, review_at, retain_until", { count: "exact" })
     .neq("outcome", "completed")
     .order("requested_at", { ascending: true })
     .order("id", { ascending: true })
@@ -1018,6 +1020,7 @@ export async function getAccountDeletionCases(page = 0): Promise<{ rows: Account
       userId: r.user_id,
       person: r.user_id ? (people.get(r.user_id) ?? null) : null,
       outcome: r.outcome as AccountDeletionCase["outcome"],
+      blockerCode: r.blocker_code,
       nextAction: r.next_action,
       owner: r.responsible_owner,
       pendingDecisions: r.policy_decisions_pending ?? [],

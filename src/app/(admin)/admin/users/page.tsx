@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
 import { adminSuspendUser, adminUnsuspendUser } from "@/lib/admin/actions";
-import { isDeletionPending, SUSPENDED_CHIP } from "@/lib/admin/presentation";
+import { deletionBlockerLabel, isDeletionPending, SUSPENDED_CHIP } from "@/lib/admin/presentation";
 import { ACCOUNT_DELETIONS_PAGE_SIZE, getAccountDeletionCases, searchUsers, USER_STATE_FILTERS, USERS_PAGE_SIZE, type UserStateFilter } from "@/lib/admin/queries";
 import { cx, isPersonStub, personLabel } from "@/lib/format";
 
@@ -109,6 +109,9 @@ export default async function AdminUsersPage({
                     <span className={cx("chip", d.outcome === "operator_attention" ? "chip--live" : "chip--warn")}>
                       {DELETION_STATE[d.outcome]}
                     </span>
+                    {deletionBlockerLabel(d.blockerCode) && (
+                      <span className="order__meta block">{deletionBlockerLabel(d.blockerCode)}</span>
+                    )}
                   </td>
                   <td data-label="Next step">
                     {d.nextAction ?? "—"}

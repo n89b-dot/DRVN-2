@@ -37,6 +37,7 @@ vi.mock("./guard", () => ({
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 vi.mock("@/lib/evidence-urls", () => ({ signEvidenceUrls: vi.fn() }));
 
+import { deletionBlockerLabel } from "./presentation";
 import { ACCOUNT_DELETIONS_PAGE_SIZE, getAccountDeletionCases } from "./queries";
 
 const row = (n: number) => ({
@@ -84,5 +85,28 @@ describe("account deletion queue paging (OS-W11 follow-up)", () => {
       { method: "order", args: ["requested_at", { ascending: true }] },
       { method: "order", args: ["id", { ascending: true }] },
     ]);
+  });
+});
+
+describe("N418: the deletion queue says why a case waits", () => {
+  it("N418: a late hold after the scrub reaches the console with its reason", async () => {
+    state.results.account_deletion_requests = {
+      data: [{ ...row(1), outcome: "operator_attention", blocker_code: "late_hold_after_scrub", next_action: "Order ABCD1234 has a return" }],
+      count: 1,
+      error: null,
+    };
+    const result = await getAccountDeletionCases();
+    const select = state.calls.account_deletion_requests.find((c) => c.method === "select");
+    expect(String(select?.args[0])).toContain("blocker_code");
+    expect(result.rows[0]).toMatchObject({ outcome: "operator_attention", blockerCode: "late_hold_after_scrub" });
+    expect(deletionBlockerLabel(result.rows[0].blockerCode)).toBe("Late hold after scrub");
+  });
+
+  it("N418: every code the database writes has a label, and an unknown one still reads", () => {
+    expect(deletionBlockerLabel("open_chargeback")).toBe("Open bank chargeback");
+    expect(deletionBlockerLabel("active_financial_obligations")).toBe("Open order, return, refund or payout");
+    expect(deletionBlockerLabel("immutable_retained_identity")).toBe("Transaction records kept");
+    expect(deletionBlockerLabel("some_new_code")).toBe("some new code");
+    expect(deletionBlockerLabel(null)).toBeNull();
   });
 });
