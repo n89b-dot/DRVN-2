@@ -4,16 +4,18 @@ import {execFileSync} from 'node:child_process';
 import {resolve,relative,join,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-export const REQUIRED_GATES=['unit','typecheck','lint','sql','schema-parity','build','browser-first-attempt','stripe-api','hosted-provider','invitation-boundaries','privacy','accessibility','operations','restore-rollback','staging-soak'];
+export const REQUIRED_GATES=['unit','typecheck','lint','sql','schema-parity','build','browser-first-attempt','stripe-api','hosted-provider','guest-hold-caps','privacy','accessibility','operations','restore-rollback','staging-soak'];
 const digest = value => createHash('sha256').update(value).digest('hex');
 export function validateConfiguration(config) {
- const allowed=['environmentId','canonicalOrigin','supabaseProjectRef','paymentMode','shippingMode','analyticsEnabled','searchEnabled','betaRequired','operator'];
+ const allowed=['environmentId','canonicalOrigin','supabaseProjectRef','paymentMode','shippingMode','analyticsEnabled','searchEnabled','guestCheckout','operator'];
  if (!config || Object.keys(config).some(key=>!allowed.includes(key)) || allowed.some(key=>!(key in config))) throw new Error('Candidate configuration must use the exact non-secret field inventory');
  for(const field of ['environmentId','supabaseProjectRef','operator']) if(typeof config[field]!=='string'||!config[field].trim()) throw new Error(`Missing candidate ${field}`);
  const origin=new URL(config.canonicalOrigin);
  if(origin.protocol!=='https:'||origin.username||origin.password||origin.pathname!=='/'||origin.search||origin.hash)throw new Error('Candidate requires a canonical HTTPS origin');
  if(config.paymentMode!=='stripe-test'||!['stub','easypost-test'].includes(config.shippingMode))throw new Error('Staging candidate must use test providers');
- if(config.betaRequired!==true || typeof config.analyticsEnabled!=='boolean'||typeof config.searchEnabled!=='boolean')throw new Error('Explicit beta and optional-provider decisions required');
+ // R-rcconfig (remediation plan B3): the invite-only beta was removed (#126); guest checkout is open with
+ // holds capped per device, network and listing (20261107220800), so the candidate declares that, not a beta.
+ if(config.guestCheckout!=='capped' || typeof config.analyticsEnabled!=='boolean'||typeof config.searchEnabled!=='boolean')throw new Error('Explicit guest-checkout and optional-provider decisions required');
  return config;
 }
 function treeFiles(root,base=root) {
@@ -33,6 +35,15 @@ export function captureCandidate(root,config,expectedSourceSha) {
  for(const entry of readdirSync(buildRoot,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))){if(entry.isFile()&&(entry.name.endsWith('.json')||entry.name==='BUILD_ID')){const path=join(buildRoot,entry.name);files.push({path:entry.name,sha256:digest(readFileSync(path)),bytes:statSync(path).size});}}
  const migrations=treeFiles(join(root,'supabase/migrations')).filter(file=>file.path.endsWith('.sql'));
  return {version:1,sourceSha,buildId,buildDigest:digest(JSON.stringify(files)),migrationsDigest:digest(JSON.stringify(migrations)),buildFiles:files,migrations,lockfileDigest:digest(readFileSync(join(root,'package-lock.json'))),nodeVersion:process.version,configuration:config,configurationSource:'operator-declared; hosted observation required',createdAt:new Date().toISOString()};
+}
+// N540: variables that must be absent from every hosted environment. The
+// operations gate runs `hosted-env` on the host's variable list (for Vercel,
+// `vercel env ls production` and `vercel env ls preview` saved to a file); the
+// app also refuses to boot with the first one on a hosted deployment.
+export const FORBIDDEN_HOSTED_VARIABLES=['PAYMENTS_ALLOW_STUB_IN_PRODUCTION','SHIPPING_ALLOW_STUB_IN_PRODUCTION'];
+export function forbiddenHostedVariables(listing) {
+ const names=new Set(String(listing).split(/\r?\n/).map(line=>line.trim().split(/\s+/)[0]).filter(Boolean));
+ return FORBIDDEN_HOSTED_VARIABLES.filter(name=>names.has(name));
 }
 export function verifyEvidenceFiles(reports, directory) {
  const base=realpathSync(directory);
@@ -64,6 +75,7 @@ if(process.argv[1]===fileURLToPath(import.meta.url)) {
   const [command,a,b]=process.argv.slice(2);
   if(command==='build'&&a&&b){const config=validateConfiguration(JSON.parse(readFileSync(a,'utf8')));const sourceSha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();if(execFileSync('git',['status','--porcelain'],{encoding:'utf8'}).trim())throw new Error('Candidate build requires a clean source tree');execFileSync('npm',['run','build'],{stdio:'inherit'});const manifest=captureCandidate(process.cwd(),config,sourceSha);writeFileSync(resolve(b),JSON.stringify(manifest,null,2)+'\n',{mode:0o600});console.log('Candidate manifest captured; acceptance remains unverified.');}
   else if(command==='verify'&&a&&b){const candidate=JSON.parse(readFileSync(a,'utf8'));const reports=JSON.parse(readFileSync(b,'utf8'));verifyEvidenceFiles(reports,dirname(resolve(b)));console.log(JSON.stringify(verifyPromotion(candidate,reports)));}
-  else throw new Error('Usage: release-candidate.mjs build CONFIG OUTPUT | verify CANDIDATE REPORTS');
+  else if(command==='hosted-env'&&a){const found=forbiddenHostedVariables(readFileSync(a,'utf8'));if(found.length)throw new Error(`Hosted environment sets ${found.join(', ')}: remove it (N540)`);console.log(`Hosted environment has none of ${FORBIDDEN_HOSTED_VARIABLES.join(', ')}.`);}
+  else throw new Error('Usage: release-candidate.mjs build CONFIG OUTPUT | verify CANDIDATE REPORTS | hosted-env VARIABLE_LISTING');
  } catch(error){console.error(error.message);process.exitCode=1;}
 }

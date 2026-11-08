@@ -66,3 +66,24 @@ describe("readiness crosswalk JSON (OS-signals)", () => {
     expect(d).toMatchObject({ plan_ids: ["N135"], batches: ["OS-W02", "OS-PR33"], proving_tests: [{ file: "supabase/tests/x_guard.sql", name: null }] });
   });
 });
+
+/** Every file the crosswalk cites as proof that is not on disk (report three #98). */
+export function missingCitedFiles(items: Array<{ proving_tests: Array<{ file: string | null }> }>, exists: (file: string) => boolean): string[] {
+  const files = new Set(items.flatMap((item) => item.proving_tests.map((t) => t.file)).filter((f): f is string => !!f));
+  return [...files].filter((file) => !exists(file)).sort();
+}
+
+describe("the crosswalk cites only files that exist (N410)", () => {
+  const onDisk = (file: string) => fs.existsSync(path.join(root, file));
+
+  it("N410: every proving test or guard the crosswalk names is on disk", () => {
+    const missing = missingCitedFiles(parseCrosswalk(read(CROSSWALK_MD)), onDisk);
+    expect(missing, "docs/plans/2026-11-readiness-crosswalk.md cites files that are not in the tree").toEqual([]);
+  });
+
+  it("N410: a cited file that is removed fails the check, naming it", () => {
+    const items = parseCrosswalk(read(CROSSWALK_MD));
+    const gone = "tests/ci/dependency-advisories.test.ts";
+    expect(missingCitedFiles(items, (file) => file !== gone && onDisk(file))).toEqual([gone]);
+  });
+});

@@ -1,0 +1,4 @@
+{
+  "description": "Migration files merged to main and applied to shared dev that staging does not have yet, each with why. tests/ci/migrations-md.test.ts allows a row without a staging cell only while its file is under two days old, or while it is listed here. Remove an entry when staging gets the file (R-staging-behind).",
+  "pending": {}
+}
