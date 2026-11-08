@@ -34,3 +34,11 @@ describe("OS-W11 follow-up: the same case for a member who can no longer sign in
     }
   });
 });
+
+describe("OS-W11 follow-up: a held deletion names the order to settle", () => {
+  it("says which order, and that sign-in still works", () => {
+    const notice = deletionReferenceNotice("temporary_financial_hold", "a1b2c3d4-0000-4000-8000-000000000001");
+    expect(notice?.title).toBe("Paused: settle order A1B2C3D4");
+    expect(notice?.body).toContain("still sign in");
+  });
+});

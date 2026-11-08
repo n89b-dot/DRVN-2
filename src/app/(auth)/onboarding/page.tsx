@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { hasAgeConfirmation } from "@/lib/age-confirmation-record";
+import { heldDeletionPath, loadHeldDeletion } from "@/lib/held-deletion";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 import { createClient } from "@/lib/supabase/server";
 
@@ -34,6 +35,10 @@ export default async function OnboardingPage({
     .eq("id", user.id)
     .maybeSingle();
   if (profile?.username) redirect(safeRedirectPath(next, "/home"));
+  // OS-W11: an account whose deletion is paused on a hold isn't asked for a
+  // new handle; it goes to the order holding the deletion.
+  const held = await loadHeldDeletion(supabase, user.id);
+  if (held) redirect(safeRedirectPath(next, heldDeletionPath(held)));
 
   // Validated here as well as in the action — the hidden field is user input
   // by the time it comes back.
