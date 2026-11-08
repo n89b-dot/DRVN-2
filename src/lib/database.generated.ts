@@ -2330,6 +2330,7 @@ export type Database = {
           network_key: string
           order_id: string | null
           released_at: string | null
+          request_key: string | null
         }
         Insert: {
           admitted_until?: string
@@ -2341,6 +2342,7 @@ export type Database = {
           network_key: string
           order_id?: string | null
           released_at?: string | null
+          request_key?: string | null
         }
         Update: {
           admitted_until?: string
@@ -2352,6 +2354,7 @@ export type Database = {
           network_key?: string
           order_id?: string | null
           released_at?: string | null
+          request_key?: string | null
         }
         Relationships: [
           {
@@ -7667,14 +7670,11 @@ export type Database = {
           p_device: string
           p_listing_ids: string[]
           p_network: string
+          p_request: string
         }
         Returns: string[]
       }
-      guest_hold_bind: {
-        Args: { p_buyer: string; p_hold_ids: string[] }
-        Returns: number
-      }
-      guest_hold_release: { Args: { p_hold_ids: string[] }; Returns: number }
+      guest_hold_release: { Args: { p_request: string }; Returns: number }
       has_embedded_media_reference: {
         Args: { p_url: string }
         Returns: boolean
