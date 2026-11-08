@@ -15,6 +15,8 @@ export type Database = {
           affected_data_classes: string[]
           blocker_code: string | null
           completed_at: string | null
+          email_digest: string | null
+          email_digest_key: string | null
           hold_order_id: string | null
           id: string
           job_id: string | null
@@ -23,7 +25,10 @@ export type Database = {
           policy_decisions_pending: string[]
           requested_at: string
           responsible_owner: string | null
+          retain_until: string | null
+          retention_starts_at: string | null
           review_at: string | null
+          scrubbed_at: string | null
           updated_at: string
           user_id: string | null
         }
@@ -31,6 +36,8 @@ export type Database = {
           affected_data_classes?: string[]
           blocker_code?: string | null
           completed_at?: string | null
+          email_digest?: string | null
+          email_digest_key?: string | null
           hold_order_id?: string | null
           id?: string
           job_id?: string | null
@@ -39,7 +46,10 @@ export type Database = {
           policy_decisions_pending?: string[]
           requested_at?: string
           responsible_owner?: string | null
+          retain_until?: string | null
+          retention_starts_at?: string | null
           review_at?: string | null
+          scrubbed_at?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -47,6 +57,8 @@ export type Database = {
           affected_data_classes?: string[]
           blocker_code?: string | null
           completed_at?: string | null
+          email_digest?: string | null
+          email_digest_key?: string | null
           hold_order_id?: string | null
           id?: string
           job_id?: string | null
@@ -55,7 +67,10 @@ export type Database = {
           policy_decisions_pending?: string[]
           requested_at?: string
           responsible_owner?: string | null
+          retain_until?: string | null
+          retention_starts_at?: string | null
           review_at?: string | null
+          scrubbed_at?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -8902,6 +8917,10 @@ export type Database = {
           window_xact: number
         }[]
       }
+      scrub_deleted_account: {
+        Args: { p_digest_key: string; p_email_digest: string; p_user: string }
+        Returns: Json
+      }
       search_car_ids: { Args: { p_query: string }; Returns: string[] }
       search_listing_documents: {
         Args: { p_ids: string[] }
@@ -9124,6 +9143,7 @@ export type Database = {
         }
         Returns: Json
       }
+      username_available: { Args: { p_username: string }; Returns: string }
       withdraw_listing: { Args: { p_listing: string }; Returns: Json }
       worker_health_snapshot: { Args: never; Returns: Json }
       write_account_export: {

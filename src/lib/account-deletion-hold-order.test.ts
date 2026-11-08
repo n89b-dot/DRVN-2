@@ -109,7 +109,8 @@ const { processAccountDeletions } = await import("./account-deletion-worker");
 const HOLD: Answer = { financial_hold: true, retained_identity: true };
 const CLEAR: Answer = { financial_hold: false, retained_identity: false };
 
-const DESTRUCTIVE = ["profiles.update", "activity_posts.delete", "listings.delete", "cars.delete", "agent_purge_member", "delete-auth-user"];
+// The scrub (N16, OS-W34) is the first destructive step since 20261107220510.
+const DESTRUCTIVE = ["scrub_deleted_account", "activity_posts.delete", "listings.delete", "cars.delete", "agent_purge_member", "delete-auth-user"];
 
 beforeEach(() => {
   state.events = [];
@@ -145,7 +146,7 @@ describe("account deletion and financial holds (OS-W11 follow-up)", () => {
     state.answers = [CLEAR, CLEAR, HOLD];
     await processAccountDeletions();
     const events = state.events;
-    expect(events.indexOf("lift-ban")).toBeGreaterThan(events.indexOf("profiles.update"));
+    expect(events.indexOf("lift-ban")).toBeGreaterThan(events.indexOf("scrub_deleted_account"));
     expect(events.indexOf("lift-ban")).toBeLessThan(events.indexOf("pause_account_deletion_hold"));
     expect(events).not.toContain("delete-auth-user");
     // The hold came from the last check, finalise, which recorded nothing.
@@ -180,7 +181,7 @@ describe("account deletion and financial holds (OS-W11 follow-up)", () => {
     state.answers = [CLEAR, CLEAR, CLEAR];
     await expect(processAccountDeletions()).resolves.toMatchObject({ completed: 1 });
     const events = state.events;
-    expect(events.indexOf("ban")).toBeLessThan(events.indexOf("profiles.update"));
+    expect(events.indexOf("ban")).toBeLessThan(events.indexOf("scrub_deleted_account"));
     expect(events).toContain("delete-auth-user");
     expect(events.indexOf("finalise")).toBeLessThan(events.indexOf("delete-auth-user"));
     expect(events).not.toContain("lift-ban");

@@ -6,9 +6,13 @@ import { removeMediaObject } from "@/lib/media-lifecycle";
 import { reportError } from "@/lib/monitoring";
 import { purgeAccountExportsForUser } from "@/lib/account-export-worker";
 import type { DeletionBlockers } from "@/lib/account-deletion-policy";
+import { accountEmailDigest } from "@/lib/email-digest";
 
 type Job = { id: string; lease_id: string; payload: { user_id: string; stripe_customer_id?: string | null } };
-const buckets = ["avatars", "car-images", "activity-images", "listing-images"];
+// message-photos: the sender's own folder; the scrub clears the attachments
+// first, so only photos nothing else references (dispute evidence) go.
+// deletion_storage_tasks allows it from 20261107220520.
+const buckets = ["avatars", "car-images", "activity-images", "listing-images", "message-photos"];
 
 /** Inventory pages commit before any deletions, so object removal cannot shift offsets. */
 async function drainStorage(admin: ReturnType<typeof createAdminClient>, job: Job, heartbeat: () => Promise<void>) {
@@ -72,12 +76,14 @@ async function pauseOnHold(admin: Admin, job: Job, uid: string, banned: boolean)
 }
 
 /** How a deletion that has to keep transaction records ends (operator_attention). */
+// N16 (OS-W34): personal data is scrubbed by then; only transaction keys
+// remain, until account_deletion_requests.retain_until (6 years).
 export const RETAINED_IDENTITY_RECORD = {
   blocker_code: "immutable_retained_identity",
-  affected_data_classes: ["orders", "financial records", "audit or reporting references"],
-  next_action: "An operator must apply the approved retained-identity anonymization and retention policy.",
+  affected_data_classes: ["order and payment keys", "audit or reporting references"],
+  next_action: "Personal data is removed. Order and payment keys are kept until the retention date; the final step after it is not yet ruled.",
   responsible_owner: "operations and policy owner",
-  policy_decisions_pending: ["financial record retention duration", "audit/log retention", "eventual identity anonymization", "backup expiry"],
+  policy_decisions_pending: ["audit/log retention", "backup expiry", "what happens when the 6-year retention ends"],
 };
 
 type Finalised = DeletionBlockers & { held: boolean; hold_order_id?: string | null; outcome?: "operator_attention" | "hard_delete_eligible" };
@@ -116,7 +122,7 @@ export async function processAccountDeletions() {
     try {
       const uid = job.payload.user_id;
       const heartbeat = jobHeartbeat(admin, job);
-      const deletionRequest = await admin.from("account_deletion_requests").select("id").eq("user_id", uid).maybeSingle();
+      const deletionRequest = await admin.from("account_deletion_requests").select("id, email_digest").eq("user_id", uid).maybeSingle();
       if (deletionRequest.error || !deletionRequest.data) throw new Error("Deletion request record is missing");
       const deletionRequestId = deletionRequest.data.id;
       await heartbeat();
@@ -147,10 +153,21 @@ export async function processAccountDeletions() {
         await pauseOnHold(admin, job, uid, Boolean(account.user));
         return { completed, continued: 1, outcome: "temporary_financial_hold" as const };
       }
-        // Rows are removed before media checks. Frozen order/evidence references
-        // remain authoritative and prevent deletion of retained transaction media.
-        const scrub = await admin.from("profiles").update({ avatar_url: null, display_name: "Deleted member", username: null, bio: null, headline: null, location: null, country: null, region: null, store_note: null, main_car_id: null, default_offer_floor_pct: null, links: [] }).eq("id", uid);
-        if (scrub.error) throw new Error("Profile cleanup failed");
+        // N16: the email is replaced by a keyed digest, taken once: a resumed
+        // run finds the digest already recorded (the email is gone by then).
+        const email = account.user?.email;
+        const digest = !deletionRequest.data.email_digest && email ? accountEmailDigest(email) : null;
+        // One transaction under the deletion lock, the same however often it
+        // runs (20261107220510): Auth email and metadata, addresses, order
+        // party labels, message, question and comment bodies, the profile,
+        // and the retained-key clock. Rows are removed before media checks;
+        // frozen order and evidence references still protect retained media.
+        const scrub = await admin.rpc("scrub_deleted_account", {
+          p_user: uid,
+          p_email_digest: digest?.digest ?? null,
+          p_digest_key: digest?.key ?? null,
+        });
+        if (scrub.error) throw new Error("Personal data scrub failed");
         for (const operation of [
           admin.from("activity_posts").delete().eq("author_id", uid),
           // Listings kept for completed orders keep their private terms row;
@@ -171,6 +188,20 @@ export async function processAccountDeletions() {
       // retained-identity job itself, so nothing may follow it.
       await purgeAccountExportsForUser(uid);
       await heartbeat();
+      // N439 (N16): saved cards go for every deleted account, traders
+      // included, so before finalise (which finishes a trader's job). Asked
+      // first whether a hold has opened: a held case keeps its cards until
+      // it resumes. Past charges and refunds hang on the charge, not the
+      // customer, so the transaction keys are unaffected.
+      if (job.payload.stripe_customer_id && !(await holdGate(admin, job, uid)).held) {
+        const stripe = stripeClient();
+        const customer = await stripe.customers.retrieve(job.payload.stripe_customer_id, {}, { timeout: 10000, maxNetworkRetries: 0 });
+        if (!customer.deleted) {
+          if (customer.metadata.user_id !== uid) throw new Error("Customer ownership requires operator review");
+          await stripe.customers.del(customer.id, {}, { timeout: 10000, maxNetworkRetries: 0 });
+        }
+      }
+      await heartbeat();
       // OS-W11 (Codex on #157): the last check and the outcome in one
       // transaction under the deletion lock. A hold that commits later
       // (a buyer's return, a dispute) puts the case back in the queue
@@ -183,14 +214,6 @@ export async function processAccountDeletions() {
       if (final.outcome === "operator_attention") {
         completed++;
         return { completed, outcome: "operator_attention" as const };
-      }
-      if (job.payload.stripe_customer_id) {
-        const stripe = stripeClient();
-        const customer = await stripe.customers.retrieve(job.payload.stripe_customer_id, {}, { timeout: 10000, maxNetworkRetries: 0 });
-        if (!customer.deleted) {
-          if (customer.metadata.user_id !== uid) throw new Error("Customer ownership requires operator review");
-          await stripe.customers.del(customer.id, {}, { timeout: 10000, maxNetworkRetries: 0 });
-        }
       }
       await heartbeat();
       if (account.user) {

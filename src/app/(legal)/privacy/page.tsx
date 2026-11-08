@@ -283,9 +283,11 @@ export default function PrivacyPage() {
             an update.
           </li>
           <li>
-            Everything else: for as long as your account exists. How long order, payment, message,
-            dispute and log records are kept after an account is deleted is still being set; this
-            page will state those periods once they are decided.
+            Everything else: for as long as your account exists. After you delete your account,
+            the order and payment records it was part of are kept for 6 years from the later of the
+            deletion and your last order, with your name, address and messages removed. How long
+            dispute and log records are kept is still being set; this page will state it once it
+            is decided.
           </li>
         </ul>
 
@@ -296,10 +298,13 @@ export default function PrivacyPage() {
           everywhere straight away. If an order, payment, refund or payout is still in progress,
           deletion waits until it&apos;s finished. Then your profile is cleared and shown as
           &ldquo;Deleted member&rdquo;, your cars, build posts and listings and their photos are
-          removed, any saved cards are deleted at Stripe, and your sign-in is deleted. Orders and
-          payment records stay on the other party&apos;s record with your name removed; where a
-          record must be kept, a minimal disabled identity is kept with it. How long backup
-          copies are kept is still being set.
+          removed, any saved cards are deleted at Stripe, and your sign-in is deleted. Your
+          handle is retired, so nobody can take it later. Your email, sign-in details,
+          delivery and ship-from addresses, and what you wrote in messages, questions and comments
+          are removed; we keep only a one-way fingerprint of your email. Orders and payment records
+          stay on the other party&apos;s record with your name removed; where a record must be
+          kept, a minimal disabled identity is kept with it. How long backup copies are kept is
+          still being set.
         </p>
 
         <h2>Your rights</h2>

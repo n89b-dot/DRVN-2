@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { Suspense, cache } from "react";
 
 import {
@@ -10,6 +10,7 @@ import {
   ratingLine,
 } from "@/components/ui";
 import { ProfileBody } from "@/components/profile/profile-body";
+import { canonicalProfilePath } from "@/lib/username";
 import { initialsFrom, splitLinks } from "@/components/profile/helpers";
 import { FollowButton } from "@/features/social/buttons";
 import { ReportButton } from "@/features/moderation/report-button";
@@ -80,6 +81,13 @@ export default async function PublicProfilePage({
     updatesPage: updatesPageParam,
     status: storeTab,
   } = await searchParams;
+  // N38 (OS-W34): handles are lowercase, and old mixed-case ones were
+  // lowercased, so a link written as /u/Neil lands on /u/neil.
+  const canonical = canonicalProfilePath(username, {
+    view: viewParam, tab: legacyTabParam, listingsPage: listingsPageParam,
+    reviewsPage: reviewsPageParam, updatesPage: updatesPageParam, status: storeTab,
+  });
+  if (canonical) permanentRedirect(canonical);
   const listingsPage = parsePageParam(listingsPageParam);
   const reviewsPage = parsePageParam(reviewsPageParam);
   const updatesPage = parsePageParam(updatesPageParam, PROFILE_UPDATES_MAX_PAGE);

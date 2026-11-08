@@ -27,6 +27,7 @@ declare
     'search_car_ids(text)',               -- ids of public builds of visible owners; definer so text indexes apply (20261010100100)
     'search_listing_ids(text)',           -- ids of parts a signed-out visitor may see; same reason
     'search_update_ids(text)',            -- ids of published updates on visible public builds; same reason
+    'username_available(text)',           -- 'invalid' | 'taken' | 'available' for one handle; reserved and retired read as taken, so no deleted account's handle is revealed (N38, 20261107220500)
     'search_word_corrections(text)',      -- the words of a query absent from the titles/brands of parts for sale, each with its closest word there; words anyone can read (20261011130000)
     'settlement_hold_policy()',           -- the public part of settlement_settings: periods, and whether each fraud control is on, never its amount (20261107210000)
     'suspended_profile_ids()'             -- the set the read policies test against, once per query; ids only (20261010095900)
@@ -105,6 +106,15 @@ begin
     and not (p.oid::regprocedure::text = any(member_reviewed));
   if cardinality(exposed) > 0 then
     raise exception 'Unreviewed SECURITY DEFINER functions executable by signed-in members: %', exposed;
+  end if;
+
+  -- N38 (OS-W34): the onboarding check answers visitors, but the handles it
+  -- guards (reserved, retired) stay unreadable, and the deletion scrub is
+  -- the server's alone.
+  if not has_function_privilege('anon', 'public.username_available(text)', 'execute')
+     or has_table_privilege('anon', 'private.username_tombstones', 'select')
+     or has_function_privilege('authenticated', 'public.scrub_deleted_account(uuid,text,text)', 'execute') then
+    raise exception 'FAIL N38: the username check, the retired handles or the deletion scrub is exposed wrongly (N38, N16)';
   end if;
 
   -- The internal ones stay closed to every client role.

@@ -11,6 +11,7 @@ import {
 } from "@/lib/age-confirmation";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import { DISPLAY_NAME_MAX } from "@/lib/limits";
+import { isValidUsername, normalizeUsername } from "@/lib/username";
 
 import { completeOnboarding, logout, type AuthState } from "../actions";
 
@@ -40,9 +41,9 @@ export function OnboardingForm({
   // synchronously inside it.
   const handleUsernameChange = (raw: string) => {
     setUsername(raw);
-    const value = raw.trim().toLowerCase();
+    const value = normalizeUsername(raw);
     if (!value) setAvailability("idle");
-    else if (!/^[a-z0-9_]{3,24}$/.test(value)) setAvailability("invalid");
+    else if (!isValidUsername(value)) setAvailability("invalid");
     else setAvailability("checking");
   };
 
@@ -91,7 +92,7 @@ export function OnboardingForm({
           prefix="@"
           placeholder="drossi_integrale"
           autoComplete="username"
-          pattern="[a-zA-Z0-9_]{3,24}"
+          pattern="[a-zA-Z0-9_]{3,30}"
           value={username}
           onChange={(e) => handleUsernameChange(e.target.value)}
           className="max-w-none"
@@ -105,7 +106,7 @@ export function OnboardingForm({
                 : availability === "taken"
                   ? "Already taken"
                   : availability === "invalid" && username.length > 0
-                    ? "3-24 characters: letters, numbers, underscores"
+                    ? "3-30 characters: letters, numbers, underscores"
                     : ""
           }
         />

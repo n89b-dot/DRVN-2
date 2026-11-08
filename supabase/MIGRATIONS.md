@@ -84,6 +84,22 @@ Apply in order, after every earlier migration, **before the app from #148 serves
 
 `supabase/tests/ci_shim.sql` gains `storage.objects.updated_at` and `metadata` (hosted Storage has both). The three guards were run against a throwaway Postgres with stubbed Supabase objects, not the full chain; CI's sql-guard job runs them on the full chain.
 
+## November 7 — deletion scrub and username rules: OS-W34 N16 N38 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261107220500_username_rules.sql` | not applied |
+| `20261107220510_account_deletion_scrub.sql` | not applied |
+| `20261107220520_deletion_storage_message_photos.sql` | not applied |
+
+From #149. Apply in order, after every earlier migration (they sort before `20261107220600`, which is already applied: apply them as missing files), together with the app from #149: the new worker calls `scrub_deleted_account`, and the onboarding check calls `username_available`.
+
+- **`220500` (N38):** audits and fixes existing usernames **on the data**: it lowercases the unambiguous ones and clears the rest back to onboarding, recording every change in `private.username_audit`. Then it adds `profiles_username_format` (lowercase a-z, 0-9, `_`, 3 to 30 characters), reserved names, tombstones and `username_available(text)`. Read `private.username_audit` after applying: a cleared member chooses a new handle at onboarding.
+- **`220510` (N16):** `scrub_deleted_account` (service role only) and the retention columns on `account_deletion_requests` (`email_digest`, `email_digest_key`, `scrubbed_at`, `retention_starts_at`, `retain_until`). It writes `auth.users` and `auth.identities` as a definer function: confirm on the hosted project that the migration role may update them (if not, deletions fail loudly and retry). It takes `private.account_deletion_lock_key` from `20261108130400`, so apply that first (it is). It restates `guard_accepted_checkout_shipping` from `20260905223236` (its only definition), adding only the scrub's exception for the order's own buyer.
+- **`220520` (N16):** widens `deletion_storage_tasks_bucket_check` to include `message-photos`, which the new worker drains.
+
+Guards: `account_deletion_scrub_guard.sql` (U1–U6, S1–S12; fails before these migrations: the functions don't exist) and `definer_exposure_guard.sql`. Checked on a fresh `supabase/postgres` (CI's pinned image) with the CI shim: every migration applies and every SQL guard passes.
+
 ## November 8 — Payout setup: started to sell, 14 days to finish, N244 (not applied anywhere)
 
 | File | Applied to |

@@ -12,6 +12,7 @@ import { siteUrl } from "@/lib/site";
 import { landingWithoutUsername, loadHeldDeletion } from "@/lib/held-deletion";
 import { onboardingPath, safeRedirectPath } from "@/lib/safe-redirect";
 import { DISPLAY_NAME_MAX } from "@/lib/limits";
+import { isValidUsername, normalizeUsername, USERNAME_RULE_MESSAGE } from "@/lib/username";
 import { AGE_CONFIRMATION_REQUIRED, ageConfirmedIn } from "@/lib/age-confirmation";
 import { hasAgeConfirmation, recordAgeConfirmation } from "@/lib/age-confirmation-record";
 import { authErrorCode, publicAuthError } from "@/lib/auth-errors";
@@ -206,16 +207,14 @@ export async function completeOnboarding(
   _prev: AuthState,
   formData: FormData
 ): Promise<AuthState> {
-  const username = String(formData.get("username") ?? "")
-    .trim()
-    .toLowerCase();
+  const username = normalizeUsername(String(formData.get("username") ?? ""));
   const displayName = String(formData.get("display_name") ?? "").trim();
   // Onboarding used to end at /home unconditionally, which is where a new
   // account's original intent (an offer on a specific listing) died.
   const next = formData.get("next");
 
-  if (!/^[a-z0-9_]{3,24}$/.test(username)) {
-    return { error: "Username must be 3-24 characters: letters, numbers, underscores." };
+  if (!isValidUsername(username)) {
+    return { error: USERNAME_RULE_MESSAGE };
   }
   if (!displayName) {
     return { error: "Display name is required." };
@@ -252,9 +251,12 @@ export async function completeOnboarding(
     .select("id");
 
   if (error) {
+    // Taken, reserved or retired by a deleted account (N38) all read as
+    // taken; the format check (23514) is the same rule as the form's.
     if (error.code === "23505") {
       return { error: "That username is taken." };
     }
+    if (error.code === "23514") return { error: USERNAME_RULE_MESSAGE };
     reportError("[onboarding] profile update failed", { userId: user.id, error });
     return { error: "We couldn't save your username. Try again." };
   }
