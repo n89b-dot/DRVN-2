@@ -5,6 +5,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { publicEnv } from "@/lib/env";
 import type { Database } from "@/lib/database.types";
 import { cachedPublicFetch, PUBLIC_TAGS, type PublicDataKind } from "./public-cache";
+import { photoFetch } from "./photo-signing";
 
 /**
  * Anon client with no cookie access, for reading public data outside a request
@@ -21,13 +22,16 @@ import { cachedPublicFetch, PUBLIC_TAGS, type PublicDataKind } from "./public-ca
  */
 export function createPublicClient(options?: { maxAge: number; kinds?: PublicDataKind[]; tags?: string[] }) {
   const { url, anonKey } = publicEnv();
-  return createSupabaseClient<Database>(url, anonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    ...(options ? {
-      global: { fetch: cachedPublicFetch({
+  // N455: the shared copy holds canonical photo URLs; each reader gets them
+  // signed, outside the cache, so a cached copy never carries an expired URL.
+  const base = options
+    ? cachedPublicFetch({
         maxAge: options.maxAge,
         tags: [...(options.kinds ?? []).map(kind => PUBLIC_TAGS[kind]), ...(options.tags ?? [])],
-      }) },
-    } : {}),
+      })
+    : fetch;
+  return createSupabaseClient<Database>(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: photoFetch(base, { sign: true }) },
   });
 }

@@ -29,6 +29,7 @@ import { orderCars } from "@/lib/cars/order";
 import type { TurnCard } from "@/lib/ai/run";
 import { publishChatPhotos } from "@/lib/agent/chat-photos";
 import { isOwnedStorageUrl } from "@/lib/media-url";
+import { signedPhotoUrls } from "@/lib/supabase/photo-signing";
 
 /** AG-7: why "Let DRVN handle offers" can't be turned on, when it can't. */
 async function sellerAgentRefusal(userId: string): Promise<string | null> {
@@ -291,9 +292,12 @@ export default async function SellPage({
         subcategory,
         // R81: the chat's photos are private; the listing gets its own public
         // copies, made now, in the member's listing-images folder.
-        images: (await publishChatPhotos(createAdminClient(), user.id, card.images, "listing-images"))
-          .filter((url) => isOwnedStorageUrl(url, user.id))
-          .map((url) => ({ url, alt: null })),
+        images: await (async () => {
+          const urls = (await publishChatPhotos(createAdminClient(), user.id, card.images, "listing-images")).filter((url) => isOwnedStorageUrl(url, user.id));
+          // N455: shown signed; the form hands them back and the save stores them canonical.
+          const signed = await signedPhotoUrls(urls);
+          return urls.map((url) => ({ url: signed.get(url) ?? url, alt: null }));
+        })(),
       };
       fromAgent = true;
     }

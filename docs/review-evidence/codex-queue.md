@@ -97,7 +97,7 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #146 | 2026-11-08 | OS-signals: migration rows record who, which commit and which PR | owed | owed | — |
 | #147 | 2026-11-08 | OS-R-migrations: a verified record-only mode for the migration runner | full | 2026-11-07 | P1 found |
 | #148 | 2026-11-08 | N531 N627 N232: audited admin exports, old message photo metadata s… | full + fix-check | 2026-11-08 | P1 found; fix-check done |
-| #149 | 2026-11-08 | OS-W34 N16 N38: deletion scrubs personal data on a 6-year key clock… | owed | owed | — |
+| #149 | 2026-11-08 | OS-W34 N16 N38: deletion scrubs personal data on a 6-year key clock… | full | 2026-11-08 | P1 found (2 P1, 2 P2; 2026-11-08-codex-post-merge-review.md) |
 | #150 | 2026-11-08 | R69-dmca: blocked-media cache ages from the caller's clock (fixes a… | owed | owed | — |
 | #151 | 2026-11-08 | OS-R-migrations: record-only refuses dynamic SQL it can't parse, ke… | fix-check | 2026-11-07 | fix-check of an earlier PR's findings |
 | #152 | 2026-11-08 | Checkout: resume never adds unrelated cart items; guest hold admiss… | fix-check | 2026-11-07 | fix-check of an earlier PR's findings |
@@ -107,13 +107,13 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #156 | 2026-11-08 | Disputes: the 8-photo evidence limit holds under concurrent attaches | full | 2026-11-08 | clean |
 | #157 | 2026-11-08 | OS-W11: account deletion checks financial holds before banning sign-in | full + fix-check | 2026-11-08 | P1 found; fix-check done |
 | #158 | 2026-11-08 | Agent: card-number redaction never corrupts ids | full | 2026-11-08 | P2 found |
-| #159 | 2026-11-08 | Agent: emails containing ids are still redacted for the model | owed | owed | — |
+| #159 | 2026-11-08 | Agent: emails containing ids are still redacted for the model | full | 2026-11-08 | clean |
 | #161 | 2026-11-08 | docs(migrations): record 20261108130400 as applied to shared dev | skipped | — | docs only (ruling, 7 Nov) |
 | #162 | 2026-11-08 | OS-signals: staging caught up to main; shared dev history gaps reco… | owed | owed | — |
 | #163 | 2026-11-08 | docs(plans): remediation plan from the 7 Nov readiness report | skipped | — | docs only (ruling, 7 Nov) |
 | #164 | 2026-11-08 | OS-W11: an open bank chargeback holds account deletion | full | 2026-11-08 | P1 found |
 | #165 | 2026-11-08 | docs: mark 20261108140000 applied to shared dev (#164) | skipped | — | docs only (ruling, 7 Nov) |
-| #166 | 2026-11-08 | OS-W11: chargeback hold guard proves the seller is held by the char… | owed | owed | — |
+| #166 | 2026-11-08 | OS-W11: chargeback hold guard proves the seller is held by the char… | full | 2026-11-08 | clean |
 | #167 | 2026-11-08 | docs: remediation record, staging catch-up cells, shared dev's 12 h… | skipped | — | docs only (ruling, 7 Nov) |
 | #169 | 2026-11-08 | test(ci): migrations are added in date order and never renamed (#97) | owed | owed | — |
 | #168 | 2026-11-08 | OS-W36 N677 N680: approval guard fails deterministically; job inventory … | full | 2026-11-08 | P2 found (FAIL 7 null-safe; fixed in the next PR) |

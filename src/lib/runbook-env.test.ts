@@ -10,7 +10,8 @@ const root = resolve(__dirname, "..", "..");
 const runbook = readFileSync(join(root, "docs", "production-runbook.md"), "utf8");
 
 // Set by the test runner or the platform for tooling, never configured by an operator.
-const NOT_CONFIGURATION = new Set(["NODE_ENV", "NEXT_RUNTIME", "VERCEL", "CI"]);
+// Set by the runtime or the platform, never by an operator (VERCEL_ENV names the Vercel environment, N540).
+const NOT_CONFIGURATION = new Set(["NODE_ENV", "NEXT_RUNTIME", "VERCEL", "VERCEL_ENV", "CI"]);
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -30,5 +31,12 @@ describe("the production runbook's environment tables", () => {
     expect(read.size).toBeGreaterThan(30);
     const missing = [...read].filter((name) => !NOT_CONFIGURATION.has(name) && !new RegExp(`\\b${name}\\b`).test(runbook));
     expect(missing).toEqual([]);
+  });
+
+  it("N540: tells the operator the sandbox payment override must never be on a hosted deployment", () => {
+    const row = runbook.split("\n").find((line) => line.startsWith("| `PAYMENTS_MODE` |")) ?? "";
+    expect(row).toMatch(/PAYMENTS_ALLOW_STUB_IN_PRODUCTION/);
+    expect(row).toMatch(/refuses to boot/);
+    expect(row).toMatch(/N540/);
   });
 });
