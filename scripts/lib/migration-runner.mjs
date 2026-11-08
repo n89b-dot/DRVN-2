@@ -6,11 +6,18 @@
 // and each file is applied in one transaction together with its row in
 // supabase_migrations.schema_migrations, so the history can never say a file
 // ran when it didn't (or the reverse), and a recorded file is never replayed.
+//
+// --record-only (OS-R-migrations) writes history rows for files that already
+// ran on the target, WITHOUT running them, and only for files it verifies:
+// every object the file creates is probed, read-only, in the catalog, and
+// each function the file is the tree's latest definition of must have that
+// body. The same dry run and --confirm code, allow-list and TLS as an apply.
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
+import { analyseTree, catalogFromRows, verifyFile } from "./migration-objects.mjs";
 import { splitStatements, isTransactionControl, dynamicExecutes } from "./sql-statements.mjs";
 import { directClientConfig, loadDynamicSqlAllowed, loadSupabaseRootCa, loadTargets, readDbEnv, resolveTarget } from "./supabase-db.mjs";
 
@@ -260,13 +267,145 @@ export async function applyMigration(client, m, allowance = null) {
   }
 }
 
+/**
+ * Binds a record-only dry run to its confirmed run: the same target and the
+ * same files to record, byte for byte. Its own prefix, so an apply's code
+ * never confirms a record-only run or the reverse.
+ */
+export function recordConfirmationCode(ref, migrations) {
+  const hash = createHash("sha256").update(`drvn-apply-migration record-only v1\n${ref}\n`);
+  for (const m of migrations) hash.update(`${m.version} ${m.name} ${m.sha256}\n`);
+  return hash.digest("hex").slice(0, 12);
+}
+
+/**
+ * What --record-only would do with each file: "record" (every object it
+ * creates verified on the target), "skip" (already recorded) or "refuse"
+ * (with every reason). A refusal doesn't stop the others being recorded.
+ */
+export function planRecordOnly(state, migrations, analysis, catalog) {
+  const seen = new Set();
+  return migrations.map((m) => {
+    if (m.problems.length) return { migration: m, action: "refuse", reasons: m.problems };
+    if (seen.has(m.version)) return { migration: m, action: "refuse", reasons: [`version ${m.version} appears twice`] };
+    seen.add(m.version);
+    if (state.recorded.has(m.version)) {
+      return { migration: m, action: "skip", reasons: ["already recorded in supabase_migrations.schema_migrations"] };
+    }
+    const result = verifyFile(analysis, catalog, m.base);
+    return { migration: m, action: result.ok ? "record" : "refuse", reasons: result.reasons, checked: result.checked, superseded: result.superseded };
+  });
+}
+
+/** Every migration file in the tree, for the latest definition of each object. */
+export function readTree(migrationsDir, readFile) {
+  return readdirSync(migrationsDir)
+    .filter((name) => FILE_NAME.test(name))
+    .sort()
+    .map((base) => ({ base, text: readFile(path.join(migrationsDir, base)) }));
+}
+
+const q = (rows) => rows.rows;
+
+/**
+ * The catalog objects --record-only probes, in the schemas the tree uses.
+ * Reads only; the caller owns the transaction (read-only in a dry run).
+ */
+export async function readCatalog(client, schemas) {
+  const s = [schemas];
+  const scoped = "join pg_namespace n on n.oid = c.relnamespace where n.nspname = any($1::text[])";
+  const rows = {
+    relations: q(await client.query(`select n.nspname as schema, c.relname as name, c.relkind::text as relkind from pg_class c ${scoped}`, s)),
+    columns: q(
+      await client.query(
+        `select n.nspname as schema, c.relname as table_name, a.attname as name from pg_attribute a join pg_class c on c.oid = a.attrelid
+         ${scoped} and a.attnum > 0 and not a.attisdropped`,
+        s,
+      ),
+    ),
+    constraints: q(
+      await client.query(`select n.nspname as schema, c.relname as table_name, k.conname as name from pg_constraint k join pg_class c on c.oid = k.conrelid ${scoped}`, s),
+    ),
+    triggers: q(
+      await client.query(
+        `select n.nspname as schema, c.relname as table_name, t.tgname as name from pg_trigger t join pg_class c on c.oid = t.tgrelid ${scoped} and not t.tgisinternal`,
+        s,
+      ),
+    ),
+    policies: q(await client.query("select schemaname as schema, tablename as table_name, policyname as name from pg_policies where schemaname = any($1::text[])", s)),
+    functions: q(
+      await client.query(
+        `select n.nspname as schema, p.proname as name, p.prosrc as body,
+                array(select format_type(a.t, null) from unnest(p.proargtypes::oid[]) with ordinality a(t, i) order by a.i) as args
+           from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = any($1::text[])`,
+        s,
+      ),
+    ),
+    types: q(await client.query("select n.nspname as schema, t.typname as name from pg_type t join pg_namespace n on n.oid = t.typnamespace where n.nspname = any($1::text[])", s)),
+    enums: q(
+      await client.query(
+        `select n.nspname as schema, t.typname as type, e.enumlabel as value from pg_enum e join pg_type t on t.oid = e.enumtypid
+           join pg_namespace n on n.oid = t.typnamespace where n.nspname = any($1::text[])`,
+        s,
+      ),
+    ),
+    schemas: q(await client.query("select nspname as name from pg_namespace")),
+    extensions: q(await client.query("select extname as name from pg_extension")),
+    roles: q(await client.query("select rolname as name from pg_roles")),
+  };
+  for (const kind of ["columns", "constraints", "triggers", "policies"]) {
+    rows[kind] = rows[kind].map(({ table_name: table, ...rest }) => ({ ...rest, table }));
+  }
+  return catalogFromRows(rows);
+}
+
+const RECORDED_MARK = "-- recorded by scripts/apply-migration.mjs --record-only: every object verified on the target; this file was not run\n";
+
+/**
+ * Records `toRecord` in one transaction under the run lock, after verifying
+ * again inside it: the confirmation code is recomputed from what verifies
+ * now, so a file that changed, got recorded meanwhile or stopped verifying
+ * since the dry run refuses the whole run and records nothing.
+ */
+export async function recordMigrations(client, { ref, confirm, migrations, analysis, schemas, readCatalogFn = readCatalog }) {
+  await client.query("begin");
+  try {
+    await client.query("select pg_advisory_xact_lock($1)", [RUN_LOCK_KEY]);
+    for (const ddl of HISTORY_DDL) await client.query(ddl);
+    const rows = await client.query("select version from supabase_migrations.schema_migrations");
+    const recorded = new Set(rows.rows.map((row) => String(row.version)));
+    const catalog = await readCatalogFn(client, schemas);
+    const toRecord = planRecordOnly({ recorded }, migrations, analysis, catalog)
+      .filter((step) => step.action === "record")
+      .map((step) => step.migration);
+    if (recordConfirmationCode(ref, toRecord) !== confirm) {
+      throw new Error("what verifies now isn't what the dry run verified (a file changed, was recorded meanwhile, or no longer verifies): nothing was recorded; run the dry run again");
+    }
+    for (const m of toRecord) {
+      await client.query(
+        "insert into supabase_migrations.schema_migrations (version, name, statements) values ($1, $2, $3)",
+        [m.version, m.name, [RECORDED_MARK + m.text]],
+      );
+    }
+    await client.query("commit");
+    return toRecord;
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    throw error;
+  }
+}
+
 export const USAGE = `usage:
   node scripts/apply-migration.mjs --target <name> <migration.sql>...                       dry run (default)
   node scripts/apply-migration.mjs --target <name> --apply --confirm <code> <migration.sql>...
+  node scripts/apply-migration.mjs --target <name> --record-only <migration.sql>...         dry run of recording
+  node scripts/apply-migration.mjs --target <name> --record-only --apply --confirm <code> <migration.sql>...
 
   --target <name>     a project in supabase/migration-targets.json; must be the one the env file points at
   --env-file <path>   read SUPABASE_DB_PASSWORD and NEXT_PUBLIC_SUPABASE_URL from here (default .env.local)
-  --apply             apply for real; needs --confirm with the code the dry run printed for these files`;
+  --apply             apply for real; needs --confirm with the code the dry run printed for these files
+  --record-only       don't run the files: record the history row of each one whose every object is
+                      verified on the target (functions by signature and body); list the rest with reasons`;
 
 /**
  * The whole command. `deps` exists for tests: `createClient(config)` returns
@@ -288,6 +427,7 @@ export async function run(argv, deps = {}) {
         apply: { type: "boolean", default: false },
         "dry-run": { type: "boolean", default: false },
         confirm: { type: "string" },
+        "record-only": { type: "boolean", default: false },
         "env-file": { type: "string", default: ".env.local" },
         help: { type: "boolean", default: false },
       },
@@ -335,8 +475,13 @@ export async function run(argv, deps = {}) {
     return 1;
   }
 
+  const recordOnly = values["record-only"];
+  if (recordOnly && values.apply && !values.confirm) {
+    fail("--apply needs --confirm <code>: run the --record-only dry run first, read it, then pass the code it prints");
+    return 1;
+  }
   const code = confirmationCode(target.ref, migrations);
-  if (values.apply && values.confirm !== code) {
+  if (!recordOnly && values.apply && values.confirm !== code) {
     fail(
       values.confirm
         ? "--confirm doesn't match these files on this target (a file changed, or the list differs): run the dry run again"
@@ -361,6 +506,9 @@ export async function run(argv, deps = {}) {
         state.historyPresent ? `has ${state.recorded.size} rows` : "table absent (the first apply creates it)"
       }`,
     );
+    if (recordOnly) {
+      return await runRecordOnly({ client, state, target, migrations, values, positionals, migrationsDir, readFile, log, fail, deps });
+    }
     const plan = planMigrations(state, migrations, allowed);
     for (const step of plan) {
       const m = step.migration;
@@ -410,6 +558,62 @@ export async function run(argv, deps = {}) {
   } finally {
     await client.end().catch(() => {});
   }
+}
+
+/** The --record-only half of `run`, once connected and the target is printed. */
+async function runRecordOnly({ client, state, target, migrations, values, positionals, migrationsDir, readFile, log, fail, deps }) {
+  const readCatalogFn = deps.readCatalog ?? readCatalog;
+  const analysis = analyseTree(readTree(migrationsDir, readFile));
+  const schemas = [...analysis.schemas].sort();
+  await client.query("begin transaction read only");
+  let catalog;
+  try {
+    catalog = await readCatalogFn(client, schemas);
+  } finally {
+    await client.query("rollback");
+  }
+  const plan = planRecordOnly(state, migrations, analysis, catalog);
+  for (const step of plan) {
+    const m = step.migration;
+    const detail =
+      step.action === "record"
+        ? `  (${step.checked} object(s) verified${step.superseded ? `, ${step.superseded} dropped by a later file` : ""})`
+        : "";
+    log(`  ${step.action.padEnd(6)} ${m.base}  sha256 ${m.sha256.slice(0, 12)}${detail}`);
+    if (step.action !== "record") for (const reason of step.reasons) log(`         ${reason}`);
+  }
+  const toRecord = plan.filter((step) => step.action === "record").map((step) => step.migration);
+  const refused = plan.filter((step) => step.action === "refuse").length;
+  const skipped = plan.filter((step) => step.action === "skip").length;
+  const code = recordConfirmationCode(target.ref, toRecord);
+  const summary = `${toRecord.length} file(s) to record without running them, ${refused} refused, ${skipped} already recorded`;
+
+  if (!values.apply) {
+    log(`record-only dry run: ${summary}. Nothing was changed.`);
+    if (toRecord.length) {
+      log(`to record exactly these:\n  node scripts/apply-migration.mjs --target ${target.name} --record-only --apply --confirm ${code} ${positionals.join(" ")}`);
+    }
+    return 0;
+  }
+  if (values.confirm !== code) {
+    fail("--confirm doesn't match what verifies on this target now (a file changed, the list differs, or the target changed): run the --record-only dry run again");
+    return 1;
+  }
+  if (!toRecord.length) {
+    log("record-only: nothing verifies, so nothing was recorded.");
+    return 0;
+  }
+  const recorded = await recordMigrations(client, {
+    ref: target.ref,
+    confirm: values.confirm,
+    migrations,
+    analysis,
+    schemas,
+    readCatalogFn,
+  });
+  for (const m of recorded) log(`recorded: ${m.base} (not run)`);
+  log(`recorded ${recorded.length} file(s) in supabase_migrations.schema_migrations without running them; ${refused} refused, left pending`);
+  return 0;
 }
 
 async function defaultClient(config) {
