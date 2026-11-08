@@ -32,6 +32,21 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 8 — deletion: late holds after the scrub, other members' notifications, the tombstone race, old retained cases: N418 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261108180000_deletion_late_holds_and_previews.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+
+From Codex's post-merge review of #149. Apply after `20261108140000`, together with the app from the same PR: the new worker never lifts the ban on a scrubbed case (it reads `scrubbed_at`, and the gate's and finalise's new `scrubbed` key), and the console shows `blocker_code`. The old worker still runs against the new database (no signature changes), but it would still lift the ban on a scrubbed case before calling the pause, so deploy both together.
+
+- **Late hold after the scrub** (ruled: a scrubbed member is never reinstated). `pause_account_deletion_hold` (from `20261108140000`) records a scrubbed case as `operator_attention`, `blocker_code = 'late_hold_after_scrub'`, owner `operations`, with the order and the operator's next step, and keeps the job's one-hour recheck. `private.requeue_account_deletion_for_hold` (from `20261108140000`; the deferred `account_deletion_hold_watch` path) marks a scrubbed, finished case the same way and leaves the job finished, so no pass can give sign-in back. `account_deletion_hold_gate` and `account_deletion_finalise` (from `20261108130400`) also return `scrubbed`; a clear gate puts a late-hold case back to cleaning up. New: `private.account_deletion_late_hold_note`, `private.record_account_deletion_late_hold`. Money rules unchanged.
+- **Notifications.** `scrub_deleted_account` (from `20261107220510`) also rewrites every notification the member is the actor of: neutral title, body `(removed)`, `actor_id` null, and no link to their own retired handle; order, offer, dispute, receipt and refund kinds keep DRVN's text and lose only the actor. Returns `notifications_sent`.
+- **Tombstone race.** New `private.username_lock_key(text)`; the scrub takes it before writing the tombstone, and `private.guard_username_choice` (from `20261107220500`) takes it before reading tombstones.
+- **Applying this file requeues every deletion retained before #149** (outcome `operator_attention`, `scrubbed_at` null, account still in Auth) once, through `private.requeue_unscrubbed_retained_deletions()`: its `delete_account` job goes back to pending (or is created) and the case reads as cleaning up, so the worker's hold checks run before the scrub. A held one pauses for its member as before. Running it again finds none.
+
+Guards: `deletion_late_holds_and_previews_guard.sql`, `username_tombstone_race_guard.sql` (two sessions over dblink).
+
 ## November 8 — member photos are private objects: N455 (OS-W38)
 
 | File | Applied to |

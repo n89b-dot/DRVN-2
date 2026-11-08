@@ -49,7 +49,8 @@ async function drainStorage(admin: ReturnType<typeof createAdminClient>, job: Jo
   return remaining.data.length === 0;
 }
 type Admin = ReturnType<typeof createAdminClient>;
-type HoldGate = DeletionBlockers & { held: boolean; hold_order_id: string | null };
+/** N418: scrubbed says the case's personal data is already gone (scrubbed_at), from 20261108180000. */
+type HoldGate = DeletionBlockers & { held: boolean; hold_order_id: string | null; scrubbed?: boolean };
 
 /**
  * OS-W11: whether a financial hold stops the deletion right now, asked under
@@ -66,13 +67,26 @@ async function holdGate(admin: Admin, job: Job, uid: string): Promise<HoldGate> 
  * A hold pauses the deletion with sign-in back, so the member can settle what
  * holds it. The ban is lifted first: if that fails the job keeps its lease
  * and retries, rather than pausing with the member locked out.
+ *
+ * N418 (ruled 8 Nov 2026): a scrubbed member is never reinstated. Their email
+ * and phone sign-in are gone, so nobody could use the account to settle a
+ * return or chargeback that opened after the scrub. The ban stays, and the
+ * database records the case for an operator (late_hold_after_scrub,
+ * 20261108180000) instead of pausing it for the member; the money settles
+ * through the normal rules without them.
  */
-async function pauseOnHold(admin: Admin, job: Job, uid: string, banned: boolean) {
-  if (banned) {
+async function pauseOnHold(
+  admin: Admin,
+  job: Job,
+  uid: string,
+  { banned, scrubbed }: { banned: boolean; scrubbed: boolean },
+): Promise<"temporary_financial_hold" | "operator_attention"> {
+  if (banned && !scrubbed) {
     const lifted = await admin.auth.admin.updateUserById(uid, { ban_duration: "none" });
     if (lifted.error) throw new Error("Could not restore account access for a held deletion");
   }
   await admin.rpc("pause_account_deletion_hold", { p_job: job.id, p_lease: job.lease_id, p_user: uid }).throwOnError();
+  return scrubbed ? "operator_attention" : "temporary_financial_hold";
 }
 
 /** How a deletion that has to keep transaction records ends (operator_attention). */
@@ -86,7 +100,7 @@ export const RETAINED_IDENTITY_RECORD = {
   policy_decisions_pending: ["audit/log retention", "backup expiry", "what happens when the 6-year retention ends"],
 };
 
-type Finalised = DeletionBlockers & { held: boolean; hold_order_id?: string | null; outcome?: "operator_attention" | "hard_delete_eligible" };
+type Finalised = DeletionBlockers & { held: boolean; hold_order_id?: string | null; scrubbed?: boolean; outcome?: "operator_attention" | "hard_delete_eligible" };
 
 /**
  * The last hold check after cleanup and the outcome with it, atomically
@@ -122,17 +136,21 @@ export async function processAccountDeletions() {
     try {
       const uid = job.payload.user_id;
       const heartbeat = jobHeartbeat(admin, job);
-      const deletionRequest = await admin.from("account_deletion_requests").select("id, email_digest").eq("user_id", uid).maybeSingle();
+      const deletionRequest = await admin.from("account_deletion_requests").select("id, email_digest, scrubbed_at").eq("user_id", uid).maybeSingle();
       if (deletionRequest.error || !deletionRequest.data) throw new Error("Deletion request record is missing");
       const deletionRequestId = deletionRequest.data.id;
+      // N418: once the scrub has committed (on an earlier pass, or this one)
+      // a hold never gives sign-in back. The database says so too.
+      let scrubbed = Boolean(deletionRequest.data.scrubbed_at);
       await heartbeat();
       const { data: account, error: lookup } = await admin.auth.admin.getUserById(uid);
       if (lookup && lookup.status !== 404) throw new Error("Deletion account lookup failed");
       // OS-W11: holds come before any ban or destructive step. A member held
       // on an earlier pass with the ban still in place gets sign-in back.
-      if ((await holdGate(admin, job, uid)).held) {
-        await pauseOnHold(admin, job, uid, isBanned(account.user));
-        return { completed, continued: 1, outcome: "temporary_financial_hold" as const };
+      const first = await holdGate(admin, job, uid);
+      if (first.held) {
+        const outcome = await pauseOnHold(admin, job, uid, { banned: isBanned(account.user), scrubbed: scrubbed || Boolean(first.scrubbed) });
+        return { completed, continued: 1, outcome };
       }
       // Preserve the external identity before profile/Auth cascades can remove it.
       if (!("stripe_customer_id" in job.payload)) {
@@ -149,9 +167,10 @@ export async function processAccountDeletions() {
       // ban only a counterparty can open one (a return, a dispute), and the
       // check after cleanup catches that.
       await heartbeat();
-      if ((await holdGate(admin, job, uid)).held) {
-        await pauseOnHold(admin, job, uid, Boolean(account.user));
-        return { completed, continued: 1, outcome: "temporary_financial_hold" as const };
+      const second = await holdGate(admin, job, uid);
+      if (second.held) {
+        const outcome = await pauseOnHold(admin, job, uid, { banned: Boolean(account.user), scrubbed: scrubbed || Boolean(second.scrubbed) });
+        return { completed, continued: 1, outcome };
       }
         // N16: the email is replaced by a keyed digest, taken once: a resumed
         // run finds the digest already recorded (the email is gone by then).
@@ -168,6 +187,7 @@ export async function processAccountDeletions() {
           p_digest_key: digest?.key ?? null,
         });
         if (scrub.error) throw new Error("Personal data scrub failed");
+        scrubbed = true;
         for (const operation of [
           admin.from("activity_posts").delete().eq("author_id", uid),
           // Listings kept for completed orders keep their private terms row;
@@ -205,11 +225,13 @@ export async function processAccountDeletions() {
       // OS-W11 (Codex on #157): the last check and the outcome in one
       // transaction under the deletion lock. A hold that commits later
       // (a buyer's return, a dispute) puts the case back in the queue
-      // itself (20261108130400), and the next pass gives sign-in back.
+      // itself (20261108130400). N418: the scrub has run by now, so a hold
+      // found here goes to an operator with the ban kept (20261108180000),
+      // and so does one that commits after the case finished.
       const final = await finalise(admin, job, uid);
       if (final.held) {
-        await pauseOnHold(admin, job, uid, Boolean(account.user));
-        return { completed, continued: 1, outcome: "temporary_financial_hold" as const };
+        const outcome = await pauseOnHold(admin, job, uid, { banned: Boolean(account.user), scrubbed: scrubbed || Boolean(final.scrubbed) });
+        return { completed, continued: 1, outcome };
       }
       if (final.outcome === "operator_attention") {
         completed++;

@@ -50,3 +50,21 @@ export const ACCOUNT_DELETION_REASON = "Account deletion requested";
 export function isDeletionPending(suspendedReason: string | null | undefined): boolean {
   return suspendedReason === ACCOUNT_DELETION_REASON;
 }
+
+/**
+ * Why an account deletion is waiting, from account_deletion_requests.blocker_code.
+ * N418: late_hold_after_scrub is a return, refund, payout or chargeback that
+ * opened after the member's personal data was removed (20261108180000). The
+ * account stays disabled; an operator settles the money without the member.
+ */
+export const DELETION_BLOCKER_LABEL: Record<string, string> = {
+  late_hold_after_scrub: "Late hold after scrub",
+  open_chargeback: "Open bank chargeback",
+  active_financial_obligations: "Open order, return, refund or payout",
+  immutable_retained_identity: "Transaction records kept",
+};
+
+export function deletionBlockerLabel(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return DELETION_BLOCKER_LABEL[code] ?? code.replaceAll("_", " ");
+}
