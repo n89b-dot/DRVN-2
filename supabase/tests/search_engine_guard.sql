@@ -26,7 +26,6 @@ declare
   v_denied boolean;
   stamp timestamptz := now() - interval '2 days';
 begin
-  update public.beta_access_config set enforced = false where singleton;
   insert into auth.users(id, email) values (v_seller, 'engine-seller@drvn.test'), (v_suspended, 'engine-suspended@drvn.test');
   insert into public.profiles(id, username) values (v_seller, 'engine_seller'), (v_suspended, 'engine_suspended')
     on conflict (id) do update set username = excluded.username;

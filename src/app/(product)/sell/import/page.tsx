@@ -3,10 +3,8 @@ import { redirect } from "next/navigation";
 
 import { EmptyState, Foot, PageHead } from "@/components/ui";
 import { resolveImportConfig } from "@/lib/listing-import/config";
-import { getBetaAccess } from "@/lib/beta-access";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
-import { SellerAccessNotice } from "../seller-access-notice";
 import { ImportFlow } from "./import-flow";
 
 export const metadata = { title: "Import a listing - DRVN" };
@@ -21,9 +19,6 @@ export default async function ImportPage({
   const supabase = await getPageClient();
   const user = await getViewer();
   if (!user) redirect("/login");
-
-  const betaAccess = await getBetaAccess(user.id, "seller");
-  if (!betaAccess.eligible) return <SellerAccessNotice unavailable={betaAccess.unavailable} />;
 
   const [{ data: profile }, config] = await Promise.all([
     supabase.from("profiles").select("import_attested_at").eq("id", user.id).maybeSingle(),

@@ -51,6 +51,14 @@ export type PartLinkFields = {
 export type PartLinkResult =
   | ({
       ok: true;
+      /**
+       * The address DRVN really fetched: the member's link, or where its
+       * redirects led, each hop checked by the fetch guard. Unlike
+       * product_url (the page's own canonical claim, which the page can set
+       * to anything), this is a page someone actually supplied or visited
+       * (OS-W07 N124 follow-up). Not part of the mod line.
+       */
+      fetched_url: string;
     } & PartLinkFields)
   | { ok: false; error: string };
 
@@ -164,6 +172,7 @@ export async function fetchPartLink(rawUrl: string, userId: string): Promise<Par
 
   return {
     ok: true,
+    fetched_url: page.finalUrl,
     product_url: canonical.slice(0, 2000),
     source_domain: new URL(canonical).hostname.replace(/^www\./i, ""),
     title,

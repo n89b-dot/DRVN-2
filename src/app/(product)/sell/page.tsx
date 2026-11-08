@@ -5,7 +5,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Alert, Foot, PageHead } from "@/components/ui";
-import { getBetaAccess } from "@/lib/beta-access";
 import { capture } from "@/lib/analytics";
 import { sourceLabelFor } from "@/lib/listing-import/engine";
 import {
@@ -25,10 +24,10 @@ import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { getVehicleMakes } from "@/lib/vehicles/vpic";
 
 import { SellForm, type SellFormInitialValues } from "./sell-form";
-import { SellerAccessNotice } from "./seller-access-notice";
 import { reportError } from "@/lib/monitoring";
 import { orderCars } from "@/lib/cars/order";
 import type { TurnCard } from "@/lib/ai/run";
+import { publishChatPhotos } from "@/lib/agent/chat-photos";
 import { isOwnedStorageUrl } from "@/lib/media-url";
 
 /** AG-7: why "Let DRVN handle offers" can't be turned on, when it can't. */
@@ -132,7 +131,6 @@ export default async function SellPage({
   // One parallel round. The access check, the form's data, the import under
   // review and the pre-fill mod line used to load in up to six steps.
   const [
-    betaAccess,
     { data: cars, error },
     makes,
     canPublish,
@@ -142,7 +140,6 @@ export default async function SellPage({
     { data: importRow },
     { data: prefillMod },
   ] = await Promise.all([
-    getBetaAccess(user.id, "seller"),
     supabase
       .from("cars")
       .select("id, name, make, model, year, created_at")
@@ -188,7 +185,6 @@ export default async function SellPage({
           .maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
-  if (!betaAccess.eligible) return <SellerAccessNotice unavailable={betaAccess.unavailable} />;
 
   const drvnShipping = {
     enabled: integratedShippingEnabled(),
@@ -293,7 +289,11 @@ export default async function SellPage({
         partNumber: card.part_number ?? undefined,
         category,
         subcategory,
-        images: card.images.filter((url) => isOwnedStorageUrl(url, user.id)).map((url) => ({ url, alt: null })),
+        // R81: the chat's photos are private; the listing gets its own public
+        // copies, made now, in the member's listing-images folder.
+        images: (await publishChatPhotos(createAdminClient(), user.id, card.images, "listing-images"))
+          .filter((url) => isOwnedStorageUrl(url, user.id))
+          .map((url) => ({ url, alt: null })),
       };
       fromAgent = true;
     }

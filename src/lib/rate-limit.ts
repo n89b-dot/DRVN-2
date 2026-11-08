@@ -84,6 +84,9 @@ export const RATE_LIMITS = {
   /** Following notifies the followed member, so it is a spam vector too. */
   follow: { action: "follow", limit: 60, windowSeconds: 60 * 10 },
   fileReport: { action: "report", limit: 5, windowSeconds: 60 * 60 },
+  /** A copyright notice from /copyright (R69-dmca), per member or network:
+   *  needs no account, so it is keyed like signed-out checkout. */
+  copyrightNotice: { action: "copyright-notice", limit: 5, windowSeconds: 60 * 60 },
   /** Explore autocomplete: four searches a request, public and signed-out, so
    *  keyed by the visitor's address. A person typing (150 ms debounce, two
    *  characters minimum) makes a handful a query; this is a minute of

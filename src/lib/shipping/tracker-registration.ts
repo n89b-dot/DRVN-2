@@ -4,6 +4,7 @@ import { jobHeartbeat } from "@/lib/job-lease";
 import { reportError } from "@/lib/monitoring";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
+import { recordDeliveryProof } from "./apply-tracking";
 import { easypostProvider } from "./easypost";
 import { resolveShippingMode } from "./provider";
 import { stubShippingProvider } from "./stub";
@@ -62,7 +63,9 @@ export type TrackerOutcome =
   /** Nothing to register: no tracking, no provider, or the shipment is over. */
   | "skipped"
   /** The provider refused this tracking number; retrying won't change that. */
-  | "rejected";
+  | "rejected"
+  /** A delivered shipment's proof was (re)evaluated from the carrier (N95). */
+  | "evaluated";
 
 const CLOSED_SHIPMENT = new Set(["cancelled", "failed", "delivered"]);
 
@@ -142,8 +145,42 @@ export async function registerShipmentTracker(
   throw lastError instanceof Error ? lastError : new Error("Tracker registration failed");
 }
 
+/**
+ * N95 (20261107210300): a shipment delivered before delivery proof existed
+ * was recorded for review; this re-reads the carrier's evidence and records
+ * the real proof. Runs from the same queue, as 'evaluate_proof' jobs.
+ */
+export async function evaluateShipmentProof(
+  admin: Admin,
+  shipmentId: string,
+  provider: ShippingProvider,
+): Promise<TrackerOutcome> {
+  const { data: shipment, error } = await admin.from("shipments").select("*").eq("id", shipmentId).maybeSingle();
+  if (error) throw new Error("Shipment proof state unavailable");
+  if (!shipment || shipment.direction !== "outbound" || shipment.status !== "delivered" || !shipment.tracking_code) {
+    return "skipped";
+  }
+  try {
+    const summary = await provider.getTracking({
+      trackerRef: shipment.provider_tracker_id,
+      trackingCode: shipment.tracking_code,
+      carrier: shipment.carrier,
+    });
+    if (summary.state !== "delivered") return "skipped";
+    await recordDeliveryProof(admin, shipment, summary);
+    return "evaluated";
+  } catch (error) {
+    if (rejectsTheNumber(error)) {
+      reportError("[tracker] provider refused the tracking number for proof", { shipmentId, error });
+      return "rejected";
+    }
+    throw error;
+  }
+}
+
 export type TrackerWorkerSummary = {
   claimed: number;
+  evaluated: number;
   registered: number;
   already: number;
   skipped: number;
@@ -158,7 +195,7 @@ export async function processTrackerRegistrations(
   admin: Admin,
   opts: { batch?: number; provider?: ShippingProvider | null } = {},
 ): Promise<TrackerWorkerSummary> {
-  const summary: TrackerWorkerSummary = { claimed: 0, registered: 0, already: 0, skipped: 0, rejected: 0, failed: 0 };
+  const summary: TrackerWorkerSummary = { claimed: 0, evaluated: 0, registered: 0, already: 0, skipped: 0, rejected: 0, failed: 0 };
   const provider = opts.provider === undefined ? getTrackingProvider() : opts.provider;
   // No provider: the dispatches stand untracked, exactly as before N110, and
   // their jobs are settled (skipped) rather than left due — the job-health
@@ -169,7 +206,7 @@ export async function processTrackerRegistrations(
     p_limit: opts.batch ?? 10,
   });
   if (claimed.error) throw new Error("Tracker registration claim failed");
-  type Job = { id: string; lease_id: string; payload: { shipment_id?: string } };
+  type Job = { id: string; lease_id: string; payload: { shipment_id?: string; evaluate_proof?: boolean } };
   for (const job of (claimed.data ?? []) as unknown as Job[]) {
     summary.claimed += 1;
     let failure: string | undefined;
@@ -177,9 +214,11 @@ export async function processTrackerRegistrations(
       await jobHeartbeat(admin, job)();
       const shipmentId = job.payload?.shipment_id;
       // One attempt per claim: the queue's own backoff spaces the retries.
-      const outcome = shipmentId && provider
-        ? await registerShipmentTracker(admin, shipmentId, { provider, attempts: 1 })
-        : "skipped";
+      const outcome = !shipmentId || !provider
+        ? "skipped"
+        : job.payload?.evaluate_proof
+          ? await evaluateShipmentProof(admin, shipmentId, provider)
+          : await registerShipmentTracker(admin, shipmentId, { provider, attempts: 1 });
       summary[outcome] += 1;
     } catch (error) {
       summary.failed += 1;

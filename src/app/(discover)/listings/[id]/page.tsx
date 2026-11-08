@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { Suspense, cache } from "react";
 
@@ -29,12 +30,13 @@ import { conditionLabel, formatPrice, getCategory } from "@/lib/marketplace/taxo
 import { paymentsAreLive } from "@/lib/payments/provider";
 import { getPublicPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 import { deliveryLabel } from "@/lib/marketplace/delivery";
+import { classifyArrival } from "@/lib/marketplace/arrival";
 import { listingHref, normalizeMarketplaceState, shoppingReturn } from "@/lib/marketplace/state";
 import { listingShareDescription } from "@/lib/share-copy";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
-import { getBetaAccess } from "@/lib/beta-access";
 
 import { ReportButton } from "@/features/moderation/report-button";
+import { MessageSellerButton } from "@/features/commerce/message-seller";
 import { PurchaseActions } from "./purchase-actions";
 import { AskAgentButton } from "@/features/agent/ask-agent-button";
 import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
@@ -145,12 +147,11 @@ export default async function ListingPage({
   const agentMode = user && (await agentTabOpen()) ? await loadAgentMode(user.id) : "act";
 
   // Round 1: everything that needs only the listing id or the viewer.
-  const [{ data: listing }, { data: images }, selectedVehicle, betaBuyerAccess, { data: taggedPostRows }] =
+  const [{ data: listing }, { data: images }, selectedVehicle, { data: taggedPostRows }] =
     await Promise.all([
       loadListing(id),
       loadListingImages(id),
       shoppingState.vehicle ? resolveVehicleFilter(shoppingState.vehicle) : Promise.resolve(null),
-      getBetaAccess(user?.id, "buyer"),
       // W-4: updates that tagged this part, with their photos, in one read.
       // Only ever posts on public builds — see the filter below. A LEFT join
       // to cars: a post about this part may have no car at all (W-5), and an
@@ -198,7 +199,7 @@ export default async function ListingPage({
     { data: questions },
     { data: save },
     garageFitment,
-    { count: soldCount },
+    { data: soldCount },
     { count: openOfferCount },
     { data: publicOfferFloor },
   ] = await Promise.all([
@@ -273,12 +274,11 @@ export default async function ListingPage({
     user
       ? fetchGarageFitment(supabase, user.id)
       : Promise.resolve({ cars: [], index: new Map<string, string>() }),
-    // Track record for the seller line: parts they've actually sold here.
-    supabase
-      .from("listings")
-      .select("id", { count: "exact", head: true })
-      .eq("seller_id", listing.seller_id)
-      .eq("status", "sold"),
+    // Track record for the seller line: sales buyers actually paid for
+    // (N71). Counting the seller's listings marked sold counted their own
+    // "Mark sold" clicks, which anyone could make; profile_sales_count counts
+    // paid orders, as the profile's trust line does.
+    supabase.rpc("profile_sales_count", { p_profile: listing.seller_id }),
     // The owner panel's one open question: offers waiting on them.
     isOwn
       ? supabase
@@ -309,10 +309,14 @@ export default async function ListingPage({
   // a failed counter bump must never break the page.
   // Members only: the function counts one look per member per hour and is
   // closed to signed-out callers, so asking for a visitor is a wasted request.
+  // OS-R-arrival: the counted look also records the surface it came from
+  // (a build, a profile, a post, the marketplace…), read from the Referer.
+  const requestHeaders = await headers();
+  const arrival = classifyArrival(requestHeaders.get("referer"), requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host"));
   if (user && user.id !== listing.seller_id) {
     // `.then` is what sends it: a Supabase query does nothing until it is
     // awaited, so the bare `void supabase.rpc(…)` here never counted a look.
-    void supabase.rpc("bump_listing_view", { p_listing: id }).then(() => undefined, () => undefined);
+    void supabase.rpc("record_listing_view", { p_listing: id, p_arrival: arrival }).then(() => undefined, () => undefined);
   }
 
   const isSaved = Boolean(save);
@@ -348,7 +352,7 @@ export default async function ListingPage({
     .join("")
     .slice(0, 2)
     .toUpperCase();
-  const sold = soldCount ?? 0;
+  const sold = Number(soldCount ?? 0);
   const sellerRecord = [
     avgRating ? ratingLine(avgRating, sellerRating?.review_count ?? 0) : null,
     sold > 0 ? `${sold} sold on DRVN` : null,
@@ -385,7 +389,7 @@ export default async function ListingPage({
 
   return (
     <div className="wrap">
-      <MarketplaceViewEvent viewKey={`listing:${listing.id}`} entry={{ kind: "listing" }} />
+      <MarketplaceViewEvent viewKey={`listing:${listing.id}`} entry={{ kind: "listing", arrival }} />
       {returnTo && <nav aria-label="Return to results" className="marketplace-breadcrumb"><Link href={returnTo}>← Back to results</Link></nav>}
       {/* An item title, not a display head: ~28–32px, so the gallery starts
           right under it instead of under two lines of 52px type. */}
@@ -503,9 +507,6 @@ export default async function ListingPage({
               <PurchaseActions
                 listingId={listing.id}
                 isLoggedIn={Boolean(user)}
-                betaEnforced={betaBuyerAccess.enforced}
-                buyerEligible={betaBuyerAccess.eligible}
-                accessUnavailable={Boolean(betaBuyerAccess.unavailable)}
                 isOwn={false}
                 isActive={listing.status === "active"}
                 paymentsLive={paymentsAreLive()}
@@ -556,6 +557,18 @@ export default async function ListingPage({
                   </span>
                 </span>
               </Link>
+            )}
+            {/* R-directcontact: a buyer may ask the seller about this part;
+                the conversation is theirs to continue in Messages. */}
+            {seller && !isOwn && ["active", "sold"].includes(listing.status) && (
+              <div className="mt-2">
+                <MessageSellerButton
+                  listingId={listing.id}
+                  sellerName={sellerName}
+                  isLoggedIn={Boolean(user)}
+                  loginHref={`/login?next=${encodeURIComponent(`/listings/${listing.id}`)}`}
+                />
+              </div>
             )}
             {sourceCar?.is_public && (
               <div className="pdp__source">
@@ -750,7 +763,7 @@ export default async function ListingPage({
               </p>
               <p className="spec-note mt-2">
                 Report a problem within {DISPUTE_WINDOW_DAYS} days of delivery and the seller has{" "}
-                {SELLER_RESPONSE_DAYS} days to respond before DRVN can step in.
+                {SELLER_RESPONSE_DAYS} business days to respond before DRVN can step in.
               </p>
               <Link href="/protection" className="jumplink mt-2 inline-flex">
                 How protection &amp; disputes work

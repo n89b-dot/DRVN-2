@@ -75,6 +75,10 @@ describe("domain state definitions", () => {
     // Refund crashes land in recovery, never silently complete.
     expect(canTransition(REFUND_TRANSITIONS, "provider_pending", "recovery_required")).toBe(true);
     expect(REFUND_TRANSITIONS.recovery_required).toEqual([]);
+    // A not-received case on an undispatched order resolves back to paid,
+    // and a paid order can be in a case (20261107210300).
+    expect(canTransition(ORDER_TRANSITIONS, "disputed", "paid")).toBe(true);
+    expect(canTransition(ORDER_TRANSITIONS, "paid", "disputed")).toBe(true);
   });
 
   it("never reopens a finished agent task, mandate or job", () => {

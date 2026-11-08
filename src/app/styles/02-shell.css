@@ -819,12 +819,35 @@
     body:has(.chatbox:not(.sidepanel *)):not(:has(#main .agentchat)) .bnav {
       display: none;
     }
+    /* R-audit-composer: pinned to the screen, just above the bar (56px of
+       tab plus its 1px rule, plus the safe area the bar pads itself with).
+       It used to be sticky, which only pins inside the chat section, and
+       that section starts mid-page: whenever its top edge was near the
+       bottom of the screen (on arrival, or scrolling) the composer slid
+       under the bar. Fixed, it is always whole and reachable. The page
+       keeps room for it: AgentChat publishes its measured height as
+       --agent-composer-h. Left and right follow the page's own gutter. */
     #main .agentchat .chatbox {
+      position: fixed;
+      left: 0;
+      right: 0;
       bottom: calc(56px + 1px + env(safe-area-inset-bottom, 0px));
+      margin: 0;
+      padding: 12px var(--gutter, 16px);
     }
-    body:not(:has(.buybar, .savebar, .chatbox:not(.sidepanel *))) .shell:has(.bnav:not([hidden])) .shell__body,
-    body:has(#main .agentchat) .shell:has(.bnav:not([hidden])) .shell__body {
+    /* Keyboard up: the bar stands down (BottomNav), so the composer takes
+       the edge itself, clear of the home indicator. */
+    body:has(.bnav[hidden]) #main .agentchat .chatbox {
+      bottom: 0;
+      padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    }
+    body:not(:has(.buybar, .savebar, .chatbox:not(.sidepanel *))) .shell:has(.bnav:not([hidden])) .shell__body {
       padding-bottom: calc(var(--bottom-surface-h, 80px) + env(safe-area-inset-bottom, 0px));
+    }
+    /* The bar, the pinned composer, and a gap, so the page's last line
+       clears both. */
+    body:has(#main .agentchat) .shell:has(.bnav:not([hidden])) .shell__body {
+      padding-bottom: calc(56px + 1px + var(--agent-composer-h, var(--bottom-surface-h, 80px)) + 16px + env(safe-area-inset-bottom, 0px));
     }
     body:not(:has(.buybar, .savebar, .chatbox:not(.sidepanel *))):has(.bnav:not([hidden])) .toast {
       bottom: calc(var(--bottom-surface-h, 80px) + 8px + env(safe-area-inset-bottom, 0px));

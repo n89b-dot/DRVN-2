@@ -5,12 +5,17 @@ import { useRecoverableAction } from "@/features/commerce/use-recoverable-action
 
 import { startConnectOnboarding } from "./payouts-actions";
 import { formatPrice } from "@/lib/payments/fee";
+import { PAYOUT_SETUP_DEADLINE_DAYS } from "@/lib/payments/payout-readiness";
 
 export type ConnectSummary =
   | {
       stripeConfigured: boolean;
       hasAccount: boolean;
       payoutsEnabled: boolean;
+      /** Details sent to Stripe: listings can go live while it verifies. */
+      detailsSubmitted?: boolean;
+      /** The payout deadline passed with payouts off: listings are paused. */
+      restricted?: boolean;
       unavailable?: never;
     }
   /** The account state couldn't be read (R2-05). Not "not set up": that
@@ -79,6 +84,10 @@ export function PayoutSetup({
         end={
           connect.payoutsEnabled ? (
             <span className="chip chip--ok">Payouts enabled</span>
+          ) : connect.restricted ? (
+            <span className="chip chip--live">Listings paused</span>
+          ) : connect.hasAccount && connect.detailsSubmitted ? (
+            <span className="chip">Stripe is checking</span>
           ) : connect.hasAccount ? (
             <span className="chip chip--live">Setup incomplete</span>
           ) : (
@@ -89,7 +98,11 @@ export function PayoutSetup({
       <p className="max-w-[62ch] text-dim">
         {connect.payoutsEnabled
           ? "Your Stripe account can receive payouts. Sale proceeds transfer automatically when a buyer's payment settles."
-          : "Selling needs somewhere for the money to go. Stripe verifies your details and holds your bank account — DRVN never sees either. Until this is done, listings can't be published."}
+          : connect.restricted
+            ? `A sale passed ${PAYOUT_SETUP_DEADLINE_DAYS} days without payouts switched on, so your listings are paused and orders you hadn't dispatched were cancelled and refunded. Finish setup with Stripe and your listings come back on their own.`
+            : connect.hasAccount && connect.detailsSubmitted
+              ? `Stripe has your details and is verifying them. Your listings can go live and sell meanwhile; the money is paid out once Stripe switches payouts on. If that hasn't happened ${PAYOUT_SETUP_DEADLINE_DAYS} days after a sale, an order you haven't dispatched is cancelled and the buyer refunded, and your listings come down until it has.`
+              : "Selling needs somewhere for the money to go. Stripe verifies your details and holds your bank account — DRVN never sees either. Until you've sent Stripe your details, listings can't be published."}
       </p>
       {!connect.payoutsEnabled && waitingCents > 0 && (
         <p className="mt-2 max-w-[62ch] font-medium">

@@ -73,19 +73,22 @@ describe("member detail (N138)", () => {
   });
 });
 
-describe("audit log (N138)", () => {
+describe("audit log (N138, paged actor filter)", () => {
   it("throws on a failed read, never 'No actions recorded'", async () => {
-    state.tables.admin_audit_log = { data: null, error: { message: "timeout" } };
+    state.rpc.mockResolvedValue({ data: null, error: { message: "timeout" } });
     await expect(getAuditLog()).rejects.toThrow("Couldn't load the audit log");
   });
 
   it("an empty log is an empty page", async () => {
+    state.rpc.mockResolvedValue({ data: [], error: null });
     await expect(getAuditLog()).resolves.toMatchObject({ rows: [], hasMore: false });
   });
 
-  it("throws when the actor search fails, instead of matching no one", async () => {
-    state.rpc.mockResolvedValue({ data: null, error: { message: "timeout" } });
-    await expect(getAuditLog({ actorQuery: "dana" })).rejects.toThrow("Couldn't load audit actors");
+  it("sends the actor's name to the database's paged query, never a list of ids", async () => {
+    state.rpc.mockResolvedValue({ data: [], error: null });
+    await getAuditLog({ actorQuery: "  dana ", action: "order.", page: 3 });
+    expect(state.rpc).toHaveBeenCalledWith("admin_audit_page", expect.objectContaining({ p_actor: "dana", p_action: "order.", p_offset: 150, p_limit: 51 }));
+    expect(state.fromCalls).not.toContain("admin_audit_log");
   });
 });
 

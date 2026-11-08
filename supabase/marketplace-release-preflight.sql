@@ -18,4 +18,9 @@ select 'purchase_begin accepts checkout identity',exists(
  and 'p_checkout_request_key'=any(proargnames) and 'p_checkout_context'=any(proargnames))
 union all
 select 'purchase analytics outbox',to_regclass('public.remediation_jobs') is not null
+union all
+-- 20261107210000: a live-money database enforces payout readiness; a stub row
+-- would switch it off.
+select 'payout readiness enforced (no stub payments_mode)',
+ not exists(select 1 from public.job_config where key='payments_mode' and value='stub')
 order by check_name;

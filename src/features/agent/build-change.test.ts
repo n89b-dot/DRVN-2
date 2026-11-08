@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildChangeItems, buildListItems, groupForCategory, type BuildDraft, type BuildList, type SheetRow } from "./build-change";
+import { buildChangeItems, buildListItems, confirmedLink, draftRow, groupForCategory, type BuildDraft, type BuildList, type SheetRow } from "./build-change";
 
 const car = "33333333-3333-4333-8333-333333333333";
 const row = (id: string, position: number, extra: Partial<SheetRow> = {}): SheetRow => ({
@@ -113,5 +113,24 @@ describe("Paste your build: what Confirm saves", () => {
     const plan = buildListItems([row("l1", 0)], list);
     if (plan.kind !== "save") throw new Error(plan.kind);
     expect(plan.items.map((item) => item.id)).toEqual(["l1", "l2"]);
+  });
+});
+
+// N124: Confirm and Edit save the link exactly as the card shows it, and
+// never one that isn't a safe web address, whatever an older draft holds.
+describe("Update my build: the link it saves (OS-W07 N124)", () => {
+  it("saves a safe link as the card shows it", () => {
+    const shown = "https://www.kwsuspensions.com/en/products/v3-coilovers";
+    expect(confirmedLink(draft({ product_url: shown }))).toBe(shown);
+    expect(draftRow(draft({ product_url: shown })).product_url).toBe(shown);
+  });
+
+  it("leaves off a link that isn't a public web page", () => {
+    for (const bad of ["javascript:alert(1)", "http://127.0.0.1/admin", "https://user:pw@kwsuspensions.com/", "https://localhost/x", "ftp://kwsuspensions.com/x"]) {
+      expect(confirmedLink(draft({ product_url: bad })), bad).toBeNull();
+      expect(draftRow(draft({ product_url: bad })).product_url, bad).toBeNull();
+    }
+    const plan = buildChangeItems([], draft({ product_url: "javascript:alert(1)" }));
+    expect(plan.kind === "save" && plan.items[0].product_url).toBeNull();
   });
 });

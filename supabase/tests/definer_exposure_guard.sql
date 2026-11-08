@@ -18,14 +18,18 @@ declare
     'listing_watch_counts(uuid[])',       -- counts only, for listings the caller can see (R2-09)
     'marketplace_search_capped_ids(text,text,text,text,text,text,integer,integer,integer)', -- the newest 1,001 ids marketplace_search_ids would give, within filters a visitor can apply; callers re-read under RLS (20261011130000)
     'marketplace_search_ids(text)',       -- ids of active parts of visible sellers matching a search; callers re-read under RLS
+    'my_deal_listing_ids()',              -- used by the archived-listing read policies: ids of listings the caller offered on or ordered; none for a visitor (OS-W33, 20261108110100)
     'mod_purchase_sources(uuid[])',       -- source car of purchased build lines, by unguessable item id
     'profile_follow_counts(uuid)',        -- public follower counts
     'profile_is_visible(uuid)',           -- used by public read policies
+    'profile_shares_deal_with_me(uuid)',  -- used by the suspended-profile read policy: whether the caller shares a conversation or order with that member; boolean, and false for a visitor (N59, 20261107220600)
     'profile_sales_count(uuid)',          -- public sales count for visible profiles
     'search_car_ids(text)',               -- ids of public builds of visible owners; definer so text indexes apply (20261010100100)
     'search_listing_ids(text)',           -- ids of parts a signed-out visitor may see; same reason
     'search_update_ids(text)',            -- ids of published updates on visible public builds; same reason
+    'username_available(text)',           -- 'invalid' | 'taken' | 'available' for one handle; reserved and retired read as taken, so no deleted account's handle is revealed (N38, 20261107220500)
     'search_word_corrections(text)',      -- the words of a query absent from the titles/brands of parts for sale, each with its closest word there; words anyone can read (20261011130000)
+    'settlement_hold_policy()',           -- the public part of settlement_settings: periods, and whether each fraud control is on, never its amount (20261107210000)
     'suspended_profile_ids()'             -- the set the read policies test against, once per query; ids only (20261010095900)
   ];
   -- Callable by signed-in members (not visitors): each answers or acts only
@@ -35,6 +39,7 @@ declare
     'admin_set_agent_beta_step(text,boolean,text)', -- refuses anyone but an admin with step-up (20261024100000)
     'admin_set_agent_spend_limits(numeric,numeric,text)', -- refuses anyone but an admin with step-up (20261024100000)
     'admin_open_agent_chat(uuid,text,uuid,text)', -- admins with step-up only, a named case, audited (20261024100000)
+    'admin_confirmed_factor()',                        -- the caller's own confirmed authenticator id, null for anyone else (20261107200550)
     'admin_enrolment_state()',                         -- the caller's own console membership: pending or confirmed, null otherwise (20261107200500)
     'agent_approval_decide(uuid,text)',                -- the caller's own agent's confirm card (20261021100100)
     'agent_clear_conversation()',                      -- the caller's own agent chat
@@ -50,17 +55,26 @@ declare
     'execute_admin_command(text,uuid,text,jsonb)',     -- refuses anyone but an admin
     'listing_edit_status(uuid,uuid)',                  -- the caller's own edit request on their own listing
     'listing_question_parent_matches(uuid,uuid)',      -- boolean: a reply's parent is on a listing the caller can see
+    'listing_enquiry_reply_allowed(uuid,uuid)',        -- boolean, true only for the listing's own seller answering a buyer who asked about it (R-directcontact, 20261107220600)
     'my_car_vin(uuid)',                                -- the caller's own car's VIN (20261004160000)
     'my_default_offer_floor()',                        -- the caller's own default minimum
+    'my_account_deletion_status()',                    -- the caller's own deletion case: outcome, next step, owner (N35, 20261107220400)
+    'my_dispute_evidence_upload_count(uuid)',          -- count of the caller's own files in one order's evidence folder (N247, 20261107220000)
     'my_listing_offer_floor(uuid)',                    -- the caller's own listing's minimum (20261017120000)
+    'my_notification_prefs()',                         -- the caller's own notification settings; the column is closed to members (N62, 20261107220020)
     'offer_move(uuid,text,integer,text,integer)',      -- a move on an offer the caller is party to, under the v2 rules (20261017160000)
     'offer_open(uuid,uuid,integer,text)',              -- the caller's own opening offer, under the v2 rules (20261017160000)
     'order_buyer_reviewable(uuid)',                    -- boolean, only for the order's buyer or seller
     'price_comparables(text,text,text,uuid)',          -- aggregates of completed sales and live listings of one product, only from 3 up; no rows or ids (20261020140000)
     'reconcile_admin_external_operation(uuid,bigint,text,text)', -- refuses anyone but an admin with step-up
+    'withdraw_listing(uuid)',                          -- the caller's own listing only, listing-first lock; ends its live offers and archives it; refuses a removed listing (N77, 20261107220700, 20261108110100)
+    'record_admin_export(text,text,jsonb,uuid,integer,text)', -- records the caller's own console export on the audit log; refuses anyone without an admin session (N531, 20261108120000)
+    'record_listing_view(uuid,text)',                  -- counts the caller's own view (bump_listing_view's rules) and its arrival surface; no viewer ids stored (OS-R-arrival, 20261107220200)
     'record_listing_edit(uuid,text,uuid,timestamp with time zone,jsonb)', -- the caller's own edit request
     'replay_listing_edit(uuid,text,uuid,timestamp with time zone)',      -- same request, replayed for its owner
     'resolve_product_identity_review(uuid,text,text)', -- refuses anyone but an admin with step-up (20261020120000)
+    'copyright_takedown(uuid,uuid[],text[],text)', -- refuses anyone but an admin with step-up (20261107231002)
+    'reject_copyright_notice(uuid,text)', -- refuses anyone but an admin with step-up (20261107231002)
     'request_account_deletion()',                      -- the caller's own account
     'request_account_export()',                        -- the caller's own export
     'seller_payout_dates(uuid[])',                     -- payout dates of the caller's own sales only
@@ -92,6 +106,15 @@ begin
     and not (p.oid::regprocedure::text = any(member_reviewed));
   if cardinality(exposed) > 0 then
     raise exception 'Unreviewed SECURITY DEFINER functions executable by signed-in members: %', exposed;
+  end if;
+
+  -- N38 (OS-W34): the onboarding check answers visitors, but the handles it
+  -- guards (reserved, retired) stay unreadable, and the deletion scrub is
+  -- the server's alone.
+  if not has_function_privilege('anon', 'public.username_available(text)', 'execute')
+     or has_table_privilege('anon', 'private.username_tombstones', 'select')
+     or has_function_privilege('authenticated', 'public.scrub_deleted_account(uuid,text,text)', 'execute') then
+    raise exception 'FAIL N38: the username check, the retired handles or the deletion scrub is exposed wrongly (N38, N16)';
   end if;
 
   -- The internal ones stay closed to every client role.

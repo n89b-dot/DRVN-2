@@ -30,3 +30,13 @@ The root `index.html` is a hub linking all three concepts — each card links to
 | `BRIEF.md` | design thesis, reference lineage, iteration-pass log, portable style-emulation prompt, "thesis as a design system", and the `design.md` standard explainer |
 | `design.md` | the design system in Google's open `design.md` format (YAML tokens + prose) — source of truth |
 | `design.html` | live, self-contained style guide mirroring `design.md`, rendered in the concept's own language |
+
+## Untracked assets awaiting review (October 2026)
+
+About 1.3 GB of generated mockup assets sit in this folder untracked:
+`assets/c17-*`, `assets/c18-*`, `assets/c19-*`, `assets/coldstart-*`,
+`assets/flake-*`, `assets/rolling-road-*` (the October concept explorations,
+17–22, which `LEDGER.md` does not yet record) and the capture script
+`.shot.mjs`. They are waiting for Neil's own review. Until he has decided
+what stays, nobody else deletes, moves or commits any of them — not as
+cleanup, not as a "quick" commit of a single folder.

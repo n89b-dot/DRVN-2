@@ -23,6 +23,8 @@ describe("public auth error copy", () => {
     expect(authErrorCode({ code: "email_exists" })).toBe("account_exists");
     expect(authErrorCode({ code: "over_email_send_rate_limit" })).toBe("rate_limited");
     expect(authErrorCode({ code: "same_password" })).toBe("same_password");
+    expect(authErrorCode({ code: "current_password_required" })).toBe("current_password_wrong");
+    expect(authErrorCode({ code: "current_password_mismatch" })).toBe("current_password_wrong");
     expect(authErrorCode({ code: "reauthentication_needed" })).toBe("reauthentication_needed");
     expect(authErrorCode({ code: "session_not_found" })).toBe("session_expired");
     expect(authErrorCode({ code: "something_new", message: "AuthApiError: relation auth.x does not exist" })).toBe("unavailable");

@@ -4,7 +4,7 @@ import { unstable_rethrow } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import { AgentResultCard } from "@/components/commerce";
-import { Button, ButtonLink, ChatComposer, FilterButton, MessageBubble, MessageRun, MessageThread, ResultNote } from "@/components/ui";
+import { Button, ButtonLink, ChatComposer, DataRow, FilterButton, MessageBubble, MessageRun, MessageThread, ResultNote } from "@/components/ui";
 import { confirmBuildChange } from "./build";
 import { AGENT_CHAT_CLEARED, useAgentEvent } from "./chat-events";
 import { ClearAgentChat } from "./clear-agent-chat";
@@ -12,24 +12,20 @@ import type { ResolvedCard } from "./cards";
 import { pollAgentReply, sendAgentMessage, type ChatMessage } from "./chat";
 import type { ChatAbout } from "./chat-load";
 import { mergeMessages, waitForReply } from "./reply-wait";
+import { startersFor } from "./starters";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { uploadImages } from "@/lib/media-upload";
+import type { PhotoJob } from "@/lib/agent/photo-job";
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 
-/** Starters above the composer (design 02): each fills the box, never sends. They follow what you opened it from. */
-const STARTERS = ["Will this fit my car?", "What do parts like this sell for?", "Update my build", "Find parts for my car", "What's my agent doing?"];
 /** How often, and for how long, a pending send asks for its reply: past the server's 120 s deadline for one send. */
 const REPLY_POLL_MS = 3_000;
 const REPLY_WAIT_MS = 150_000;
-/** A3d's jobs, once their step is open. */
-const JOB_STARTERS = ["Paste my build", "List the parts that came off", "List this part from my photos", "Post an update"];
 const MAX_PHOTOS = 4;
-function startersFor(about: ChatAbout | null, jobs: boolean): string[] {
-  if (!about) return jobs ? [...STARTERS.slice(0, 3), ...JOB_STARTERS, ...STARTERS.slice(3)] : STARTERS;
-  if (about.kind === "car") return ["Update my build", "Find parts for my car", "What's on this car?"];
-  return about.mine ? ["What do parts like this sell for?", "How is this listing doing?"] : ["Will this fit my car?", "What do parts like this sell for?"];
-}
+/** R-photos: photos go to the model only for one of these jobs, chosen here. */
+const PHOTO_JOB_STARTERS: Record<string, PhotoJob> = { "List this part from my photos": "listing", "Post an update": "update" };
+const PHOTO_JOB_LABEL: Record<PhotoJob, string> = { listing: "List this part", update: "Post an update" };
 
 /**
  * The agent thread on /agent and in the desktop side panel (A3c): the member's messages and the agent's
@@ -74,11 +70,6 @@ export function AgentChat({
   // send still in flight from before it is dropped when it answers, or the
   // deleted messages would come back (N125).
   const generation = useRef(0);
-  useAgentEvent(AGENT_CHAT_CLEARED, () => {
-    generation.current += 1;
-    attempt.current = null;
-    setMessages([]);
-  });
   const [pending, startTransition] = useTransition();
   const sent = useRef(false);
   const section = useRef<HTMLElement>(null);
@@ -90,7 +81,29 @@ export function AgentChat({
     photosRef.current = photos;
   }, [photos]);
   useEffect(() => () => photosRef.current.forEach((photo) => URL.revokeObjectURL(photo.preview)), []);
+  // R-photos: which photo job the attached photos are for. Chosen by the
+  // job's starter or the choice above the composer; without one, photos
+  // can't be sent.
+  const [photoJob, setPhotoJob] = useState<PhotoJob | null>(null);
   const uploading = photos.some((photo) => !photo.url && !photo.error);
+
+  // A clear (N125) deletes the chat's photos from Storage, the ones waiting
+  // to send included (R81): they go from the composer too, with the job they
+  // were for, so the next message can't name a deleted photo. An upload
+  // still running finds its place gone and is left for the 48-hour sweep.
+  function dropPhotos() {
+    photosRef.current.forEach((photo) => URL.revokeObjectURL(photo.preview));
+    photosRef.current = [];
+    setPhotos([]);
+    setPhotoJob(null);
+  }
+  // Heard for a clear made here too: ClearAgentChat announces every clear.
+  useAgentEvent(AGENT_CHAT_CLEARED, () => {
+    generation.current += 1;
+    attempt.current = null;
+    setMessages([]);
+    dropPhotos();
+  });
   const ready = photos.flatMap((photo) => (photo.url ? [photo.url] : []));
 
   async function addPhotos(files: File[]) {
@@ -101,7 +114,8 @@ export function AgentChat({
     const staged = chosen.map((file) => ({ id: crypto.randomUUID(), preview: URL.createObjectURL(file), url: null }));
     setPhotos((current) => [...current, ...staged]);
     setError(files.length > chosen.length ? `Up to ${MAX_PHOTOS} photos per message — the rest were left out.` : null);
-    const { uploaded, failed } = await uploadImages({ files: chosen, bucket: "listing-images", pathPrefix: userId, normalize: true });
+    // R81: chat photos are private, never a public listing photo.
+    const { uploaded, failed } = await uploadImages({ files: chosen, bucket: "agent-chat-photos", pathPrefix: userId, normalize: true });
     setPhotos((current) =>
       current.map((photo) => {
         const index = staged.findIndex((s) => s.id === photo.id);
@@ -134,6 +148,22 @@ export function AgentChat({
     else window.scrollTo({ top: document.documentElement.scrollHeight, behavior });
   }, [messages]);
 
+  // R-audit-composer: on phones and tablets the composer is pinned above the
+  // bottom bar (02-shell.css), out of the page's flow, so the page keeps
+  // room for it at its end. Its height changes (a longer message, a topic,
+  // photos), so it is measured. The side panel's composer isn't pinned.
+  useEffect(() => {
+    const box = section.current?.querySelector<HTMLElement>(".chatbox");
+    if (!box || section.current?.closest(".sidepanel__body") || typeof ResizeObserver === "undefined") return;
+    const root = document.documentElement;
+    const observer = new ResizeObserver(() => root.style.setProperty("--agent-composer-h", `${box.offsetHeight}px`));
+    observer.observe(box);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--agent-composer-h");
+    };
+  }, []);
+
   // A send can come back pending (its first attempt is still running): ask
   // for the reply until it lands, while this chat is on screen. The request
   // id stays in `attempt` until its reply has arrived (OS-W04 follow-up).
@@ -148,9 +178,13 @@ export function AgentChat({
   function send() {
     const text = draft.trim();
     if ((!text && !ready.length) || pending || uploading) return;
+    if (ready.length && !photoJob) {
+      setError("Choose what the photos are for: a listing or an update.");
+      return;
+    }
     setError(null);
     setCleared(null);
-    const key = JSON.stringify([text, ready]);
+    const key = JSON.stringify([text, ready, ready.length ? photoJob : null]);
     if (attempt.current?.key !== key) attempt.current = { key, id: crypto.randomUUID() };
     const requestId = attempt.current.id;
     const sentIn = generation.current;
@@ -162,7 +196,7 @@ export function AgentChat({
     };
     startTransition(async () => {
       try {
-        const first = await sendAgentMessage({ text, about: context ? { kind: context.kind, id: context.id } : undefined, images: ready, requestId });
+        const first = await sendAgentMessage({ text, about: context ? { kind: context.kind, id: context.id } : undefined, images: ready, photoJob: ready.length ? (photoJob ?? undefined) : undefined, requestId });
         // Cleared while it ran: nothing from the old conversation comes back.
         if (!current() || first.cleared) return;
         // Only a pending send waits; an answered one is shown straight away.
@@ -184,6 +218,7 @@ export function AgentChat({
           setDraft("");
           photos.forEach((photo) => URL.revokeObjectURL(photo.preview));
           setPhotos([]);
+          setPhotoJob(null);
         }
       } catch (caught) {
         unstable_rethrow(caught);
@@ -264,9 +299,16 @@ export function AgentChat({
         </div>
       )}
 
+      {/* Starters (design 02): each fills the box, never sends. Built from the tools the agent has (starters.ts). */}
       <div className="agentchat__starters mt-4 flex flex-wrap gap-2" role="group" aria-label="Starters">
         {startersFor(context, jobs).map((starter) => (
-          <FilterButton key={starter} onClick={() => setDraft(starter)}>
+          <FilterButton
+            key={starter}
+            onClick={() => {
+              setDraft(starter);
+              if (PHOTO_JOB_STARTERS[starter]) setPhotoJob(PHOTO_JOB_STARTERS[starter]);
+            }}
+          >
             {starter}
           </FilterButton>
         ))}
@@ -295,6 +337,16 @@ export function AgentChat({
                   <Button variant="quiet" onClick={() => setContext(null)} aria-label={`Stop asking about ${context.label}`}>
                     ✕
                   </Button>
+                </div>
+              )}
+              {photos.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2" role="group" aria-label="What are these photos for?">
+                  <span className="text-micro text-dim">Photos for:</span>
+                  {(Object.keys(PHOTO_JOB_LABEL) as PhotoJob[]).map((job) => (
+                    <FilterButton key={job} pressed={photoJob === job} onClick={() => setPhotoJob(job)}>
+                      {PHOTO_JOB_LABEL[job]}
+                    </FilterButton>
+                  ))}
                 </div>
               )}
               {photos.length > 0 && (
@@ -338,7 +390,8 @@ function BuildChangeCard({ card }: { card: Extract<ResolvedCard, { kind: "build_
     setError(null);
     startTransition(async () => {
       try {
-        const result = await confirmBuildChange(card.id);
+        // What this card showed: Confirm saves that link and no other (N124).
+        const result = await confirmBuildChange(card.id, { productUrl: card.kind === "build_change" ? (card.link?.url ?? null) : null });
         if (result.error) setError(result.error);
         if (result.ok) {
           setApplied(true);
@@ -367,6 +420,13 @@ function BuildChangeCard({ card }: { card: Extract<ResolvedCard, { kind: "build_
         ? `Add to your ${card.carName}; mark ${card.replaces} removed`
         : `Add to your ${card.carName}`;
   const image = !list && card.image ? { src: card.image, alt: card.part } : undefined;
+  // The link the change saves, before Confirm: its host, then its full address (N124).
+  const details =
+    card.kind !== "build_change" ? undefined : card.link ? (
+      <DataRow label="Link goes to" value={card.link.host} note={<span className="break-all">{card.link.url}</span>} />
+    ) : card.linkLeftOff ? (
+      <DataRow label="Link" value="Left off" note="It wasn't a web page address DRVN can show you." />
+    ) : undefined;
   return (
     <div className="grid gap-2">
       <AgentResultCard
@@ -374,6 +434,7 @@ function BuildChangeCard({ card }: { card: Extract<ResolvedCard, { kind: "build_
         title={title}
         meta={meta}
         image={image}
+        details={details}
         href={applied ? card.href : card.editHref}
         action={
           applied ? (

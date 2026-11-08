@@ -256,7 +256,8 @@ lives in the in-app docs microsite (`/docs/design-system`).
 
 *(updated 2026-08-09)* All milestones are shipped and the money is real. **Stripe is fully
 integrated**: Connect onboarding for sellers, PaymentIntents checkout with saved payment
-methods, transfers that move only on buyer-confirmed delivery plus a 7-day clearing hold,
+methods, transfers that move only after delivery plus a clearing hold (2 days since the
+4 October 2026 ruling, `docs/decisions/payout-hold.md`; 7 days when this was written),
 a durable refund state machine that reverses the seller's transfer on every refund path,
 a dispute SLA with escalation and auto-refund, and a webhook that is the settlement
 authority. Messaging exists (`/messages`, order-scoped threads) alongside a dedicated

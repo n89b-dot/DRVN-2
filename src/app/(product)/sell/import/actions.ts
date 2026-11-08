@@ -20,7 +20,6 @@ import {
   policyFor,
 } from "@/lib/listing-import/policy";
 import { parseExtraction, toJson, type NormalizedImportSource } from "@/lib/listing-import/schema";
-import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 
 /**
  * Importer actions — thin, auth-gated shells over the engine
@@ -81,9 +80,6 @@ export async function startUrlImport(
   formData: FormData
 ): Promise<ImportStartState> {
   const { supabase, user } = await requireUser();
-
-  const betaAccess = await getBetaAccess(user.id, "seller");
-  if (!betaAccess.eligible) return { error: betaCommerceError("seller") };
 
   if (!(await allowAction(RATE_LIMITS.importListing, user.id))) {
     return { error: rateLimitMessage(RATE_LIMITS.importListing) };
@@ -160,9 +156,6 @@ export async function startPasteImport(
   formData: FormData
 ): Promise<ImportStartState> {
   const { supabase, user } = await requireUser();
-
-  const betaAccess = await getBetaAccess(user.id, "seller");
-  if (!betaAccess.eligible) return { error: betaCommerceError("seller") };
 
   if (!(await allowAction(RATE_LIMITS.importListing, user.id))) {
     return { error: rateLimitMessage(RATE_LIMITS.importListing) };

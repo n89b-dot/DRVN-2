@@ -4,6 +4,7 @@ import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { registerShipmentTracker, trackingConfigured } from "@/lib/shipping/tracker-registration";
+import { PAYOUT_DEADLINE_CODE, PAYOUT_SETUP_DEADLINE_DAYS } from "@/lib/payments/payout-readiness";
 import { refundOrder } from "@/lib/payments/refunds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { capture } from "@/lib/analytics";
@@ -46,6 +47,12 @@ export async function markShipped(
     p_tracking: tracking,
   });
   if (error?.code === "42501") return { error: "Only this order's seller can mark it dispatched." };
+  // 20261108100000: the payout deadline claimed this order for a refund.
+  if (error?.code === PAYOUT_DEADLINE_CODE) {
+    return {
+      error: `This order is being cancelled and the buyer refunded: your payouts weren't set up within ${PAYOUT_SETUP_DEADLINE_DAYS} days of the sale. Don't send the part.`,
+    };
+  }
   if (error || !data) {
     reportError("[dispatch] atomic transition failed", { orderId, error });
     return { error: "We couldn't record dispatch. Check the order and try again." };

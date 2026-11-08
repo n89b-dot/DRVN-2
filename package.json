@@ -22,8 +22,10 @@
     "db:types": "node scripts/generate-database-types.mjs",
     "db:types:check": "node scripts/generate-database-types.mjs --check",
     "test:operations": "vitest run --config vitest.operations.config.ts",
-    "test:monitor": "node --test scripts/check-worker-health.test.mjs scripts/release-candidate.test.mjs scripts/owner/stripe-webhooks.test.mjs scripts/owner/rotate-seed-password.test.mjs scripts/owner/stripe-negative-balances.test.mjs",
-    "preview:build": "node scripts/build-interface-preview.mjs"
+    "test:monitor": "node --test scripts/check-worker-health.test.mjs scripts/release-candidate.test.mjs scripts/owner/stripe-webhooks.test.mjs scripts/owner/rotate-seed-password.test.mjs scripts/owner/stripe-negative-balances.test.mjs scripts/owner/scrub-photo-metadata.test.mjs scripts/owner/storage-reference-check.test.mjs",
+    "preview:build": "node scripts/build-interface-preview.mjs",
+    "docs:crosswalk": "node scripts/crosswalk-json.mjs",
+    "build-info": "node scripts/build-info.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",

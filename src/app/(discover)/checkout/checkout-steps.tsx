@@ -6,7 +6,13 @@ import { useActionState, useId, useState } from "react";
 
 import { AnimatePresence, motion } from "motion/react";
 
-import { Button, Select, Stepper, TextField } from "@/components/ui";
+import { Button, Checkbox, Select, Stepper, TextField } from "@/components/ui";
+import {
+  AGE_CONFIRMATION_FIELD,
+  AGE_CONFIRMATION_HINT,
+  AGE_CONFIRMATION_LABEL,
+  AGE_CONFIRMATION_VALUE,
+} from "@/lib/age-confirmation";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import { springs, transitions } from "@/lib/motion";
 import { checkoutCart, type CommerceState } from "@/features/commerce/actions";
@@ -15,6 +21,7 @@ import {
   quoteCartShipping,
   type CartShippingQuotes,
 } from "@/features/commerce/shipping-quote-actions";
+import type { CheckoutResume } from "@/lib/checkout-data";
 import type { SavedCard } from "@/lib/payments/customers";
 import { formatPrice } from "@/lib/payments/fee";
 import { COUNTRIES, DEFAULT_COUNTRY_CODE, countryLabel } from "@/lib/geo/countries";
@@ -55,9 +62,10 @@ const BLANK_ADDRESS: Address = {
 /**
  * P21 — the checkout, lululemon-shaped: 1 Shipping → 2 Payment, a completed
  * step collapsing to a summary line with a Change link. The address submit is
- * what creates the orders + PaymentIntent. Retries preserve that request's
- * original basket, address and service. The server rejects changed details
- * once checkout has started; reopening this form does not change a payment.
+ * what creates the orders + PaymentIntent. Retries (and, OS-W17, a reload)
+ * resume that request's original basket, address and service. Submitting
+ * changed details — Edit address, another service, a changed cart — releases
+ * the buyer's own hold and starts the checkout again with what they chose.
  */
 export function CheckoutSteps({
   idempotencyKey,
@@ -74,8 +82,12 @@ export function CheckoutSteps({
   drvnListings = [],
   totalsBase,
   priceNote,
+  resume = null,
 }: {
   idempotencyKey: string;
+  /** OS-W17 (N85): the details an in-flight checkout was started with, so a
+   *  reload resumes it with one press (cart checkout, signed in). */
+  resume?: CheckoutResume | null;
   /** Signed-out checkout: collect the email the order confirmation goes to. */
   needsEmail?: boolean;
   allowsCollection: boolean;
@@ -92,6 +104,8 @@ export function CheckoutSteps({
   savedCards: SavedCard[];
   /** Defaults to cart checkout; a reserved order passes its own action. */
   action?: (prev: CommerceState, formData: FormData) => Promise<CommerceState>;
+  /** A reserved order to pay (accepted offer), or, for cart checkout, the
+   *  order "Finish checkout" resumes on a device without its key (OS-W17). */
   orderId?: string;
   /** DRVN-Shipping lines (0053): the address submit first fetches live rates
    *  for these, and payment waits for a service selection. */
@@ -116,17 +130,34 @@ export function CheckoutSteps({
   // Controlled fields must not replace what was typed before hydration
   // (see useHydrated): they stay disabled until the page is live.
   const ready = useHydrated();
-  const [collection, setCollection] = useState(false);
+  const [collection, setCollection] = useState(() => resume?.shipping.isCollection ?? false);
   const [editingAddress, setEditingAddress] = useState(false);
   // Kept in state (not just read at submit time) so "Change" re-renders the
   // form pre-filled via defaultValue/value below, instead of resetting it —
   // the old version only remembered {name, line1, city} and lost everything
   // else on every edit.
-  const [address, setAddress] = useState<Address>(BLANK_ADDRESS);
+  const [address, setAddress] = useState<Address>(() =>
+    resume && !resume.shipping.isCollection
+      ? {
+          name: resume.shipping.name,
+          line1: resume.shipping.line1,
+          line2: resume.shipping.line2 ?? "",
+          city: resume.shipping.city,
+          postcode: resume.shipping.postcode,
+          country: resume.shipping.country || DEFAULT_COUNTRY_CODE,
+          state: resume.shipping.state ?? "",
+          phone: resume.shipping.phone ?? "",
+        }
+      : resume
+        ? { ...BLANK_ADDRESS, name: resume.shipping.name, phone: resume.shipping.phone ?? "" }
+        : BLANK_ADDRESS
+  );
   // Held in state for the same reason the address is: "Change" must re-render
   // the form filled in, not blank.
   const [email, setEmail] = useState("");
   const [saved, setSaved] = useState(false);
+  // Kept across "Change address", which remounts the form.
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
   const errorId = useId();
 
   // DRVN Shipping (0053): the address submit fetches rates first; payment
@@ -162,6 +193,10 @@ export function CheckoutSteps({
   // RR-10: one totals model. Before admission, an estimate from what the
   // server will charge; after, the amount of the payment it created.
   const admittedCents = state.payment?.amountCents ?? null;
+  // OS-W17 (N485): once the server has reserved the basket, its own figures
+  // describe this payment — not the cart as it was when the page loaded.
+  const breakdown = state.payment?.breakdown;
+  const admittedGoodsCents = breakdown?.goodsCents ?? null;
   const selectedQuoteCents = needsRates && ratesReady ? selectedShippingCents : null;
   const totals = totalsBase
     ? checkoutTotals({
@@ -170,11 +205,21 @@ export function CheckoutSteps({
         collection,
         selectedQuoteCents,
         admittedCents,
+        admittedGoodsCents,
       })
     : null;
   const liveTotal = totals?.total ?? (admittedCents != null ? formatPrice(admittedCents) : total);
   const shownShipping = totals?.shipping ?? shippingLabel;
-  useReportCheckoutTotals({ collection, selectedQuoteCents, admittedCents });
+  useReportCheckoutTotals({ collection, selectedQuoteCents, admittedCents, admittedGoodsCents });
+  const reviewItems = breakdown?.lines
+    ? breakdown.lines.map((line) => ({ id: line.id, title: line.title, priceLabel: formatPrice(line.priceCents) }))
+    : items;
+  const reviewSubtotal = breakdown ? formatPrice(breakdown.goodsCents) : subtotalLabel;
+  // The resumed attempt's frozen services, for lines this form isn't
+  // re-rating — so resuming submits exactly what the payment was made for.
+  const resumedQuotes = Object.entries(resume?.quoteIds ?? {}).filter(
+    ([listingId]) => !rates.groups.some((group) => group.listingId === listingId)
+  );
 
   const stateRequired = STATE_REQUIRED_COUNTRIES.has(address.country);
   const paymentStep = Boolean(state.payment) && !editingAddress;
@@ -272,9 +317,15 @@ export function CheckoutSteps({
               </Link>
             </div>
 
-            {items && items.length > 0 && (
+            {breakdown?.skipped && breakdown.skipped.length > 0 && (
+              <p className="field__hint">
+                No longer available, so not in this payment: {breakdown.skipped.join(", ")}.
+              </p>
+            )}
+
+            {reviewItems && reviewItems.length > 0 && (
               <div className="rowlist">
-                {items.map((item) => (
+                {reviewItems.map((item) => (
                   <div key={item.id} className="flex items-baseline justify-between gap-3">
                     <span className="order__name min-w-0 truncate">{item.title}</span>
                     <b className="shrink-0">{item.priceLabel}</b>
@@ -283,12 +334,12 @@ export function CheckoutSteps({
               </div>
             )}
 
-            {(subtotalLabel || shownShipping) && (
+            {(reviewSubtotal || shownShipping) && (
               <div>
-                {subtotalLabel && (
+                {reviewSubtotal && (
                   <div className="sheet__row">
                     <span>Subtotal</span>
-                    <b>{subtotalLabel}</b>
+                    <b>{reviewSubtotal}</b>
                   </div>
                 )}
                 {shownShipping && (totals || !collection) && (
@@ -367,6 +418,16 @@ export function CheckoutSteps({
           <fieldset disabled={!ready} className="contents">
           <input type="hidden" name="idempotency_key" value={idempotencyKey} />
           {orderId && <input type="hidden" name="order_id" value={orderId} />}
+          {resumedQuotes.map(([listingId, quoteId]) => (
+            <input key={listingId} type="hidden" name={`quote_${listingId}`} value={quoteId} />
+          ))}
+
+          {resume && !state.payment && (
+            <p className="field__hint">
+              You started this checkout earlier, and its parts are held for you. Continue with
+              these details to pick up the same payment; change them and it starts again.
+            </p>
+          )}
 
           {/* Guest checkout: one field, and it's the one a receipt needs
               anyway. No password, no signup step — the emailed link that
@@ -394,6 +455,17 @@ export function CheckoutSteps({
                     </Link>
                   </>
                 }
+              />
+              {/* R69-age: asked before the order email; the action checks it. */}
+              <Checkbox
+                id="checkout-age"
+                name={AGE_CONFIRMATION_FIELD}
+                value={AGE_CONFIRMATION_VALUE}
+                required
+                checked={ageConfirmed}
+                onChange={(event) => setAgeConfirmed(event.target.checked)}
+                label={AGE_CONFIRMATION_LABEL}
+                hint={AGE_CONFIRMATION_HINT}
               />
             </fieldset>
           )}

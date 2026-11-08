@@ -2,6 +2,8 @@ import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "vitest/config";
 
+import { junitInCi } from "./tests/support/vitest-junit";
+
 /**
  * The Stripe test-mode integration suite (`npm run test:stripe`) — separate
  * from the unit config so `npm test` stays network-free. The suite refuses to
@@ -11,6 +13,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
+    ...junitInCi("stripe.xml"),
     include: ["tests/stripe/**/*.test.ts"],
     testTimeout: 30_000,
     hookTimeout: 30_000,

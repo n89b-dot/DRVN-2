@@ -39,7 +39,6 @@ declare
   refused boolean;
   avg_expected numeric;
 begin
-  update public.beta_access_config set enforced = false where singleton = true;
 
   -- ── Fixtures ────────────────────────────────────────────────────────────
   insert into auth.users(id, email, raw_user_meta_data) values

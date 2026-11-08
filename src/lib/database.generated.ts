@@ -15,6 +15,9 @@ export type Database = {
           affected_data_classes: string[]
           blocker_code: string | null
           completed_at: string | null
+          email_digest: string | null
+          email_digest_key: string | null
+          hold_order_id: string | null
           id: string
           job_id: string | null
           next_action: string
@@ -22,7 +25,10 @@ export type Database = {
           policy_decisions_pending: string[]
           requested_at: string
           responsible_owner: string | null
+          retain_until: string | null
+          retention_starts_at: string | null
           review_at: string | null
+          scrubbed_at: string | null
           updated_at: string
           user_id: string | null
         }
@@ -30,6 +36,9 @@ export type Database = {
           affected_data_classes?: string[]
           blocker_code?: string | null
           completed_at?: string | null
+          email_digest?: string | null
+          email_digest_key?: string | null
+          hold_order_id?: string | null
           id?: string
           job_id?: string | null
           next_action: string
@@ -37,7 +46,10 @@ export type Database = {
           policy_decisions_pending?: string[]
           requested_at?: string
           responsible_owner?: string | null
+          retain_until?: string | null
+          retention_starts_at?: string | null
           review_at?: string | null
+          scrubbed_at?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -45,6 +57,9 @@ export type Database = {
           affected_data_classes?: string[]
           blocker_code?: string | null
           completed_at?: string | null
+          email_digest?: string | null
+          email_digest_key?: string | null
+          hold_order_id?: string | null
           id?: string
           job_id?: string | null
           next_action?: string
@@ -52,11 +67,21 @@ export type Database = {
           policy_decisions_pending?: string[]
           requested_at?: string
           responsible_owner?: string | null
+          retain_until?: string | null
+          retention_starts_at?: string | null
           review_at?: string | null
+          scrubbed_at?: string | null
           updated_at?: string
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "account_deletion_requests_hold_order_id_fkey"
+            columns: ["hold_order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "account_deletion_requests_job_id_fkey"
             columns: ["job_id"]
@@ -531,6 +556,24 @@ export type Database = {
           note?: string | null
           role?: string
           sessions_valid_after?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      age_confirmations: {
+        Row: {
+          age_confirmed_at: string
+          source: string
+          user_id: string
+        }
+        Insert: {
+          age_confirmed_at?: string
+          source: string
+          user_id: string
+        }
+        Update: {
+          age_confirmed_at?: string
+          source?: string
           user_id?: string
         }
         Relationships: []
@@ -1394,27 +1437,6 @@ export type Database = {
           },
         ]
       }
-      beta_access_config: {
-        Row: {
-          enforced: boolean
-          singleton: boolean
-          updated_at: string
-          updated_by: string | null
-        }
-        Insert: {
-          enforced: boolean
-          singleton?: boolean
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Update: {
-          enforced?: boolean
-          singleton?: boolean
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Relationships: []
-      }
       beta_invitations: {
         Row: {
           consumed_at: string | null
@@ -1595,6 +1617,52 @@ export type Database = {
             columns: ["car_id"]
             isOneToOne: false
             referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      car_moderation_holds: {
+        Row: {
+          car_id: string
+          created_at: string
+          hidden_by: string | null
+          reason: string
+          report_id: string | null
+        }
+        Insert: {
+          car_id: string
+          created_at?: string
+          hidden_by?: string | null
+          reason: string
+          report_id?: string | null
+        }
+        Update: {
+          car_id?: string
+          created_at?: string
+          hidden_by?: string | null
+          reason?: string
+          report_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "car_moderation_holds_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: true
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "car_moderation_holds_hidden_by_fkey"
+            columns: ["hidden_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "car_moderation_holds_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "reports"
             referencedColumns: ["id"]
           },
         ]
@@ -1888,6 +1956,103 @@ export type Database = {
           },
         ]
       }
+      copyright_blocked_media: {
+        Row: {
+          blocked_at: string
+          notice_id: string
+          object_key: string
+        }
+        Insert: {
+          blocked_at?: string
+          notice_id: string
+          object_key: string
+        }
+        Update: {
+          blocked_at?: string
+          notice_id?: string
+          object_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copyright_blocked_media_notice_id_fkey"
+            columns: ["notice_id"]
+            isOneToOne: false
+            referencedRelation: "copyright_notices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copyright_notices: {
+        Row: {
+          accurate_and_authorised: boolean
+          claimant_address: string
+          claimant_email: string
+          claimant_name: string
+          claimant_phone: string | null
+          content_urls: string[]
+          created_at: string
+          good_faith: boolean
+          id: string
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          rights_holder: string | null
+          signature: string
+          status: string
+          submitted_by: string | null
+          takedown: Json | null
+          work_description: string
+        }
+        Insert: {
+          accurate_and_authorised: boolean
+          claimant_address: string
+          claimant_email: string
+          claimant_name: string
+          claimant_phone?: string | null
+          content_urls: string[]
+          created_at?: string
+          good_faith: boolean
+          id?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          rights_holder?: string | null
+          signature: string
+          status?: string
+          submitted_by?: string | null
+          takedown?: Json | null
+          work_description: string
+        }
+        Update: {
+          accurate_and_authorised?: boolean
+          claimant_address?: string
+          claimant_email?: string
+          claimant_name?: string
+          claimant_phone?: string | null
+          content_urls?: string[]
+          created_at?: string
+          good_faith?: boolean
+          id?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          rights_holder?: string | null
+          signature?: string
+          status?: string
+          submitted_by?: string | null
+          takedown?: Json | null
+          work_description?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copyright_notices_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deletion_storage_tasks: {
         Row: {
           bucket: string
@@ -1963,6 +2128,93 @@ export type Database = {
             columns: ["order_id"]
             isOneToOne: true
             referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      delivery_proofs: {
+        Row: {
+          carrier: string | null
+          carrier_delivered_at: string | null
+          created_at: string
+          deliver_by: string | null
+          destination_city: string | null
+          destination_match: string
+          destination_postcode: string | null
+          evaluated_at: string
+          evidence_at: string | null
+          first_scan_at: string | null
+          order_city: string | null
+          order_country: string | null
+          order_created_at: string
+          order_id: string
+          order_postcode: string | null
+          reasons: string[]
+          shipment_id: string
+          signature_required: boolean
+          signed_by: string | null
+          tracking_code: string | null
+          verdict: string
+        }
+        Insert: {
+          carrier?: string | null
+          carrier_delivered_at?: string | null
+          created_at?: string
+          deliver_by?: string | null
+          destination_city?: string | null
+          destination_match: string
+          destination_postcode?: string | null
+          evaluated_at?: string
+          evidence_at?: string | null
+          first_scan_at?: string | null
+          order_city?: string | null
+          order_country?: string | null
+          order_created_at: string
+          order_id: string
+          order_postcode?: string | null
+          reasons?: string[]
+          shipment_id: string
+          signature_required: boolean
+          signed_by?: string | null
+          tracking_code?: string | null
+          verdict: string
+        }
+        Update: {
+          carrier?: string | null
+          carrier_delivered_at?: string | null
+          created_at?: string
+          deliver_by?: string | null
+          destination_city?: string | null
+          destination_match?: string
+          destination_postcode?: string | null
+          evaluated_at?: string
+          evidence_at?: string | null
+          first_scan_at?: string | null
+          order_city?: string | null
+          order_country?: string | null
+          order_created_at?: string
+          order_id?: string
+          order_postcode?: string | null
+          reasons?: string[]
+          shipment_id?: string
+          signature_required?: boolean
+          signed_by?: string | null
+          tracking_code?: string | null
+          verdict?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_proofs_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_proofs_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: true
+            referencedRelation: "shipments"
             referencedColumns: ["id"]
           },
         ]
@@ -2092,6 +2344,67 @@ export type Database = {
           },
         ]
       }
+      guest_holds: {
+        Row: {
+          admitted_until: string
+          buyer_id: string | null
+          created_at: string
+          device_key: string
+          id: string
+          listing_id: string
+          network_key: string
+          order_id: string | null
+          released_at: string | null
+          request_key: string | null
+        }
+        Insert: {
+          admitted_until?: string
+          buyer_id?: string | null
+          created_at?: string
+          device_key: string
+          id?: string
+          listing_id: string
+          network_key: string
+          order_id?: string | null
+          released_at?: string | null
+          request_key?: string | null
+        }
+        Update: {
+          admitted_until?: string
+          buyer_id?: string | null
+          created_at?: string
+          device_key?: string
+          id?: string
+          listing_id?: string
+          network_key?: string
+          order_id?: string | null
+          released_at?: string | null
+          request_key?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guest_holds_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "guest_holds_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "guest_holds_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       job_config: {
         Row: {
           key: string
@@ -2107,6 +2420,42 @@ export type Database = {
           key?: string
           updated_at?: string
           value?: string
+        }
+        Relationships: []
+      }
+      ledger_reconciliation_runs: {
+        Row: {
+          checked: Json
+          detail: string | null
+          discrepancies: number
+          finished_at: string | null
+          id: string
+          started_at: string
+          status: string
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          checked?: Json
+          detail?: string | null
+          discrepancies?: number
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          window_end: string
+          window_start: string
+        }
+        Update: {
+          checked?: Json
+          detail?: string | null
+          discrepancies?: number
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          window_end?: string
+          window_start?: string
         }
         Relationships: []
       }
@@ -2464,6 +2813,35 @@ export type Database = {
           },
         ]
       }
+      listing_view_arrivals: {
+        Row: {
+          arrival: string
+          day: string
+          listing_id: string
+          views: number
+        }
+        Insert: {
+          arrival: string
+          day: string
+          listing_id: string
+          views?: number
+        }
+        Update: {
+          arrival?: string
+          day?: string
+          listing_id?: string
+          views?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_view_arrivals_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       listings: {
         Row: {
           allows_collection: boolean
@@ -2487,6 +2865,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -2526,6 +2905,7 @@ export type Database = {
           part_number_compact?: string | null
           price_cents: number
           published_at?: string | null
+          published_xact?: number | null
           removed_at?: string | null
           removed_reason?: string | null
           reserved_until?: string | null
@@ -2565,6 +2945,7 @@ export type Database = {
           part_number_compact?: string | null
           price_cents?: number
           published_at?: string | null
+          published_xact?: number | null
           removed_at?: string | null
           removed_reason?: string | null
           reserved_until?: string | null
@@ -2655,6 +3036,39 @@ export type Database = {
           reason?: string
         }
         Relationships: []
+      }
+      member_blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_blocks_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_blocks_blocker_id_fkey"
+            columns: ["blocker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {
@@ -3037,6 +3451,7 @@ export type Database = {
           counter_amount_cents: number | null
           countered_at: string | null
           created_at: string
+          ended_reason: string | null
           expires_at: string | null
           id: string
           last_round_id: string | null
@@ -3052,6 +3467,7 @@ export type Database = {
           counter_amount_cents?: number | null
           countered_at?: string | null
           created_at?: string
+          ended_reason?: string | null
           expires_at?: string | null
           id?: string
           last_round_id?: string | null
@@ -3067,6 +3483,7 @@ export type Database = {
           counter_amount_cents?: number | null
           countered_at?: string | null
           created_at?: string
+          ended_reason?: string | null
           expires_at?: string | null
           id?: string
           last_round_id?: string | null
@@ -3156,6 +3573,93 @@ export type Database = {
             columns: ["report_id"]
             isOneToOne: false
             referencedRelation: "reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_dispute_history: {
+        Row: {
+          actor_id: string | null
+          category: string | null
+          created_at: string
+          escalate_until: string | null
+          escalated_at: string | null
+          escalated_by: string | null
+          event: string
+          id: string
+          kind: string
+          note: string | null
+          opened_at: string | null
+          opened_by: string | null
+          order_id: string
+          outcome: string | null
+          pre_dispute_status: string | null
+          reason: string | null
+          reopened_from: string | null
+          resolved_at: string | null
+          resolved_to_status: string | null
+          respond_by: string | null
+          stripe_dispute_id: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          category?: string | null
+          created_at?: string
+          escalate_until?: string | null
+          escalated_at?: string | null
+          escalated_by?: string | null
+          event: string
+          id?: string
+          kind: string
+          note?: string | null
+          opened_at?: string | null
+          opened_by?: string | null
+          order_id: string
+          outcome?: string | null
+          pre_dispute_status?: string | null
+          reason?: string | null
+          reopened_from?: string | null
+          resolved_at?: string | null
+          resolved_to_status?: string | null
+          respond_by?: string | null
+          stripe_dispute_id?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          category?: string | null
+          created_at?: string
+          escalate_until?: string | null
+          escalated_at?: string | null
+          escalated_by?: string | null
+          event?: string
+          id?: string
+          kind?: string
+          note?: string | null
+          opened_at?: string | null
+          opened_by?: string | null
+          order_id?: string
+          outcome?: string | null
+          pre_dispute_status?: string | null
+          reason?: string | null
+          reopened_from?: string | null
+          resolved_at?: string | null
+          resolved_to_status?: string | null
+          respond_by?: string | null
+          stripe_dispute_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_dispute_history_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_dispute_history_reopened_from_fkey"
+            columns: ["reopened_from"]
+            isOneToOne: false
+            referencedRelation: "order_dispute_history"
             referencedColumns: ["id"]
           },
         ]
@@ -3253,6 +3757,7 @@ export type Database = {
         Row: {
           accepted_checkout_shipping: Json | null
           analytics_consent_version: string | null
+          available_by: string | null
           buyer_id: string | null
           buyer_label: string | null
           cancel_reason: string | null
@@ -3262,13 +3767,18 @@ export type Database = {
           correlation_id: string | null
           created_at: string
           currency: string
+          deliver_by: string | null
           delivered_at: string | null
+          delivery_estimate_source: string | null
+          dispatch_by: string | null
           dispute_category: string | null
+          dispute_escalate_until: string | null
           dispute_escalated_at: string | null
           dispute_escalated_by: string | null
           dispute_outcome: string | null
           dispute_reason: string | null
           dispute_resolved_at: string | null
+          dispute_respond_by: string | null
           dispute_sla_alerted_at: string | null
           disputed_at: string | null
           disputed_by: string | null
@@ -3280,6 +3790,7 @@ export type Database = {
           platform_fee_refunded_cents: number
           pre_dispute_status: string | null
           refund_offer_cents: number | null
+          refund_offer_expires_at: string | null
           refund_offered_at: string | null
           refunded_at: string | null
           refunded_cents: number
@@ -3309,6 +3820,7 @@ export type Database = {
         Insert: {
           accepted_checkout_shipping?: Json | null
           analytics_consent_version?: string | null
+          available_by?: string | null
           buyer_id?: string | null
           buyer_label?: string | null
           cancel_reason?: string | null
@@ -3318,13 +3830,18 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string
           currency?: string
+          deliver_by?: string | null
           delivered_at?: string | null
+          delivery_estimate_source?: string | null
+          dispatch_by?: string | null
           dispute_category?: string | null
+          dispute_escalate_until?: string | null
           dispute_escalated_at?: string | null
           dispute_escalated_by?: string | null
           dispute_outcome?: string | null
           dispute_reason?: string | null
           dispute_resolved_at?: string | null
+          dispute_respond_by?: string | null
           dispute_sla_alerted_at?: string | null
           disputed_at?: string | null
           disputed_by?: string | null
@@ -3336,6 +3853,7 @@ export type Database = {
           platform_fee_refunded_cents?: number
           pre_dispute_status?: string | null
           refund_offer_cents?: number | null
+          refund_offer_expires_at?: string | null
           refund_offered_at?: string | null
           refunded_at?: string | null
           refunded_cents?: number
@@ -3365,6 +3883,7 @@ export type Database = {
         Update: {
           accepted_checkout_shipping?: Json | null
           analytics_consent_version?: string | null
+          available_by?: string | null
           buyer_id?: string | null
           buyer_label?: string | null
           cancel_reason?: string | null
@@ -3374,13 +3893,18 @@ export type Database = {
           correlation_id?: string | null
           created_at?: string
           currency?: string
+          deliver_by?: string | null
           delivered_at?: string | null
+          delivery_estimate_source?: string | null
+          dispatch_by?: string | null
           dispute_category?: string | null
+          dispute_escalate_until?: string | null
           dispute_escalated_at?: string | null
           dispute_escalated_by?: string | null
           dispute_outcome?: string | null
           dispute_reason?: string | null
           dispute_resolved_at?: string | null
+          dispute_respond_by?: string | null
           dispute_sla_alerted_at?: string | null
           disputed_at?: string | null
           disputed_by?: string | null
@@ -3392,6 +3916,7 @@ export type Database = {
           platform_fee_refunded_cents?: number
           pre_dispute_status?: string | null
           refund_offer_cents?: number | null
+          refund_offer_expires_at?: string | null
           refund_offered_at?: string | null
           refunded_at?: string | null
           refunded_cents?: number
@@ -3836,6 +4361,33 @@ export type Database = {
           },
         ]
       }
+      policy_announcements: {
+        Row: {
+          announced_at: string
+          body: string
+          href: string
+          key: string
+          recipients: number
+          title: string
+        }
+        Insert: {
+          announced_at?: string
+          body: string
+          href: string
+          key: string
+          recipients?: number
+          title: string
+        }
+        Update: {
+          announced_at?: string
+          body?: string
+          href?: string
+          key?: string
+          recipients?: number
+          title?: string
+        }
+        Relationships: []
+      }
       product_fitments: {
         Row: {
           brake_packages: string[] | null
@@ -4181,6 +4733,8 @@ export type Database = {
           location: string | null
           main_car_id: string | null
           notification_prefs: Json
+          payout_details_submitted: boolean
+          payout_restricted_at: string | null
           payouts_enabled: boolean
           profile_type: string
           region: string | null
@@ -4207,6 +4761,8 @@ export type Database = {
           location?: string | null
           main_car_id?: string | null
           notification_prefs?: Json
+          payout_details_submitted?: boolean
+          payout_restricted_at?: string | null
           payouts_enabled?: boolean
           profile_type?: string
           region?: string | null
@@ -4233,6 +4789,8 @@ export type Database = {
           location?: string | null
           main_car_id?: string | null
           notification_prefs?: Json
+          payout_details_submitted?: boolean
+          payout_restricted_at?: string | null
           payouts_enabled?: boolean
           profile_type?: string
           region?: string | null
@@ -4984,17 +5542,23 @@ export type Database = {
       }
       saved_search_email_cursors: {
         Row: {
+          activated_at: string
           checked_through: string
+          checked_xact: number
           saved_search_id: string
           updated_at: string
         }
         Insert: {
+          activated_at: string
           checked_through: string
+          checked_xact: number
           saved_search_id: string
           updated_at?: string
         }
         Update: {
+          activated_at?: string
           checked_through?: string
+          checked_xact?: number
           saved_search_id?: string
           updated_at?: string
         }
@@ -5027,7 +5591,9 @@ export type Database = {
           status: string
           updated_at: string
           window_end: string
+          window_end_xact: number | null
           window_start: string
+          window_start_xact: number | null
         }
         Insert: {
           attempts?: number
@@ -5047,7 +5613,9 @@ export type Database = {
           status?: string
           updated_at?: string
           window_end: string
+          window_end_xact?: number | null
           window_start: string
+          window_start_xact?: number | null
         }
         Update: {
           attempts?: number
@@ -5067,7 +5635,9 @@ export type Database = {
           status?: string
           updated_at?: string
           window_end?: string
+          window_end_xact?: number | null
           window_start?: string
+          window_start_xact?: number | null
         }
         Relationships: [
           {
@@ -6138,14 +6708,57 @@ export type Database = {
     }
     Functions: {
       account_deletion_blockers: { Args: { p_user: string }; Returns: Json }
+      account_deletion_finalise: {
+        Args: {
+          p_job: string
+          p_lease: string
+          p_retained: Json
+          p_user: string
+        }
+        Returns: Json
+      }
+      account_deletion_hold_gate: {
+        Args: { p_job: string; p_lease: string; p_user: string }
+        Returns: Json
+      }
       activity_post_search_text: { Args: { body: Json }; Returns: string }
       activity_post_visible: { Args: { p_post_id: string }; Returns: boolean }
       actor_name: { Args: { p_id: string }; Returns: string }
-      admin_audit_actor_ids: { Args: { p_query: string }; Returns: string[] }
+      admin_audit_page: {
+        Args: {
+          p_action?: string
+          p_actor?: string
+          p_before_at?: string
+          p_before_id?: number
+          p_from?: string
+          p_limit?: number
+          p_offset?: number
+          p_subject_type?: string
+          p_to?: string
+        }
+        Returns: {
+          action: string
+          actor_id: string
+          created_at: string
+          id: number
+          metadata: Json
+          order_id: string | null
+          reason: string
+          subject_id: string
+          subject_type: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "admin_audit_log"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       admin_cancel_seller_carry_payout: {
         Args: { p_id: string }
         Returns: Json
       }
+      admin_confirmed_factor: { Args: never; Returns: string }
       admin_enrolment_state: { Args: never; Returns: string }
       admin_export_orders: {
         Args: {
@@ -6203,6 +6816,7 @@ export type Database = {
         Returns: Json
       }
       admin_retry_seller_carry_payout: { Args: { p_id: string }; Returns: Json }
+      admin_retry_transfer_intent: { Args: { p_order: string }; Returns: Json }
       admin_role: { Args: never; Returns: string }
       admin_set_agent_beta_step: {
         Args: { p_open: boolean; p_reason: string; p_step: string }
@@ -6238,6 +6852,7 @@ export type Database = {
           p_match_count: number
           p_saved_search_id: string
           p_window_end: string
+          p_window_xact: number
         }
         Returns: string
       }
@@ -6246,6 +6861,8 @@ export type Database = {
         Args: { p_approval: string; p_choice: string }
         Returns: Json
       }
+      agent_audit_ids_valid: { Args: { p_ids: Json }; Returns: boolean }
+      agent_audit_vocabulary: { Args: { p_list: string }; Returns: string[] }
       agent_authority: {
         Args: {
           p_job: Database["public"]["Tables"]["agent_jobs"]["Row"]
@@ -6273,6 +6890,12 @@ export type Database = {
       }
       agent_chat_card_ok: { Args: { p_card: Json }; Returns: boolean }
       agent_chat_message_json: { Args: { p_id: string }; Returns: Json }
+      agent_chat_photos_expired: {
+        Args: { p_limit?: number; p_older_than?: string }
+        Returns: {
+          name: string
+        }[]
+      }
       agent_chat_turn_begin: {
         Args: {
           p_body: string
@@ -6418,6 +7041,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      agent_record_tool_calls: {
+        Args: {
+          p_calls: Json
+          p_owner: string
+          p_request: string
+          p_turn: string
+        }
+        Returns: number
+      }
       agent_redact_cards: { Args: { p_text: string }; Returns: string }
       agent_renew_lease: {
         Args: { p_job: string; p_lease: string; p_lease_seconds?: number }
@@ -6453,6 +7085,10 @@ export type Database = {
         Returns: undefined
       }
       agent_usage_retention_sweep: { Args: never; Returns: number }
+      announce_policy_update: {
+        Args: { p_body: string; p_href: string; p_key: string; p_title: string }
+        Returns: number
+      }
       apply_stripe_dispute_event: {
         Args: {
           p_amount: number
@@ -6491,6 +7127,29 @@ export type Database = {
         Args: { p_actor: string; p_reason: string; p_target: string }
         Returns: string
       }
+      begin_not_received_refund: {
+        Args: {
+          p_actor_role: string
+          p_dispute_outcome: string
+          p_disputed_at: string
+          p_order: string
+          p_payment_reference: string
+          p_reason: string
+          p_requested_by: string
+        }
+        Returns: Json
+      }
+      begin_payout_deadline_refund: {
+        Args: {
+          p_actor_role: string
+          p_dispute_outcome: string
+          p_order: string
+          p_payment_reference: string
+          p_reason: string
+          p_requested_by: string
+        }
+        Returns: Json
+      }
       begin_refund_operation: {
         Args: {
           p_actor_role: string
@@ -6522,10 +7181,6 @@ export type Database = {
           p_requested_by: string
           p_resolve_dispute: boolean
         }
-        Returns: Json
-      }
-      beta_access_status: {
-        Args: { p_role?: string; p_user_id?: string }
         Returns: Json
       }
       bind_cart_checkout_payment: {
@@ -6571,6 +7226,15 @@ export type Database = {
         }[]
       }
       charge_cents_in_bounds: { Args: { p_cents: number }; Returns: boolean }
+      check_photo_rewrite: {
+        Args: {
+          p_bucket: string
+          p_object: string
+          p_path: string
+          p_token: string
+        }
+        Returns: string
+      }
       claim_listing_creation: {
         Args: { p_payload_hash: string; p_request: string }
         Returns: Json
@@ -6581,6 +7245,14 @@ export type Database = {
       }
       claim_outbound_label_void: {
         Args: { p_shipment: string; p_worker: string }
+        Returns: Json
+      }
+      claim_payout_deadline_cancellations: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
+      claim_photo_rewrite: {
+        Args: { p_bucket: string; p_path: string }
         Returns: Json
       }
       claim_refund_replacement_provider: {
@@ -6763,6 +7435,15 @@ export type Database = {
         Args: { p_job: string; p_lease: string }
         Returns: undefined
       }
+      copyright_takedown: {
+        Args: {
+          p_listing_ids: string[]
+          p_media_urls: string[]
+          p_note: string
+          p_notice: string
+        }
+        Returns: Json
+      }
       create_protection_return: {
         Args: {
           p_item_ids?: string[]
@@ -6796,6 +7477,10 @@ export type Database = {
         Args: { p_entity: string; p_id: string }
         Returns: undefined
       }
+      escalate_order_dispute: {
+        Args: { p_actor: string; p_order: string }
+        Returns: Json
+      }
       escalate_stale_disputes: { Args: never; Returns: number }
       execute_admin_command: {
         Args: {
@@ -6806,6 +7491,7 @@ export type Database = {
         }
         Returns: Json
       }
+      expire_refund_offers: { Args: { p_limit?: number }; Returns: number }
       explore_build_rows: {
         Args: { p_query: string }
         Returns: {
@@ -6977,6 +7663,17 @@ export type Database = {
         Args: { p_reference: string }
         Returns: undefined
       }
+      finish_photo_rewrite: {
+        Args: {
+          p_bucket: string
+          p_detail?: string
+          p_object: string
+          p_outcome: string
+          p_path: string
+          p_token: string
+        }
+        Returns: string
+      }
       finish_remediation_job: {
         Args: { p_error?: string; p_id: string; p_lease: string }
         Returns: undefined
@@ -7029,6 +7726,17 @@ export type Database = {
         }[]
       }
       grow_products: { Args: { p_full?: boolean }; Returns: Json }
+      guest_hold_admit: {
+        Args: {
+          p_buyer: string
+          p_device: string
+          p_listing_ids: string[]
+          p_network: string
+          p_request: string
+        }
+        Returns: string[]
+      }
+      guest_hold_release: { Args: { p_request: string }; Returns: number }
       has_embedded_media_reference: {
         Args: { p_url: string }
         Returns: boolean
@@ -7095,6 +7803,10 @@ export type Database = {
           listing_id: string
           questions: number
         }[]
+      }
+      listing_enquiry_reply_allowed: {
+        Args: { p_buyer: string; p_listing: string }
+        Returns: boolean
       }
       listing_public_offer_floor: {
         Args: { p_listing: string }
@@ -7197,6 +7909,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7282,6 +7995,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7362,6 +8076,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7446,6 +8161,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7509,6 +8225,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7552,9 +8269,45 @@ export type Database = {
         Args: { p_brand: string; p_part_number: string; p_product: string }
         Returns: string
       }
+      mod_sheet_matches: {
+        Args: { p_car: string; p_items: Json }
+        Returns: boolean
+      }
+      mod_sheet_revision: { Args: { p_car: string }; Returns: string }
+      mod_sheet_revision_if_matches: {
+        Args: { p_car: string; p_items: Json }
+        Returns: string
+      }
+      my_account_deletion_status: { Args: never; Returns: Json }
       my_car_vin: { Args: { p_car: string }; Returns: string }
+      my_deal_listing_ids: { Args: never; Returns: string[] }
       my_default_offer_floor: { Args: never; Returns: number }
+      my_dispute_evidence_upload_count: {
+        Args: { p_order: string }
+        Returns: number
+      }
+      my_listing_enquiries: {
+        Args: { p_others: string[] }
+        Returns: {
+          last_at: string
+          listing_id: string
+          other_id: string
+          price_cents: number
+          seller_id: string
+          status: string
+          title: string
+        }[]
+      }
       my_listing_offer_floor: { Args: { p_listing: string }; Returns: number }
+      my_notification_prefs: { Args: never; Returns: Json }
+      not_received_refund_due: { Args: { p_order: string }; Returns: boolean }
+      not_received_refunds_due: {
+        Args: { p_limit?: number }
+        Returns: {
+          disputed_at: string
+          order_id: string
+        }[]
+      }
       notification_href_target: { Args: { p_href: string }; Returns: string }
       notify: {
         Args: {
@@ -7619,11 +8372,21 @@ export type Database = {
         }
         Returns: Json
       }
+      open_order_dispute: {
+        Args: {
+          p_buyer: string
+          p_category: string
+          p_order: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       open_seller_carry_payouts: {
         Args: { p_limit?: number; p_quiet_hours?: number }
         Returns: number
       }
       order_buyer_reviewable: { Args: { p_order: string }; Returns: boolean }
+      order_has_valid_tracking: { Args: { p_order: string }; Returns: boolean }
       pause_account_deletion_hold: {
         Args: { p_job: string; p_lease: string; p_user: string }
         Returns: undefined
@@ -7635,6 +8398,34 @@ export type Database = {
       payout_release_at: {
         Args: { p_delivered_at: string; p_now: boolean; p_order: string }
         Returns: string
+      }
+      photo_metadata_candidates: {
+        Args: {
+          p_after?: string
+          p_bucket: string
+          p_limit?: number
+          p_uploaded_before?: string
+        }
+        Returns: {
+          path: string
+          size_bytes: number
+          updated_at: string
+        }[]
+      }
+      photo_metadata_scrub_summary: {
+        Args: never
+        Returns: {
+          bucket: string
+          objects: number
+          outcome: string
+        }[]
+      }
+      photo_rewrite_strays: {
+        Args: { p_bucket: string; p_limit?: number }
+        Returns: {
+          path: string
+          reason: string
+        }[]
       }
       pickup_mint_pass: {
         Args: {
@@ -7677,10 +8468,6 @@ export type Database = {
       }
       post_search_doc: {
         Args: { p_intro: string; p_search_text: string; p_title: string }
-        Returns: string
-      }
-      prepare_beta_signup: {
-        Args: { p_email: string; p_token_hash: string }
         Returns: string
       }
       prepare_outbound_label: {
@@ -7745,6 +8532,7 @@ export type Database = {
       }
       profile_is_visible: { Args: { p_id: string }; Returns: boolean }
       profile_sales_count: { Args: { p_profile: string }; Returns: number }
+      profile_shares_deal_with_me: { Args: { p_id: string }; Returns: boolean }
       prune_listing_edit_requests: { Args: never; Returns: number }
       prune_rate_limits: { Args: never; Returns: undefined }
       purchase_begin: {
@@ -7799,9 +8587,35 @@ export type Database = {
         }
         Returns: Json
       }
+      record_admin_export: {
+        Args: {
+          p_detail?: string
+          p_export?: string
+          p_filters?: Json
+          p_phase: string
+          p_rows?: number
+          p_view?: string
+        }
+        Returns: string
+      }
       record_capture_recovery: {
         Args: { p_amount?: number; p_detail: string; p_key: string }
         Returns: string
+      }
+      record_delivery_proof: {
+        Args: {
+          p_carrier_delivered_at?: string
+          p_destination_city?: string
+          p_destination_match: string
+          p_destination_postcode?: string
+          p_evidence_at?: string
+          p_first_scan_at?: string
+          p_reasons: string[]
+          p_shipment: string
+          p_signed_by?: string
+          p_verdict: string
+        }
+        Returns: Json
       }
       record_listing_edit: {
         Args: {
@@ -7812,6 +8626,10 @@ export type Database = {
           p_result: Json
         }
         Returns: undefined
+      }
+      record_listing_view: {
+        Args: { p_arrival: string; p_listing: string }
+        Returns: boolean
       }
       record_outbound_label_void_observation: {
         Args: {
@@ -7917,6 +8735,22 @@ export type Database = {
       }
       refresh_marketplace_facet_counts: { Args: never; Returns: undefined }
       refresh_search_words: { Args: never; Returns: undefined }
+      refund_gap_snapshot: {
+        Args: { p_payment_reference: string; p_refund_references: string[] }
+        Returns: Json
+      }
+      reject_copyright_notice: {
+        Args: { p_note: string; p_notice: string }
+        Returns: undefined
+      }
+      release_cart_checkout: {
+        Args: {
+          p_buyer: string
+          p_idempotency_key: string
+          p_reference?: string
+        }
+        Returns: Json
+      }
       release_expired_reservations: { Args: never; Returns: Json }
       release_media_claim: {
         Args: { p_bucket: string; p_path: string; p_token: string }
@@ -7968,6 +8802,10 @@ export type Database = {
       repair_completed_outbound_label: {
         Args: { p_actor: string; p_shipment: string }
         Returns: Json
+      }
+      replace_car_showcase: {
+        Args: { p_car: string; p_image_url: string; p_pins: Json }
+        Returns: number
       }
       replay_listing_edit: {
         Args: {
@@ -8027,7 +8865,7 @@ export type Database = {
         Returns: string
       }
       save_mod_items: {
-        Args: { p_car_id: string; p_items: Json }
+        Args: { p_car_id: string; p_expected_revision: string; p_items: Json }
         Returns: Json
       }
       saved_counts: {
@@ -8070,11 +8908,18 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: {
           checked_through: string
+          checked_xact: number
           params: Json
           saved_search_id: string
           user_id: string
           window_end: string
+          window_floor: string
+          window_xact: number
         }[]
+      }
+      scrub_deleted_account: {
+        Args: { p_digest_key: string; p_email_digest: string; p_user: string }
+        Returns: Json
       }
       search_car_ids: { Args: { p_query: string }; Returns: string[] }
       search_listing_documents: {
@@ -8198,6 +9043,10 @@ export type Database = {
         }
         Returns: Json
       }
+      settle_payout_deadline_cancellation: {
+        Args: { p_order: string }
+        Returns: Json
+      }
       settle_refund_operation: {
         Args: { p_operation_id: string }
         Returns: Json
@@ -8205,6 +9054,17 @@ export type Database = {
       settle_seller_cancellation: {
         Args: { p_actor: string; p_order: string; p_reason?: string }
         Returns: Json
+      }
+      settlement_hold_policy: {
+        Args: never
+        Returns: {
+          auto_confirm_after_days: number
+          auto_confirm_notice_days: number
+          card_verification_on: boolean
+          payout_hold_days: number
+          payout_hold_mode: string
+          receipt_release_after_days: number
+        }[]
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
@@ -8216,6 +9076,15 @@ export type Database = {
           updated_at: string
         }[]
       }
+      storage_object_rows: {
+        Args: { p_after?: string; p_bucket: string; p_limit?: number }
+        Returns: {
+          created_at: string
+          expected_reason: string
+          path: string
+        }[]
+      }
+      storage_reference_report: { Args: { p_sample?: number }; Returns: Json }
       suggested_builders: {
         Args: { p_limit?: number; p_viewer?: string }
         Returns: {
@@ -8232,6 +9101,10 @@ export type Database = {
       sync_activity_post_listings: {
         Args: { p_listing_ids: string[]; p_post_id: string }
         Returns: undefined
+      }
+      take_down_reported_content: {
+        Args: { p_actor: string; p_reason: string; p_report: string }
+        Returns: Json
       }
       trending_models: {
         Args: { p_days?: number; p_limit?: number }
@@ -8255,6 +9128,10 @@ export type Database = {
           updates: number
         }[]
       }
+      unlink_mod_listing: {
+        Args: { p_car: string; p_expected_revision: string; p_mod_item: string }
+        Returns: Json
+      }
       update_listing_atomic: {
         Args: {
           p_alt_numbers: Json
@@ -8266,6 +9143,8 @@ export type Database = {
         }
         Returns: Json
       }
+      username_available: { Args: { p_username: string }; Returns: string }
+      withdraw_listing: { Args: { p_listing: string }; Returns: Json }
       worker_health_snapshot: { Args: never; Returns: Json }
       write_account_export: {
         Args: {

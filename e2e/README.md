@@ -74,6 +74,11 @@ by `realtime-delivery.spec.ts`, which waits less than the 20-second fallback
 refresh so polling can't pass it. (Until 1 October 2026 this section said E2E
 wasn't in CI; it has been since September.)
 
+Run local Supabase CLI commands as `npx --yes supabase@2.116.0 …` (the
+version CI pins). The globally installed CLI (2.98.2 as of October 2026)
+cannot parse `supabase/config.toml` — it predates the `local_smtp` section
+— so `supabase start` from it fails before anything runs.
+
 ## Additions (Aug 2026)
 
 - `SUPABASE_SECRET_KEY` is accepted as well as the legacy

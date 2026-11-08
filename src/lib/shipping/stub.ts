@@ -82,8 +82,13 @@ function summaryFor(trackingCode: string, carrier: string | null): TrackingSumma
         city: null,
         state_code: null,
         country: "US",
+        postalCode: null,
       },
     ],
+    // The stub knows no destination or signer, so its deliveries prove
+    // nothing on their own: delivery proof records them for review (N95).
+    signedBy: null,
+    destination: null,
   };
 }
 

@@ -20,7 +20,6 @@ declare
   v_expected uuid[];
   v_reader record;
 begin
-  update public.beta_access_config set enforced = false where singleton;
   insert into auth.users(id, email) values
     (v_author, 'post-rules-author@drvn.test'), (v_suspended, 'post-rules-suspended@drvn.test'), (v_viewer, 'post-rules-viewer@drvn.test');
   insert into public.profiles(id, username) values
@@ -44,9 +43,11 @@ begin
 
   for v_reader in
     select * from (values
-      ('anon', null::uuid, array[u[1], u[3], u[6]]),
-      ('viewer', v_viewer, array[u[1], u[3], u[6]]),
-      ('author', v_author, array[u[1], u[2], u[3], u[4], u[6]]),
+      -- N59 (20261107220600): a suspended member's update with no car is
+      -- hidden too, from everyone but its author.
+      ('anon', null::uuid, array[u[1], u[3]]),
+      ('viewer', v_viewer, array[u[1], u[3]]),
+      ('author', v_author, array[u[1], u[2], u[3], u[4]]),
       ('suspended', v_suspended, array[u[1], u[3], u[5], u[6]])) r(who, id, expected)
   loop
     perform set_config('role', case when v_reader.id is null then 'anon' else 'authenticated' end, true);

@@ -60,10 +60,13 @@ export default defineConfig({
   // A release pass is first-attempt evidence. Retries are available only via
   // the explicitly labeled diagnostic lane and never replace its result.
   retries: diagnosticRetries,
+  // JUnit beside the existing reporters gives the Intelligence OS a result per
+  // test per commit (docs/ids.md). A diagnostic rerun writes its own file, so
+  // it never stands in for the first attempt's results.
   reporter: process.env.CI
     ? diagnosticLane
-      ? [["github"], ["list"]]
-      : [["github"], ["./e2e/release-reporter.ts"]]
+      ? [["github"], ["list"], ["junit", { outputFile: "test-results/playwright-diagnostic.xml" }]]
+      : [["github"], ["./e2e/release-reporter.ts"], ["junit", { outputFile: "test-results/playwright.xml" }]]
     : "list",
   timeout: 60_000,
   expect: { timeout: 10_000 },

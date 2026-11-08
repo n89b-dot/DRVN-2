@@ -9,10 +9,13 @@ import { headers } from "next/headers";
 import { attributedNetworkIdentity } from "@/lib/abuse-identity";
 import { allowAction, RATE_LIMITS, type RateLimitRule } from "@/lib/rate-limit";
 import { siteUrl } from "@/lib/site";
+import { landingWithoutUsername, loadHeldDeletion } from "@/lib/held-deletion";
 import { onboardingPath, safeRedirectPath } from "@/lib/safe-redirect";
 import { DISPLAY_NAME_MAX } from "@/lib/limits";
-import { getBetaAccess, prepareBetaSignup } from "@/lib/beta-access";
-import { AUTH_ERROR_COPY, authErrorCode, publicAuthError } from "@/lib/auth-errors";
+import { isValidUsername, normalizeUsername, USERNAME_RULE_MESSAGE } from "@/lib/username";
+import { AGE_CONFIRMATION_REQUIRED, ageConfirmedIn } from "@/lib/age-confirmation";
+import { hasAgeConfirmation, recordAgeConfirmation } from "@/lib/age-confirmation-record";
+import { authErrorCode, publicAuthError } from "@/lib/auth-errors";
 import { reportError } from "@/lib/monitoring";
 import { hasRecoveryAuthorisation } from "@/lib/reauthentication";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -22,7 +25,7 @@ export type AuthState = {
   error?: string;
   ok?: string;
   /** Which field the error belongs under; none means the whole form. */
-  field?: "email" | "password";
+  field?: "email" | "password" | "age";
   /** The email the person typed, handed back so a failed sign-up keeps it. */
   email?: string;
 };
@@ -45,7 +48,9 @@ async function destinationForUser(userId: string, requested?: unknown): Promise<
     .eq("id", userId)
     .single();
 
-  if (!profile?.username) return onboardingPath(requested);
+  // OS-W11: a member whose deletion is paused on a hold goes to the order to
+  // settle, not to onboarding, even with the handle cleanup cleared.
+  if (!profile?.username) return landingWithoutUsername(await loadHeldDeletion(supabase, userId), requested);
   return safeRedirectPath(requested, "/home");
 }
 
@@ -124,7 +129,7 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   // round-trip, and is validated as an internal path before it's used.
   const next = safeRedirectPath(formData.get("next"), "");
   // Every failure keeps what was typed and says which field it's about.
-  const fail = (error: string, field?: "email" | "password"): AuthState => ({ error, field, email });
+  const fail = (error: string, field?: AuthState["field"]): AuthState => ({ error, field, email });
 
   if (!email || !password) {
     return fail("Email and password are required.", email ? "password" : "email");
@@ -132,15 +137,17 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   if (password.length < 8) {
     return fail("Password must be at least 8 characters.", "password");
   }
-  // N42: counted before the invitation check and before Supabase is asked,
+  // R69-age: checked here, not only in the form, so posting to the action
+  // without the box ticked creates nothing and sends no email.
+  if (!ageConfirmedIn(formData)) {
+    return fail(AGE_CONFIRMATION_REQUIRED, "age");
+  }
+  // N42: counted before Supabase is asked,
   // so a throttled attempt can't send a confirmation email to anyone. Same
   // answer whether or not the address is registered.
   if (await throttled(RATE_LIMITS.signUp, RATE_LIMITS.signUpEmailCeiling, RATE_LIMITS.signUpNetwork, email)) {
     return fail("Too many sign-up attempts. Wait a while and try again.");
   }
-
-  const prepared = await prepareBetaSignup(email, String(formData.get("invite") ?? ""));
-  if (prepared.error) return fail(prepared.error);
 
   // RR-07: the confirmation email opens in a new tab, often on another
   // device, so the destination has to travel inside its link. The email
@@ -156,7 +163,6 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
     password,
     options: {
       emailRedirectTo: confirmed.toString(),
-      ...(prepared.claimId ? { data: { beta_claim_id: prepared.claimId } } : {}),
     },
   });
 
@@ -170,15 +176,11 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
     return fail(publicAuthError(error, "sign-up"), field);
   }
 
-  // In enforced mode, the Auth trigger is the authority: a direct Auth user
-  // without the server-minted claim gets no membership or public profile.
-  if (prepared.enforced) {
-    const access = await getBetaAccess(data.user?.id, "buyer");
-    const sellerAccess = await getBetaAccess(data.user?.id, "seller");
-    if (!access.eligible && !sellerAccess.eligible) {
-      await supabase.auth.signOut();
-      return fail("This invitation could not be accepted. It may already have been used.");
-    }
+  // The answer is kept against the new account, so onboarding doesn't ask
+  // again. Supabase returns no identities for an address that already has an
+  // account; nothing is recorded against someone else's account then.
+  if (data.user?.id && data.user.identities?.length) {
+    await recordAgeConfirmation(data.user.id, "email_signup");
   }
 
   // If email confirmation is disabled, a session exists now → onboarding.
@@ -205,16 +207,14 @@ export async function completeOnboarding(
   _prev: AuthState,
   formData: FormData
 ): Promise<AuthState> {
-  const username = String(formData.get("username") ?? "")
-    .trim()
-    .toLowerCase();
+  const username = normalizeUsername(String(formData.get("username") ?? ""));
   const displayName = String(formData.get("display_name") ?? "").trim();
   // Onboarding used to end at /home unconditionally, which is where a new
   // account's original intent (an offer on a specific listing) died.
   const next = formData.get("next");
 
-  if (!/^[a-z0-9_]{3,24}$/.test(username)) {
-    return { error: "Username must be 3-24 characters: letters, numbers, underscores." };
+  if (!isValidUsername(username)) {
+    return { error: USERNAME_RULE_MESSAGE };
   }
   if (!displayName) {
     return { error: "Display name is required." };
@@ -232,19 +232,18 @@ export async function completeOnboarding(
     redirect("/login");
   }
 
-  const [buyerAccess, sellerAccess] = await Promise.all([
-    getBetaAccess(user.id, "buyer"),
-    getBetaAccess(user.id, "seller"),
-  ]);
-  if (buyerAccess.enforced && !buyerAccess.eligible && !sellerAccess.eligible) {
-    // Said as what it means here, with the way out beside the form (N40).
-    return {
-      error: buyerAccess.unavailable
-        ? AUTH_ERROR_COPY.unavailable
-        : "This account can't be set up: it isn't on an invitation. Sign out below and use the email your invitation was sent to.",
-    };
+  // R69-age: an account that didn't confirm at sign-up or checkout (a first
+  // Google sign-in) confirms here. The database also refuses the handle
+  // without the record (20261107231001), so skipping this form gets nowhere.
+  if (!(await hasAgeConfirmation(user.id))) {
+    if (!ageConfirmedIn(formData)) return { error: AGE_CONFIRMATION_REQUIRED, field: "age" };
+    if (!(await recordAgeConfirmation(user.id, "onboarding"))) {
+      return { error: "We couldn't save that. Try again." };
+    }
   }
 
+  // OS-W31: the invite-only beta is gone, so every account can finish
+  // onboarding; the missing-profile repair below stays (N40, #86).
   const { data: updated, error } = await supabase
     .from("profiles")
     .update({ username, display_name: displayName })
@@ -252,9 +251,12 @@ export async function completeOnboarding(
     .select("id");
 
   if (error) {
+    // Taken, reserved or retired by a deleted account (N38) all read as
+    // taken; the format check (23514) is the same rule as the form's.
     if (error.code === "23505") {
       return { error: "That username is taken." };
     }
+    if (error.code === "23514") return { error: USERNAME_RULE_MESSAGE };
     reportError("[onboarding] profile update failed", { userId: user.id, error });
     return { error: "We couldn't save your username. Try again." };
   }

@@ -62,7 +62,6 @@ declare
   checks int := 0;
   stamp timestamptz := now() - interval '1 day';
 begin
-  update public.beta_access_config set enforced = false where singleton;
   insert into auth.users(id, email) values
     (v_seller, 'pages-seller@drvn.test'), (v_suspended, 'pages-suspended@drvn.test'), (v_viewer, 'pages-viewer@drvn.test');
   insert into public.profiles(id, username) values

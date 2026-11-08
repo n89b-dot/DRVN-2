@@ -43,7 +43,7 @@ Where: product definition `docs/DRVN-PRD-2026-09.md`; currency
 |---|---|
 | DRVN (operator, entity TBD) | Runs the platform, holds the Stripe platform account, buys postage, decides disputes it is asked to step into |
 | Member | Account holder: email + password, or Google sign-in. Must be 18+ per the terms (not checked at signup) |
-| Seller | A member who lists parts. Must set up a Stripe Express connected account before a listing can go live while live payments are on |
+| Seller | A member who lists parts. Must start setting up a Stripe Express connected account (details sent to Stripe) before a listing can go live while live payments are on; is paid only once Stripe enables payouts (§3.5) |
 | Shop | A seller who switched their profile to "shop" (self-declared). A separate "verified" badge is granted by hand. No business or VAT details are collected |
 | Buyer | A member, or a **guest** who checks out with an email address (§7) |
 | Admin | DRVN staff in the admin console. Membership is set in the database only; admins must use two-factor sign-in. Admins can read any conversation |
@@ -140,6 +140,18 @@ buyer never confirms, it is never delivered and the seller never paid. A rule
 that marks such orders delivered N days after dispatch (with an in-app warning
 to the buyer 3 days before) is built but **off**; the owner picks N or leaves
 it off. If turned on, the terms need to say so.
+
+**Payout setup (owner ruling 8 November 2026, "go with the eBay approach, 14
+days").** A seller can list, and be bought from, once they have sent Stripe
+their details, even while Stripe is still verifying them. The payout waits
+until Stripe enables payouts and is released then. If payouts still aren't
+enabled 14 days after a sale, an order that hasn't been dispatched is
+cancelled and the buyer refunded in full, and the seller's listings come off
+sale until payouts are enabled. An order already dispatched by then isn't
+refunded; its payout keeps waiting. The owner set that case aside (8
+November: no orders exist yet, so it can't arise); revisit it once live
+orders make it real. Terms §3 says the rest. Where: migration `20261108100000`,
+`docs/decisions/seller-payout-setup.md`.
 
 Where: `public.settlement_settings` and `src/lib/payments/payout-hold.ts`
 (migration `20261006100000`); auto-confirm migration `20261006100100`;
@@ -328,7 +340,8 @@ facts the drafts had to work around". Several were fixed on 3–5 October:
 - Orders never auto-completed: **partly fixed** (a carrier delivery scan now
   starts the payout clock; an auto-confirm rule for untracked shipments is
   built but off, pending the owner's choice).
-- Payout hold: now an owner setting rather than a fixed 7 days (§3.5).
+- Payout hold: now an owner setting rather than a fixed 7 days, set to 2 days
+  after delivery (§3.5).
 - Connect `account.updated` not received: **fixed** (second webhook endpoint).
 
 The privacy policy already reflects the photo change; check the other wording
@@ -354,6 +367,6 @@ Each points to where it lives. Q1–Q11 come from
 | Q11 | Privacy: lawful bases per purpose; international transfer mechanism (US processors); DPAs; provider erasure; internal policy on staff reading messages; whether opt-in-in-Settings without a banner is enough for analytics | §5, §6, §9 |
 | Q12 | Retention: approve or change `docs/owner/retention-proposal.md`, in particular financial records (6 years proposed), personal details on orders (2 years), dispute evidence (2 years), raw webhook payloads (90 days), and the backup statement (30 days) | proposal §3–4 |
 | Q13 | YouTube embeds load from Google without a choice. Disclose, or switch to click-to-load? | §5, §6 |
-| Q14 | If the owner keeps a short hold: paying sellers on day 7 while buyers can report problems for 30 days (and change-of-mind returns run to 60), given recovery depends on the seller's Stripe balance. If auto-confirm is turned on: the wording for "marked delivered after N days without a reported problem", and whether an in-app-only warning is enough notice | §3.5, §3.6 |
+| Q14 | If the owner keeps a short hold: paying sellers on day 2 while buyers can report problems for 30 days (and change-of-mind returns run to 60), given recovery depends on the seller's Stripe balance. If auto-confirm is turned on: the wording for "marked delivered after N days without a reported problem", and whether an in-app-only warning is enough notice | §3.5, §3.6 |
 | Q15 | Guest checkout: is creating an account from a typed email, and telling a visitor that an address is already registered, acceptable? What should the guest's email say? | §7 |
 | Q16 | Offers: the terms call an offer "a promise you intend to keep" but nothing binds the buyer. Is that the wording you want? | §3.2 |

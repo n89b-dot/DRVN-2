@@ -15,29 +15,24 @@ const state = vi.hoisted(() => ({
   audit: [] as { id: number; actor_id: string; created_at: string; action: string; subject_type: string; subject_id: string; order_id: string | null; reason: string; metadata: unknown }[],
   rpcCalls: [] as Record<string, unknown>[],
   auditPages: 0,
+  auditCalls: [] as Record<string, unknown>[],
   profileLookups: [] as number[],
   failOnOrdersPage: 0,
+  // N531: the admin session's audit records, in order.
+  exportRecords: [] as Record<string, unknown>[],
+  failRecordPhase: null as string | null,
+  role: "admin" as "admin" | "viewer",
 }));
 
-function auditBuilder() {
-  const filters: { lt?: number; limit?: number } = {};
-  const builder: Record<string, unknown> = {};
-  for (const m of ["select", "order", "ilike", "eq", "gte", "in"]) builder[m] = () => builder;
-  builder.lt = (column: string, value: number) => {
-    if (column === "id") filters.lt = value;
-    return builder;
-  };
-  builder.limit = (n: number) => {
-    filters.limit = n;
-    return builder;
-  };
-  builder.then = (resolve: (value: unknown) => unknown) => {
-    state.auditPages += 1;
-    const rows = state.audit.filter((r) => filters.lt == null || r.id < filters.lt).slice(0, filters.limit ?? 1000);
-    return resolve({ data: rows.slice(0, 1000), error: null });
-  };
-  return builder;
-}
+// The admin's own session (RLS client): only record_admin_export goes here.
+const session = {
+  rpc: async (name: string, args: Record<string, unknown>) => {
+    if (name !== "record_admin_export") return { data: null, error: { message: `unexpected session rpc ${name}` } };
+    state.exportRecords.push(args);
+    if (state.failRecordPhase === args.p_phase) return { data: null, error: { message: "audit unavailable" } };
+    return { data: args.p_phase === "started" ? "11111111-1111-4111-8111-111111111111" : args.p_export, error: null };
+  },
+};
 
 function profilesBuilder() {
   const builder: Record<string, unknown> = {};
@@ -62,14 +57,22 @@ const client = {
       // Like PostgREST: never more than 1,000 rows, whatever was asked.
       return { data: state.orders.slice(after, after + Math.min(Number(args.p_limit), 1000)), error: null };
     }
-    if (name === "admin_audit_actor_ids") return { data: [], error: null };
+    if (name === "admin_audit_page") {
+      state.auditPages += 1;
+      state.auditCalls.push(args);
+      // The database filters by actor name itself; this fixture's actors are
+      // all named "Admin actor-N", so "nobody" matches none.
+      const named = args.p_actor === "nobody" ? [] : state.audit;
+      const rows = named.filter((r) => args.p_before_id == null || r.id < Number(args.p_before_id));
+      return { data: rows.slice(Number(args.p_offset ?? 0)).slice(0, Math.min(Number(args.p_limit), 1000)), error: null };
+    }
     return { data: null, error: { message: `unexpected rpc ${name}` } };
   },
-  from: (table: string) => (table === "admin_audit_log" ? auditBuilder() : profilesBuilder()),
+  from: () => profilesBuilder(),
 };
 
 vi.mock("@/lib/admin/guard", () => ({
-  getAdminContext: async () => ({ userId: "admin-1", role: "admin" }),
+  getAdminContext: async () => ({ userId: "admin-1", role: state.role, supabase: session }),
   requireAdminRead: async () => ({ userId: "admin-1", role: "admin" }),
   adminReadClient: async () => client,
 }));
@@ -106,8 +109,12 @@ function seedOrders(count: number) {
 beforeEach(() => {
   state.rpcCalls = [];
   state.auditPages = 0;
+  state.auditCalls = [];
   state.profileLookups = [];
   state.failOnOrdersPage = 0;
+  state.exportRecords = [];
+  state.failRecordPhase = null;
+  state.role = "admin";
   seedOrders(2500);
   state.audit = Array.from({ length: 1700 }, (_, i) => ({
     id: 1700 - i,
@@ -179,9 +186,104 @@ describe("audit export (N133)", () => {
     expect(lines[1]).toContain("Admin actor-0");
   });
 
+  it("filters by actor name in the database: 1,000 matching actors never become an id list", async () => {
+    state.audit = state.audit.map((r, i) => ({ ...r, actor_id: `actor-${i % 1000}` }));
+    const response = await GET(new Request("https://drvn.test/admin/export?view=audit&actor=Admin"));
+    expect(response.headers.get("x-drvn-export-rows")).toBe("1700");
+    expect(state.auditCalls[0]).toMatchObject({ p_actor: "Admin", p_limit: 500 });
+    expect(state.auditCalls[1]).toMatchObject({ p_before_id: 1201, p_before_at: "2026-10-01T00:00:00Z" });
+    for (const call of state.auditCalls) expect(JSON.stringify(call).length).toBeLessThan(500);
+    // Names for the file are looked up in chunks of 100 or fewer.
+    expect(Math.max(...state.profileLookups)).toBeLessThanOrEqual(100);
+    expect(state.profileLookups.reduce((a, b) => a + b, 0)).toBe(1000);
+  });
+
   it("an actor search that matches no one exports an empty file, not everyone", async () => {
     const response = await GET(new Request("https://drvn.test/admin/export?view=audit&actor=nobody"));
     expect(response.headers.get("x-drvn-export-rows")).toBe("0");
-    expect(state.auditPages).toBe(0);
+    expect(state.auditCalls[0]).toMatchObject({ p_actor: "nobody" });
+  });
+});
+
+describe("export audit (N531)", () => {
+  const EXPORT_ID = "11111111-1111-4111-8111-111111111111";
+
+  it("records who exported which view with which filters before reading, then the row count", async () => {
+    let readsWhenStarted = -1;
+    const original = session.rpc;
+    session.rpc = async (name, args) => {
+      if (args.p_phase === "started") readsWhenStarted = state.rpcCalls.length;
+      return original(name, args);
+    };
+    try {
+      const response = await GET(new Request("https://drvn.test/admin/export?view=orders&q=Buyer%20One&status=paid&min=10&ignored=x"));
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-drvn-export-rows")).toBe("2500");
+    } finally {
+      session.rpc = original;
+    }
+    // Recorded before a single page was read.
+    expect(readsWhenStarted).toBe(0);
+    expect(state.exportRecords).toEqual([
+      { p_phase: "started", p_view: "orders", p_filters: { q: "Buyer One", status: "paid", min: "10" } },
+      { p_phase: "completed", p_export: EXPORT_ID, p_rows: 2500 },
+    ]);
+  });
+
+  it("records each dispute scope and the audit view as its own view", async () => {
+    await GET(new Request("https://drvn.test/admin/export?view=disputes&scope=resolved&category=wrong_item"));
+    await GET(new Request("https://drvn.test/admin/export?view=audit&actor=dana&subject=order"));
+    expect(state.exportRecords.filter((r) => r.p_phase === "started")).toEqual([
+      { p_phase: "started", p_view: "disputes_resolved", p_filters: { category: "wrong_item" } },
+      { p_phase: "started", p_view: "audit", p_filters: { actor: "dana", subject: "order" } },
+    ]);
+    expect(state.exportRecords.filter((r) => r.p_phase === "completed")).toHaveLength(2);
+  });
+
+  it("records a failed export as failed, and sends no file", async () => {
+    state.failOnOrdersPage = 2;
+    const response = await GET(new Request("https://drvn.test/admin/export?view=orders"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("content-disposition")).toBeNull();
+    expect(state.exportRecords).toEqual([
+      { p_phase: "started", p_view: "orders", p_filters: {} },
+      { p_phase: "failed", p_export: EXPORT_ID, p_detail: "read_failed" },
+    ]);
+  });
+
+  it("records an export refused as too large as failed, with the reason", async () => {
+    state.audit = Array.from({ length: 100_501 }, (_, i) => ({ ...state.audit[0], id: 100_501 - i }));
+    const response = await GET(new Request("https://drvn.test/admin/export?view=audit"));
+    expect(response.status).toBe(413);
+    expect(state.exportRecords.at(-1)).toMatchObject({ p_phase: "failed", p_detail: expect.stringMatching(/^too_large: More than 100,000 rows/) });
+  });
+
+  it("makes no file and reads nothing when the start can't be recorded", async () => {
+    state.failRecordPhase = "started";
+    const response = await GET(new Request("https://drvn.test/admin/export?view=orders"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("content-disposition")).toBeNull();
+    expect(await response.text()).toMatch(/couldn't be recorded/);
+    expect(state.rpcCalls).toHaveLength(0);
+  });
+
+  it("sends no file when the completion can't be recorded", async () => {
+    state.failRecordPhase = "completed";
+    const response = await GET(new Request("https://drvn.test/admin/export?view=orders"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("content-disposition")).toBeNull();
+  });
+
+  it("still lets a read-only viewer export, and records it (who may export is unchanged, N135)", async () => {
+    state.role = "viewer";
+    const response = await GET(new Request("https://drvn.test/admin/export?view=disputes"));
+    expect(response.status).toBe(200);
+    expect(state.exportRecords.map((r) => r.p_phase)).toEqual(["started", "completed"]);
+  });
+
+  it("an unknown view is a 404 with nothing recorded", async () => {
+    const response = await GET(new Request("https://drvn.test/admin/export?view=members"));
+    expect(response.status).toBe(404);
+    expect(state.exportRecords).toHaveLength(0);
   });
 });
