@@ -26,7 +26,9 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-import { saveModItems, saveShowcase, STALE_MOD_SHEET } from "./actions";
+import { STALE_MOD_SHEET } from "@/lib/mods/sheet-revision";
+
+import { saveModItems, saveShowcase } from "./actions";
 
 const line = {
   id: "12345678-1234-4234-8234-123456789012",

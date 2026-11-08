@@ -1,5 +1,6 @@
 "use server";
 
+import { STALE_MOD_SHEET } from "@/lib/mods/sheet-revision";
 import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 
@@ -379,11 +380,6 @@ export async function modSheetRevision(carId: string): Promise<string | null> {
   const { data, error } = await supabase.rpc("mod_sheet_revision", { p_car: carId });
   return error ? null : (data ?? null);
 }
-
-/** The sheet revision the editor or agent loaded (N65). A save over any
- *  other revision is refused rather than erasing what the caller never saw. */
-export const STALE_MOD_SHEET =
-  "This build changed since you opened it — in another tab or from your agent. Reload to see the latest; your edits here stay until you do.";
 
 export async function saveModItems(
   carId: string,
