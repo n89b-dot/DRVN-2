@@ -60,7 +60,10 @@ test("N455: a private car's photo and a draft listing's photo are refused to a v
     // Nor through the optimiser, nor through the pages.
     const optimised = await request.get(`/_next/image?url=${encodeURIComponent(canonical("car-images", paths.privateCar))}&w=640&q=75`);
     expect(optimised.ok()).toBe(false);
-    expect((await request.get(`/cars/${privateCar.slug}`)).status()).toBe(404);
+    // The private car's page doesn't show it (Next streams notFound() with a 200, so read the body).
+    const privatePage = await (await request.get(`/cars/${privateCar.slug}`)).text();
+    expect(privatePage).not.toContain(paths.privateCar);
+    expect(privatePage).not.toContain("Hidden build");
 
     // The public car's photo renders, through a signed URL.
     await page.goto(`/cars/${publicCar.slug}`);
