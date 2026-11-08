@@ -4,6 +4,7 @@ import { buttonClass, ConfirmDialog, ResultNote } from "@/components/ui";
 import { useRecoverableAction } from "@/features/commerce/use-recoverable-action";
 
 import { stopBuyerAgent, type AgentState } from "./actions";
+import { useStopNotice } from "./stop-notice";
 
 /**
  * "Stop negotiating for me" (readiness 64): the buyer's way out of a running
@@ -32,11 +33,20 @@ export function StopBuyerAgent({
    */
   live?: boolean;
 }) {
+  // Under StopNotices (/agent), the result goes to the page's slot: the row
+  // this sits on moves or goes when the page comes back stopped. The page's
+  // setter outlives this component, so the hand-off holds even when that
+  // tree lands before the result does.
+  const notice = useStopNotice();
   const [state, submit, pending] = useRecoverableAction<AgentState>(
-    stopBuyerAgent,
+    async (previous, data) => {
+      const result = await stopBuyerAgent(previous, data);
+      if (result.ok) notice?.(result.ok);
+      return result;
+    },
     "Couldn't confirm your agent stopped. Check Agent before trying again.",
   );
-  if (state.ok) return <ResultNote ok={state.ok} />;
+  if (state.ok) return notice ? null : <ResultNote ok={state.ok} />;
   // Stopped (here or elsewhere): nothing left to stop, and any error or
   // lost-response notice is answered by the page that now says so.
   if (!live) return null;

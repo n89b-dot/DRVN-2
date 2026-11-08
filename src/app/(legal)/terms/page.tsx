@@ -4,6 +4,8 @@ import { Rv } from "@/components/livesheet";
 import {
   AUTO_REFUND_AFTER_DAYS,
   DISPUTE_WINDOW_DAYS,
+  ESCALATION_CLOSES_DAYS,
+  REFUND_OFFER_HOURS,
   SELLER_RESPONSE_DAYS,
 } from "@/features/commerce/disputes";
 import { RETURN_SHIP_DAYS, SELLER_INSPECT_HOURS } from "@/lib/domain/return-policy";
@@ -260,17 +262,22 @@ export default async function TermsPage() {
         </p>
         <ul>
           <li>
-            A buyer can report a problem within {DISPUTE_WINDOW_DAYS} days of delivery (no
-            deadline if it never arrived) if the item didn&apos;t arrive, arrived damaged, is
-            significantly not as described, or is the wrong item. Changing your mind isn&apos;t
-            covered unless the seller is a shop that offers change-of-mind returns.
+            A buyer can report a problem within {DISPUTE_WINDOW_DAYS} days of delivery if the item
+            arrived damaged, is significantly not as described, is counterfeit, doesn&apos;t fit
+            as listed, or is the wrong item. An item that never arrived can be reported from the
+            latest delivery date shown on the order until {DISPUTE_WINDOW_DAYS} days after it,
+            whether or not it was dispatched. Changing your mind isn&apos;t covered unless the
+            seller is a shop that offers change-of-mind returns.
           </li>
           <li>
-            The seller has {SELLER_RESPONSE_DAYS} days to respond — with a partial refund, a full
-            refund, or a return. After that the buyer can ask DRVN to step in, and DRVN reviews
-            the order record and both sides&apos; evidence and decides how the money on the order
-            moves. A problem the seller ignores is refunded automatically on day{" "}
-            {AUTO_REFUND_AFTER_DAYS}.
+            The seller has {SELLER_RESPONSE_DAYS} business days to respond — with tracking, a
+            partial or full refund, or a return. A refund offer stands for {REFUND_OFFER_HOURS}{" "}
+            hours. After that either side can ask DRVN to step in, up to {ESCALATION_CLOSES_DAYS}{" "}
+            business days after the report, and DRVN reviews the order record and both
+            sides&apos; evidence and decides how the money on the order moves. An item that never
+            arrived, with no valid tracking, is refunded in full. A problem the seller ignores is
+            refunded automatically on day {AUTO_REFUND_AFTER_DAYS}. A resolved dispute is final.
+            Business days are Monday to Friday.
           </li>
           <li>
             An agreed return must be posted with tracking within {RETURN_SHIP_DAYS} days. The seller

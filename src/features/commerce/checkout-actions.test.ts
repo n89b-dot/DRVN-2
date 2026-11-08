@@ -27,6 +27,12 @@ const mocks = vi.hoisted(() => ({
   guestAdmit: vi.fn(),
   guestBind: vi.fn(),
   guestRelease: vi.fn(),
+  release: vi.fn(),
+  rememberKey: vi.fn(),
+  forgetKey: vi.fn(),
+  itemsRead: vi.fn(),
+  guestIdentity: vi.fn(),
+  guestBuyer: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -34,8 +40,18 @@ vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("next/headers", () => ({ headers: vi.fn() }));
 vi.mock("@/lib/abuse-identity", () => ({ abuseIdentity: vi.fn().mockReturnValue("network:203.0.113.9") }));
 vi.mock("@/lib/cart", () => ({ getCartIds: mocks.cartIds, removeCartIds: mocks.cartRemove }));
-vi.mock("@/lib/guest-checkout", () => ({ guestCheckoutIdentity: vi.fn(), isPlausibleEmail: vi.fn(), setGuestOrders: vi.fn() }));
-vi.mock("./guest-buyer", () => ({ resolveGuestBuyer: vi.fn(), sendOrderAccessLink: vi.fn() }));
+vi.mock("@/lib/guest-checkout", () => ({
+  guestCheckoutIdentity: mocks.guestIdentity,
+  isPlausibleEmail: vi.fn(() => true),
+  setGuestOrders: vi.fn(),
+}));
+vi.mock("./guest-buyer", () => ({ resolveGuestBuyer: mocks.guestBuyer, sendOrderAccessLink: vi.fn() }));
+vi.mock("@/lib/checkout-key", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/checkout-key")>()),
+  rememberCheckoutKey: mocks.rememberKey,
+  forgetCheckoutKey: mocks.forgetKey,
+}));
+vi.mock("./checkout-release", () => ({ releaseCartCheckout: mocks.release }));
 vi.mock("./checkout-shipping", () => ({
   freezeOrderShipping: vi.fn(),
   hashDestination: vi.fn().mockReturnValue("destination-hash"),
@@ -95,6 +111,7 @@ vi.mock("@/lib/supabase/admin", () => ({
         if (table === "purchase_attempts") return attemptQuery;
         if (table === "listings") return listingQuery;
         if (table === "payments") return paymentQuery;
+        if (table === "order_items") return { select: () => ({ in: mocks.itemsRead }) };
         return orderQuery;
       },
     };
@@ -107,6 +124,7 @@ import { guestCheckoutIdentity, isPlausibleEmail } from "@/lib/guest-checkout";
 import { resolveGuestBuyer } from "./guest-buyer";
 import { freezeOrderShipping } from "./checkout-shipping";
 import { GUEST_HOLD_LIMIT_MESSAGE, GUEST_HOLD_TAKEN_MESSAGE } from "./guest-holds";
+import { cartCheckoutRequestKey } from "@/lib/checkout-key";
 
 const pendingOfferOrder = {
   id: "order-1",
@@ -176,6 +194,12 @@ beforeEach(() => {
   mocks.guestBind.mockResolvedValue({ data: 1, error: null });
   mocks.guestRelease.mockResolvedValue({ data: 1, error: null });
   mocks.redirect.mockImplementation((path: string) => { throw new Error(`redirect:${path}`); });
+  mocks.release.mockResolvedValue({ outcome: "released" });
+  mocks.rememberKey.mockResolvedValue(undefined);
+  mocks.forgetKey.mockResolvedValue(undefined);
+  mocks.itemsRead.mockResolvedValue({ data: [], error: null });
+  mocks.guestIdentity.mockResolvedValue("guest:browser-1");
+  mocks.guestBuyer.mockResolvedValue({ buyer: { id: "guest-1", created: false } });
 });
 
 function cartCheckoutForm(line1 = "10 Main Street") {
@@ -249,28 +273,223 @@ it("recovers the authenticated buyer's exact paid checkout before reading an emp
   expect(mocks.createPayment).not.toHaveBeenCalled();
 });
 
-it("refuses to replay a bound checkout when its shipping payload changed", async () => {
+// OS-W17 — checkout resume and reservations. The form carries the key the
+// page rendered from the checkout-key cookie; these cover what the server
+// does with an existing attempt under that key.
+const FORM_KEY = "33333333-3333-4333-8333-333333333333";
+
+it("N85: resumes the same reserved attempt after a reload instead of reporting nothing available", async () => {
+  const { form, attempt } = durableCartAttempt();
+  mocks.attemptRead.mockResolvedValue({ data: attempt, error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+
+  const result = await checkoutCart({}, form);
+
+  expect(mocks.release).not.toHaveBeenCalled();
+  expect(mocks.purchaseBegin).toHaveBeenCalledWith(expect.objectContaining({
+    p_idempotency_key: attempt.idempotency_key,
+    p_checkout_context: attempt.checkout_context,
+  }));
+  expect(mocks.createPayment).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: attempt.idempotency_key }));
+  expect(result.payment?.clientSecret).toBe("secret");
+  expect(mocks.rememberKey).toHaveBeenCalledWith(FORM_KEY);
+});
+
+it("N86: Edit address releases the buyer's own hold and restarts the checkout for the new address", async () => {
   const original = durableCartAttempt();
   mocks.attemptRead.mockResolvedValue({ data: original.attempt, error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
 
   const result = await checkoutCart({}, cartCheckoutForm("99 Changed Street"));
 
-  expect(result.error).toContain("details changed");
-  expect(mocks.replayOrdersRead).not.toHaveBeenCalled();
-  expect(mocks.cartIds).not.toHaveBeenCalled();
+  expect(mocks.release).toHaveBeenCalledWith(expect.anything(), {
+    buyerId: "buyer-1",
+    idempotencyKey: original.attempt.idempotency_key,
+    orderIds: ["order-1"],
+  });
+  // A new attempt: neither the old payment key nor the old browser binding.
+  const begun = mocks.purchaseBegin.mock.calls[0][0] as Record<string, unknown>;
+  expect(begun.p_idempotency_key).not.toBe(original.attempt.idempotency_key);
+  expect(begun.p_checkout_request_key).not.toBe(cartCheckoutRequestKey("buyer-1", FORM_KEY));
+  expect(begun.p_checkout_context).toEqual(expect.objectContaining({
+    shipping: expect.objectContaining({ line1: "99 Changed Street" }),
+  }));
+  expect(mocks.release.mock.invocationCallOrder[0]).toBeLessThan(mocks.purchaseBegin.mock.invocationCallOrder[0]);
+  expect(result.payment?.clientSecret).toBe("secret");
+  // The cookie now names the new attempt, so a reload resumes that one.
+  const remembered = mocks.rememberKey.mock.calls[0][0];
+  expect(remembered).not.toBe(FORM_KEY);
+  expect(cartCheckoutRequestKey("buyer-1", remembered)).toBe(begun.p_checkout_request_key);
+});
+
+it("N86: a different shipping service releases and restarts rather than refusing", async () => {
+  const original = durableCartAttempt("10 Main Street", "quote-original");
+  mocks.attemptRead.mockResolvedValue({ data: original.attempt, error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+
+  const result = await checkoutCart({}, durableCartAttempt("10 Main Street", "quote-changed").form);
+
+  expect(mocks.release).toHaveBeenCalledTimes(1);
+  expect(mocks.purchaseBegin).toHaveBeenCalledWith(expect.objectContaining({
+    p_idempotency_key: expect.not.stringMatching(original.attempt.idempotency_key),
+  }));
+  expect(result.payment).toBeDefined();
+});
+
+it("N86: a changed cart releases the old basket and reserves the new one", async () => {
+  const { form, attempt } = durableCartAttempt();
+  mocks.attemptRead.mockResolvedValue({ data: attempt, error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-1", "listing-2"]);
+
+  await checkoutCart({}, form);
+
+  expect(mocks.release).toHaveBeenCalledTimes(1);
+  expect(mocks.purchaseBegin).toHaveBeenCalledWith(expect.objectContaining({
+    p_listing_ids: ["listing-1", "listing-2"],
+  }));
+});
+
+it("N86: keeps the hold and starts nothing when the earlier payment can't be resolved", async () => {
+  const original = durableCartAttempt();
+  mocks.attemptRead.mockResolvedValue({ data: original.attempt, error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  mocks.release.mockResolvedValue({ outcome: "unresolved" });
+
+  const result = await checkoutCart({}, cartCheckoutForm("99 Changed Street"));
+
+  expect(result.error).toContain("still being confirmed");
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
   expect(mocks.createPayment).not.toHaveBeenCalled();
 });
 
-it("refuses a different service selection on a browser-bound checkout", async () => {
-  const original = durableCartAttempt("10 Main Street", "quote-original");
+it("N86: shows the order, not a second payment, when the released checkout had in fact been paid", async () => {
+  const original = durableCartAttempt();
   mocks.attemptRead.mockResolvedValue({ data: original.attempt, error: null });
-  const changed = durableCartAttempt("10 Main Street", "quote-changed").form;
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  mocks.release.mockResolvedValue({ outcome: "settled" });
 
-  const result = await checkoutCart({}, changed);
+  await expect(checkoutCart({}, cartCheckoutForm("99 Changed Street"))).rejects.toThrow("redirect:/orders/order-1?placed=1");
 
-  expect(result.error).toContain("shipping service changed");
-  expect(mocks.replayOrdersRead).not.toHaveBeenCalled();
+  expect(mocks.forgetKey).toHaveBeenCalled();
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
   expect(mocks.createPayment).not.toHaveBeenCalled();
+});
+
+it("N85: starts a new attempt when the remembered one has lapsed", async () => {
+  const { form, attempt } = durableCartAttempt();
+  mocks.attemptRead.mockResolvedValue({ data: attempt, error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "payment_failed" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+
+  const result = await checkoutCart({}, form);
+
+  expect(mocks.release).not.toHaveBeenCalled();
+  expect(mocks.purchaseBegin).toHaveBeenCalledWith(expect.objectContaining({
+    p_idempotency_key: expect.not.stringMatching(attempt.idempotency_key),
+  }));
+  expect(result.payment).toBeDefined();
+});
+
+it("N85: a guest's lapsed attempt is not replayed either", async () => {
+  mocks.auth.mockResolvedValue({ data: { user: null } });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  mocks.attemptRead.mockResolvedValue({ data: { result: { orders: [{ order_id: "order-1" }], skipped: [] } }, error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "payment_failed" }], error: null });
+  const form = cartCheckoutForm();
+  form.set("email", "guest@example.test");
+  const shipping = { name: "Buyer One", line1: "10 Main Street", line2: null, city: "Detroit", postcode: "48201", country: "US", state: null, phone: null, isCollection: false };
+  const lapsedKey = createHash("sha256")
+    .update(JSON.stringify(["guest:browser-1", FORM_KEY, shipping, ["listing-1"]]))
+    .digest("hex");
+
+  await checkoutCart({}, form);
+
+  expect(mocks.attemptEq).toHaveBeenCalledWith("idempotency_key", lapsedKey);
+  const begun = mocks.purchaseBegin.mock.calls[0][0] as Record<string, unknown>;
+  expect(begun.p_buyer_id).toBe("guest-1");
+  expect(begun.p_idempotency_key).not.toBe(lapsedKey);
+});
+
+it("N85: says the buyer's own checkout holds the parts, not that they sold", async () => {
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  mocks.purchaseBegin.mockResolvedValue({
+    data: { orders: [], skipped: [{ listing_id: "listing-1", reason: "unavailable" }] },
+    error: null,
+  });
+  mocks.replayOrdersRead.mockResolvedValue({
+    data: [{ id: "order-9", order_items: [{ listing_id: "listing-1" }] }],
+    error: null,
+  });
+
+  const result = await checkoutCart({}, cartCheckoutForm());
+
+  expect(result.error).toContain("Your checkout is already holding these parts");
+  expect(result.error).not.toContain("sold");
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+});
+
+it("N87: an empty cart on another device says the buyer's own checkout holds the parts", async () => {
+  mocks.cartIds.mockResolvedValue([]);
+  mocks.replayOrdersRead.mockResolvedValue({
+    data: [{ id: "order-9", order_items: [{ listing_id: "listing-1" }] }],
+    error: null,
+  });
+
+  const result = await checkoutCart({}, cartCheckoutForm());
+
+  expect(result.error).toContain("Your checkout is already holding these parts");
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
+});
+
+it("N88: explains the unfinished-checkout cap instead of a generic failure", async () => {
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  mocks.purchaseBegin.mockResolvedValue({ data: null, error: { code: "P0001", message: "Too many unresolved checkouts" } });
+
+  const result = await checkoutCart({}, cartCheckoutForm());
+
+  expect(result.error).toContain("5 checkouts waiting for payment");
+  expect(result.error).toContain("Nothing was charged");
+  expect(mocks.reportError).not.toHaveBeenCalled();
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+});
+
+it("N485: the payment step's breakdown is what the server reserved, not the page-load cart", async () => {
+  mocks.cartIds.mockResolvedValue(["listing-1", "listing-2"]);
+  mocks.listingRead.mockResolvedValue({
+    data: [{ id: "listing-1", title: "Intercooler" }, { id: "listing-2", title: "Downpipe" }],
+    error: null,
+  });
+  // listing-2 sold meanwhile and listing-1's price rose to $50 since the page loaded.
+  mocks.purchaseBegin.mockResolvedValue({
+    data: {
+      orders: [{
+        order_id: "order-1", seller_id: "seller-1", currency: "USD",
+        subtotal_cents: 5000, shipping_cents: 500, platform_fee_cents: 550, total_cents: 5500,
+        listing_ids: ["listing-1"],
+      }],
+      skipped: [{ listing_id: "listing-2", reason: "unavailable" }],
+    },
+    error: null,
+  });
+  mocks.itemsRead.mockResolvedValue({ data: [{ listing_id: "listing-1", title: "Intercooler", price_cents: 5000 }], error: null });
+
+  const result = await checkoutCart({}, cartCheckoutForm());
+
+  expect(result.payment).toEqual(expect.objectContaining({
+    amountCents: 5500,
+    breakdown: {
+      goodsCents: 5000,
+      shippingCents: 500,
+      lines: [{ id: "listing-1", title: "Intercooler", priceCents: 5000 }],
+      skipped: ["Downpipe"],
+    },
+  }));
 });
 
 it("journals and freezes authenticated delivery before crossing the provider boundary", async () => {
