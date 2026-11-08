@@ -142,11 +142,8 @@ export default async function NotificationsPage({
   // The member's muted kinds shape the page query itself; the badge count
   // starts alongside, since it reads the preferences on its own.
   const unreadCountRead = loadUnreadNotificationCount(supabase, user.id);
-  const { data: me } = await supabase
-    .from("profiles")
-    .select("notification_prefs")
-    .eq("id", user.id)
-    .maybeSingle();
+  // The column is closed to members (N62); this answers only for the caller.
+  const { data: prefs } = await supabase.rpc("my_notification_prefs");
 
   let query = supabase
     .from("notifications")
@@ -154,7 +151,7 @@ export default async function NotificationsPage({
     .eq("user_id", user.id);
   if (unreadOnly) query = query.is("read_at", null);
   if (section) query = query.eq("section", section);
-  const muted = mutedKindFilter(me?.notification_prefs);
+  const muted = mutedKindFilter(prefs);
   if (muted) query = query.or(muted);
   query = query.order("created_at", { ascending: false }).range(from, from + PAGE_SIZE - 1);
 
