@@ -12,8 +12,10 @@
 // every object the file creates is probed, read-only, in the catalog, and
 // each function the file is the tree's latest definition of must have that
 // body. The same dry run and --confirm code, allow-list and TLS as an apply.
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
@@ -239,7 +241,7 @@ export async function inspectTarget(client) {
  * isn't allowed, still meets an empty database. Returns "applied" or
  * "skipped"; throws (after rolling back) on any refusal or SQL error.
  */
-export async function applyMigration(client, m, allowance = null) {
+export async function applyMigration(client, m, allowance = null, provenance = null) {
   await client.query("begin");
   try {
     await client.query("select pg_advisory_xact_lock($1)", [RUN_LOCK_KEY]);
@@ -257,13 +259,68 @@ export async function applyMigration(client, m, allowance = null) {
     await client.query(m.body);
     await client.query(
       "insert into supabase_migrations.schema_migrations (version, name, statements) values ($1, $2, $3)",
-      [m.version, m.name, [m.text]],
+      // statements[0] is the file as applied, led by who applied it and from
+      // which commit and PR (provenanceLine), so the Supabase-owned table
+      // needs no new column.
+      [m.version, m.name, [provenance ? `${provenance}\n${m.text}` : m.text]],
     );
     await client.query("commit");
     return "applied";
   } catch (error) {
     await client.query("rollback").catch(() => {});
     throw error;
+  }
+}
+
+const PROVENANCE_VALUE = /[^A-Za-z0-9._@+-]/g;
+
+/**
+ * The comment line that leads each recorded file's statements[0]:
+ * `-- applied_by=<user> source_sha=<sha> pr=<n>`. Values are single tokens
+ * (anything else becomes "_"), so the line splits on spaces.
+ */
+export function provenanceLine({ appliedBy, sourceSha, pr }) {
+  const value = (v, fallback) => String(v ?? "").trim().replace(PROVENANCE_VALUE, "_").slice(0, 80) || fallback;
+  return `-- applied_by=${value(appliedBy, "unknown")} source_sha=${value(sourceSha, "unknown")} pr=${value(pr, "none")}`;
+}
+
+/** Reads a provenance line back from statements[0] (first line of an apply, second of a --record-only row), or null. */
+export function parseProvenance(statement) {
+  const m = String(statement ?? "").match(/^-- applied_by=(\S+) source_sha=(\S+) pr=(\S+)$/m);
+  return m ? { appliedBy: m[1], sourceSha: m[2], pr: m[3] } : null;
+}
+
+/**
+ * Who is applying, from which commit: --applied-by, else git's user.name,
+ * else the OS user; HEAD's sha, marked "+uncommitted" when a file being
+ * applied differs from HEAD; --pr, else "none". `git(args)` returns stdout.
+ *
+ * @param {{ appliedBy?: string, pr?: string, files: string[] }} options
+ * @param {(args: string[]) => string} [git]
+ */
+export function readProvenance({ appliedBy, pr, files }, git = defaultGit) {
+  const tryGit = (args) => {
+    try {
+      return git(args).trim();
+    } catch {
+      return "";
+    }
+  };
+  const user = appliedBy || tryGit(["config", "user.name"]) || safeUsername();
+  let sha = tryGit(["rev-parse", "HEAD"]);
+  if (sha && files.length && tryGit(["status", "--porcelain", "--", ...files])) sha = `${sha}+uncommitted`;
+  return provenanceLine({ appliedBy: user, sourceSha: sha, pr: pr ?? "none" });
+}
+
+function defaultGit(args) {
+  return execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+}
+
+function safeUsername() {
+  try {
+    return os.userInfo().username;
+  } catch {
+    return "";
   }
 }
 
@@ -371,7 +428,7 @@ const RECORDED_MARK = "-- recorded by scripts/apply-migration.mjs --record-only:
  * now, so a file that changed, got recorded meanwhile or stopped verifying
  * since the dry run refuses the whole run and records nothing.
  */
-export async function recordMigrations(client, { ref, confirm, migrations, analysis, schemas, readCatalogFn = readCatalog }) {
+export async function recordMigrations(client, { ref, confirm, migrations, analysis, schemas, readCatalogFn = readCatalog, provenance = null }) {
   await client.query("begin");
   try {
     await client.query("select pg_advisory_xact_lock($1)", [RUN_LOCK_KEY]);
@@ -388,7 +445,7 @@ export async function recordMigrations(client, { ref, confirm, migrations, analy
     for (const m of toRecord) {
       await client.query(
         "insert into supabase_migrations.schema_migrations (version, name, statements) values ($1, $2, $3)",
-        [m.version, m.name, [RECORDED_MARK + m.text]],
+        [m.version, m.name, [RECORDED_MARK + (provenance ? `${provenance}\n` : "") + m.text]],
       );
     }
     await client.query("commit");
@@ -407,6 +464,8 @@ export const USAGE = `usage:
   node scripts/apply-migration.mjs --target <name> --status                                 read-only: what is applied, as JSON
 
   --target <name>     a project in supabase/migration-targets.json; must be the one the env file points at
+  --pr <n>            the merged PR these files came from, recorded with each row (default "none")
+  --applied-by <who>  recorded with each row (default: git user.name, else the OS user)
   --env-file <path>   read SUPABASE_DB_PASSWORD and NEXT_PUBLIC_SUPABASE_URL from here (default .env.local)
   --apply             apply for real; needs --confirm with the code the dry run printed for these files
   --record-only       don't run the files: record the history row of each one whose every object is
@@ -452,6 +511,8 @@ export async function run(argv, deps = {}) {
       allowPositionals: true,
       options: {
         target: { type: "string" },
+        pr: { type: "string" },
+        "applied-by": { type: "string" },
         apply: { type: "boolean", default: false },
         "dry-run": { type: "boolean", default: false },
         confirm: { type: "string" },
@@ -508,6 +569,11 @@ export async function run(argv, deps = {}) {
     return 1;
   }
 
+  if (values.pr !== undefined && !/^(\d+|none)$/.test(values.pr)) {
+    fail(`--pr takes a PR number or "none", not "${values.pr}"`);
+    return 1;
+  }
+  const provenance = readProvenance({ appliedBy: values["applied-by"], pr: values.pr, files: positionals }, deps.git);
   const recordOnly = values["record-only"];
   if (recordOnly && values.apply && !values.confirm) {
     fail("--apply needs --confirm <code>: run the --record-only dry run first, read it, then pass the code it prints");
@@ -545,8 +611,9 @@ export async function run(argv, deps = {}) {
         state.historyPresent ? `has ${state.recorded.size} rows` : "table absent (the first apply creates it)"
       }`,
     );
+    log(`each recorded row will start with: ${provenance}`);
     if (recordOnly) {
-      return await runRecordOnly({ client, state, target, migrations, values, positionals, migrationsDir, readFile, log, fail, deps });
+      return await runRecordOnly({ client, state, target, migrations, values, positionals, migrationsDir, readFile, log, fail, deps, provenance });
     }
     const plan = planMigrations(state, migrations, allowed);
     for (const step of plan) {
@@ -569,7 +636,7 @@ export async function run(argv, deps = {}) {
         return 0;
       }
       log(`dry run: ${toApply.length} file(s) would be applied, each in one transaction with its history row. Nothing was changed.`);
-      log(`to apply exactly this:\n  node scripts/apply-migration.mjs --target ${target.name} --apply --confirm ${code} ${positionals.join(" ")}`);
+      log(`to apply exactly this:\n  node scripts/apply-migration.mjs --target ${target.name} --apply --confirm ${code}${values.pr ? ` --pr ${values.pr}` : ""} ${positionals.join(" ")}`);
       return 0;
     }
 
@@ -581,7 +648,7 @@ export async function run(argv, deps = {}) {
     const reload = () => client.query("notify pgrst, 'reload schema'");
     let applied = 0;
     for (const step of toApply) {
-      const outcome = await applyMigration(client, step.migration, allowedFor(allowed, step.migration));
+      const outcome = await applyMigration(client, step.migration, allowedFor(allowed, step.migration), provenance);
       if (outcome === "applied") {
         applied += 1;
         await reload();
@@ -600,7 +667,7 @@ export async function run(argv, deps = {}) {
 }
 
 /** The --record-only half of `run`, once connected and the target is printed. */
-async function runRecordOnly({ client, state, target, migrations, values, positionals, migrationsDir, readFile, log, fail, deps }) {
+async function runRecordOnly({ client, state, target, migrations, values, positionals, migrationsDir, readFile, log, fail, deps, provenance }) {
   const readCatalogFn = deps.readCatalog ?? readCatalog;
   const analysis = analyseTree(readTree(migrationsDir, readFile));
   const schemas = [...analysis.schemas].sort();
@@ -630,7 +697,7 @@ async function runRecordOnly({ client, state, target, migrations, values, positi
   if (!values.apply) {
     log(`record-only dry run: ${summary}. Nothing was changed.`);
     if (toRecord.length) {
-      log(`to record exactly these:\n  node scripts/apply-migration.mjs --target ${target.name} --record-only --apply --confirm ${code} ${positionals.join(" ")}`);
+      log(`to record exactly these:\n  node scripts/apply-migration.mjs --target ${target.name} --record-only --apply --confirm ${code}${values.pr ? ` --pr ${values.pr}` : ""} ${positionals.join(" ")}`);
     }
     return 0;
   }
@@ -649,6 +716,7 @@ async function runRecordOnly({ client, state, target, migrations, values, positi
     analysis,
     schemas,
     readCatalogFn,
+    provenance,
   });
   for (const m of recorded) log(`recorded: ${m.base} (not run)`);
   log(`recorded ${recorded.length} file(s) in supabase_migrations.schema_migrations without running them; ${refused} refused, left pending`);

@@ -37,7 +37,7 @@ Every test file and SQL guard a PR adds or changes names at least one canonical 
 
 Every file in `supabase/migrations/` has a row in `supabase/MIGRATIONS.md`, and its "Applied to" cell is one of `not applied`, `shared-dev <YYYY-MM-DD>`, `staging <YYYY-MM-DD>` or `production <YYYY-MM-DD>` (several joined with `; `). Rows written before this rule are listed in `supabase/migrations-md-baseline.json` and keep their prose.
 
-`node scripts/apply-migration.mjs --target <name> --status` prints, read-only, what a target has applied against what is on disk, as JSON. Each row the runner records in `supabase_migrations.schema_migrations` starts its `statements[0]` with a provenance line: `-- applied_by=<user> source_sha=<sha> pr=<n>`.
+`node scripts/apply-migration.mjs --target <name> --status` prints, read-only, what a target has applied against what is on disk, as JSON. Each row the runner records in `supabase_migrations.schema_migrations` carries a provenance comment line in `statements[0]`: `-- applied_by=<user> source_sha=<sha> pr=<n>`. It is the first line of an applied file's row, and the second (after the `--record-only` marker) of a row recorded without running the file. Pass `--pr <n>` when applying a merged PR's files.
 
 ## What CI publishes per commit
 
