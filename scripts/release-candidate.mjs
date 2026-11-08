@@ -34,6 +34,15 @@ export function captureCandidate(root,config,expectedSourceSha) {
  const migrations=treeFiles(join(root,'supabase/migrations')).filter(file=>file.path.endsWith('.sql'));
  return {version:1,sourceSha,buildId,buildDigest:digest(JSON.stringify(files)),migrationsDigest:digest(JSON.stringify(migrations)),buildFiles:files,migrations,lockfileDigest:digest(readFileSync(join(root,'package-lock.json'))),nodeVersion:process.version,configuration:config,configurationSource:'operator-declared; hosted observation required',createdAt:new Date().toISOString()};
 }
+// N540: variables that must be absent from every hosted environment. The
+// operations gate runs `hosted-env` on the host's variable list (for Vercel,
+// `vercel env ls production` and `vercel env ls preview` saved to a file); the
+// app also refuses to boot with the first one on a hosted deployment.
+export const FORBIDDEN_HOSTED_VARIABLES=['PAYMENTS_ALLOW_STUB_IN_PRODUCTION','SHIPPING_ALLOW_STUB_IN_PRODUCTION'];
+export function forbiddenHostedVariables(listing) {
+ const names=new Set(String(listing).split(/\r?\n/).map(line=>line.trim().split(/\s+/)[0]).filter(Boolean));
+ return FORBIDDEN_HOSTED_VARIABLES.filter(name=>names.has(name));
+}
 export function verifyEvidenceFiles(reports, directory) {
  const base=realpathSync(directory);
  for(const report of reports) {
@@ -64,6 +73,7 @@ if(process.argv[1]===fileURLToPath(import.meta.url)) {
   const [command,a,b]=process.argv.slice(2);
   if(command==='build'&&a&&b){const config=validateConfiguration(JSON.parse(readFileSync(a,'utf8')));const sourceSha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();if(execFileSync('git',['status','--porcelain'],{encoding:'utf8'}).trim())throw new Error('Candidate build requires a clean source tree');execFileSync('npm',['run','build'],{stdio:'inherit'});const manifest=captureCandidate(process.cwd(),config,sourceSha);writeFileSync(resolve(b),JSON.stringify(manifest,null,2)+'\n',{mode:0o600});console.log('Candidate manifest captured; acceptance remains unverified.');}
   else if(command==='verify'&&a&&b){const candidate=JSON.parse(readFileSync(a,'utf8'));const reports=JSON.parse(readFileSync(b,'utf8'));verifyEvidenceFiles(reports,dirname(resolve(b)));console.log(JSON.stringify(verifyPromotion(candidate,reports)));}
-  else throw new Error('Usage: release-candidate.mjs build CONFIG OUTPUT | verify CANDIDATE REPORTS');
+  else if(command==='hosted-env'&&a){const found=forbiddenHostedVariables(readFileSync(a,'utf8'));if(found.length)throw new Error(`Hosted environment sets ${found.join(', ')}: remove it (N540)`);console.log(`Hosted environment has none of ${FORBIDDEN_HOSTED_VARIABLES.join(', ')}.`);}
+  else throw new Error('Usage: release-candidate.mjs build CONFIG OUTPUT | verify CANDIDATE REPORTS | hosted-env VARIABLE_LISTING');
  } catch(error){console.error(error.message);process.exitCode=1;}
 }

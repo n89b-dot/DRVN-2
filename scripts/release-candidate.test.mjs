@@ -1,5 +1,5 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';
-import {REQUIRED_GATES,validateConfiguration,verifyPromotion} from './release-candidate.mjs';
+import {REQUIRED_GATES,validateConfiguration,verifyPromotion,forbiddenHostedVariables} from './release-candidate.mjs';
 const config={environmentId:'staging',canonicalOrigin:'https://staging.example',supabaseProjectRef:'test-project',paymentMode:'stripe-test',shippingMode:'stub',analyticsEnabled:false,searchEnabled:false,betaRequired:true,operator:'release-owner'};
 const candidate={sourceSha:'a'.repeat(40),buildDigest:'b'.repeat(64),migrationsDigest:'c'.repeat(64),configuration:config};
 const now=Date.parse('2026-09-05T20:00:00Z');
@@ -18,4 +18,12 @@ test('evidence bytes must match and remain within the report directory',async()=
  const {createHash}=await import('node:crypto');const {verifyEvidenceFiles}=await import('./release-candidate.mjs');
  const dir=mkdtempSync(join(tmpdir(),'drvn-evidence-'));
  try {writeFileSync(join(dir,'proof.txt'),'pass');const report={evidencePath:'proof.txt',evidenceDigest:createHash('sha256').update('pass').digest('hex')};verifyEvidenceFiles([report],dir);writeFileSync(join(dir,'proof.txt'),'changed');assert.throws(()=>verifyEvidenceFiles([report],dir),/mismatch/);assert.throws(()=>verifyEvidenceFiles([{...report,evidencePath:'..'}],dir),/within/);}finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('N540: the hosted variable listing may not carry the sandbox payment or shipping override',()=>{
+ const listing=['> Environment Variables found for drvn/staging','',' name                     value      environments  created','NEXT_PUBLIC_SITE_URL       Encrypted  Production    2d ago','PAYMENTS_MODE              Encrypted  Production    2d ago'].join('\n');
+ assert.deepEqual(forbiddenHostedVariables(listing),[]);
+ assert.deepEqual(forbiddenHostedVariables(listing+'\nPAYMENTS_ALLOW_STUB_IN_PRODUCTION  Encrypted  Production  1m ago'),['PAYMENTS_ALLOW_STUB_IN_PRODUCTION']);
+ assert.deepEqual(forbiddenHostedVariables('SHIPPING_ALLOW_STUB_IN_PRODUCTION\nPAYMENTS_ALLOW_STUB_IN_PRODUCTION'),['PAYMENTS_ALLOW_STUB_IN_PRODUCTION','SHIPPING_ALLOW_STUB_IN_PRODUCTION']);
+ assert.deepEqual(forbiddenHostedVariables('X_PAYMENTS_ALLOW_STUB_IN_PRODUCTION Encrypted'),[]);
 });

@@ -10,7 +10,8 @@ const root = resolve(__dirname, "..", "..");
 const runbook = readFileSync(join(root, "docs", "production-runbook.md"), "utf8");
 
 // Set by the test runner or the platform for tooling, never configured by an operator.
-const NOT_CONFIGURATION = new Set(["NODE_ENV", "NEXT_RUNTIME", "VERCEL", "CI"]);
+// Set by the runtime or the platform, never by an operator (VERCEL_ENV names the Vercel environment, N540).
+const NOT_CONFIGURATION = new Set(["NODE_ENV", "NEXT_RUNTIME", "VERCEL", "VERCEL_ENV", "CI"]);
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {

@@ -195,7 +195,8 @@ Emails:
 | `POSTHOG_KEY`, `POSTHOG_HOST` | optional (step 0.3) |
 
 Never set `PAYMENTS_ALLOW_STUB_IN_PRODUCTION` on staging — the candidate
-declares `paymentMode: "stripe-test"`. Deploy; the build must start without a
+declares `paymentMode: "stripe-test"`, and the app refuses to boot with it
+on a hosted deployment (N540). Deploy; the build must start without a
 `PaymentsConfigError` in the logs. A boot failure lists every missing or
 invalid variable at once.
 
@@ -361,7 +362,7 @@ create invitations for testers from Admin → Invitations.
    | `invitation-boundaries` | uninvited signup/buy/sell refused, invited accepted, on staging |
    | `privacy` | an export downloaded and checked, a deletion completed, private buckets refusing anonymous reads |
    | `accessibility` | the axe/e2e accessibility run against staging |
-   | `operations` | worker health green, a monitor failure + recovery delivered (step 10), an alert delivered (step 9) |
+   | `operations` | worker health green, a monitor failure + recovery delivered (step 10), an alert delivered (step 9), and the sandbox overrides absent: save `vercel env ls production` and `vercel env ls preview` to one file and run `node scripts/release-candidate.mjs hosted-env <file>` (N540; the app also refuses to boot with `PAYMENTS_ALLOW_STUB_IN_PRODUCTION` on a hosted deployment) |
    | `restore-rollback` | a hosted restore of a recovery point into an isolated target and a previous-build rollback (runbook §6) |
    | `staging-soak` | the agreed soak period with workers green and no unexpected Sentry errors |
 
