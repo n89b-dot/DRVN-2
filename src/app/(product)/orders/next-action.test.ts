@@ -86,7 +86,11 @@ describe("nextAction", () => {
 
 describe("finishCheckoutHref", () => {
   it("N87: a pending cart order finishes in the cart checkout, not the offer page that refuses it", () => {
-    expect(finishCheckoutHref({ id: "order-1", origin_offer_id: null })).toBe("/checkout");
+    expect(finishCheckoutHref({ id: "order-1", origin_offer_id: null })).toMatch(/^\/checkout(\?|$)/);
+  });
+
+  it("a cart order's Finish checkout carries the order, so another device can resume it", () => {
+    expect(finishCheckoutHref({ id: "order-1", origin_offer_id: null })).toBe("/checkout?order=order-1");
   });
 
   it("an accepted offer still finishes on its own checkout page", () => {
