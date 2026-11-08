@@ -72,7 +72,8 @@ scripts/owner/branch-protection.sh --verify
 It prints the repository visibility, the rules in force on `main`
 (`GET /repos/{repo}/rules/branches/main`), the rulesets, and any classic
 protection. Expect `deletion`, `non_fast_forward`, `pull_request` and
-`required_status_checks: release-gate`.
+`required_status_checks: release-gate`, with strict status checks on (see
+below).
 
 Then prove it:
 
@@ -84,6 +85,29 @@ Then prove it:
 4. Keep the `--verify` output and a screenshot of step 3 with the release
    packet. None of the 15 gates checks branch protection, so this is the
    only record of it.
+
+## Branches must be up to date (strict status checks)
+
+The ruleset requires a pull request's branch to contain current `main` before
+`release-gate` counts (`strict_required_status_checks_policy: true`; classic
+protection: `required_status_checks.strict: true`). Every PR is then tested
+against the rules it will land on. Twice on 7–8 November 2026 a PR that was
+green against an older `main` merged after another PR changed the rules it was
+tested under, and `main` went red (remediation plan A2). A PR that falls
+behind shows "This branch is out-of-date"; update it (`gh pr update-branch <n>`
+or merge `main` into it) and let its checks rerun before merging.
+
+## History
+
+- **8 November 2026, about 18:50 UTC:** `main` was found with no ruleset and no
+  classic protection (`GET /repos/{repo}/branches/main/protection` answered 404,
+  rulesets `[]`). Nothing in any session's record showed a deliberate removal.
+  PRs armed with `gh pr merge --auto` merged before their checks finished. The
+  orchestrating session restored the `protect-main` ruleset from this script
+  (release-gate required, pull requests required, force pushes and deletion
+  blocked), ruleset id `26808907`.
+- **8 November 2026:** strict status checks ("require branches to be up to
+  date") turned on at Neil's go-ahead (plan A2), and this script now sets it.
 
 ## The deploy boundary [OWNER]
 

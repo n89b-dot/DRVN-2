@@ -109,11 +109,15 @@ describe("isOwnedStorageUrl — canonical, ours, the member's own folder (N55)",
 
 /** N55 (SSRF): the share-image renderer fetches only our public photos. */
 describe("ogImageSource — the share card's fetch allow-list", () => {
-  it("passes a canonical public photo on our storage", () => {
-    expect(ogImageSource(photo)).toBe(photo);
-    expect(ogImageSource(photo.replace("car-images", "activity-images"))).not.toBeNull();
-    expect(ogImageSource(photo.replace("car-images", "listing-images"))).not.toBeNull();
-    expect(ogImageSource(photo.replace("car-images", "avatars"))).not.toBeNull();
+  it("N455: passes a signed member photo and a public avatar on our storage; a bare canonical member photo can't be fetched", () => {
+    const signed = (bucket: string) => `${ORIGIN}/storage/v1/object/sign/${bucket}/${ME}/car-1/photo.webp?token=abc.def-ghi`;
+    expect(ogImageSource(signed("car-images"))).toBe(signed("car-images"));
+    expect(ogImageSource(signed("activity-images"))).toBe(signed("activity-images"));
+    expect(ogImageSource(signed("listing-images"))).toBe(signed("listing-images"));
+    expect(ogImageSource(photo.replace("car-images", "avatars"))).toBe(photo.replace("car-images", "avatars"));
+    expect(ogImageSource(photo)).toBeNull();
+    expect(ogImageSource(signed("avatars"))).toBeNull();
+    expect(ogImageSource(`${signed("car-images")}&download=1`)).toBeNull();
   });
 
   it.each([
@@ -159,3 +163,20 @@ describe("isOwnedDisputeEvidenceRef", () => {
     expect(isOwnedDisputeEvidenceRef(value, ME, ORDER)).toBe(false);
   });
 });
+
+describe("signed member photos come back canonical (N455)", () => {
+  const signed = `${ORIGIN}/storage/v1/object/sign/car-images/${ME}/car-1/photo.webp?token=not-a-real-token_1.2`;
+
+  it("N455: a member's own signed photo passes the ownership check, and the kept list is canonical", () => {
+    expect(isOwnedStorageUrl(signed, ME)).toBe(true);
+    expect(isOwnedStorageUrl(signed, THEM)).toBe(false);
+    expect(keepValidImageUrls([signed, photo], 12, ME)).toEqual([photo, photo]);
+  });
+
+  it("N455: a signed URL with anything after its token, or on another host, is refused", () => {
+    expect(isOwnedStorageUrl(`${signed}&x=1`, ME)).toBe(false);
+    expect(isOwnedStorageUrl(signed.replace(ORIGIN, "https://evil.example"), ME)).toBe(false);
+    expect(keepValidImageUrls([`${signed}#frag`], 12, ME)).toEqual([]);
+  });
+});
+

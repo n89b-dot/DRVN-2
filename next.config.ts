@@ -36,14 +36,24 @@ const nextConfig: NextConfig = {
     // Storage-hosted media was served unoptimized at full size to an
     // image-heavy feed; this turns resizing and modern formats back on.
     dangerouslyAllowLocalIP: isolatedLocal,
+    // N455: member photos (cars, listings, posts) are private objects read
+    // through signed URLs (src/lib/supabase/photo-signing.ts); avatars stay
+    // on the public route.
     remotePatterns: host
-      ? [{ protocol: isolatedLocal ? "http" : "https", hostname: host, port: isolatedLocal ? "54321" : "", pathname: "/storage/v1/object/public/**" }]
+      ? (["/storage/v1/object/public/**", "/storage/v1/object/sign/**"] as const).map((pathname) => ({
+          protocol: isolatedLocal ? ("http" as const) : ("https" as const),
+          hostname: host,
+          port: isolatedLocal ? "54321" : "",
+          pathname,
+        }))
       : [],
     formats: ["image/avif", "image/webp"],
-    // Storage paths are content-unique (UUID per upload) and never rewritten,
-    // so a resized variant can live a month. The 4-hour default forced the
-    // slow AVIF re-encode (0.6–1 s per image) again every four hours.
-    minimumCacheTTL: 2678400,
+    // One signing window (an hour, src/lib/photo-urls.ts): a signed photo
+    // keeps its URL for the window, so a resized variant is reused within it,
+    // and no resized copy outlives the window. A month-long copy would keep
+    // serving a photo after its car went private (N455). The AVIF re-encode
+    // (0.6–1 s per image) now happens once an hour per photo and width.
+    minimumCacheTTL: 3600,
     // Uploads are capped at 2560px (src/lib/media-upload.ts), so a 3840px
     // variant is an upscale nobody needs — and the slowest encode there is.
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 2560],

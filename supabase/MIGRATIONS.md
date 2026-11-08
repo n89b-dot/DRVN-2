@@ -47,6 +47,16 @@ From Codex's post-merge review of #149. Apply after `20261108140000`, together w
 
 Guards: `deletion_late_holds_and_previews_guard.sql`, `username_tombstone_race_guard.sql` (two sessions over dblink).
 
+## November 8 — member photos are private objects: N455 (OS-W38)
+
+| File | Applied to |
+|---|---|
+| `20261108160000_member_photos_private.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
+
+**Order matters, and it is the reverse of the usual rule.** Merge the PR and deploy the app that signs photos (`src/lib/supabase/photo-signing.ts`) *first*, then apply this file. Applied before that app, every car, listing and post photo stops loading, because the old app hands out public-route URLs that the private buckets refuse. On shared dev: merge, update the main checkout to merged `main`, restart the dev server on :3005 (`launchctl kickstart -k` the dev-server agent), then apply to shared dev and staging with the runner and fill both cells.
+
+It makes `car-images`, `listing-images` and `activity-images` private, and restates "public read media" (from `0001`, its only definition) to `avatars` only. Nothing moves and no stored URL changes: the canonical `/object/public/` spelling stays each photo's identity, so `member_media_ref_ok`, the cleanup queue, `media_object_referenced`, copyright takedowns and the storage reference report are unchanged. Guard: `member_photos_private_guard.sql`, which also proves a signed URL names the same object and can't be stored.
+
 ## November 8 — earlier members confirm they are 18 at their next sign-in: N686 (OS-W38)
 
 | File | Applied to |

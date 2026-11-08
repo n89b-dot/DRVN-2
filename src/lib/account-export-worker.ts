@@ -18,6 +18,7 @@ import {
 import { jobHeartbeat } from "./job-lease";
 import { reportError } from "./monitoring";
 import { createAdminClient } from "./supabase/admin";
+import { signPhotosForExport } from "./supabase/photo-signing";
 
 type ExportJob = { id: string; lease_id: string; payload: { request_id: string; user_id: string } };
 type ExportRequest = {
@@ -123,7 +124,7 @@ async function readPage(admin: UntypedAdmin, request: ExportRequest, section: Ex
   }
   const result = await query;
   if (result.error) throw new Error(`Export section ${section.key} failed: ${result.error.message}`);
-  return ((result.data ?? []) as unknown as Record<string, unknown>[]).map((row) => {
+  const rows = ((result.data ?? []) as unknown as Record<string, unknown>[]).map((row) => {
     const output = { ...row };
     for (const field of section.excludedSourceFields ?? []) {
       output[`__cursor_${field}`] = output[field];
@@ -131,6 +132,10 @@ async function readPage(admin: UntypedAdmin, request: ExportRequest, section: Ex
     }
     return output;
   });
+  // N455: car, listing and post photos are private objects; the member's
+  // export carries links that open for seven days instead of stored URLs
+  // that no longer do.
+  return signPhotosForExport(rows);
 }
 
 async function persistPart(admin: UntypedAdmin, request: ExportRequest, sectionKey: string, page: number, body: Uint8Array, rowCount: number, contentType = "application/json") {

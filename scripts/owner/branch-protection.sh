@@ -57,7 +57,7 @@ RULESET_JSON=$(cat <<JSON
         "require_last_push_approval": false,
         "required_review_thread_resolution": false } },
     { "type": "required_status_checks", "parameters": {
-        "strict_required_status_checks_policy": false,
+        "strict_required_status_checks_policy": true,
         "required_status_checks": [ { "context": "$CHECK", "integration_id": $ACTIONS_APP_ID } ] } }
   ]
 }
@@ -66,7 +66,7 @@ JSON
 
 CLASSIC_JSON=$(cat <<JSON
 {
-  "required_status_checks": { "strict": false, "checks": [ { "context": "$CHECK", "app_id": $ACTIONS_APP_ID } ] },
+  "required_status_checks": { "strict": true, "checks": [ { "context": "$CHECK", "app_id": $ACTIONS_APP_ID } ] },
   "enforce_admins": true,
   "required_pull_request_reviews": { "required_approving_review_count": 0, "dismiss_stale_reviews": false, "require_code_owner_reviews": false },
   "restrictions": null,
