@@ -167,6 +167,7 @@ function ManageRow({ row }: { row: LedgerRow }) {
         {deletable && (
           <DeleteListing
             listingId={row.id}
+            hasOffers={row.offers.length > 0}
             triggerLabel="Delete"
             triggerClassName="relbtn relbtn--danger !static"
           />

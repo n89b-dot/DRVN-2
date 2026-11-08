@@ -421,21 +421,29 @@ test.describe.serial("authenticated matrix @ 390x844", () => {
     }
   });
 
-  test("seller can fully delete a listing from the ledger", async ({ page }) => {
+  // N77 (OS-W33, Neil's ruling): partB has had an offer, so the ledger
+  // withdraws it instead of deleting it — the record and its offer history
+  // stay, archived.
+  test("seller withdraws a listing with offers from the ledger, keeping its record", async ({ page }) => {
     await signIn(page, seller);
     await page.goto("/listings");
     // Lifecycle actions live in the listing's disclosed detail row.
     const toggle = page.locator("tr.ledger__row", { hasText: partB }).first().locator(".ledger__toggle");
     await toggle.click();
     const detail = page.locator(`#${await toggle.getAttribute("aria-controls")}`);
-    await detail.getByRole("button", { name: /delete/i }).click();
+    await expect(detail.getByRole("button", { name: /^delete$/i })).toHaveCount(0);
+    await detail.getByRole("button", { name: /^withdraw$/i }).click();
 
     const dialog = page.getByRole("dialog");
-    await dialog.getByRole("button", { name: /delete permanently/i }).click();
+    await dialog.getByRole("button", { name: /withdraw listing/i }).click();
+    await expect(dialog).toBeHidden();
 
-    // Lands back on the ledger with the confirmation, and the row is gone.
-    await page.waitForURL(/\/listings\?deleted=1/);
-    await page.getByText(/listing deleted/i).first().waitFor();
-    await page.locator("tr", { hasText: partB }).waitFor({ state: "detached" });
+    // Kept, archived: it is in the Archived register, not gone.
+    await expect
+      .poll(async () => {
+        await page.goto("/listings?register=archived");
+        return page.locator("tr.ledger__row", { hasText: partB }).count();
+      }, { timeout: 30_000 })
+      .toBeGreaterThan(0);
   });
 });
