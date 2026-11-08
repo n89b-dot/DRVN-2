@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 
 import { capture } from "@/lib/analytics";
 import { reportError } from "@/lib/monitoring";
+import { PAYOUT_SETUP_DEADLINE_DAYS } from "@/lib/payments/payout-readiness";
 import { siteUrl } from "@/lib/site";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -121,6 +122,8 @@ export async function showPickupPass(
       not_your_order: "Not your order.",
       already_redeemed: "This pickup was already confirmed.",
       not_ready: "The pass appears once the seller marks the order ready.",
+      // 20261108110000: the payout deadline claimed the order for a refund.
+      payout_deadline: "This order is being cancelled and you'll be refunded in full, so there's nothing to collect.",
     };
     return { error: messages[minted.reason ?? ""] ?? "Couldn't create the pass. Try again." };
   }
@@ -179,6 +182,8 @@ export async function redeemPickup(
       expired: "That pass expired — ask the buyer to reopen it for a fresh one.",
       locked: "Too many wrong codes — ask the buyer to reopen their pass.",
       mismatch: "That code doesn't match — check the digits and try again.",
+      // 20261108110000: the payout deadline claimed the order for a refund.
+      payout_deadline: `This order is being cancelled and the buyer refunded: your payouts weren't set up within ${PAYOUT_SETUP_DEADLINE_DAYS} days of the sale. Don't hand the part over.`,
     };
     return { error: messages[result.reason ?? ""] ?? "Couldn't confirm the pickup." };
   }

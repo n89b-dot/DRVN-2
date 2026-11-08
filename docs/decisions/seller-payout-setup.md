@@ -80,3 +80,35 @@ and their live listings end
 No official eBay page confirms that a listing can go live and sell before
 verification finishes; community posts say the first listing starts
 registration. Neil chose this approach knowing that.
+
+## How it is held (20261108110000)
+
+A follow-up to the review of #123. The rule above is unchanged; these fix
+how the database and the worker hold it.
+
+- **A claimed order can't be handed over by any path.** Dispatch
+  (`mark_order_dispatched`) and both collection steps (`pickup_mint_pass`,
+  `pickup_redeem`) refuse a claimed order whether or not the buyer has opened
+  a case, and the orders trigger refuses any write that records a handoff
+  (status, `pre_dispute_status`, `shipped_at`, `delivered_at`) while the
+  claim is open. Before, a not-received case kept the order `disputed` and
+  dispatch moved only `pre_dispute_status`, so the fence never ran.
+- **Retries rotate.** Each claim has its own schedule (`attempts`,
+  `next_attempt_at`). A pass hands the worker only claims that are due and
+  pushes each back as it does (5 minutes, doubling, at most 6 hours), so a
+  few refunds that keep failing can't starve later ones.
+- **The refund is always the whole order.** `begin_payout_deadline_refund`
+  reserves it under the order lock: it adopts the deadline's own refund while
+  that is in flight, waits (reserving nothing) while any other refund of the
+  order is in flight, and otherwise reserves everything not yet refunded. A
+  deadline refund that completed short is topped up under the next key of the
+  request (`payout_deadline:<order>:1`, …), never adopted again.
+- **Payouts enabled always wins.** Settling and the sweep lock the seller's
+  profile before the listings, the order a payouts update takes, so a
+  settlement can't pause a part just after payouts were enabled. Every sync
+  that reports payouts enabled restores what the rule still holds.
+- **Only a complete listing goes back on sale.** At payouts enabled and at
+  settlement, a part goes live again only if it meets what publishing needs
+  (payouts, not suspended, at least one photo). One that doesn't, say its
+  photos were removed while it was paused, stays paused for the seller to
+  finish and publish.
