@@ -24,13 +24,22 @@ export function guestHoldKey(kind: "device" | "network", value: string): string 
 
 export async function admitGuestHolds(
   admin: Admin,
-  input: { device: string; network: string; listingIds: string[]; buyerId: string },
+  input: {
+    device: string;
+    network: string;
+    listingIds: string[];
+    buyerId: string;
+    /** The checkout request (guest idempotency key) the admissions belong
+     *  to: only it reuses, binds or releases them (20261108130000). */
+    request: string;
+  },
 ): Promise<{ holds: string[] } | { error: string }> {
   const { data, error } = await admin.rpc("guest_hold_admit", {
     p_device: guestHoldKey("device", input.device),
     p_network: guestHoldKey("network", input.network),
     p_listing_ids: input.listingIds,
     p_buyer: input.buyerId,
+    p_request: input.request,
   });
   if (error?.code === "GH429") return { error: GUEST_HOLD_LIMIT_MESSAGE };
   if (error?.code === "GH409") return { error: GUEST_HOLD_TAKEN_MESSAGE };
@@ -41,12 +50,13 @@ export async function admitGuestHolds(
   return { holds: data };
 }
 
-/** Points each hold at its order, or gives the admission back when nothing
- *  was reserved. A failure here never undoes the purchase: an unbound
- *  admission lapses on its own after 15 minutes. */
-export async function settleGuestHolds(admin: Admin, holds: string[], buyerId: string, reserved: boolean): Promise<void> {
-  const { error } = reserved
-    ? await admin.rpc("guest_hold_bind", { p_hold_ids: holds, p_buyer: buyerId })
-    : await admin.rpc("guest_hold_release", { p_hold_ids: holds });
-  if (error) reportError("[checkout] guest hold settle failed", { code: error.code, reserved });
+/** Gives back this request's own unbound admissions, for a checkout whose
+ *  purchase_begin never committed. purchase_begin binds (or gives back) a
+ *  request's admissions in its own transaction, so once it has run there is
+ *  nothing left here to release, and another request's admissions are never
+ *  reachable. A failure is reported, never fatal: an unbound admission
+ *  lapses on its own after 15 minutes. */
+export async function releaseGuestHolds(admin: Admin, request: string): Promise<void> {
+  const { error } = await admin.rpc("guest_hold_release", { p_request: request });
+  if (error) reportError("[checkout] guest hold release failed", { code: error.code });
 }

@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
   guestBuyer: vi.fn(),
   recordAge: vi.fn(),
   setCart: vi.fn(),
+  shipWrite: vi.fn(),
   quotesRead: vi.fn(),
 }));
 
@@ -95,7 +96,12 @@ vi.mock("@/lib/supabase/admin", () => ({
       eq: () => orderQuery,
       in: mocks.replayOrdersRead,
       maybeSingle: mocks.orderRead,
-      update: () => ({ eq: () => ({ select: () => ({ maybeSingle: mocks.paymentWrite }) }) }),
+      update: () => ({
+        // Awaited directly by the guest delivery write; chained by the rest.
+        eq: () => Object.assign(Promise.resolve().then(() => mocks.shipWrite()), {
+          select: () => ({ maybeSingle: mocks.paymentWrite }),
+        }),
+      }),
     };
     const listingQuery = {
       select: () => listingQuery,
@@ -133,7 +139,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 import { checkoutCart, completeReservedOrder } from "./checkout-actions";
 import { getStripeCustomerId } from "@/lib/payments/customers";
-import { guestCheckoutIdentity, isPlausibleEmail } from "@/lib/guest-checkout";
+import { guestCheckoutIdentity, isPlausibleEmail, setGuestOrders } from "@/lib/guest-checkout";
 import { resolveGuestBuyer } from "./guest-buyer";
 import { freezeOrderShipping } from "./checkout-shipping";
 import { GUEST_HOLD_LIMIT_MESSAGE, GUEST_HOLD_TAKEN_MESSAGE } from "./guest-holds";
@@ -215,6 +221,7 @@ beforeEach(() => {
   mocks.guestIdentity.mockResolvedValue("guest:browser-1");
   mocks.guestBuyer.mockResolvedValue({ buyer: { id: "guest-1", created: false } });
   mocks.setCart.mockResolvedValue(undefined);
+  mocks.shipWrite.mockResolvedValue({ error: null });
   mocks.quotesRead.mockResolvedValue({ data: [], error: null });
 });
 
@@ -763,19 +770,23 @@ it("guest DRVN Shipping: a buyer-less quote freezes through the guest path, neve
   expect(result.payment?.clientSecret).toBe("secret");
 });
 
-it("admits a guest's holds before reserving anything, keyed by one-way digests of device and network, and binds them after", async () => {
+it("admits a guest's holds for this request before reserving anything, keyed by one-way digests of device and network", async () => {
   asGuest();
 
   await checkoutCart({}, guestForm());
 
   const admit = mocks.guestAdmit.mock.calls[0][0] as Record<string, unknown>;
+  const begun = mocks.purchaseBegin.mock.calls[0][0] as Record<string, unknown>;
   expect(admit).toMatchObject({ p_listing_ids: ["listing-1"], p_buyer: "guest-buyer-1" });
+  // The admission belongs to this request: purchase_begin binds it under the
+  // same key, in its own transaction (20261108130000).
+  expect(admit.p_request).toBe(begun.p_idempotency_key);
   expect(admit.p_device).toMatch(/^[0-9a-f]{64}$/);
   expect(admit.p_network).toMatch(/^[0-9a-f]{64}$/);
   expect(JSON.stringify(admit)).not.toContain("device-1");
   expect(JSON.stringify(admit)).not.toContain("203.0.113.9");
   expect(mocks.guestAdmit.mock.invocationCallOrder[0]).toBeLessThan(mocks.purchaseBegin.mock.invocationCallOrder[0]);
-  expect(mocks.guestBind).toHaveBeenCalledWith({ p_hold_ids: ["hold-1"], p_buyer: "guest-buyer-1" });
+  expect(mocks.guestBind).not.toHaveBeenCalled();
   expect(mocks.guestRelease).not.toHaveBeenCalled();
 });
 
@@ -789,14 +800,31 @@ it("refuses a guest over the hold cap (GH429) or on a part another guest holds (
   expect(mocks.createPayment).not.toHaveBeenCalled();
 });
 
-it("gives a guest's admission back when nothing was reserved", async () => {
+it("gives back only this request's own admissions when nothing was reserved", async () => {
   asGuest();
-  mocks.purchaseBegin.mockResolvedValue({ data: { orders: [], skipped: [{ listing_id: "listing-1", reason: "sold" }] }, error: null });
+  mocks.purchaseBegin.mockResolvedValue({ data: null, error: { code: "XX000", message: "purchase_begin failed" } });
 
   await checkoutCart({}, guestForm());
 
-  expect(mocks.guestRelease).toHaveBeenCalledWith({ p_hold_ids: ["hold-1"] });
+  const admit = mocks.guestAdmit.mock.calls[0][0] as Record<string, unknown>;
+  expect(mocks.guestRelease).toHaveBeenCalledWith({ p_request: admit.p_request });
+  expect(JSON.stringify(mocks.guestRelease.mock.calls)).not.toContain("hold-1");
   expect(mocks.guestBind).not.toHaveBeenCalled();
+});
+
+// Codex review of #126 (P2): after purchase_begin reserved the order, a
+// failed delivery-address write is not "nothing reserved". The admissions
+// stay bound to the pending order and the guest keeps the receipt for it.
+it("a failed guest delivery write after reserving keeps the reservation: no admission is released", async () => {
+  asGuest();
+  mocks.shipWrite.mockResolvedValue({ error: { message: "write failed" } });
+
+  const result = await checkoutCart({}, guestForm());
+
+  expect(result.error).toContain("Couldn't confirm the delivery method");
+  expect(mocks.guestRelease).not.toHaveBeenCalled();
+  expect(vi.mocked(setGuestOrders)).toHaveBeenCalledWith(["order-1"]);
+  expect(mocks.createPayment).not.toHaveBeenCalled();
 });
 
 it("never admits guest holds for a signed-in buyer", async () => {
@@ -957,7 +985,8 @@ it("Finish checkout on another device with a new address releases and restarts t
   const form = cartCheckoutForm("22 New Road");
   form.set("order_id", ORDER_ID);
 
-  const result = await checkoutCart({}, form);
+  // The restarted basket resumes by its own order, so the page shows it.
+  await expect(checkoutCart({}, form)).rejects.toThrow("redirect:/checkout?order=order-1");
 
   expect(mocks.release).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
     buyerId: "buyer-1",
@@ -967,7 +996,28 @@ it("Finish checkout on another device with a new address releases and restarts t
   const begun = mocks.purchaseBegin.mock.calls[0][0] as Record<string, unknown>;
   expect(begun.p_listing_ids).toEqual(["listing-1"]);
   expect(begun.p_checkout_context).toMatchObject({ shipping: { line1: "22 New Road" } });
-  expect(result.payment).toBeDefined();
+  expect(mocks.createPayment).toHaveBeenCalled();
+  expect(mocks.rememberKey).not.toHaveBeenCalled();
+});
+
+// Codex fix-check of #141 (P2): device B's cart holds an unrelated part. The
+// restart of order A after an address change buys A's basket only.
+it("restarting order A on another device never adds that device's unrelated cart lines to the payment", async () => {
+  mocks.attemptRead.mockResolvedValue({ data: attemptFromOtherDevice(), error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: ORDER_ID, status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-b"]); // unrelated part B on this device
+  const form = cartCheckoutForm("22 New Road");
+  form.set("order_id", ORDER_ID);
+
+  await expect(checkoutCart({}, form)).rejects.toThrow("redirect:/checkout?order=");
+
+  const begun = mocks.purchaseBegin.mock.calls[0][0] as Record<string, unknown>;
+  expect(begun.p_listing_ids).toEqual(["listing-1"]);
+  expect(JSON.stringify(begun)).not.toContain("listing-b");
+  expect(mocks.createPayment).toHaveBeenCalledWith(expect.objectContaining({ totalCents: 5500 }));
+  // B stays in the cart, untouched; A is kept beside it.
+  expect(mocks.setCart).toHaveBeenCalledWith(["listing-1", "listing-b"]);
+  expect(mocks.cartRemove).not.toHaveBeenCalled();
 });
 
 it("a Finish checkout order the buyer doesn't own resumes nothing", async () => {
