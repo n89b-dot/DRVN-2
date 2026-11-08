@@ -5,7 +5,7 @@ vi.mock("./refunds", () => ({ refundOrder: mocks.refundOrder }));
 vi.mock("@/lib/admin/alerts", () => ({ sendAdminAlert: mocks.sendAdminAlert }));
 vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
 
-import { notReceivedRequestKey, processDisputeClocks } from "./dispute-clocks";
+import { processDisputeClocks } from "./dispute-clocks";
 
 function admin(results: Record<string, { data: unknown; error: unknown }>) {
   return { rpc: vi.fn(async (name: string) => results[name] ?? { data: null, error: null }) };
@@ -31,7 +31,7 @@ describe("dispute clocks (N6, N92)", () => {
       reason: expect.stringContaining("no valid tracking"),
       initiator: { kind: "dispute_sla" },
       resolveDispute: true,
-      requestKey: notReceivedRequestKey("order-1", "2026-11-02T10:00:00+00:00"),
+      notReceivedCase: { disputedAt: "2026-11-02T10:00:00+00:00" },
     });
     // A full refund: no amount, so everything still refundable.
     expect(mocks.refundOrder.mock.calls[0][1]).not.toHaveProperty("amountCents");
@@ -39,6 +39,16 @@ describe("dispute clocks (N6, N92)", () => {
 
   it("leaves a refund the card provider is still confirming to the resume worker", async () => {
     mocks.refundOrder.mockResolvedValue({ ok: false, pending: true, error: "pending" });
+    const db = admin({
+      expire_refund_offers: { data: 0, error: null },
+      not_received_refunds_due: { data: [{ order_id: "order-1", disputed_at: "t" }], error: null },
+    });
+    await expect(processDisputeClocks(db as never)).resolves.toMatchObject({ notReceivedRefunded: 0, failed: 0 });
+    expect(mocks.sendAdminAlert).not.toHaveBeenCalled();
+  });
+
+  it("skips a case resolved or tracked after it was read: no failure, no alert", async () => {
+    mocks.refundOrder.mockResolvedValue({ ok: false, ineligible: true, refused: true, error: "no longer due" });
     const db = admin({
       expire_refund_offers: { data: 0, error: null },
       not_received_refunds_due: { data: [{ order_id: "order-1", disputed_at: "t" }], error: null },

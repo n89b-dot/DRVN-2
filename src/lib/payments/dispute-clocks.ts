@@ -15,21 +15,20 @@ import { sendAdminAlert } from "@/lib/admin/alerts";
  *     business days, with no valid tracking (no delivery proof in
  *     'verified' or 'review', or a collection never made available), is
  *     refunded in full through the one refund path. The decision is the
- *     database's (not_received_refunds_due); the refund is keyed to the case
- *     so a retry drives the same refund.
+ *     database's (not_received_refunds_due), and is made again under the
+ *     order lock when the refund is reserved (begin_not_received_refund).
  */
 
 type Admin = ReturnType<typeof createAdminClient>;
 
 export type DisputeClocksSummary = { offersExpired: number; notReceivedRefunded: number; failed: number };
 
-/** The request key of a not-received refund: one per case. */
-export function notReceivedRequestKey(orderId: string, disputedAt: string): string {
-  return `not_received:${orderId}:${disputedAt}`;
-}
-
-/** Refunds a not-received case in full. The caller has the database's word
- *  that it is due; refundOrder re-checks the remainder under its lock. */
+/** Refunds a not-received case in full. The reservation
+ *  (begin_not_received_refund) re-checks that this same case is still open
+ *  and still due, under the order lock, in the transaction that reserves the
+ *  refund — so a case support resolved after the worker read it is never
+ *  refunded — and keys the refund to the case, so a retry drives the same
+ *  refund. */
 export function refundNotReceived(
   admin: Admin,
   orderId: string,
@@ -40,7 +39,7 @@ export function refundNotReceived(
     reason: "Not received: no valid tracking once the seller's response window closed",
     initiator: { kind: "dispute_sla" },
     resolveDispute: true,
-    requestKey: notReceivedRequestKey(orderId, disputedAt),
+    notReceivedCase: { disputedAt },
   });
 }
 
@@ -59,6 +58,9 @@ export async function processDisputeClocks(admin: Admin): Promise<DisputeClocksS
     const outcome = await refundNotReceived(admin, row.order_id, row.disputed_at);
     if (outcome.ok) {
       summary.notReceivedRefunded += 1;
+    } else if (outcome.ineligible) {
+      // Resolved or tracked since it was read: nothing to do.
+      continue;
     } else if (outcome.pending) {
       // Still being confirmed with the card provider: the refund resume
       // worker finishes it; the same key adopts it next pass.

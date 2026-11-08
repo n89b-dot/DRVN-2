@@ -273,10 +273,13 @@ export async function applyTrackingSummary(
         : shipped
           ? "shipped"
           : "none";
-      // N95: every delivered outbound shipment gets its proof record. A
-      // failure throws like any other persistence failure, so the provider's
-      // retry records it; dispatch never waits on it.
-      await recordDeliveryProof(admin, currentShipment, summary);
+      // N95: every delivered outbound shipment gets its proof record, from
+      // a payload that itself reports the delivery (an older in-transit
+      // replay carries no delivery evidence; the database also refuses
+      // evidence older than what it holds). A failure throws like any other
+      // persistence failure, so the provider's retry records it; dispatch
+      // never waits on it.
+      if (summary.state === "delivered") await recordDeliveryProof(admin, currentShipment, summary);
     }
   }
 
@@ -318,6 +321,7 @@ export async function recordDeliveryProof(
     p_destination_city: evidence.destinationCity ?? undefined,
     p_first_scan_at: evidence.firstScanAt ?? undefined,
     p_signed_by: evidence.signedBy ?? undefined,
+    p_evidence_at: evidence.evidenceAt ?? undefined,
     p_destination_match: result.destinationMatch,
     p_verdict: result.verdict,
     p_reasons: result.reasons,

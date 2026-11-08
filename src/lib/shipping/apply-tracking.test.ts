@@ -187,13 +187,14 @@ describe("tracking replay convergence", () => {
       { data: null, error: null },
       { data: { status: "shipped" }, error: null },
       { data: [{ status: "delivered", direction: "outbound" }], error: null },
-      { data: { id: "order_1" }, error: null },
-      proofOrder
+      { data: { id: "order_1" }, error: null }
     );
 
     await expect(
       applyTrackingSummary(admin as never, shipment(), summary({ state: "in_transit" }))
     ).resolves.toMatchObject({ orderEffect: "delivered", statusChanged: false });
+    // A delayed in-transit payload never rewrites the delivery proof.
+    expect(admin.rpc).not.toHaveBeenCalled();
   });
 });
 
@@ -333,6 +334,7 @@ describe("an open case and delivery proof (N6, N95)", () => {
       p_destination_city: "Reno",
       p_first_scan_at: "2026-09-03T09:00:00.000Z",
       p_signed_by: undefined,
+      p_evidence_at: "2026-09-05T10:00:00.000Z",
       p_destination_match: "postcode",
       p_verdict: "verified",
       p_reasons: [],

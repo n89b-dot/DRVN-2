@@ -62,3 +62,36 @@ describe("refundOrder with a request key", () => {
     expect(rpcs.map((call) => call.name)).toEqual(["begin_refund_operation"]);
   });
 });
+
+// Codex review of #108: a not-received refund is reserved by the guarded RPC,
+// which re-checks the case under the order lock; a case resolved after the
+// worker read it reserves nothing and runs nothing.
+describe("refundOrder for a not-received case", () => {
+  it("reserves through begin_not_received_refund with the case it read", async () => {
+    const { admin, rpcs } = fakeAdmin(completed, { ok: true, adopted: false, operation_id: "op-1" });
+    await refundOrder(admin, {
+      orderId: "order-1",
+      reason: "Not received",
+      initiator: { kind: "dispute_sla" },
+      resolveDispute: true,
+      notReceivedCase: { disputedAt: "2026-11-02T10:00:00+00:00" },
+    });
+    expect(rpcs[0]).toEqual({
+      name: "begin_not_received_refund",
+      args: expect.objectContaining({ p_order: "order-1", p_disputed_at: "2026-11-02T10:00:00+00:00", p_dispute_outcome: "auto_refunded" }),
+    });
+  });
+
+  it("stops when the case no longer qualifies (resolved while the worker ran)", async () => {
+    const { admin, rpcs } = fakeAdmin(completed, { ok: false, ineligible: true, error: "This case is no longer due a not-received refund." });
+    const outcome = await refundOrder(admin, {
+      orderId: "order-1",
+      reason: "Not received",
+      initiator: { kind: "dispute_sla" },
+      resolveDispute: true,
+      notReceivedCase: { disputedAt: "2026-11-02T10:00:00+00:00" },
+    });
+    expect(outcome).toMatchObject({ ok: false, ineligible: true, refused: true });
+    expect(rpcs.map((call) => call.name)).toEqual(["begin_not_received_refund"]);
+  });
+});

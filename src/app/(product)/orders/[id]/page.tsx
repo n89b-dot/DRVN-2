@@ -934,21 +934,29 @@ export default async function OrderDetailPage({
             </Rv>
           )}
 
-          {isSeller && caseBeforeDispatch && order.is_collection && !order.pickup_ready_at && (
+          {/* A not-received case on a collection never handed over: making
+              it available and the handoff itself both stay possible; the
+              case stays open (pickup_mint_pass / pickup_redeem). */}
+          {isSeller && caseBeforeDispatch && order.is_collection && (
             <Rv className="tile" stagger={3}>
               <span className="microlabel microlabel--ink">Pickup</span>
               <p className="spec-note">
-                The buyer reported it never arrived. Make it available now, or offer a refund in
-                the dispute below.
+                {order.pickup_ready_at
+                  ? "The buyer reported it never arrived. Scan their Pickup Pass at handoff — the case stays open until it's closed."
+                  : "The buyer reported it never arrived. Make it available now, or offer a refund in the dispute below."}
               </p>
               <div className="mt-3">
-                <ReadyForPickupButton orderId={id} />
+                {order.pickup_ready_at ? (
+                  <RedeemPickupForm orderId={id} />
+                ) : (
+                  <ReadyForPickupButton orderId={id} />
+                )}
               </div>
             </Rv>
           )}
 
           {isBuyer &&
-            order.status === "paid" &&
+            (order.status === "paid" || caseBeforeDispatch) &&
             order.is_collection &&
             order.pickup_ready_at && (
               <Rv className="tile" stagger={3}>

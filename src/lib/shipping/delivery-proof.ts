@@ -48,6 +48,9 @@ export type DeliveryEvidence = {
   /** The earliest real carrier scan (a label being created is not a scan). */
   firstScanAt: string | null;
   signedBy: string | null;
+  /** The newest carrier event this evidence is built from. The database
+   *  never lets older evidence replace newer (a delayed webhook). */
+  evidenceAt: string | null;
 };
 
 /** The order's frozen facts the evidence is judged against. */
@@ -137,7 +140,10 @@ export function deliveryEvidence(summary: TrackingSummary): DeliveryEvidence {
     validTime(summary.deliveredAt) !== null ? summary.deliveredAt : (lastDelivered?.occurredAt ?? null);
 
   let firstScan: number | null = null;
+  let newest: number | null = validTime(summary.deliveredAt);
   for (const event of summary.events) {
+    const seen = validTime(event.occurredAt);
+    if (seen !== null && (newest === null || seen > newest)) newest = seen;
     if (!SCAN_STATES.has(event.state)) continue;
     const at = validTime(event.occurredAt);
     if (at !== null && (firstScan === null || at < firstScan)) firstScan = at;
@@ -151,6 +157,7 @@ export function deliveryEvidence(summary: TrackingSummary): DeliveryEvidence {
     destinationCity,
     firstScanAt: firstScan === null ? null : new Date(firstScan).toISOString(),
     signedBy: text(summary.signedBy),
+    evidenceAt: newest === null ? null : new Date(newest).toISOString(),
   };
 }
 
@@ -186,7 +193,7 @@ export function evaluateDeliveryProof(evidence: DeliveryEvidence, order: ProofOr
 }
 
 /** Plain-English reasons, for the console and the order page. */
-export const PROOF_REASON_LABEL: Record<ProofReason | "evidence_check_failed", string> = {
+export const PROOF_REASON_LABEL: Record<ProofReason | "evidence_check_failed" | "recorded_before_proof", string> = {
   carrier_date_missing: "The carrier gave no delivery date",
   delivered_before_sale: "Delivered before the order was placed",
   destination_missing: "The carrier gave no destination to match",
@@ -197,4 +204,5 @@ export const PROOF_REASON_LABEL: Record<ProofReason | "evidence_check_failed", s
   deadline_missing: "The order has no latest delivery date",
   signature_missing: "No signature on an order of $750 or more",
   evidence_check_failed: "The order's records don't support the carrier's evidence",
+  recorded_before_proof: "Delivered before delivery proof existed; awaiting the carrier's evidence",
 };

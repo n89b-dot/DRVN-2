@@ -27,6 +27,7 @@ const good: DeliveryEvidence = {
   destinationCity: "RENO",
   firstScanAt: "2026-11-03T09:00:00.000Z",
   signedBy: null,
+  evidenceAt: "2026-11-06T15:00:00.000Z",
 };
 
 describe("destination keys", () => {
@@ -153,6 +154,7 @@ describe("deliveryEvidence: what the carrier said", () => {
       destinationCity: "Reno",
       firstScanAt: "2026-11-03T09:00:00.000Z",
       signedBy: null,
+      evidenceAt: "2026-11-06T15:00:00.000Z",
     });
   });
 

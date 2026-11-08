@@ -1977,6 +1977,7 @@ export type Database = {
           destination_match: string
           destination_postcode: string | null
           evaluated_at: string
+          evidence_at: string | null
           first_scan_at: string | null
           order_city: string | null
           order_country: string | null
@@ -1999,6 +2000,7 @@ export type Database = {
           destination_match: string
           destination_postcode?: string | null
           evaluated_at?: string
+          evidence_at?: string | null
           first_scan_at?: string | null
           order_city?: string | null
           order_country?: string | null
@@ -2021,6 +2023,7 @@ export type Database = {
           destination_match?: string
           destination_postcode?: string | null
           evaluated_at?: string
+          evidence_at?: string | null
           first_scan_at?: string | null
           order_city?: string | null
           order_country?: string | null
@@ -6779,6 +6782,18 @@ export type Database = {
         Args: { p_actor: string; p_reason: string; p_target: string }
         Returns: string
       }
+      begin_not_received_refund: {
+        Args: {
+          p_actor_role: string
+          p_dispute_outcome: string
+          p_disputed_at: string
+          p_order: string
+          p_payment_reference: string
+          p_reason: string
+          p_requested_by: string
+        }
+        Returns: Json
+      }
       begin_refund_operation: {
         Args: {
           p_actor_role: string
@@ -8120,6 +8135,7 @@ export type Database = {
           p_destination_city?: string
           p_destination_match: string
           p_destination_postcode?: string
+          p_evidence_at?: string
           p_first_scan_at?: string
           p_reasons: string[]
           p_shipment: string

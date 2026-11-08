@@ -501,7 +501,8 @@ begin
     'public.not_received_refunds_due(integer)',
     'public.order_has_valid_tracking(uuid)',
     'public.expire_refund_offers(integer)',
-    'public.record_delivery_proof(uuid,text,text,text[],timestamp with time zone,text,text,timestamp with time zone,text)',
+    'public.record_delivery_proof(uuid,text,text,text[],timestamp with time zone,text,text,timestamp with time zone,text,timestamp with time zone)',
+    'public.begin_not_received_refund(uuid,timestamp with time zone,text,text,text,text,text)',
     'public.mark_order_dispatched(uuid,uuid,text,text,text,text)',
     'public.escalate_stale_disputes()',
     'private.add_business_days(timestamp with time zone,integer)'
@@ -516,6 +517,104 @@ begin
     raise exception 'FAIL 13: dispute history or delivery proof is client-readable';
   end if;
   raise notice 'PASS 13: the commands and records are server-only';
+
+  -- ------------------------------------------------------------------
+  -- 14. Codex review of #108
+  -- ------------------------------------------------------------------
+  -- 14a. The not-received refund is reserved only if the case the worker
+  --      read is still open and due, under the order lock.
+  insert into public.orders(buyer_id, seller_id, status, pre_dispute_status, dispute_category, disputed_at, disputed_by,
+    dispute_respond_by, dispute_escalated_at, subtotal_cents, platform_fee_cents, total_cents, currency)
+  values (buyer, seller, 'disputed', 'paid', 'item_not_received', now() - interval '8 days', buyer,
+    now() - interval '1 day', now() - interval '1 hour', 10000, 1000, 10000, 'USD') returning id into o2;
+  insert into public.payments(order_id, provider, provider_reference, status, amount_cents, currency)
+  values (o2, 'stripe', 'pi_w29_race', 'succeeded', 10000, 'USD');
+  select disputed_at into t from public.orders where id = o2;
+  -- Support resolves it for the seller after the worker's read.
+  update public.orders set status = 'paid', dispute_resolved_at = now(), dispute_outcome = 'admin_resolved' where id = o2;
+  r := public.begin_not_received_refund(o2, t, 'Not received', 'scheduler:dispute_sla', 'system', 'auto_refunded', 'pi_w29_race');
+  if (r->>'ok')::boolean is not false or (r->>'ineligible')::boolean is not true
+     or exists (select 1 from public.refund_operations where order_id = o2) then
+    raise exception 'FAIL 14a: a case resolved after the read was refunded: %', r;
+  end if;
+  -- A due case reserves once; a retry adopts the same operation; another
+  -- case's timestamp never matches.
+  insert into public.orders(buyer_id, seller_id, status, pre_dispute_status, dispute_category, disputed_at, disputed_by,
+    dispute_respond_by, dispute_escalated_at, subtotal_cents, platform_fee_cents, total_cents, currency)
+  values (buyer, seller, 'disputed', 'paid', 'item_not_received', now() - interval '8 days', buyer,
+    now() - interval '1 day', now() - interval '1 hour', 10000, 1000, 10000, 'USD') returning id into o2;
+  insert into public.payments(order_id, provider, provider_reference, status, amount_cents, currency)
+  values (o2, 'stripe', 'pi_w29_due', 'succeeded', 10000, 'USD');
+  select disputed_at into t from public.orders where id = o2;
+  r := public.begin_not_received_refund(o2, t - interval '1 day', 'Not received', 'scheduler:dispute_sla', 'system', 'auto_refunded', 'pi_w29_due');
+  if (r->>'ineligible')::boolean is not true then raise exception 'FAIL 14a: another case''s refund was reserved: %', r; end if;
+  r := public.begin_not_received_refund(o2, t, 'Not received', 'scheduler:dispute_sla', 'system', 'auto_refunded', 'pi_w29_due');
+  if (r->>'ok')::boolean is not true or r->>'operation_id' is null
+     or (select (resolve_dispute, dispute_outcome, amount_cents) from public.refund_operations where id = (r->>'operation_id')::uuid)
+        is distinct from (true, 'auto_refunded'::text, 10000) then
+    raise exception 'FAIL 14a: a due case did not reserve its full refund: %', r;
+  end if;
+  if (public.begin_not_received_refund(o2, t, 'Not received', 'scheduler:dispute_sla', 'system', 'auto_refunded', 'pi_w29_due')->>'operation_id')
+       is distinct from r->>'operation_id'
+     or (select count(*) from public.refund_operations where order_id = o2) <> 1 then
+    raise exception 'FAIL 14a: a retry reserved a second refund';
+  end if;
+
+  -- 14b. A carrier delivery with no proof on record protects the seller.
+  insert into public.orders(buyer_id, seller_id, status, pre_dispute_status, dispute_category, disputed_at,
+    dispute_respond_by, dispute_escalated_at, subtotal_cents, platform_fee_cents, total_cents, currency)
+  values (buyer, seller, 'disputed', 'paid', 'item_not_received', now() - interval '8 days',
+    now() - interval '1 day', now(), 10000, 1000, 10000, 'USD') returning id into o2;
+  insert into public.order_items(order_id, listing_id, title, price_cents, shipping_cents) values (o2, listing, 'Fixture', 10000, 0);
+  perform public.mark_order_dispatched(o2, seller, 'UPS', '1ZW29NOPROOF');
+  update public.shipments set status = 'delivered', delivered_at = now() where order_id = o2 and direction = 'outbound';
+  if public.not_received_refund_due(o2) or not public.order_has_valid_tracking(o2) then
+    raise exception 'FAIL 14b: a recorded carrier delivery without proof was refundable';
+  end if;
+
+  -- 14c. Older evidence never replaces newer.
+  select id into ship from public.shipments where order_id = o2 and direction = 'outbound';
+  update public.orders set ship_postcode = '89501', ship_city = 'Reno', ship_country = 'US', deliver_by = now() + interval '5 days' where id = o2;
+  r := public.record_delivery_proof(ship, 'postcode', 'verified', '{}', now() + interval '2 minutes', '89501', 'Reno',
+    (select created_at from public.orders where id = o2) + interval '1 minute', null, now() - interval '1 day');
+  if r->>'verdict' is distinct from 'verified' then raise exception 'FAIL 14c: setup proof not verified: %', r; end if;
+  r := public.record_delivery_proof(ship, 'missing', 'review', array['carrier_date_missing'], null, null, null, null, null, now() - interval '3 days');
+  if (r->>'stale')::boolean is not true or (select verdict from public.delivery_proofs where shipment_id = ship) <> 'verified' then
+    raise exception 'FAIL 14c: older evidence replaced a verified proof: %', r;
+  end if;
+  r := public.record_delivery_proof(ship, 'missing', 'review', array['carrier_date_missing'], null, null, null, null, null, null);
+  if (r->>'stale')::boolean is not true then raise exception 'FAIL 14c: undated evidence replaced dated evidence'; end if;
+  r := public.record_delivery_proof(ship, 'mismatch', 'review', array['destination_mismatch'], now() - interval '1 hour', '10001', null,
+    (select created_at from public.orders where id = o2) + interval '1 minute', null, now() - interval '1 hour');
+  if r->>'verdict' is distinct from 'review' or (select verdict from public.delivery_proofs where shipment_id = ship) <> 'review' then
+    raise exception 'FAIL 14c: newer contradicting evidence did not move the proof to review';
+  end if;
+
+  -- 14d. A disputed collection still completes its handoff, keeping the case.
+  insert into public.orders(buyer_id, seller_id, status, pre_dispute_status, is_collection, dispute_category, disputed_at,
+    pickup_ready_at, subtotal_cents, platform_fee_cents, total_cents, currency)
+  values (buyer, seller, 'disputed', 'paid', true, 'item_not_received', now(), now(), 10000, 1000, 10000, 'USD') returning id into o2;
+  r := public.pickup_mint_pass(o2, buyer, 'w29-tok', 'w29-code', now() + interval '1 hour');
+  if (r->>'ok')::boolean is not true then raise exception 'FAIL 14d: no pass during a case: %', r; end if;
+  r := public.pickup_redeem(o2, seller, 'w29-tok');
+  if (r->>'ok')::boolean is not true
+     or (select (status, pre_dispute_status, delivered_at is not null) from public.orders where id = o2)
+        is distinct from ('disputed'::text, 'delivered'::text, true)
+     or (select redeemed_at from public.pickup_confirmations where order_id = o2) is null then
+    raise exception 'FAIL 14d: the handoff during a case did not complete and keep the case: %', r;
+  end if;
+  -- Not during an unresolved chargeback.
+  insert into public.orders(buyer_id, seller_id, status, pre_dispute_status, is_collection, dispute_category, disputed_at,
+    pickup_ready_at, subtotal_cents, platform_fee_cents, total_cents, currency)
+  values (buyer, seller, 'disputed', 'paid', true, 'other', now(), now(), 10000, 1000, 10000, 'USD') returning id into o2;
+  insert into public.stripe_dispute_journal(dispute_id, payment_reference, amount_cents, currency, state, last_event_id, last_event_created, order_ids)
+  values ('dp_w29_pickup', 'pi_w29_pickup', 10000, 'usd', 'open', 'evt_w29_p', 1, array[o2]);
+  r := public.pickup_mint_pass(o2, buyer, 'w29-tok2', 'w29-code2', now() + interval '1 hour');
+  if r->>'reason' is distinct from 'not_ready' then raise exception 'FAIL 14d: a pass during a chargeback: %', r; end if;
+
+  -- 14e. A deleted account's ON DELETE SET NULL can clear an open case's opener.
+  update public.orders set disputed_by = null where id = o2;
+  raise notice 'PASS 14: guarded reservation, unproved deliveries protected, fresh evidence only, handoff during a case';
 
   raise notice 'all dispute recourse checks passed';
 end $$;

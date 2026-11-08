@@ -79,8 +79,9 @@
 -- day-10 auto-refund, refund amounts and caps, fees, holds, and every
 -- chargeback rule from 20261107130000.
 --
--- Latest definitions restated: mark_order_dispatched (20261107200100),
--- escalate_stale_disputes (0021), execute_admin_command (20261007100100).
+-- Latest definitions restated: mark_order_dispatched and pickup_mint_pass
+-- (20261107200100), pickup_redeem (20261006100000), escalate_stale_disputes
+-- (0021), execute_admin_command (20261007100100).
 -- No open branch redefines them. Idempotent.
 
 begin;
@@ -432,7 +433,8 @@ begin
   if old.status = 'disputed' and new.status = 'disputed' then
     -- The case's reason, opener and clocks are fixed while it is open.
     if new.disputed_at is distinct from old.disputed_at
-       or new.disputed_by is distinct from old.disputed_by
+       -- (a deleted account's ON DELETE SET NULL may clear the opener)
+       or (new.disputed_by is distinct from old.disputed_by and new.disputed_by is not null)
        or new.dispute_category is distinct from old.dispute_category
        or new.dispute_reason is distinct from old.dispute_reason
        or new.dispute_respond_by is distinct from old.dispute_respond_by
@@ -503,6 +505,9 @@ create table if not exists public.delivery_proofs (
   destination_city text,
   first_scan_at timestamptz,
   signed_by text,
+  -- The newest carrier event the evidence came from. A delayed, older
+  -- payload never replaces newer evidence.
+  evidence_at timestamptz,
   -- The order's own facts, copied by record_delivery_proof, never by the app.
   order_postcode text,
   order_city text,
@@ -560,7 +565,8 @@ create or replace function public.record_delivery_proof(
   p_destination_postcode text default null,
   p_destination_city text default null,
   p_first_scan_at timestamptz default null,
-  p_signed_by text default null
+  p_signed_by text default null,
+  p_evidence_at timestamptz default null
 ) returns jsonb
 language plpgsql
 security definer
@@ -571,6 +577,7 @@ declare
   o public.orders;
   v_verdict text := p_verdict;
   v_reasons text[] := coalesce(p_reasons, '{}'::text[]);
+  v_existing public.delivery_proofs;
 begin
   if p_shipment is null or p_verdict not in ('verified', 'review')
      or p_destination_match not in ('postcode', 'city', 'mismatch', 'missing') then
@@ -583,17 +590,27 @@ begin
   end if;
   select * into strict o from public.orders where id = s.order_id;
 
+  -- Freshness: evidence older than what is on record never replaces it (a
+  -- delayed webhook after a verified delivery). Undated evidence only
+  -- replaces undated evidence, such as a backfilled review record.
+  select * into v_existing from public.delivery_proofs where shipment_id = s.id;
+  if found and v_existing.evidence_at is not null
+     and (p_evidence_at is null or p_evidence_at < v_existing.evidence_at) then
+    return jsonb_build_object('ok', true, 'stale', true, 'verdict', v_existing.verdict,
+      'reasons', to_jsonb(v_existing.reasons));
+  end if;
+
   <<attempt>>
   loop
     begin
       insert into public.delivery_proofs as p (
         shipment_id, order_id, carrier, tracking_code, carrier_delivered_at, destination_postcode,
-        destination_city, first_scan_at, signed_by, order_postcode, order_city, order_country,
+        destination_city, first_scan_at, signed_by, evidence_at, order_postcode, order_city, order_country,
         order_created_at, deliver_by, signature_required, destination_match, verdict, reasons
       ) values (
         s.id, o.id, s.carrier, s.tracking_code, p_carrier_delivered_at,
         nullif(left(btrim(p_destination_postcode), 40), ''), nullif(left(btrim(p_destination_city), 120), ''),
-        p_first_scan_at, nullif(left(btrim(p_signed_by), 200), ''),
+        p_first_scan_at, nullif(left(btrim(p_signed_by), 200), ''), p_evidence_at,
         o.ship_postcode, o.ship_city, o.ship_country, o.created_at, o.deliver_by,
         o.total_cents >= 75000, p_destination_match, v_verdict, v_reasons
       )
@@ -605,6 +622,7 @@ begin
         destination_city = excluded.destination_city,
         first_scan_at = excluded.first_scan_at,
         signed_by = excluded.signed_by,
+        evidence_at = excluded.evidence_at,
         order_postcode = excluded.order_postcode,
         order_city = excluded.order_city,
         order_country = excluded.order_country,
@@ -627,10 +645,32 @@ begin
   return jsonb_build_object('ok', true, 'verdict', v_verdict, 'reasons', to_jsonb(v_reasons));
 end $$;
 
-revoke all on function public.record_delivery_proof(uuid, text, text, text[], timestamptz, text, text, timestamptz, text)
+revoke all on function public.record_delivery_proof(uuid, text, text, text[], timestamptz, text, text, timestamptz, text, timestamptz)
   from public, anon, authenticated;
-grant execute on function public.record_delivery_proof(uuid, text, text, text[], timestamptz, text, text, timestamptz, text)
+grant execute on function public.record_delivery_proof(uuid, text, text, text[], timestamptz, text, text, timestamptz, text, timestamptz)
   to service_role;
+
+-- Shipments delivered before this record existed: a 'review' record, so an
+-- existing not-received case never refunds over a recorded carrier
+-- delivery, and an evaluation job that re-reads the carrier's evidence
+-- (tracker-registration.ts, 'evaluate_proof') when a provider is configured.
+insert into public.delivery_proofs (
+  shipment_id, order_id, carrier, tracking_code, order_postcode, order_city, order_country,
+  order_created_at, deliver_by, signature_required, destination_match, verdict, reasons
+)
+select s.id, o.id, s.carrier, s.tracking_code, o.ship_postcode, o.ship_city, o.ship_country,
+       o.created_at, o.deliver_by, o.total_cents >= 75000, 'missing', 'review', array['recorded_before_proof']
+  from public.shipments s
+  join public.orders o on o.id = s.order_id
+ where s.direction = 'outbound' and s.status = 'delivered'
+on conflict (shipment_id) do nothing;
+
+insert into public.remediation_jobs (kind, dedup_key, payload)
+select 'tracker_registration', 'proof:' || p.shipment_id,
+       jsonb_build_object('shipment_id', p.shipment_id, 'order_id', p.order_id, 'evaluate_proof', true)
+  from public.delivery_proofs p
+ where p.reasons = array['recorded_before_proof']
+on conflict (dedup_key) do nothing;
 
 -- ============================================================
 -- 5. Opening a case (N6, N91, R-disputecats)
@@ -740,8 +780,9 @@ grant execute on function public.open_order_dispute(uuid, uuid, text, text) to s
 -- ============================================================
 
 -- Valid tracking for a not-received case: a delivery proof in 'verified' or
--- 'review' (support decides) on a live outbound shipment, or, for
--- collection, the item made available.
+-- 'review' (support decides) on a live outbound shipment, a carrier-delivered
+-- shipment whose proof isn't recorded yet, or, for collection, the item made
+-- available.
 create or replace function private.order_has_valid_tracking(p_order uuid)
 returns boolean
 language sql
@@ -760,6 +801,13 @@ as $$
             where p.order_id = o.id
               and s.status not in ('cancelled', 'failed')
               and p.verdict in ('verified', 'review')
+         )
+         -- A carrier delivery whose proof isn't on record yet (still being
+         -- evaluated, or a recording retry) protects the seller too.
+         or exists (
+           select 1 from public.shipments s
+            where s.order_id = o.id and s.direction = 'outbound' and s.status = 'delivered'
+              and not exists (select 1 from public.delivery_proofs p where p.shipment_id = s.id)
          )
        end
   );
@@ -841,6 +889,47 @@ $$;
 
 revoke all on function public.not_received_refunds_due(integer) from public, anon, authenticated;
 grant execute on function public.not_received_refunds_due(integer) to service_role;
+
+-- The not-received refund's reservation (Codex review of #108): the case's
+-- identity and its eligibility are checked under the order lock, in the same
+-- transaction that reserves the refund, so support resolving the case (or
+-- anything else that changes it) between the worker's read and the refund
+-- can never be overtaken by it. A retry adopts the case's own operation.
+create or replace function public.begin_not_received_refund(
+  p_order uuid,
+  p_disputed_at timestamptz,
+  p_reason text,
+  p_requested_by text,
+  p_actor_role text,
+  p_dispute_outcome text,
+  p_payment_reference text
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  o public.orders;
+  v_key text;
+begin
+  if p_order is null or p_disputed_at is null then raise exception 'Order and case are required' using errcode = '22023'; end if;
+  select * into o from public.orders where id = p_order for update;
+  if not found then return jsonb_build_object('ok', false, 'ineligible', true, 'error', 'Order not found.'); end if;
+  v_key := 'not_received:' || o.id || ':' || extract(epoch from p_disputed_at)::text;
+  if exists (select 1 from public.refund_operations where request_key = v_key and status <> 'failed') then
+    return public.begin_request_refund_operation(v_key, o.id, null, p_reason, p_requested_by, p_actor_role,
+      true, p_dispute_outcome, p_payment_reference);
+  end if;
+  if o.disputed_at is distinct from p_disputed_at or not private.not_received_refund_due(o.id) then
+    return jsonb_build_object('ok', false, 'ineligible', true,
+      'error', 'This case is no longer due a not-received refund.');
+  end if;
+  return public.begin_request_refund_operation(v_key, o.id, null, p_reason, p_requested_by, p_actor_role,
+    true, p_dispute_outcome, p_payment_reference);
+end $$;
+
+revoke all on function public.begin_not_received_refund(uuid, timestamptz, text, text, text, text, text) from public, anon, authenticated;
+grant execute on function public.begin_not_received_refund(uuid, timestamptz, text, text, text, text, text) to service_role;
 
 -- ============================================================
 -- 7. Escalation (N6, N92)
@@ -1150,6 +1239,197 @@ revoke all on function public.mark_order_dispatched(uuid,uuid,text,text,text,tex
 grant execute on function public.mark_order_dispatched(uuid,uuid,text,text,text,text) to service_role;
 
 -- ============================================================
+-- 9b. Collection handoff stays possible during a case (Codex review of #108)
+-- ============================================================
+-- A not-received case on a collection order never handed over (pre-dispute
+-- status 'paid'): making it available stops the automatic refund, so the
+-- handoff itself must also work. Both functions now accept such an order
+-- (never while a bank chargeback is unresolved); a redemption keeps the case
+-- open and moves its pre_dispute_status to 'delivered', with the same
+-- delivered/completed stamps and payout clock a handoff always sets.
+
+-- Latest: 20261107200100. Changed: the readiness check accepts a disputed
+-- order whose pre-dispute status is 'paid'. Lock order unchanged.
+create or replace function public.pickup_mint_pass(
+  p_order_id uuid,
+  p_buyer_id uuid,
+  p_token_hash text,
+  p_code_hash text,
+  p_expires_at timestamptz
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_order record;
+  v_pass record;
+begin
+  if p_order_id is null or p_buyer_id is null
+     or nullif(p_token_hash, '') is null or nullif(p_code_hash, '') is null
+     or p_expires_at is null then
+    raise exception 'Pass mint needs an order, a buyer, both hashes and an expiry'
+      using errcode = '22023';
+  end if;
+
+  -- The same lock order as pickup_redeem: the order row, then the pass row.
+  select o.id, o.buyer_id, o.status, o.pre_dispute_status, o.is_collection, o.pickup_ready_at
+    into v_order
+    from public.orders o
+   where o.id = p_order_id
+   for update;
+
+  if not found or v_order.buyer_id is distinct from p_buyer_id then
+    return jsonb_build_object('ok', false, 'reason', 'not_your_order');
+  end if;
+
+  select pc.redeemed_at into v_pass
+    from public.pickup_confirmations pc
+   where pc.order_id = p_order_id
+   for update;
+
+  if found and v_pass.redeemed_at is not null then
+    return jsonb_build_object('ok', false, 'reason', 'already_redeemed');
+  end if;
+  if not v_order.is_collection or v_order.pickup_ready_at is null
+     or not (v_order.status = 'paid'
+             or (v_order.status = 'disputed' and v_order.pre_dispute_status = 'paid'
+                 and not private.order_has_unresolved_chargeback(v_order.id))) then
+    return jsonb_build_object('ok', false, 'reason', 'not_ready');
+  end if;
+
+  -- Rotate. redeemed_at and redeemed_by are never written here, and a
+  -- redeemed row is never updated (the where clause), so no ordering of
+  -- calls can erase a handoff.
+  insert into public.pickup_confirmations as pc
+    (order_id, token_hash, code_hash, attempts, expires_at)
+  values (p_order_id, p_token_hash, p_code_hash, 0, p_expires_at)
+  on conflict (order_id) do update
+     set token_hash = excluded.token_hash,
+         code_hash = excluded.code_hash,
+         attempts = 0,
+         expires_at = excluded.expires_at
+   where pc.redeemed_at is null;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'reason', 'already_redeemed');
+  end if;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+revoke all on function public.pickup_mint_pass(uuid, uuid, text, text, timestamptz)
+  from public, anon, authenticated;
+grant execute on function public.pickup_mint_pass(uuid, uuid, text, text, timestamptz)
+  to service_role;
+
+-- Latest: 20261006100000. Changed: a disputed order whose pre-dispute status
+-- is 'paid' is redeemable (not during an unresolved chargeback); its case
+-- stays open and pre_dispute_status becomes 'delivered'. The search_path now
+-- includes pg_temp. Everything else is verbatim.
+create or replace function public.pickup_redeem(
+  p_order_id uuid,
+  p_seller_id uuid,
+  p_hash text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_order record;
+  v_pass record;
+  v_in_case boolean;
+begin
+  select o.id, o.seller_id, o.status, o.pre_dispute_status, o.is_collection
+    into v_order
+    from public.orders o
+   where o.id = p_order_id
+   for update;
+
+  if not found or v_order.seller_id is distinct from p_seller_id then
+    return jsonb_build_object('ok', false, 'reason', 'not_your_order');
+  end if;
+  if not v_order.is_collection then
+    return jsonb_build_object('ok', false, 'reason', 'not_pickup');
+  end if;
+  v_in_case := v_order.status = 'disputed' and v_order.pre_dispute_status = 'paid'
+    and not private.order_has_unresolved_chargeback(v_order.id);
+  if v_order.status <> 'paid' and not v_in_case then
+    return jsonb_build_object('ok', false, 'reason', 'not_redeemable');
+  end if;
+
+  select * into v_pass
+    from public.pickup_confirmations
+   where order_id = p_order_id
+   for update;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'reason', 'no_pass');
+  end if;
+  if v_pass.redeemed_at is not null then
+    return jsonb_build_object('ok', false, 'reason', 'already_redeemed');
+  end if;
+  if v_pass.expires_at < now() then
+    return jsonb_build_object('ok', false, 'reason', 'expired');
+  end if;
+  if v_pass.attempts >= 10 then
+    return jsonb_build_object('ok', false, 'reason', 'locked');
+  end if;
+
+  if v_pass.token_hash <> p_hash and v_pass.code_hash <> p_hash then
+    update public.pickup_confirmations
+       set attempts = attempts + 1
+     where order_id = p_order_id;
+    return jsonb_build_object('ok', false, 'reason', 'mismatch');
+  end if;
+
+  -- Handoff proven: single-use stamp + the same delivered/clearing entry a
+  -- shipped order gets from the buyer''s confirm.
+  update public.pickup_confirmations
+     set redeemed_at = now(), redeemed_by = p_seller_id
+   where order_id = p_order_id
+     and redeemed_at is null;
+
+  if v_in_case then
+    -- The case stays open; resolving it lands on 'delivered'.
+    update public.orders
+       set pre_dispute_status = 'delivered',
+           delivered_at = now(),
+           completed_at = now()
+     where id = p_order_id
+       and status = 'disputed';
+  else
+    update public.orders
+       set status = 'delivered',
+           delivered_at = now(),
+           completed_at = now()
+     where id = p_order_id
+       and status = 'paid';
+  end if;
+
+  -- The handoff starts the payout clock exactly as a buyer's receipt does
+  -- for a shipped order (confirm_order_receipt): available when the owner's
+  -- clearing hold (settlement_settings, 20261006100000) has passed since
+  -- delivery. Without this the intent stayed 'holding' with no
+  -- available_at, and mark_due_transfer_intents never released it. While a
+  -- case is open, readiness still waits for the order to leave 'disputed'.
+  update public.transfer_intents
+     set available_at = coalesce(available_at, public.payout_available_at(p_order_id, now())),
+         updated_at = now()
+   where order_id = p_order_id
+     and status = 'holding';
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+revoke all on function public.pickup_redeem(uuid, uuid, text)
+  from public, anon, authenticated;
+
+-- ============================================================
 -- 10. execute_admin_command — the audited reopen (N91)
 -- ============================================================
 -- Latest: 20261007100100. Changed: one new branch, 'dispute.reopen'.
@@ -1283,8 +1563,11 @@ begin
     'public.not_received_refund_due(uuid)',
     'public.not_received_refunds_due(integer)',
     'public.order_has_valid_tracking(uuid)',
+    'public.begin_not_received_refund(uuid,timestamp with time zone,text,text,text,text,text)',
+    'public.pickup_mint_pass(uuid,uuid,text,text,timestamp with time zone)',
+    'public.pickup_redeem(uuid,uuid,text)',
     'public.expire_refund_offers(integer)',
-    'public.record_delivery_proof(uuid,text,text,text[],timestamp with time zone,text,text,timestamp with time zone,text)',
+    'public.record_delivery_proof(uuid,text,text,text[],timestamp with time zone,text,text,timestamp with time zone,text,timestamp with time zone)',
     'public.mark_order_dispatched(uuid,uuid,text,text,text,text)',
     'public.escalate_stale_disputes()'
   ] loop
