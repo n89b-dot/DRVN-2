@@ -1,0 +1,2243 @@
+[
+  {
+    "os_id": "N418",
+    "title": "Account deletion keeps personal data forever",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N16"
+    ],
+    "batch": "OS-W34",
+    "batches": [
+      "OS-W34"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Auth and account"
+  },
+  {
+    "os_id": "N420",
+    "title": "Open redirect",
+    "status": "FIXED",
+    "plan_ids": [
+      "N19"
+    ],
+    "batch": "OS-W12",
+    "batches": [
+      "OS-W12"
+    ],
+    "pr": 86,
+    "merge_sha": "23f725c",
+    "prs": [
+      {
+        "number": 86,
+        "merge_sha": "23f725c",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/lib/safe-redirect.test.ts",
+        "name": "safeRedirectPath › rejects control characters hidden inside the path"
+      },
+      {
+        "file": "src/lib/safe-redirect.test.ts",
+        "name": "safeRedirectPath › rejects encoded variants that turn dangerous after one more decode"
+      }
+    ],
+    "inferred": false,
+    "section": "Auth and account"
+  },
+  {
+    "os_id": "N421",
+    "title": "Password-change bypass",
+    "status": "FIXED",
+    "plan_ids": [
+      "N20"
+    ],
+    "batch": "OS-W12",
+    "batches": [
+      "OS-W12"
+    ],
+    "pr": 86,
+    "merge_sha": "23f725c",
+    "prs": [
+      {
+        "number": 86,
+        "merge_sha": "23f725c",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/app/(auth)/actions.test.ts",
+        "name": "password reset completion › refuses an ordinary signed-in session and changes nothing"
+      },
+      {
+        "file": "src/lib/reauthentication.test.ts",
+        "name": "recovery authorisation › refuses an ordinary signed-in session, however fresh"
+      }
+    ],
+    "inferred": false,
+    "section": "Auth and account"
+  },
+  {
+    "os_id": "N439",
+    "title": "Deleted traders keep their saved cards",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N16"
+    ],
+    "batch": "OS-W34",
+    "batches": [
+      "OS-W34"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Auth and account"
+  },
+  {
+    "os_id": "N442",
+    "title": "Usernames are only validated in the form",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N38"
+    ],
+    "batch": "OS-W34",
+    "batches": [
+      "OS-W34"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Auth and account"
+  },
+  {
+    "os_id": "N443",
+    "title": "Suspended members can't export or delete their data",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N39"
+    ],
+    "batch": "OS-W11",
+    "batches": [
+      "OS-W11"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": true,
+    "section": "Auth and account"
+  },
+  {
+    "os_id": "N444",
+    "title": "Google sign-in during invite-only beta leaves a stuck onboarding loop",
+    "status": "FIXED",
+    "plan_ids": [
+      "N40"
+    ],
+    "batch": "OS-W12",
+    "batches": [
+      "OS-W12"
+    ],
+    "pr": 86,
+    "merge_sha": "23f725c",
+    "prs": [
+      {
+        "number": 86,
+        "merge_sha": "23f725c",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/app/(auth)/callback/route.test.ts",
+        "name": "successful OAuth returns › sends an account with no profile row to onboarding, not round a loop (N40)"
+      },
+      {
+        "file": "src/app/(auth)/actions.test.ts",
+        "name": "onboarding an account with no profile › creates the missing profile row instead of pretending an empty update worked"
+      }
+    ],
+    "inferred": false,
+    "section": "Auth and account"
+  },
+  {
+    "os_id": "N445",
+    "title": "Account deletion and email change are too easy from an unlocked session",
+    "status": "FIXED",
+    "plan_ids": [
+      "N41"
+    ],
+    "batch": "OS-W12",
+    "batches": [
+      "OS-W12"
+    ],
+    "pr": 86,
+    "merge_sha": "23f725c",
+    "prs": [
+      {
+        "number": 86,
+        "merge_sha": "23f725c",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/app/(product)/garage/delete-account.test.ts",
+        "name": "account deletion › requests nothing when the member can't confirm it's them"
+      },
+      {
+        "file": "src/app/(product)/settings/account-actions.test.ts",
+        "name": "email change re-authentication › changes nothing without it, and says which proof to offer"
+      }
+    ],
+    "inferred": false,
+    "section": "Auth and account"
+  },
+  {
+    "os_id": "N446",
+    "title": "Sign-up has no throttle or CAPTCHA",
+    "status": "FIXED",
+    "plan_ids": [
+      "N42"
+    ],
+    "batch": "OS-W12",
+    "batches": [
+      "OS-W12"
+    ],
+    "pr": 86,
+    "merge_sha": "23f725c",
+    "prs": [
+      {
+        "number": 86,
+        "merge_sha": "23f725c",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/app/(auth)/actions.test.ts",
+        "name": "sign-up throttling › sends no confirmation email once any key is exhausted"
+      }
+    ],
+    "inferred": false,
+    "section": "Auth and account"
+  },
+  {
+    "os_id": "N447",
+    "title": "Cancelling Google sign-in shows link expired",
+    "status": "FIXED",
+    "plan_ids": [
+      "N44"
+    ],
+    "batch": "OS-W13",
+    "batches": [
+      "OS-W13"
+    ],
+    "pr": 86,
+    "merge_sha": "23f725c",
+    "prs": [
+      {
+        "number": 86,
+        "merge_sha": "23f725c",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/app/(auth)/callback/route.test.ts",
+        "name": "OAuth returns that carry no session › says cancelled when the person backed out at Google, keeping the destination"
+      }
+    ],
+    "inferred": false,
+    "section": "Auth and account"
+  },
+  {
+    "os_id": "N448",
+    "title": "Google-only members see an unusable password form",
+    "status": "FIXED",
+    "plan_ids": [
+      "N45"
+    ],
+    "batch": "OS-W13",
+    "batches": [
+      "OS-W13"
+    ],
+    "pr": 86,
+    "merge_sha": "23f725c",
+    "prs": [
+      {
+        "number": 86,
+        "merge_sha": "23f725c",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/app/(product)/settings/password-section.test.tsx",
+        "name": "password section › shows a Google-only member the set-password path instead"
+      }
+    ],
+    "inferred": false,
+    "section": "Auth and account"
+  },
+  {
+    "os_id": "N450",
+    "title": "Data export is a JSON list of links that expire in 10 minutes",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N47"
+    ],
+    "batch": "OS-W11",
+    "batches": [
+      "OS-W11"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": true,
+    "section": "Auth and account"
+  },
+  {
+    "os_id": "N452",
+    "title": "Raw Supabase error text is shown to users",
+    "status": "OPEN, UNCLAIMED",
+    "plan_ids": [
+      "N49"
+    ],
+    "batch": "OS-W13",
+    "batches": [
+      "OS-W13"
+    ],
+    "pr": 86,
+    "merge_sha": "23f725c",
+    "prs": [
+      {
+        "number": 86,
+        "merge_sha": "23f725c",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/lib/auth-errors.test.ts",
+        "name": "public auth error copy › never returns the provider's message, and reports only what wasn't expected"
+      }
+    ],
+    "inferred": false,
+    "section": "Auth and account"
+  },
+  {
+    "os_id": "N453",
+    "title": "Login and sign-up have no main landmark",
+    "status": "FIXED",
+    "plan_ids": [
+      "N50"
+    ],
+    "batch": "OS-W13",
+    "batches": [
+      "OS-W13"
+    ],
+    "pr": 86,
+    "merge_sha": "23f725c",
+    "prs": [
+      {
+        "number": 86,
+        "merge_sha": "23f725c",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/app/(auth)/layout.test.tsx",
+        "name": "auth layout landmarks › renders exactly one main landmark, around the page content"
+      }
+    ],
+    "inferred": false,
+    "section": "Auth and account"
+  },
+  {
+    "os_id": "N434",
+    "title": "Counts silently go wrong past 1,000 rows",
+    "status": "FIXED",
+    "plan_ids": [
+      "N30",
+      "N56",
+      "N133"
+    ],
+    "batch": "OS-W22",
+    "batches": [
+      "OS-W22",
+      "OS-W14"
+    ],
+    "pr": 77,
+    "merge_sha": "ade4ff8",
+    "prs": [
+      {
+        "number": 77,
+        "merge_sha": "ade4ff8",
+        "merged": true
+      },
+      {
+        "number": 87,
+        "merge_sha": "8338418",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/lib/marketplace/query.test.ts",
+        "name": "N30: card likes, questions and seller ratings come counted from the database, past 1,000"
+      },
+      {
+        "file": "src/features/activity/load-engagement.test.ts",
+        "name": "N56: counts every reaction and reply past 1,000 instead of the rows it fetched"
+      },
+      {
+        "file": "src/app/(admin)/admin/export/route.test.ts",
+        "name": "orders export (N133) › exports all 2,500 orders, past the 1,000-row cap, each exactly once"
+      }
+    ],
+    "inferred": false,
+    "section": "Social"
+  },
+  {
+    "os_id": "N435",
+    "title": "Following feed and Saved break when the ID list exceeds URL limits",
+    "status": "FIXED",
+    "plan_ids": [
+      "N31"
+    ],
+    "batch": "OS-W22",
+    "batches": [
+      "OS-W22"
+    ],
+    "pr": 77,
+    "merge_sha": "ade4ff8",
+    "prs": [
+      {
+        "number": 77,
+        "merge_sha": "ade4ff8",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/lib/feed-followed.test.ts",
+        "name": "N31: the database joins the follows — no follow list is read and no id list is sent"
+      },
+      {
+        "file": "supabase/tests/social_retrieval_guard.sql",
+        "name": "N31: the Following feed read % rows"
+      }
+    ],
+    "inferred": false,
+    "section": "Social"
+  },
+  {
+    "os_id": "N454",
+    "title": "Photos stay public after deletion or moderator removal",
+    "status": "FIXED",
+    "plan_ids": [
+      "N51"
+    ],
+    "batch": "OS-W15",
+    "batches": [
+      "OS-W15"
+    ],
+    "pr": 73,
+    "merge_sha": "d5a3eff",
+    "prs": [
+      {
+        "number": 73,
+        "merge_sha": "d5a3eff",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/lib/media-lifecycle.test.ts",
+        "name": "processMediaCleanupQueue (N51) › removes unreferenced photos of deleted content, keeps referenced ones, and dequeues both"
+      },
+      {
+        "file": "supabase/tests/media_integrity_guard.sql",
+        "name": "FAIL 6: % was not queued for cleanup"
+      }
+    ],
+    "inferred": false,
+    "section": "Social"
+  },
+  {
+    "os_id": "N456",
+    "title": "Cars can't be reported",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N53"
+    ],
+    "batch": "OS-W21",
+    "batches": [
+      "OS-W21"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Social"
+  },
+  {
+    "os_id": "N457",
+    "title": "Members can't block or mute anyone",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N54"
+    ],
+    "batch": "OS-W32",
+    "batches": [
+      "OS-W32"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Social"
+  },
+  {
+    "os_id": "N458",
+    "title": "Owners can attach image URLs from anywhere",
+    "status": "FIXED",
+    "plan_ids": [
+      "N55"
+    ],
+    "batch": "OS-W15",
+    "batches": [
+      "OS-W15"
+    ],
+    "pr": 73,
+    "merge_sha": "d5a3eff",
+    "prs": [
+      {
+        "number": 73,
+        "merge_sha": "d5a3eff",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/lib/media-url.test.ts",
+        "name": "isOwnedStorageUrl — canonical, ours, the member's own folder (N55) › accepts the member's own canonical public URL"
+      },
+      {
+        "file": "src/lib/media-url.test.ts",
+        "name": "ogImageSource — the share card's fetch allow-list › refuses %s"
+      },
+      {
+        "file": "supabase/tests/media_integrity_guard.sql",
+        "name": "FAIL 5: a car cover accepted %"
+      }
+    ],
+    "inferred": false,
+    "section": "Social"
+  },
+  {
+    "os_id": "N459",
+    "title": "Opening one notification clears the whole public cache",
+    "status": "FIXED",
+    "plan_ids": [
+      "N57"
+    ],
+    "batch": "OS-W24",
+    "batches": [
+      "OS-W24"
+    ],
+    "pr": 83,
+    "merge_sha": "57ea7ea",
+    "prs": [
+      {
+        "number": 83,
+        "merge_sha": "57ea7ea",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/lib/revalidate.test.ts",
+        "name": "opening or clearing notifications refreshes only the member's list (N57)"
+      }
+    ],
+    "inferred": false,
+    "section": "Social"
+  },
+  {
+    "os_id": "N460",
+    "title": "Reaction and comment actions refresh any path the browser names",
+    "status": "FIXED",
+    "plan_ids": [
+      "N58"
+    ],
+    "batch": "OS-W24",
+    "batches": [
+      "OS-W24"
+    ],
+    "pr": 83,
+    "merge_sha": "57ea7ea",
+    "prs": [
+      {
+        "number": 83,
+        "merge_sha": "57ea7ea",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/features/activity/actions.test.ts",
+        "name": "what reactions and replies refresh (N58) › ignores a path the browser sends with a reply"
+      },
+      {
+        "file": "src/lib/revalidate.test.ts",
+        "name": "no action revalidates a path read from its arguments or form (N58)"
+      }
+    ],
+    "inferred": false,
+    "section": "Social"
+  },
+  {
+    "os_id": "N461",
+    "title": "Car activity tab shows only the 50 newest updates",
+    "status": "FIXED",
+    "plan_ids": [
+      "N60"
+    ],
+    "batch": "OS-W22",
+    "batches": [
+      "OS-W22"
+    ],
+    "pr": 77,
+    "merge_sha": "ade4ff8",
+    "prs": [
+      {
+        "number": 77,
+        "merge_sha": "ade4ff8",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "supabase/tests/social_retrieval_guard.sql",
+        "name": "N60: paging read % updates in % pages; expected 61 in 2"
+      },
+      {
+        "file": "src/lib/page-cursor.test.ts",
+        "name": "page cursors (OS-W22) › pages a list far past every old cap completely, each row once"
+      }
+    ],
+    "inferred": false,
+    "section": "Social"
+  },
+  {
+    "os_id": "N462",
+    "title": "Notifications and saves of deleted items are left behind",
+    "status": "FIXED",
+    "plan_ids": [
+      "N61"
+    ],
+    "batch": "OS-W22",
+    "batches": [
+      "OS-W22"
+    ],
+    "pr": 77,
+    "merge_sha": "ade4ff8",
+    "prs": [
+      {
+        "number": 77,
+        "merge_sha": "ade4ff8",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "supabase/tests/social_retrieval_guard.sql",
+        "name": "N61: a deleted update left saves or notifications behind"
+      },
+      {
+        "file": "supabase/tests/social_retrieval_guard.sql",
+        "name": "N61: a deleted build left saves, follows, likes or notifications behind"
+      }
+    ],
+    "inferred": false,
+    "section": "Social"
+  },
+  {
+    "os_id": "N463",
+    "title": "Showcase pins can't be placed with a keyboard",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N67"
+    ],
+    "batch": "OS-W23",
+    "batches": [
+      "OS-W23"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": true,
+    "section": "Social"
+  },
+  {
+    "os_id": "N464",
+    "title": "Saved page cuts secondary collections at 100 items",
+    "status": "FIXED",
+    "plan_ids": [
+      "N68"
+    ],
+    "batch": "OS-W22",
+    "batches": [
+      "OS-W22"
+    ],
+    "pr": 77,
+    "merge_sha": "ade4ff8",
+    "prs": [
+      {
+        "number": 77,
+        "merge_sha": "ade4ff8",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "supabase/tests/social_retrieval_guard.sql",
+        "name": "Saved %: paged % (expected %)"
+      }
+    ],
+    "inferred": false,
+    "section": "Social"
+  },
+  {
+    "os_id": "N627",
+    "title": "Old message photos may keep metadata",
+    "status": "OPEN, UNCLAIMED",
+    "plan_ids": [],
+    "batch": null,
+    "batches": [],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [
+      {
+        "file": "supabase/tests/message_photo_normalization_guard.sql",
+        "name": null
+      }
+    ],
+    "inferred": false,
+    "section": "Social"
+  },
+  {
+    "os_id": "N430",
+    "title": "Fraud thresholds are publicly readable",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N26"
+    ],
+    "batch": "OS-W16",
+    "batches": [
+      "OS-W16"
+    ],
+    "pr": 89,
+    "merge_sha": null,
+    "prs": [
+      {
+        "number": 89,
+        "merge_sha": null,
+        "merged": false
+      }
+    ],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Listings and discovery"
+  },
+  {
+    "os_id": "N433",
+    "title": "Several foreign keys have no database index",
+    "status": "FIXED",
+    "plan_ids": [
+      "N29"
+    ],
+    "batch": "OS-W25",
+    "batches": [
+      "OS-W25"
+    ],
+    "pr": 71,
+    "merge_sha": "e8a6a15",
+    "prs": [
+      {
+        "number": 71,
+        "merge_sha": "e8a6a15",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "supabase/tests/foreign_key_index_guard.sql",
+        "name": "foreign keys with no covering index"
+      },
+      {
+        "file": "supabase/tests/foreign_key_index_guard.sql",
+        "name": "keys from the readiness review still uncovered"
+      }
+    ],
+    "inferred": false,
+    "section": "Listings and discovery"
+  },
+  {
+    "os_id": "N465",
+    "title": "Sellers can edit any column of their own listing",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N69",
+      "N5"
+    ],
+    "batch": "OS-W16",
+    "batches": [
+      "OS-W16"
+    ],
+    "pr": 89,
+    "merge_sha": null,
+    "prs": [
+      {
+        "number": 89,
+        "merge_sha": null,
+        "merged": false
+      }
+    ],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Listings and discovery"
+  },
+  {
+    "os_id": "N467",
+    "title": "\"N sold on DRVN\" can be faked",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N71"
+    ],
+    "batch": "OS-W16",
+    "batches": [
+      "OS-W16"
+    ],
+    "pr": 89,
+    "merge_sha": null,
+    "prs": [
+      {
+        "number": 89,
+        "merge_sha": null,
+        "merged": false
+      }
+    ],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Listings and discovery"
+  },
+  {
+    "os_id": "N468",
+    "title": "A refused listing traps the seller in the Sell form",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N72"
+    ],
+    "batch": "OS-W16",
+    "batches": [
+      "OS-W16"
+    ],
+    "pr": 89,
+    "merge_sha": null,
+    "prs": [
+      {
+        "number": 89,
+        "merge_sha": null,
+        "merged": false
+      }
+    ],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Listings and discovery"
+  },
+  {
+    "os_id": "N469",
+    "title": "Saved-search alerts miss listings published from drafts",
+    "status": "FIXED",
+    "plan_ids": [
+      "N73"
+    ],
+    "batch": "OS-W25",
+    "batches": [
+      "OS-W25"
+    ],
+    "pr": 71,
+    "merge_sha": "e8a6a15",
+    "prs": [
+      {
+        "number": 71,
+        "merge_sha": "e8a6a15",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/app/api/jobs/saved-searches/route.test.ts",
+        "name": "a part published from a draft enters the window when it is published, not when it was saved (N73)"
+      },
+      {
+        "file": "supabase/tests/listing_published_at_guard.sql",
+        "name": "the saved-search window missed a part published from a draft"
+      }
+    ],
+    "inferred": false,
+    "section": "Listings and discovery"
+  },
+  {
+    "os_id": "N470",
+    "title": "robots.txt fails when the database fails",
+    "status": "FIXED",
+    "plan_ids": [
+      "N74"
+    ],
+    "batch": "OS-W26",
+    "batches": [
+      "OS-W26"
+    ],
+    "pr": 74,
+    "merge_sha": "836d636",
+    "prs": [
+      {
+        "number": 74,
+        "merge_sha": "836d636",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/lib/robots.test.ts",
+        "name": "answers during a database outage with fixed sitemaps and no database read"
+      }
+    ],
+    "inferred": false,
+    "section": "Listings and discovery"
+  },
+  {
+    "os_id": "N472",
+    "title": "Import address check misses some IPv6 forms",
+    "status": "FIXED",
+    "plan_ids": [
+      "N76"
+    ],
+    "batch": "OS-W25",
+    "batches": [
+      "OS-W25"
+    ],
+    "pr": 71,
+    "merge_sha": "e8a6a15",
+    "prs": [
+      {
+        "number": 71,
+        "merge_sha": "e8a6a15",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/lib/listing-import/fetch/guard.test.ts",
+        "name": "address corpus (IPv6 and embedded IPv4) › canonicalises a mapped address to the IPv4 address it wraps"
+      }
+    ],
+    "inferred": false,
+    "section": "Listings and discovery"
+  },
+  {
+    "os_id": "N473",
+    "title": "Deleting a listing silently deletes buyers' offers",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N77"
+    ],
+    "batch": "OS-W33",
+    "batches": [
+      "OS-W33"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Listings and discovery"
+  },
+  {
+    "os_id": "N474",
+    "title": "Saved-search alerts have no frequency cap",
+    "status": "OPEN, UNCLAIMED",
+    "plan_ids": [
+      "N78"
+    ],
+    "batch": "OS-W35",
+    "batches": [
+      "OS-W35"
+    ],
+    "pr": 84,
+    "merge_sha": "87b0728",
+    "prs": [
+      {
+        "number": 84,
+        "merge_sha": "87b0728",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/app/api/jobs/saved-search-digests/route.test.ts",
+        "name": "accumulation across in-app runs › never sends a second digest the same day; later matches wait for tomorrow's"
+      }
+    ],
+    "inferred": false,
+    "section": "Listings and discovery"
+  },
+  {
+    "os_id": "N475",
+    "title": "Store page numbers accept invalid values",
+    "status": "FIXED",
+    "plan_ids": [
+      "N79"
+    ],
+    "batch": "OS-W25",
+    "batches": [
+      "OS-W25"
+    ],
+    "pr": 71,
+    "merge_sha": "e8a6a15",
+    "prs": [
+      {
+        "number": 71,
+        "merge_sha": "e8a6a15",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/lib/page-param.test.ts",
+        "name": "store page numbers (N79) › treats anything that is not a whole positive page as page 1"
+      }
+    ],
+    "inferred": false,
+    "section": "Listings and discovery"
+  },
+  {
+    "os_id": "N411",
+    "title": "Buyer cannot get a refund if the seller never ships",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N6"
+    ],
+    "batch": "OS-W29",
+    "batches": [
+      "OS-W29"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N415",
+    "title": "Dispute and purchase evidence can be deleted",
+    "status": "FIXED",
+    "plan_ids": [
+      "N12",
+      "N99"
+    ],
+    "batch": "OS-W15",
+    "batches": [
+      "OS-W15"
+    ],
+    "pr": 73,
+    "merge_sha": "d5a3eff",
+    "prs": [
+      {
+        "number": 73,
+        "merge_sha": "d5a3eff",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "supabase/tests/media_integrity_guard.sql",
+        "name": "member credentials cannot delete or overwrite evidence or media objects (N12)"
+      },
+      {
+        "file": "supabase/tests/media_integrity_guard.sql",
+        "name": "staged uploads are server-registered, owner-bound and immutable (N12)"
+      },
+      {
+        "file": "supabase/tests/media_integrity_guard.sql",
+        "name": "references and deletion targets share one (bucket, path) identity (N12, N99)"
+      },
+      {
+        "file": "src/lib/media-lifecycle.test.ts",
+        "name": "removeMediaObject — the GC's owner check (N12) › treats an object outside the verified owner's folder as invalid, never touching storage"
+      }
+    ],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N416",
+    "title": "Closing a dispute releases payout during an open chargeback",
+    "status": "FIXED",
+    "plan_ids": [
+      "N13",
+      "N223"
+    ],
+    "batch": "OS-W18",
+    "batches": [
+      "OS-W18"
+    ],
+    "pr": 72,
+    "merge_sha": "4890bfd",
+    "prs": [
+      {
+        "number": 72,
+        "merge_sha": "4890bfd",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/lib/payments/transfer-worker.test.ts",
+        "name": "bank chargeback freeze › is frozen by one unresolved chargeback among resolved ones"
+      },
+      {
+        "file": "src/lib/payments/transfer-worker.test.ts",
+        "name": "bank chargeback freeze › shelves a fresh payout while the chargeback is %s"
+      },
+      {
+        "file": "supabase/tests/chargeback_payout_freeze_guard.sql",
+        "name": null
+      }
+    ],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N481",
+    "title": "Checkout dead-ends after a reload or address change",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N85"
+    ],
+    "batch": "OS-W17",
+    "batches": [
+      "OS-W17"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": true,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N482",
+    "title": "Cart page hides its error messages",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N86"
+    ],
+    "batch": "OS-W17",
+    "batches": [
+      "OS-W17"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": true,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N483",
+    "title": "Finish checkout on a pending cart order opens the wrong page",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N87"
+    ],
+    "batch": "OS-W17",
+    "batches": [
+      "OS-W17"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": true,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N484",
+    "title": "Guests can hold any listing for free, at scale",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N89"
+    ],
+    "batch": "OS-W31",
+    "batches": [
+      "OS-W31"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N485",
+    "title": "Payment step breakdown uses stale numbers",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N90"
+    ],
+    "batch": "OS-W17",
+    "batches": [
+      "OS-W17"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": true,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N486",
+    "title": "Resolved disputes can be reopened",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N91"
+    ],
+    "batch": "OS-W29",
+    "batches": [
+      "OS-W29"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N487",
+    "title": "A one-cent refund offer stalls a dispute",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N92"
+    ],
+    "batch": "OS-W29",
+    "batches": [
+      "OS-W29"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N488",
+    "title": "Re-generating a pickup pass can erase proof of collection",
+    "status": "FIXED",
+    "plan_ids": [
+      "N93"
+    ],
+    "batch": "OS-W19",
+    "batches": [
+      "OS-W19"
+    ],
+    "pr": 82,
+    "merge_sha": "e952c8d",
+    "prs": [
+      {
+        "number": 82,
+        "merge_sha": "e952c8d",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "supabase/tests/fulfilment_integrity_guard.sql",
+        "name": "a completed handoff can never be reset by a mint"
+      }
+    ],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N489",
+    "title": "Mark shipped calls EasyPost before checking the seller",
+    "status": "FIXED",
+    "plan_ids": [
+      "N94"
+    ],
+    "batch": "OS-W19",
+    "batches": [
+      "OS-W19"
+    ],
+    "pr": 82,
+    "merge_sha": "e952c8d",
+    "prs": [
+      {
+        "number": 82,
+        "merge_sha": "e952c8d",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/features/commerce/order-fulfillment-actions.test.ts",
+        "name": "markShipped › N94: a stranger's dispatch makes zero provider calls"
+      }
+    ],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N490",
+    "title": "Delivery proof is not tied to the order",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N95"
+    ],
+    "batch": "OS-W29",
+    "batches": [
+      "OS-W29"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N491",
+    "title": "Shipping quotes are unthrottled",
+    "status": "FIXED",
+    "plan_ids": [
+      "N96"
+    ],
+    "batch": "OS-W19",
+    "batches": [
+      "OS-W19"
+    ],
+    "pr": 82,
+    "merge_sha": "e952c8d",
+    "prs": [
+      {
+        "number": 82,
+        "merge_sha": "e952c8d",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/features/commerce/shipping-quote-actions.test.ts",
+        "name": "quoteCartShipping › fails closed: an exhausted or unanswerable quota makes no provider call and writes no rows"
+      }
+    ],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N493",
+    "title": "Evidence uploads need no dispute",
+    "status": "FIXED",
+    "plan_ids": [
+      "N100"
+    ],
+    "batch": "OS-W15",
+    "batches": [
+      "OS-W15"
+    ],
+    "pr": 73,
+    "merge_sha": "d5a3eff",
+    "prs": [
+      {
+        "number": 73,
+        "merge_sha": "d5a3eff",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "supabase/tests/media_integrity_guard.sql",
+        "name": "evidence uploads only into an open dispute the uploader is party to (N100)"
+      },
+      {
+        "file": "src/lib/media-url.test.ts",
+        "name": "isOwnedDisputeEvidenceRef › refuses %s"
+      }
+    ],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N497",
+    "title": "Error reports drop the actual error on money paths",
+    "status": "FIXED",
+    "plan_ids": [
+      "N104"
+    ],
+    "batch": "OS-W27",
+    "batches": [
+      "OS-W27"
+    ],
+    "pr": 81,
+    "merge_sha": "d9d3832",
+    "prs": [
+      {
+        "number": 81,
+        "merge_sha": "d9d3832",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/lib/monitoring.test.ts",
+        "name": "nested errors (N104) › keeps name, message and stack of an Error nested in an object"
+      },
+      {
+        "file": "src/lib/monitoring.test.ts",
+        "name": "nested errors (N104) › reportError logs and reports the nested error, not {}"
+      }
+    ],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N498",
+    "title": "charge.refunded handler expects an old Stripe shape",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N105"
+    ],
+    "batch": "OS-W20",
+    "batches": [
+      "OS-W20"
+    ],
+    "pr": 91,
+    "merge_sha": null,
+    "prs": [
+      {
+        "number": 91,
+        "merge_sha": null,
+        "merged": false
+      }
+    ],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N499",
+    "title": "Transfer crash recovery only searches 1,000 transfers",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N106"
+    ],
+    "batch": "OS-W20",
+    "batches": [
+      "OS-W20"
+    ],
+    "pr": 91,
+    "merge_sha": null,
+    "prs": [
+      {
+        "number": 91,
+        "merge_sha": null,
+        "merged": false
+      }
+    ],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N500",
+    "title": "A restricted seller account strands payouts",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N8"
+    ],
+    "batch": "OS-W20",
+    "batches": [
+      "OS-W20"
+    ],
+    "pr": 91,
+    "merge_sha": null,
+    "prs": [
+      {
+        "number": 91,
+        "merge_sha": null,
+        "merged": false
+      }
+    ],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N502",
+    "title": "Stripe webhooks stuck on retry are not reported",
+    "status": "FIXED",
+    "plan_ids": [
+      "N109"
+    ],
+    "batch": "OS-W09",
+    "batches": [
+      "OS-W09"
+    ],
+    "pr": 80,
+    "merge_sha": "1e06cdb",
+    "prs": [
+      {
+        "number": 80,
+        "merge_sha": "1e06cdb",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/app/api/stripe/webhook/route.test.ts",
+        "name": "Stripe webhook retries are recorded (N109) › counts a retry outcome against the claimed event"
+      },
+      {
+        "file": "src/lib/payments/webhook-failures.test.ts",
+        "name": "recordWebhookFailure › records a retry and reports it with the attempt count"
+      }
+    ],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N504",
+    "title": "Core money logic has no unit tests",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N111"
+    ],
+    "batch": "OS-W20",
+    "batches": [
+      "OS-W20"
+    ],
+    "pr": 91,
+    "merge_sha": null,
+    "prs": [
+      {
+        "number": 91,
+        "merge_sha": null,
+        "merged": false
+      }
+    ],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N507",
+    "title": "Payouts are slow and blocked rows can starve ready ones",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N114"
+    ],
+    "batch": "OS-W20",
+    "batches": [
+      "OS-W20"
+    ],
+    "pr": 91,
+    "merge_sha": null,
+    "prs": [
+      {
+        "number": 91,
+        "merge_sha": null,
+        "merged": false
+      }
+    ],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N508",
+    "title": "No daily reconciliation of the ledger against Stripe",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N115"
+    ],
+    "batch": "OS-W20",
+    "batches": [
+      "OS-W20"
+    ],
+    "pr": 91,
+    "merge_sha": null,
+    "prs": [
+      {
+        "number": 91,
+        "merge_sha": null,
+        "merged": false
+      }
+    ],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Commerce and money"
+  },
+  {
+    "os_id": "N232",
+    "title": "Recovery plan ignores storage files and Stripe state",
+    "status": "OPEN, UNCLAIMED",
+    "plan_ids": [],
+    "batch": null,
+    "batches": [],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Admin, ops and CI"
+  },
+  {
+    "os_id": "N410",
+    "title": "Two high-severity dependency vulnerabilities (undici, zod)",
+    "status": "FIXED, test added here",
+    "plan_ids": [
+      "N2"
+    ],
+    "batch": "OS-W01",
+    "batches": [
+      "OS-W01",
+      "OS-PR65"
+    ],
+    "pr": 65,
+    "merge_sha": "f2b8eee",
+    "prs": [
+      {
+        "number": 65,
+        "merge_sha": "f2b8eee",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "tests/ci/dependency-advisories.test.ts",
+        "name": "production dependency advisories (N410, B1) › verify fails on any high or critical production advisory, and release-gate needs verify"
+      },
+      {
+        "file": "tests/ci/dependency-advisories.test.ts",
+        "name": "production dependency advisories (N410, B1) › the lockfile resolves %s at or above %s"
+      }
+    ],
+    "inferred": false,
+    "section": "Admin, ops and CI"
+  },
+  {
+    "os_id": "N414",
+    "title": "Admin console checks access only in the layout",
+    "status": "FIXED",
+    "plan_ids": [
+      "N11"
+    ],
+    "batch": "OS-W14",
+    "batches": [
+      "OS-W14"
+    ],
+    "pr": 87,
+    "merge_sha": "8338418",
+    "prs": [
+      {
+        "number": 87,
+        "merge_sha": "8338418",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/lib/admin/read-gate.test.ts",
+        "name": "every privileged read checks for itself › %s 404s a signed-out request before any all-access read"
+      },
+      {
+        "file": "src/lib/admin/guard.test.ts",
+        "name": "the console read gate (N11) › sends a lapsed step-up (TOTP over 15 minutes old) back to verify, with no client"
+      }
+    ],
+    "inferred": false,
+    "section": "Admin, ops and CI"
+  },
+  {
+    "os_id": "N525",
+    "title": "One wrong migration command can wipe the database",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N131",
+      "N246"
+    ],
+    "batch": "OS-W10",
+    "batches": [
+      "OS-W10"
+    ],
+    "pr": 92,
+    "merge_sha": null,
+    "prs": [
+      {
+        "number": 92,
+        "merge_sha": null,
+        "merged": false
+      }
+    ],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Admin, ops and CI"
+  },
+  {
+    "os_id": "N528",
+    "title": "Deploys don't wait for CI or check migrations",
+    "status": "OPEN, UNCLAIMED",
+    "plan_ids": [
+      "N3"
+    ],
+    "batch": null,
+    "batches": [],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Admin, ops and CI"
+  },
+  {
+    "os_id": "N529",
+    "title": "Finance CSV exports stop at 1,000 rows",
+    "status": "FIXED",
+    "plan_ids": [
+      "N133"
+    ],
+    "batch": "OS-W14",
+    "batches": [
+      "OS-W14"
+    ],
+    "pr": 87,
+    "merge_sha": "8338418",
+    "prs": [
+      {
+        "number": 87,
+        "merge_sha": "8338418",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/app/(admin)/admin/export/route.test.ts",
+        "name": "orders export (N133) › exports all 2,500 orders, past the 1,000-row cap, each exactly once"
+      },
+      {
+        "file": "src/lib/admin/queries-complete.test.ts",
+        "name": "Users filters (N133) › asks the database for the Sellers page, with no capped listing or order fetch"
+      }
+    ],
+    "inferred": false,
+    "section": "Admin, ops and CI"
+  },
+  {
+    "os_id": "N530",
+    "title": "A failed admin refund locks refunds on the order",
+    "status": "FIXED",
+    "plan_ids": [
+      "N134"
+    ],
+    "batch": "OS-W14",
+    "batches": [
+      "OS-W14"
+    ],
+    "pr": 87,
+    "merge_sha": "8338418",
+    "prs": [
+      {
+        "number": 87,
+        "merge_sha": "8338418",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/lib/admin/refund-refusal.test.ts",
+        "name": "auditedAction and refused refunds › closes the request when the refusal is proven and the records agree"
+      },
+      {
+        "file": "supabase/tests/admin_refund_refusal_guard.sql",
+        "name": null
+      }
+    ],
+    "inferred": false,
+    "section": "Admin, ops and CI"
+  },
+  {
+    "os_id": "N531",
+    "title": "Admin exports are not audited",
+    "status": "OPEN, UNCLAIMED",
+    "plan_ids": [
+      "N135"
+    ],
+    "batch": null,
+    "batches": [],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Admin, ops and CI"
+  },
+  {
+    "os_id": "N532",
+    "title": "New admin MFA enrolment is first-come",
+    "status": "FIXED",
+    "plan_ids": [
+      "N136"
+    ],
+    "batch": "OS-W14",
+    "batches": [
+      "OS-W14"
+    ],
+    "pr": 87,
+    "merge_sha": "8338418",
+    "prs": [
+      {
+        "number": 87,
+        "merge_sha": "8338418",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/lib/admin/guard.test.ts",
+        "name": "unconfirmed authenticators (N136) › sends a promoted member the operator hasn't confirmed to /admin-verify, never the console"
+      },
+      {
+        "file": "supabase/tests/admin_enrolment_guard.sql",
+        "name": null
+      }
+    ],
+    "inferred": false,
+    "section": "Admin, ops and CI"
+  },
+  {
+    "os_id": "N534",
+    "title": "Admin pages hide database errors",
+    "status": "FIXED",
+    "plan_ids": [
+      "N138"
+    ],
+    "batch": "OS-W14",
+    "batches": [
+      "OS-W14"
+    ],
+    "pr": 87,
+    "merge_sha": "8338418",
+    "prs": [
+      {
+        "number": 87,
+        "merge_sha": "8338418",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/lib/admin/queries-complete.test.ts",
+        "name": "audit log (N138) › throws on a failed read, never 'No actions recorded'"
+      },
+      {
+        "file": "src/lib/admin/queries-complete.test.ts",
+        "name": "member detail (N138) › throws when the member can't be read, instead of saying they don't exist"
+      }
+    ],
+    "inferred": false,
+    "section": "Admin, ops and CI"
+  },
+  {
+    "os_id": "N536",
+    "title": "Moderation messages are misleading",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N140"
+    ],
+    "batch": "OS-W21",
+    "batches": [
+      "OS-W21"
+    ],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Admin, ops and CI"
+  },
+  {
+    "os_id": "N537",
+    "title": "CI jobs don't restrict GitHub token permissions",
+    "status": "FIXED",
+    "plan_ids": [
+      "N141"
+    ],
+    "batch": "OS-W02",
+    "batches": [
+      "OS-W02",
+      "OS-PR33"
+    ],
+    "pr": 33,
+    "merge_sha": "aca3fa5",
+    "prs": [
+      {
+        "number": 33,
+        "merge_sha": "aca3fa5",
+        "merged": true
+      },
+      {
+        "number": 78,
+        "merge_sha": "4488e10",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "tests/ci/workflow-policy.test.ts",
+        "name": "public-repository workflow hardening › $name defaults the token to read-only and never grants write"
+      },
+      {
+        "file": "tests/ci/workflow-policy.test.ts",
+        "name": "public-repository workflow hardening › only the incremental secret scan widens the token, and only to read PRs"
+      }
+    ],
+    "inferred": false,
+    "section": "Admin, ops and CI"
+  },
+  {
+    "os_id": "R-migrations",
+    "title": "Shared dev migration tracking is unreliable",
+    "status": "OPEN, UNCLAIMED",
+    "plan_ids": [],
+    "batch": null,
+    "batches": [],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Admin, ops and CI"
+  },
+  {
+    "os_id": "R53-pr",
+    "title": "Design docs PR has conflicts",
+    "status": "OPEN, UNCLAIMED",
+    "plan_ids": [],
+    "batch": null,
+    "batches": [],
+    "pr": 53,
+    "merge_sha": null,
+    "prs": [
+      {
+        "number": 53,
+        "merge_sha": null,
+        "merged": false
+      }
+    ],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Admin, ops and CI"
+  },
+  {
+    "os_id": "N514",
+    "title": "Chat turns have no timeout",
+    "status": "FIXED",
+    "plan_ids": [
+      "N121"
+    ],
+    "batch": "OS-W04",
+    "batches": [
+      "OS-W04"
+    ],
+    "pr": 64,
+    "merge_sha": "073d133",
+    "prs": [
+      {
+        "number": 64,
+        "merge_sha": "073d133",
+        "merged": true
+      },
+      {
+        "number": 79,
+        "merge_sha": "a947d92",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/lib/ai/run.test.ts",
+        "name": "one turn's own bounds (readiness 67, N121) › stops at the deadline: the abort reaches the hanging request, and the turn is settled"
+      },
+      {
+        "file": "src/features/agent/chat.test.ts",
+        "name": "sendAgentMessage › runs one turn with a deadline, then stores the reply against the same request"
+      }
+    ],
+    "inferred": false,
+    "section": "Agent"
+  },
+  {
+    "os_id": "N517",
+    "title": "Prompt injection can plant a hidden link in a build change",
+    "status": "OPEN, CLAIMED",
+    "plan_ids": [
+      "N124"
+    ],
+    "batch": "OS-W07",
+    "batches": [
+      "OS-W07"
+    ],
+    "pr": 94,
+    "merge_sha": null,
+    "prs": [
+      {
+        "number": 94,
+        "merge_sha": null,
+        "merged": false
+      }
+    ],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Agent"
+  },
+  {
+    "os_id": "N521",
+    "title": "Suspended members can still use the agent",
+    "status": "FIXED",
+    "plan_ids": [
+      "N127"
+    ],
+    "batch": "OS-W04",
+    "batches": [
+      "OS-W04"
+    ],
+    "pr": 64,
+    "merge_sha": "073d133",
+    "prs": [
+      {
+        "number": 64,
+        "merge_sha": "073d133",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/features/agent/chat.test.ts",
+        "name": "sendAgentMessage › refuses a suspended member before storing, fetching, reserving or calling anything"
+      }
+    ],
+    "inferred": false,
+    "section": "Agent"
+  },
+  {
+    "os_id": "N522",
+    "title": "Approving an expired offer is recorded as accepted",
+    "status": "OPEN, UNCLAIMED",
+    "plan_ids": [],
+    "batch": null,
+    "batches": [],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Agent"
+  },
+  {
+    "os_id": "R-unproven",
+    "title": "Money paths are unproven on hosted systems",
+    "status": "NEEDS NEIL / LOCAL",
+    "plan_ids": [],
+    "batch": null,
+    "batches": [],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Needs Neil or a local session (hosted systems, secrets or spend)"
+  },
+  {
+    "os_id": "R75",
+    "title": "Nothing has run against a real model on record",
+    "status": "NEEDS NEIL / LOCAL",
+    "plan_ids": [],
+    "batch": null,
+    "batches": [],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Needs Neil or a local session (hosted systems, secrets or spend)"
+  },
+  {
+    "os_id": "R-staging-behind",
+    "title": "Staging is 2 migrations behind main",
+    "status": "NEEDS NEIL / LOCAL",
+    "plan_ids": [
+      "R-staging"
+    ],
+    "batch": null,
+    "batches": [],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Needs Neil or a local session (hosted systems, secrets or spend)"
+  },
+  {
+    "os_id": "N503",
+    "title": "Orders of $1,000 or more need DRVN Shipping to be live",
+    "status": "NEEDS NEIL / LOCAL",
+    "plan_ids": [
+      "N110"
+    ],
+    "batch": "OS-W30",
+    "batches": [
+      "OS-W30"
+    ],
+    "pr": 82,
+    "merge_sha": "e952c8d",
+    "prs": [
+      {
+        "number": 82,
+        "merge_sha": "e952c8d",
+        "merged": true
+      }
+    ],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Needs Neil or a local session (hosted systems, secrets or spend)"
+  },
+  {
+    "os_id": "N429",
+    "title": "Content Security Policy may block Stripe's payment frames",
+    "status": "NEEDS NEIL / LOCAL (code half FIXED)",
+    "plan_ids": [
+      "N25"
+    ],
+    "batch": "OS-W27",
+    "batches": [
+      "OS-W27"
+    ],
+    "pr": 81,
+    "merge_sha": "d9d3832",
+    "prs": [
+      {
+        "number": 81,
+        "merge_sha": "d9d3832",
+        "merged": true
+      }
+    ],
+    "proving_tests": [
+      {
+        "file": "src/proxy.test.ts",
+        "name": "Content Security Policy header (N25) › admits Stripe.js's frame and script origins for the Payment Element and 3-D Secure"
+      },
+      {
+        "file": "src/app/api/monitoring/csp/route.test.ts",
+        "name": "CSP report intake › forwards a blocked Stripe frame as a tagged warning"
+      }
+    ],
+    "inferred": false,
+    "section": "Needs Neil or a local session (hosted systems, secrets or spend)"
+  },
+  {
+    "os_id": "R69-age",
+    "title": "No 18+ confirmation",
+    "status": "CLAIMED (cloud D)",
+    "plan_ids": [
+      "R69"
+    ],
+    "batch": null,
+    "batches": [],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Claimed by cloud D"
+  },
+  {
+    "os_id": "R69-dmca",
+    "title": "No copyright takedown route",
+    "status": "CLAIMED (cloud D)",
+    "plan_ids": [
+      "R69"
+    ],
+    "batch": null,
+    "batches": [],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Claimed by cloud D"
+  },
+  {
+    "os_id": "N629",
+    "title": "Updated date and change announcement before publishing",
+    "status": "CLAIMED (cloud D)",
+    "plan_ids": [],
+    "batch": null,
+    "batches": [],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Claimed by cloud D"
+  },
+  {
+    "os_id": "R-audit-composer",
+    "title": "Phone agent composer sits under the bottom bar",
+    "status": "CLAIMED (cloud D)",
+    "plan_ids": [],
+    "batch": null,
+    "batches": [],
+    "pr": null,
+    "merge_sha": null,
+    "prs": [],
+    "proving_tests": [],
+    "inferred": false,
+    "section": "Claimed by cloud D"
+  }
+]
