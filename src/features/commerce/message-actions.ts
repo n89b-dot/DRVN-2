@@ -4,6 +4,7 @@ import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { BLOCKED_MESSAGE, isBlockedError } from "@/lib/blocks";
+import { isDatabaseQuotaError } from "@/lib/db-write-quotas";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
@@ -155,8 +156,12 @@ export async function sendThreadMessage(
     const committed = await existingMessage();
     if (committed.error || !committed.data || !matches(committed.data)) {
       if (isBlockedError(error)) return { error: BLOCKED_MESSAGE };
-      // A first message to someone new is limited in SQL (20261107220600).
-      if (error.code === "RL429") return { error: FIRST_CONTACT_LIMIT };
+      // Two database limits share RL429: the per-member write quota (N247,
+      // 20261107220000), which names its action in the detail, and the
+      // first-message-to-someone-new limit (20261107220600), which doesn't.
+      if (isDatabaseQuotaError(error)) {
+        return { error: error.details ? rateLimitMessage(RATE_LIMITS.sendMessage) : FIRST_CONTACT_LIMIT };
+      }
       // A suspended member's insert is refused by 20260929110000's policy —
       // say so rather than inviting a retry that can't succeed.
       if (await isSuspended(supabase, user.id)) return { error: SUSPENDED_MESSAGE };
@@ -246,7 +251,9 @@ export async function messageSeller(_prev: CommerceState, formData: FormData): P
   });
   if (error) {
     if (isBlockedError(error)) return { error: BLOCKED_MESSAGE };
-    if (error.code === "RL429") return { error: FIRST_CONTACT_LIMIT };
+    if (isDatabaseQuotaError(error)) {
+      return { error: error.details ? rateLimitMessage(RATE_LIMITS.sendMessage) : FIRST_CONTACT_LIMIT };
+    }
     if (await isSuspended(supabase, user.id)) return { error: SUSPENDED_MESSAGE };
     reportError("[messages] message seller failed", { code: error.code });
     return { error: "Couldn't send your message. Try again." };

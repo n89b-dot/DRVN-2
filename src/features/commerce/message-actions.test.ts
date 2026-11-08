@@ -88,6 +88,12 @@ describe("message submission recovery", () => {
     const empty = form(); empty.set("body", "  ");
     expect((await sendThreadMessage({}, empty)).error).toBeTruthy();
   });
+  it("tells the member's write quota (N247) apart from the first-contact limit, which share RL429", async () => {
+    mocks.insert.mockResolvedValue({ error: { code: "RL429", message: "x", details: "message: 40 per 00:10:00" } });
+    expect((await sendThreadMessage({}, form())).error).toBe("Too many messages.");
+    mocks.insert.mockResolvedValue({ error: { code: "RL429", message: "x" } });
+    expect((await sendThreadMessage({}, form())).error).toMatch(/new people today/);
+  });
   it("tells a suspended member why the send was refused", async () => {
     mocks.suspended.mockReturnValue(true);
     mocks.insert.mockResolvedValue({ error: { code: "42501", message: "row-level security" } });

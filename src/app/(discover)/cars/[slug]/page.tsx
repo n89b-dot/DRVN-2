@@ -9,6 +9,7 @@ import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
 import { loadAgentMode } from "@/lib/agent/member-mode";
 import { agentModeAllowsChat, agentModeRefusal } from "@/lib/agent/mode";
 import { FollowButton, SaveButton } from "@/features/social/buttons";
+import { ReportButton } from "@/features/moderation/report-button";
 import { formatPrice } from "@/lib/payments/fee";
 import { getPublicPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 
@@ -439,6 +440,15 @@ export default async function CarPage({
         evolution={evolution}
         agentAsk={agentChat ? { disabledReason: askDisabled } : null}
       />
+
+      {/* N53: anyone but the owner can flag a build's name, description or
+          photos — the same quiet report link a post carries, below the
+          content so the header's actions still fit a phone. */}
+      {!isOwner && (
+        <div className="mt-8 border-t border-[color:var(--rule-soft)] pt-4">
+          <ReportButton subjectType="car" subjectId={car.id} subjectLabel="this build" isLoggedIn={Boolean(user)} />
+        </div>
+      )}
 
       {/* The page people land on from a shared link — the moment to say the
           visitor's own car could have one. Signed-out viewers only. */}

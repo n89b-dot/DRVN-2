@@ -1617,6 +1617,52 @@ export type Database = {
           },
         ]
       }
+      car_moderation_holds: {
+        Row: {
+          car_id: string
+          created_at: string
+          hidden_by: string | null
+          reason: string
+          report_id: string | null
+        }
+        Insert: {
+          car_id: string
+          created_at?: string
+          hidden_by?: string | null
+          reason: string
+          report_id?: string | null
+        }
+        Update: {
+          car_id?: string
+          created_at?: string
+          hidden_by?: string | null
+          reason?: string
+          report_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "car_moderation_holds_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: true
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "car_moderation_holds_hidden_by_fkey"
+            columns: ["hidden_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "car_moderation_holds_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cars: {
         Row: {
           about: string | null
@@ -8103,6 +8149,10 @@ export type Database = {
       }
       my_car_vin: { Args: { p_car: string }; Returns: string }
       my_default_offer_floor: { Args: never; Returns: number }
+      my_dispute_evidence_upload_count: {
+        Args: { p_order: string }
+        Returns: number
+      }
       my_listing_enquiries: {
         Args: { p_others: string[] }
         Returns: {
@@ -8116,6 +8166,7 @@ export type Database = {
         }[]
       }
       my_listing_offer_floor: { Args: { p_listing: string }; Returns: number }
+      my_notification_prefs: { Args: never; Returns: Json }
       not_received_refund_due: { Args: { p_order: string }; Returns: boolean }
       not_received_refunds_due: {
         Args: { p_limit?: number }
