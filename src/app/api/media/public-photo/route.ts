@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { allowAction } from "@/lib/rate-limit";
 import { ensureMediaStorageOrigin } from "@/lib/media-lifecycle";
 import { AGENT_CHAT_BUCKET, chatPhotoRef } from "@/lib/agent/chat-photo-ref";
+import { signedPhotoUrl } from "@/lib/supabase/photo-signing";
 
 const BUCKETS = new Set(["avatars", "car-images", "activity-images", "listing-images"]);
 /**
@@ -101,7 +102,10 @@ export async function POST(request: Request) {
     // so browsers and the CDN may keep the object for a year.
     const result = await admin.storage.from(bucket).upload(path, normalized, { contentType: "image/webp", upsert: false, cacheControl: "31536000" });
     if (result.error) throw new Error("Storage unavailable");
-    return Response.json({ url, path });
+    // N455: car, listing and post photos are private objects. The ledger and
+    // the database keep the canonical URL; the browser gets a signed one to
+    // show, and hands it back to be saved (canonicalised on the way in).
+    return Response.json({ url: await signedPhotoUrl(url), path });
   } catch {
     if (heic) return Response.json({ error: HEIC_REFUSAL }, { status: 415 });
     return Response.json({ error: "The photo could not be safely processed. Try a JPEG, PNG or WebP image." }, { status: 422 });

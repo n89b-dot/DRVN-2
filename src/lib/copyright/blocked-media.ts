@@ -9,8 +9,8 @@ import { reportError } from "@/lib/monitoring";
  * Photos a copyright takedown removed (R69-dmca), as the proxy sees them.
  *
  * A takedown deletes every reference and queues the storage object for
- * deletion, but Next.js keeps resized copies of an image for a month
- * (`images.minimumCacheTTL`, next.config.ts) and has no way to evict one. So
+ * deletion, but Next.js keeps resized copies of an image (`images.minimumCacheTTL`,
+ * next.config.ts: an hour since N455, a month before) and has no way to evict one. So
  * the proxy refuses `/_next/image` for any object in
  * public.copyright_blocked_media (20261107231002), cached copy or not.
  *

@@ -6,7 +6,13 @@
  * off-site hotlinking, tracking beacons and `data:` payloads to be rendered on
  * public pages. React escapes attributes so this was never XSS — it is a
  * content-integrity and privacy problem.
+ *
+ * N455: member photos reach the browser as signed URLs (src/lib/photo-urls.ts)
+ * and come back from it that way. The checks below take a signed photo URL
+ * for its canonical spelling, and what they hand on to be stored is canonical.
  */
+
+import { canonicalPhotoUrl, SIGNED_PHOTO_BUCKETS } from "@/lib/photo-urls";
 
 function supabaseStorageHost(): string | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -131,8 +137,9 @@ export function isCanonicalPublicStorageUrl(value: unknown): value is string {
  * as the plain URL but match no stored reference.
  */
 export function isOwnedStorageUrl(value: unknown, userId: string): value is string {
-  if (!userId || !isCanonicalPublicStorageUrl(value)) return false;
-  const ref = canonicalStorageObject(value)!;
+  const canonical = canonicalPhotoUrl(value);
+  if (!userId || !isCanonicalPublicStorageUrl(canonical)) return false;
+  const ref = canonicalStorageObject(canonical)!;
   return OWNED_STORAGE_BUCKETS.includes(ref.bucket) && ref.path.split("/")[0] === userId;
 }
 
@@ -143,9 +150,17 @@ export function isOwnedStorageUrl(value: unknown, userId: string): value is stri
  * pointed at — renders the card without a photo (N55: SSRF).
  */
 export function ogImageSource(value: unknown): string | null {
-  if (!isCanonicalPublicStorageUrl(value)) return null;
-  const ref = canonicalStorageObject(value)!;
-  return PUBLIC_MEDIA_BUCKETS.includes(ref.bucket) ? value : null;
+  // N455: a member photo arrives signed (the row was read under the page's
+  // own visibility rules); its canonical spelling is what is checked, and the
+  // signed URL is what is fetched. A canonical URL in a signed bucket can no
+  // longer be fetched, so it gets no photo.
+  const canonical = canonicalPhotoUrl(value);
+  if (!isCanonicalPublicStorageUrl(canonical)) return null;
+  const ref = canonicalStorageObject(canonical)!;
+  if (!PUBLIC_MEDIA_BUCKETS.includes(ref.bucket)) return null;
+  const signedBucket = (SIGNED_PHOTO_BUCKETS as readonly string[]).includes(ref.bucket);
+  if (signedBucket) return canonical === value ? null : (value as string);
+  return canonical;
 }
 
 /**
@@ -179,6 +194,7 @@ export function isOwnedDisputeEvidenceRef(value: unknown, userId: string, orderI
 export function keepValidImageUrls(values: unknown, max = 12, userId?: string): string[] {
   if (!Array.isArray(values)) return [];
   return values
+    .map((v) => canonicalPhotoUrl(v))
     .filter((v): v is string => (userId ? isOwnedStorageUrl(v, userId) : isCanonicalPublicStorageUrl(v)))
     .slice(0, max);
 }

@@ -105,5 +105,6 @@ export async function requireAdminRead(): Promise<AdminContext> {
  */
 export async function adminReadClient(): Promise<ReturnType<typeof createAdminClient>> {
   await requireAdminRead();
-  return createAdminClient();
+  // N455: the console shows members' photos, private ones included, signed.
+  return createAdminClient({ signPhotos: true });
 }

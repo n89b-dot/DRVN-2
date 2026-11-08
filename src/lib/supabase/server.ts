@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import { publicEnv } from "@/lib/env";
 import type { Database } from "@/lib/database.types";
 
+import { photoFetch } from "./photo-signing";
+
 export type SupabaseCookie = { name: string; value: string; options: CookieOptions };
 
 export async function createClient(onSetCookies?: (cookies: SupabaseCookie[]) => void) {
@@ -15,6 +17,8 @@ export async function createClient(onSetCookies?: (cookies: SupabaseCookie[]) =>
     url,
     anonKey,
     {
+      // N455: member photos are signed for whoever could read the row.
+      global: { fetch: photoFetch(fetch, { sign: true }) },
       cookies: {
         getAll() {
           return cookieStore.getAll();

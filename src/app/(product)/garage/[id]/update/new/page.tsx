@@ -9,6 +9,7 @@ import type { TurnCard } from "@/lib/ai/run";
 import { publishChatPhotos } from "@/lib/agent/chat-photos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isOwnedStorageUrl } from "@/lib/media-url";
+import { signedPhotoUrls } from "@/lib/supabase/photo-signing";
 import { loadTaggableParts } from "@/features/composer/taggable-parts";
 
 import { modPickerLabel, seedChangeBlocks } from "./seed-blocks";
@@ -90,7 +91,9 @@ export default async function NewUpdatePage({
       // R81: the chat's photos are private; the update gets public copies,
       // made now, in the member's activity-images folder.
       const urls = (await publishChatPhotos(createAdminClient(), user.id, card.images, "activity-images")).filter((url) => isOwnedStorageUrl(url, user.id));
-      if (urls.length) seededBlocks.push({ type: "images", urls });
+      // N455: shown signed; the editor hands them back and the save stores them canonical.
+      const signed = await signedPhotoUrls(urls);
+      if (urls.length) seededBlocks.push({ type: "images", urls: urls.map((url) => signed.get(url) ?? url) });
       seededBlocks.push({ type: "text", style: "normal", text: card.body });
     }
   }
