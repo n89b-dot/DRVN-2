@@ -6,7 +6,13 @@ unless it says `--apply` with the code that dry run printed:
 ```bash
 node scripts/apply-migration.mjs --target shared-dev supabase/migrations/<file>.sql
 node scripts/apply-migration.mjs --target shared-dev --apply --confirm <code> supabase/migrations/<file>.sql
+node scripts/apply-migration.mjs --target shared-dev --status   # read-only: applied vs on disk, as JSON
 ```
+
+Every file in `supabase/migrations/` gets a row below, and its "Applied to"
+cell is `not applied`, `shared-dev YYYY-MM-DD`, `staging YYYY-MM-DD` or
+`production YYYY-MM-DD` (several joined with `; `). `tests/ci/migrations-md.test.ts`
+enforces it; rows older than the check are in `supabase/migrations-md-baseline.json`.
 
 `--target` names a project in `supabase/migration-targets.json` and must be
 the project `.env.local` (or `--env-file`) points at. The connection verifies

@@ -7,7 +7,7 @@
 // supabase_migrations.schema_migrations, so the history can never say a file
 // ran when it didn't (or the reverse), and a recorded file is never replayed.
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
@@ -266,7 +266,30 @@ export const USAGE = `usage:
 
   --target <name>     a project in supabase/migration-targets.json; must be the one the env file points at
   --env-file <path>   read SUPABASE_DB_PASSWORD and NEXT_PUBLIC_SUPABASE_URL from here (default .env.local)
-  --apply             apply for real; needs --confirm with the code the dry run printed for these files`;
+  --apply             apply for real; needs --confirm with the code the dry run printed for these files
+  --status            read-only: print {target, applied, onDisk, missing, extra, newest, count} as JSON`;
+
+/**
+ * What a target has applied against what is in supabase/migrations/, for the
+ * Intelligence OS and for people (docs/ids.md). Versions only: "missing" is
+ * on disk but not applied, "extra" is applied but not on disk, "newest" is
+ * the newest applied version and "count" the number applied.
+ */
+export function migrationStatus(targetName, recorded, fileNames) {
+  const onDisk = [...new Set(fileNames.map((name) => name.match(FILE_NAME)?.[1]).filter(Boolean))].sort();
+  const applied = [...new Set([...recorded].map(String))].sort();
+  const appliedSet = new Set(applied);
+  const diskSet = new Set(onDisk);
+  return {
+    target: targetName,
+    applied,
+    onDisk,
+    missing: onDisk.filter((v) => !appliedSet.has(v)),
+    extra: applied.filter((v) => !diskSet.has(v)),
+    newest: applied.at(-1) ?? null,
+    count: applied.length,
+  };
+}
 
 /**
  * The whole command. `deps` exists for tests: `createClient(config)` returns
@@ -289,6 +312,7 @@ export async function run(argv, deps = {}) {
         "dry-run": { type: "boolean", default: false },
         confirm: { type: "string" },
         "env-file": { type: "string", default: ".env.local" },
+        status: { type: "boolean", default: false },
         help: { type: "boolean", default: false },
       },
     });
@@ -301,7 +325,11 @@ export async function run(argv, deps = {}) {
     log(USAGE);
     return 0;
   }
-  if (!positionals.length) {
+  if (values.status && (positionals.length || values.apply || values.confirm || values["dry-run"])) {
+    fail("--status takes only --target and --env-file: it reads the whole history and changes nothing");
+    return 1;
+  }
+  if (!positionals.length && !values.status) {
     fail(USAGE);
     return 1;
   }
@@ -351,6 +379,12 @@ export async function run(argv, deps = {}) {
   try {
     await client.connect();
     const state = await inspectTarget(client);
+    if (values.status) {
+      // stdout is the JSON alone, so it can be piped; inspectTarget read it in a read-only transaction.
+      const listDir = deps.listMigrations ?? ((dir) => readdirSync(dir));
+      log(JSON.stringify(migrationStatus(target.name, state.recorded, listDir(migrationsDir)), null, 2));
+      return 0;
+    }
     log(`target: ${target.name} (${target.ref}${target.note ? `, ${target.note}` : ""}) at ${target.host}`);
     log(
       `connected as ${state.role} to ${state.database}, Postgres ${state.serverVersion}, TLS ${state.ssl ? "on" : "OFF"}, ` +

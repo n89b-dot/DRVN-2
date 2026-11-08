@@ -5,6 +5,8 @@
 //     → dry run: checks the target and prints the plan and a confirmation code
 //   node scripts/apply-migration.mjs --target shared-dev --apply --confirm <code> supabase/migrations/<file>.sql
 //     → applies each file in one transaction with its history row
+//   node scripts/apply-migration.mjs --target shared-dev --status
+//     → read-only: prints {target, applied, onDisk, missing, extra, newest, count} as JSON
 //
 // Reads SUPABASE_DB_PASSWORD and NEXT_PUBLIC_SUPABASE_URL from .env.local (or
 // --env-file). The target must be on supabase/migration-targets.json and be
