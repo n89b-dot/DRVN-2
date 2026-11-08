@@ -4,7 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, ObjectRow, PaymentModeNotice } from "@/components/ui";
+import { Alert, Foot, ObjectRow, PaymentModeNotice } from "@/components/ui";
 import {
   loadCartSummary,
   loadCheckoutResume,
@@ -30,9 +30,9 @@ export const metadata = { title: "Checkout - DRVN" };
 export default async function CheckoutPage({
   searchParams,
 }: {
-  searchParams: Promise<{ order?: string | string[] }>;
+  searchParams: Promise<{ order?: string | string[]; resume?: string | string[] }>;
 }) {
-  const { order } = await searchParams;
+  const { order, resume: resumeNote } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -74,6 +74,17 @@ export default async function CheckoutPage({
         <span className="microlabel">Secure checkout · {cart.lines.length} part{cart.lines.length === 1 ? "" : "s"}</span>
         <h1>Nearly yours.</h1>
       </Rv>
+
+      {/* A restarted checkout reserved its parts but stopped before payment
+          (e.g. its delivery plan couldn't be finished): this is that
+          checkout, and continuing retries it. A fixed code, never query text. */}
+      {byOrder && resumeNote === "incomplete" && (
+        <Rv className="mb-4">
+          <Alert ico="!" role="alert" title="Your checkout restarted, but didn't reach payment">
+            Its parts are held for you. Continue with these details to try again. Nothing was charged.
+          </Alert>
+        </Rv>
+      )}
 
       <CheckoutTotalsProvider
         base={{ goodsCents: cart.goodsCents, flatShippingCents: cart.shippingCents, quotedLines: cart.drvnLines.length }}

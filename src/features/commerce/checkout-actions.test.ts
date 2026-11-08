@@ -997,7 +997,33 @@ it("Finish checkout on another device with a new address releases and restarts t
   expect(begun.p_listing_ids).toEqual(["listing-1"]);
   expect(begun.p_checkout_context).toMatchObject({ shipping: { line1: "22 New Road" } });
   expect(mocks.createPayment).toHaveBeenCalled();
-  expect(mocks.rememberKey).not.toHaveBeenCalled();
+  // The replacement's own key is remembered on this device (never the page's).
+  expect(mocks.rememberKey).toHaveBeenCalledTimes(1);
+  expect(mocks.rememberKey).not.toHaveBeenCalledWith(FORM_KEY);
+});
+
+// Codex fix-check of #152 (P2): the restart reserved its replacement, then
+// the shipping freeze failed. The replacement is what a reload or a retry
+// must recover, not the released order A.
+it("a restart whose freeze fails after reserving the replacement keeps that replacement recoverable", async () => {
+  mocks.attemptRead.mockResolvedValue({ data: attemptFromOtherDevice(), error: null });
+  mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: ORDER_ID, status: "pending" }], error: null });
+  mocks.cartIds.mockResolvedValue(["listing-b"]);
+  mocks.cartFreeze.mockResolvedValue({ data: null, error: { message: "freeze failed" } });
+  const form = cartCheckoutForm("22 New Road");
+  form.set("order_id", ORDER_ID);
+
+  // The page moves to the replacement's order and says it didn't reach payment.
+  await expect(checkoutCart({}, form)).rejects.toThrow("redirect:/checkout?order=order-1&resume=incomplete");
+
+  const begun = mocks.purchaseBegin.mock.calls[0][0] as Record<string, unknown>;
+  expect(begun.p_listing_ids).toEqual(["listing-1"]);
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+  // The replacement's key is remembered, so the cookie path finds it too.
+  expect(mocks.rememberKey).toHaveBeenCalledTimes(1);
+  const remembered = mocks.rememberKey.mock.calls[0][0] as string;
+  expect(remembered).not.toBe(FORM_KEY);
+  expect(cartCheckoutRequestKey("buyer-1", remembered)).toBe(begun.p_checkout_request_key);
 });
 
 // Codex fix-check of #141 (P2): device B's cart holds an unrelated part. The

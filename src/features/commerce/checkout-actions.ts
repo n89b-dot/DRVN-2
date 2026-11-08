@@ -1079,6 +1079,20 @@ export async function checkoutCart(
     await removeCartIds(outcome.purchased.map((p) => p.listingId));
   }
 
+  // A by-order restart that reserved its replacement: from here on the
+  // replacement is the checkout to recover, whatever happens next. Its key is
+  // remembered and the page moves to its order, so a reload or a retry
+  // resumes the pending replacement instead of the released order (whose
+  // parts the replacement now holds). A payment-step failure (a shipping
+  // freeze, a reconciliation) says so on that page.
+  const replacementOrderId = restartBasket && !outcome.purchased.length ? outcome.orderIds[0] : undefined;
+  if (replacementOrderId) {
+    await rememberCheckoutKey(effectiveRawKey);
+    const params = new URLSearchParams({ order: replacementOrderId });
+    if (!outcome.payment) params.set("resume", "incomplete");
+    redirect(`/checkout?${params.toString()}`);
+  }
+
   // Async processor: hand the client secret back so the form can swap to the
   // Payment Element confirmation step. The cart stays intact until the money
   // is actually confirmed (the return route clears it).
@@ -1086,13 +1100,8 @@ export async function checkoutCart(
     // OS-W17 (N85): the basket is reserved under this key; a reload renders
     // it back and resumes this payment instead of starting a second one.
     // A checkout resumed by its order has no key on this device (the page
-    // keeps resuming it by order), so nothing is remembered for it.
-    if (restartBasket && outcome.payment.orderIds[0]) {
-      // The restarted basket is resumed by its order, like the one it
-      // replaces: this page then shows exactly that basket, not this
-      // device's cart, and a reload picks up the same payment.
-      redirect(`/checkout?order=${encodeURIComponent(outcome.payment.orderIds[0])}`);
-    }
+    // keeps resuming it by order), so nothing is remembered for it. (A
+    // restarted one was handled above.)
     if (!resumingByOrder) await rememberCheckoutKey(effectiveRawKey);
     return { payment: outcome.payment };
   }
@@ -1101,7 +1110,7 @@ export async function checkoutCart(
     // Orders that exist without a settled outcome (processing, or a payment
     // still being reconciled) are retried under the same key. A key whose
     // attempt has ended is rotated on the next submit, so it can stay.
-    if (outcome.orderIds.length && !resumingByOrder && !restartBasket) await rememberCheckoutKey(effectiveRawKey);
+    if (outcome.orderIds.length && !resumingByOrder) await rememberCheckoutKey(effectiveRawKey);
     return { error: outcome.error ?? "Nothing could be purchased." };
   }
   await forgetCheckoutKey();
