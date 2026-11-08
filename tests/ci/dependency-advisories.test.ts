@@ -35,12 +35,12 @@ describe("production dependency advisories (N410, B1)", () => {
     expect(ci.jobs["release-gate"]?.needs).toContain("verify");
   });
 
-  // The first patched releases named in the 3 Nov review: next past 16.4.0,
-  // undici past 8.12.1, zod 4.6.6 or later.
+  // The releases #65 installed and the remediation plan (A5) holds as the
+  // floor: next 16.4.3, undici 8.12.3, zod 4.6.7.
   it.each([
-    ["next", "16.4.1"],
-    ["undici", "8.12.2"],
-    ["zod", "4.6.6"],
+    ["next", "16.4.3"],
+    ["undici", "8.12.3"],
+    ["zod", "4.6.7"],
   ])("the lockfile resolves %s at or above %s", (name, floor) => {
     const version = lock.packages[`node_modules/${name}`]?.version ?? "";
     expect(atLeast(version, floor), `${name} ${version}`).toBe(true);

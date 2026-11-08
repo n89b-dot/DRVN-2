@@ -23,6 +23,8 @@ recorded file is skipped, and a destructive baseline (0001) is refused on a
 database with any table in `public`. Details: "Applying without Docker or
 psql" below.
 
+**Staging stays level with shared dev** (R-staging-behind). A migration PR is applied to shared dev *and* staging before it merges, by the same session, with both cells filled. `tests/ci/migrations-md.test.ts` lets a row name `shared-dev` without `staging` (or say `not applied`) only while the file is less than two days old by its timestamp. A session that cannot reach staging lists the file in `supabase/migrations-staging-pending.json` with the reason, and the next session with the credential applies it and removes the entry.
+
 **A merged migration is never renamed** (#97). Apply order on every target is merge order, so filename order must stay the same as merge order. A pull request may only add migration files, each with a timestamp later than every file already on `main`, and may never rename or remove a file `main` has. If `main` gains a later file before yours merges, rename yours (it is not merged yet) to a timestamp after it. `tests/ci/migration-order.test.ts` fails a PR that breaks either rule, naming the file. Find what a merge added with `git diff --diff-filter=A`, never by name.
 
 **Recording files that already ran** (OS-R-migrations): `--record-only` writes
@@ -162,7 +164,7 @@ Guard: `supabase/tests/launch_legal_guard.sql` (fails before these migrations). 
 
 | File | Applied to |
 |---|---|
-| `20261107220900_payout_hold_fallback_two_days.sql` | not applied |
+| `20261107220900_payout_hold_fallback_two_days.sql` | shared-dev 2026-11-07; staging 2026-11-07 |
 
 Apply after every earlier migration. Neil, 7 Nov 2026: the fallbacks follow his 2-day rule. `settlement_settings.payout_hold_days` defaults to 2 (was 7), and `payout_available_at()` (restated from `20261006100000`, the only change being the coalesce's 7 → 2) treats a missing settings row as a fixed 2 days. The deployed row is already fixed, 2 days (`20261009100000`), so no payout date changes; dates already set never move. The app's `DEFAULT_PAYOUT_HOLD` changes to 2 in the same PR. Guard: `payout_hold_setting_guard.sql` check 7 (missing row and a new row both mean 2 days), which fails on the schema before this migration.
 
@@ -170,7 +172,7 @@ Apply after every earlier migration. Neil, 7 Nov 2026: the fallbacks follow his 
 
 | File | Applied to |
 |---|---|
-| `20261107210150_refund_gap_snapshot.sql` | not applied |
+| `20261107210150_refund_gap_snapshot.sql` | shared-dev 2026-11-07; staging 2026-11-07 |
 
 Apply after `20261107210100`. New `refund_gap_snapshot(payment_reference, refund_references[])` (service role only, read-only): a payment's booked refund total and the cents of the listed refunds whose operation is still booking, from one statement. `applyChargeRefund` opens an "unattributed refund" case only on this result, so a refund settling while `charge.refunded` is handled can't be counted in neither place. Redefines nothing. Guard: `supabase/tests/refund_gap_snapshot_guard.sql` (fails before this migration: the function doesn't exist). Checked on a fresh native PostgreSQL 17 with the CI shim: every migration applies and every guard passes except `job_inventory_health_guard.sql` (needs real pg_cron).
 

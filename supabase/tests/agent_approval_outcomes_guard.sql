@@ -11,6 +11,15 @@
 --   5. dismissed: unchanged.
 --   6. Repeats replay the stored outcome and write nothing.
 --   7. 'Approvals answered' counts the expired and refused answers.
+-- N677: this guard flaked on main ("FAIL 8: a refused accept was recorded as
+-- refused /"). The cause was not ordering: agent_redact_event scrubbed card-
+-- like digit runs out of every event, and about 0.3% of random UUIDs carry
+-- one, so the owner's 'approval' event sometimes stored a mangled
+-- approval_id and pg_temp.answers() found nothing. 20261108130500 (#158)
+-- stopped redaction scanning UUIDs. FAIL 0 now proves that on thousands of
+-- random ids before any case runs, FAIL 7 asserts the answer was not a
+-- replay, and FAIL 7b names a mangled id directly, so a regression fails
+-- every run, where it happens, with a message that says why.
 -- Transactional; disposable local database only.
 begin;
 
@@ -71,9 +80,20 @@ declare
   ad uuid;
   ae uuid;
   r jsonb;
+  bad text;
   m record;
   expected numeric;
 begin
+  -- 0. Redaction never changes an id (N677). Before 20261108130500 about 15
+  -- of these 5,000 would have been mangled, so this fails on every run.
+  select string_agg(u, ', ') into bad
+  from (select g::text as u from (select gen_random_uuid() as g from generate_series(1, 5000)) x) ids
+  where public.agent_redact_cards(u) is distinct from u
+     or public.agent_redact_cards('{"approval_id": "' || u || '"}') is distinct from '{"approval_id": "' || u || '"}';
+  if bad is not null then
+    raise exception 'FAIL 0: card redaction changed random ids, so an approval event can lose its approval_id (N677): %', left(bad, 400);
+  end if;
+
   update public.agent_controls set cleared_at = now() where scope = 'all' and cleared_at is null;
   update public.agent_beta_steps set open = true where step in ('seller', 'buyer');
   insert into auth.users(id, email) values (seller, 'outcome-guard-seller@drvn.test'), (buyer, 'outcome-guard-buyer@drvn.test');
@@ -132,8 +152,16 @@ begin
   perform pg_temp.act(seller);
   r := public.agent_approval_decide(ac, 'accept');
   perform pg_temp.reset();
-  if r->>'outcome' <> 'refused' or r->>'status' <> 'refused' or r->>'order_id' is not null then
-    raise exception 'FAIL 7: an accept the offer refused did not report refused (%)', r;
+  if r->>'outcome' <> 'refused' or r->>'status' <> 'refused' or r->>'order_id' is not null
+     or (r->>'replayed')::boolean then
+    raise exception 'FAIL 7: an accept the offer refused did not report a fresh refusal (N677) (%)', r;
+  end if;
+  if pg_temp.answers(ac) = '' and exists (
+       select 1 from public.agent_events e join public.agent_approvals a on a.task_id = e.task_id
+       where a.id = ac and e.kind = 'approval' and e.initiated_by = 'owner') then
+    raise exception 'FAIL 7b: the owner''s answer was logged but its approval_id was changed to % (N677)',
+      (select string_agg(e.result->>'approval_id', ', ') from public.agent_events e join public.agent_approvals a on a.task_id = e.task_id
+       where a.id = ac and e.kind = 'approval' and e.initiated_by = 'owner');
   end if;
   if (select status from public.agent_approvals where id = ac) <> 'refused' or pg_temp.answers(ac) <> 'refused' then
     raise exception 'FAIL 8: a refused accept was recorded as % / %', (select status from public.agent_approvals where id = ac), pg_temp.answers(ac);

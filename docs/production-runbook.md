@@ -156,7 +156,7 @@ if any is missing or invalid.
 | `NEXT_PUBLIC_SUPABASE_URL` | required | production project URL |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or legacy `NEXT_PUBLIC_SUPABASE_ANON_KEY`) | required | browser-safe key |
 | `SUPABASE_SECRET_KEY` (or legacy `SUPABASE_SERVICE_ROLE_KEY`) | required | server only; bypasses RLS |
-| `PAYMENTS_MODE` | recommended `stripe` | unset = `stripe` when `STRIPE_SECRET_KEY` is set. Production refuses stub mode (or a missing key) unless `PAYMENTS_ALLOW_STUB_IN_PRODUCTION=true`, which is for non-public sandboxes only |
+| `PAYMENTS_MODE` | recommended `stripe` | unset = `stripe` when `STRIPE_SECRET_KEY` is set. Production refuses stub mode (or a missing key) unless `PAYMENTS_ALLOW_STUB_IN_PRODUCTION=true`, which is for CI and local rehearsals only: the app refuses to boot with that variable set, to any value, on a Vercel deployment, behind a public https site URL or with a live Stripe key (N540), and the operations gate checks the host's variable list for it |
 | `STRIPE_SECRET_KEY` | required | `sk_live_…` flips `paymentsAreLive()`; the terms' and fees page's test-mode notices disappear at the same moment |
 | `STRIPE_WEBHOOK_SECRET` | required (live) | signing secret of the platform endpoint below |
 | `STRIPE_CONNECT_WEBHOOK_SECRET` | required (live) | signing secret of the Connect endpoint (`account.updated` on sellers' accounts) |
@@ -289,6 +289,28 @@ judges each job against its budget:
 | `drvn-listing-edit-sweep` | `45 3 * * *` | `prune_listing_edit_requests()` (SQL) — `private.listing_edit_requests` rows older than 7 days (20261026100000) |
 | `drvn-cron-history-prune` | `27 4 * * *` | `private.prune_cron_history()` (SQL) — `cron.job_run_details` older than 14 days (20261107191000) |
 | `drvn-ledger-reconciliation` | `50 5 * * *` | `invoke_remediation_worker('ledger-reconciliation')` → `/api/jobs/ledger-reconciliation` (20261107210100): read-only Stripe ↔ ledger comparison; discrepancies open `ledger_discrepancy` cases in Admin → Payments |
+
+**Worker families** (N680). Each family is recorded in `worker_runs` by the
+route or function its job calls, and each is driven by exactly one job. The
+SQL guard `job_inventory_health_guard.sql` (FAIL 4b–4e) holds the inventory to
+this list by name, and `tests/ci/job-families.test.ts` holds this list, the
+guard's and `src/lib/job-inventory.ts` to the same set, so a restatement of
+`private.scheduled_job_inventory()` cannot drop a family without failing CI.
+Anything that restates the inventory or `invoke_remediation_worker` copies
+every family below.
+
+<!-- job-families:start -->
+- `drvn-agent-worker`: `agent`
+- `drvn-deletion-worker`: `deletions`
+- `drvn-delivery-auto-confirm`: `deliveryAutoConfirm`
+- `drvn-ledger-reconciliation`: `ledgerReconciliation`
+- `drvn-listing-import-sweep`: `listingImports`
+- `drvn-media-gc`: `media`
+- `drvn-saved-search-digests`: `savedSearchDigests`
+- `drvn-saved-search-worker`: `savedSearches`
+- `drvn-search-worker`: `search`
+- `drvn-transfer-worker`: `expiries`, `captures`, `transfers`, `transferReconciliation`, `refunds`, `labelVoids`, `returns`, `disputes`, `payoutDeadlines`, `alerts`, `receipts`, `analytics`
+<!-- job-families:end -->
 
 `select jobname, schedule from cron.job order by 1;` must return exactly
 these twenty-one. Without the `job_config` rows the SQL jobs still run, but every
@@ -458,7 +480,7 @@ Hosted acceptance still requires:
    provider callbacks and private downloads. Use a forward fix if the previous
    application is incompatible; do not erase committed financial state.
 5. Record actual elapsed recovery time, unrecovered data and operator findings
-   against approved targets. Obtain hosted acceptance before releasing invitations.
+   against approved targets. Obtain hosted acceptance before opening to members.
 
 ### 6a. Storage objects: back up, restore, reconcile (N232)
 
