@@ -11,6 +11,8 @@ import { usePathname } from "next/navigation";
 export function AuthClose() {
   const pathname = usePathname();
   if (pathname === "/onboarding" || pathname.startsWith("/onboarding/")) return null;
+  // N686: nor on the earlier member's one-time 18+ question; its way out is Sign out.
+  if (pathname === "/confirm-age") return null;
   return (
     <Link href="/" className="authtop__plate authtop__close">
       <span aria-hidden="true">×</span> Close
