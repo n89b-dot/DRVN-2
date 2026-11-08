@@ -72,6 +72,12 @@ export type RefundOrderInput = {
    *  and its eligibility under the order lock in the same transaction, and
    *  keys the refund to the case. Ignores requestKey and amountCents. */
   notReceivedCase?: { disputedAt: string };
+  /** The payout deadline's full refund (20261108110000): reserved by
+   *  begin_payout_deadline_refund under the order lock, which adopts the
+   *  deadline's own refund in flight, waits while any other refund of the
+   *  order is in flight, and otherwise reserves the whole remainder (topping
+   *  up one that completed short). Ignores requestKey and amountCents. */
+  payoutDeadline?: true;
 };
 
 export type RefundOrderOutcome =
@@ -104,6 +110,9 @@ export type RefundOrderOutcome =
       /** The guarded reservation found the case no longer qualifies (it was
        *  resolved, or tracking arrived): nothing was reserved. */
       ineligible?: true;
+      /** Nothing was reserved because another refund of the order is still
+       *  in flight (payoutDeadline): ask again once it has finished. */
+      waiting?: true;
     };
 
 function initiatorLabel(initiator: RefundInitiator): string {
@@ -392,6 +401,15 @@ export async function refundOrder(
         p_dispute_outcome: disputeOutcome,
         p_payment_reference: payment.provider_reference,
       })
+    : input.payoutDeadline
+    ? await admin.rpc("begin_payout_deadline_refund", {
+        p_order: orderId,
+        p_reason: reason,
+        p_requested_by: initiatorLabel(initiator),
+        p_actor_role: actorRole(initiator),
+        p_dispute_outcome: disputeOutcome,
+        p_payment_reference: payment.provider_reference,
+      })
     : input.requestKey
     ? await admin.rpc("begin_request_refund_operation", {
         p_request_key: input.requestKey,
@@ -420,7 +438,17 @@ export async function refundOrder(
     reportError("[refunds] begin_refund_operation failed", { orderId, beginError });
     return { ok: false, error: "The refund could not be started — try again." };
   }
-  const begin = begun as { ok: boolean; error?: string; operation_id?: string; ineligible?: boolean };
+  const begin = begun as {
+    ok: boolean;
+    error?: string;
+    operation_id?: string;
+    ineligible?: boolean;
+    waiting?: boolean;
+  };
+  if (!begin.ok && begin.waiting) {
+    // Reserved nothing, on purpose: another refund is still in flight.
+    return { ok: false, waiting: true, error: begin.error ?? "Another refund on this order is still being made." };
+  }
   if (!begin.ok || !begin.operation_id) {
     // The database answered and reserved nothing ("nothing left to refund",
     // or a not-received case that no longer qualifies).

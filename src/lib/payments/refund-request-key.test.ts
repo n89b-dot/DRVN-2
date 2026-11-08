@@ -95,3 +95,50 @@ describe("refundOrder for a not-received case", () => {
     expect(rpcs.map((call) => call.name)).toEqual(["begin_not_received_refund"]);
   });
 });
+
+// N244 follow-up (20261108110000): the payout deadline's full refund is
+// reserved by begin_payout_deadline_refund, which waits while another refund
+// of the order is in flight instead of reserving "the rest" around it. Before
+// the fix it went through begin_request_refund_operation with no amount and a
+// fixed key: with $20 in flight it reserved $80, and once the $20 failed every
+// retry adopted the completed $80 under that key, so $20 was never refunded.
+describe("refundOrder for the payout deadline", () => {
+  it("reserves through begin_payout_deadline_refund, never a bare remainder under a fixed key", async () => {
+    const { admin, rpcs } = fakeAdmin(completed, { ok: true, adopted: false, operation_id: "op-1" });
+    await refundOrder(admin, {
+      orderId: "order-1",
+      reason: "Payouts not set up",
+      initiator: { kind: "payout_deadline" },
+      payoutDeadline: true,
+    });
+    expect(rpcs[0]).toEqual({
+      name: "begin_payout_deadline_refund",
+      args: {
+        p_order: "order-1",
+        p_reason: "Payouts not set up",
+        p_requested_by: "scheduler:payout_deadline",
+        p_actor_role: "system",
+        p_dispute_outcome: "admin_refunded",
+        p_payment_reference: "pi_1",
+      },
+    });
+    expect(rpcs.some((call) => call.name === "begin_request_refund_operation" || call.name === "begin_refund_operation")).toBe(false);
+  });
+
+  it("waits, reserving and running nothing, while another refund is in flight", async () => {
+    const { admin, rpcs } = fakeAdmin(completed, {
+      ok: false,
+      waiting: true,
+      error: "Another refund on this order is still being made; the full refund waits for it.",
+    });
+    const outcome = await refundOrder(admin, {
+      orderId: "order-1",
+      reason: "Payouts not set up",
+      initiator: { kind: "payout_deadline" },
+      payoutDeadline: true,
+    });
+    expect(outcome).toMatchObject({ ok: false, waiting: true });
+    expect(outcome).not.toHaveProperty("refused");
+    expect(rpcs.map((call) => call.name)).toEqual(["begin_payout_deadline_refund"]);
+  });
+});

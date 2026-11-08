@@ -73,7 +73,6 @@ declare
   claim jsonb;
   rejected boolean;
 begin
-  update public.beta_access_config set enforced = false where singleton = true;
   insert into public.job_config(key, value) values ('media_storage_origin', 'https://proj.supabase.co')
     on conflict (key) do update set value = excluded.value;
   -- No payments_mode row: the production default, the rule enforced.
@@ -156,8 +155,11 @@ begin
     (sold_waiting, late, 'Late sold, waiting', 'performance', 10000, 0, 'sold'),
     (sold_shipped, late, 'Late sold, shipped', 'performance', 10000, 0, 'sold'),
     (sold_young, late, 'Late sold, young', 'performance', 10000, 0, 'sold');
+  -- Every part had its photo when it was published (20261108110000 puts a
+  -- part back on sale only if it still meets the publish rules).
   insert into public.listing_images(listing_id, url, position) values
-    (late_live, late_img || 'a.webp', 0), (late_own_paused, late_img || 'b.webp', 0), (late_draft, late_img || 'c.webp', 0);
+    (late_live, late_img || 'a.webp', 0), (late_own_paused, late_img || 'b.webp', 0), (late_draft, late_img || 'c.webp', 0),
+    (sold_waiting, late_img || 'd.webp', 0), (sold_shipped, late_img || 'e.webp', 0), (sold_young, late_img || 'f.webp', 0);
   o_waiting := pg_temp.sale(buyer, late, sold_waiting, 'paid', interval '15 days');
   o_shipped := pg_temp.sale(buyer, late, sold_shipped, 'shipped', interval '15 days');
   o_young := pg_temp.sale(buyer, late, sold_young, 'paid', interval '3 days');

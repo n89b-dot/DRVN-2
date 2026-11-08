@@ -3,15 +3,26 @@ import Link from "next/link";
 import { Rv } from "@/components/livesheet";
 import { adminSuspendUser, adminUnsuspendUser } from "@/lib/admin/actions";
 import { isDeletionPending, SUSPENDED_CHIP } from "@/lib/admin/presentation";
-import { searchUsers, USER_STATE_FILTERS, USERS_PAGE_SIZE, type UserStateFilter } from "@/lib/admin/queries";
+import { getAccountDeletionCases, searchUsers, USER_STATE_FILTERS, USERS_PAGE_SIZE, type UserStateFilter } from "@/lib/admin/queries";
 import { cx, isPersonStub, personLabel } from "@/lib/format";
 
 import { ActionDialog } from "../_components/action-dialog";
 import { ConsoleEmpty } from "../_components/console-empty";
 import { Pager } from "../_components/pager";
-import { SearchField } from "@/components/ui";
+import { SearchField, TileHead } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
+
+const DELETION_STATE = {
+  temporary_financial_hold: "On hold: money still moving",
+  cleanup_pending: "Cleaning up",
+  operator_attention: "Needs an operator",
+} as const;
+
+function daysSince(iso: string): string {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  return days <= 0 ? "today" : days === 1 ? "1 day ago" : `${days} days ago`;
+}
 
 /**
  * People: search, history at a glance (sales, disputes), suspend/unsuspend.
@@ -29,7 +40,7 @@ export default async function AdminUsersPage({
   const activeState = (USER_STATE_FILTERS.some((f) => f.key === state)
     ? state
     : "all") as UserStateFilter;
-  const { rows, total, hasMore } = await searchUsers(q, activeState, page);
+  const [{ rows, total, hasMore }, deletions] = await Promise.all([searchUsers(q, activeState, page), getAccountDeletionCases()]);
 
   const pagerHref = (target: number) =>
     `/admin/users?${new URLSearchParams({
@@ -47,6 +58,57 @@ export default async function AdminUsersPage({
           enforces both. Admin membership is managed in SQL, never from here.
         </p>
       </Rv>
+
+      {/* N35: every account deletion that hasn't finished, oldest first,
+          with who acts next. "Operator attention" used to exist only inside
+          the deletion worker. */}
+      {deletions.rows.length > 0 && (
+        <section className="tile mb-6" aria-label="Account deletions not finished">
+          <TileHead label="Account deletions not finished" end={<span className="kv">{deletions.total}</span>} />
+          <table className="ledger">
+            <thead>
+              <tr>
+                <th scope="col">Member</th>
+                <th scope="col">State</th>
+                <th scope="col">Next step</th>
+                <th scope="col">Asked</th>
+              </tr>
+            </thead>
+            <tbody>
+              {deletions.rows.map((d) => (
+                <tr key={`${d.userId ?? "gone"}-${d.requestedAt}`}>
+                  <td data-label="Member">
+                    {d.userId ? (
+                      <Link href={`/admin/users/${d.userId}`} className="order__name block hover:text-live">
+                        {d.person ? personLabel(d.person) : "Member"}
+                      </Link>
+                    ) : (
+                      <span className="order__name block">Account removed</span>
+                    )}
+                  </td>
+                  <td data-label="State">
+                    <span className={cx("chip", d.outcome === "operator_attention" ? "chip--live" : "chip--warn")}>
+                      {DELETION_STATE[d.outcome]}
+                    </span>
+                  </td>
+                  <td data-label="Next step">
+                    {d.nextAction ?? "—"}
+                    <span className="order__meta block">
+                      {d.owner ? `On: ${d.owner}` : ""}
+                      {d.pendingDecisions.length ? ` · waiting on ${d.pendingDecisions.join(", ")}` : ""}
+                      {d.reviewAt ? ` · review by ${new Date(d.reviewAt).toLocaleDateString()}` : ""}
+                    </span>
+                  </td>
+                  <td data-label="Asked">
+                    {new Date(d.requestedAt).toLocaleDateString()}
+                    <span className="order__meta block">{daysSince(d.requestedAt)}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       <div className="finder mb-4">
         <form method="get" className="finder__main" role="search">

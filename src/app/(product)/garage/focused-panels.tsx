@@ -5,6 +5,7 @@ import { Media, MEDIA_SIZES, ObjectRow, TileHead } from "@/components/ui";
 import { postHeadline } from "@/lib/activity/headline";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { createClient } from "@/lib/supabase/server";
+import { requiredRead } from "@/lib/supabase/required-read";
 
 import type { GarageSheet } from "./garage-data";
 import { workOrders } from "./garage-sheet";
@@ -255,15 +256,23 @@ export async function GarageCarOverview({
  * marketplace wants: already off the car, already documented, one tap from
  * being a listing.
  */
+/** What a came-off part's listing is, when it isn't in a group of its own. */
+const HIDDEN_LISTING_LINE: Partial<Record<string, string>> = {
+  paused: "Listing paused",
+  archived: "Listing withdrawn",
+  removed: "Listing taken down",
+};
+
 export async function GarageCarParts({ sheet }: { sheet: GarageSheet }) {
   const supabase = await createClient();
 
-  const [{ data: listings }, { data: removedMods }] = await Promise.all([
+  const [listingsResult, removedModsResult] = await Promise.all([
+    // Every status, not just the four grouped below: a came-off part whose
+    // listing was paused, withdrawn or taken down must still be found.
     supabase
       .from("listings")
       .select("id, title, price_cents, status")
       .eq("source_car_id", sheet.id)
-      .in("status", ["draft", "active", "reserved", "sold"])
       .order("created_at", { ascending: false }),
     supabase
       .from("mod_items")
@@ -272,6 +281,10 @@ export async function GarageCarParts({ sheet }: { sheet: GarageSheet }) {
       .eq("status", "removed")
       .order("removed_at", { ascending: false }),
   ]);
+  // RR-11: an empty tab says "nothing came off and nothing is listed". A
+  // failed read must never say that; it is a failed page with Try again.
+  const listings = requiredRead(listingsResult, "this car's listings");
+  const removedMods = requiredRead(removedModsResult, "the parts that came off this car");
 
   // For sale = active + reserved: the same two states the garage counts as
   // live. A draft is not for sale, but it is not gone either — it gets its
@@ -279,7 +292,12 @@ export async function GarageCarParts({ sheet }: { sheet: GarageSheet }) {
   const forSale = (listings ?? []).filter((l) => l.status === "active" || l.status === "reserved");
   const drafts = (listings ?? []).filter((l) => l.status === "draft");
   const sold = (listings ?? []).filter((l) => l.status === "sold");
-  const unlisted = (removedMods ?? []).filter((m) => !m.linked_listing_id);
+  // Came off and not listed: no listing at all, or one that is not in any
+  // group above (paused, withdrawn, taken down — or gone). Those rows open
+  // their listing rather than starting another, as List it does (A-1).
+  const grouped = new Set([...forSale, ...drafts, ...sold].map((l) => l.id));
+  const statusOf = new Map((listings ?? []).map((l) => [l.id, l.status]));
+  const unlisted = (removedMods ?? []).filter((m) => !m.linked_listing_id || !grouped.has(m.linked_listing_id));
 
   return (
     <div className="mt-8 grid gap-8">
@@ -346,22 +364,27 @@ export async function GarageCarParts({ sheet }: { sheet: GarageSheet }) {
         <section>
           <span className="microlabel microlabel--ink">Came off, not listed</span>
           <div className="rowlist mt-2">
-            {unlisted.map((mod) => (
-              <ObjectRow
-                key={mod.id}
-                title={
-                  [mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw_text || "A part"
-                }
-                actions={
-                  <Link
-                    href={`/sell?car=${sheet.id}&mod=${mod.id}`}
-                    className="relbtn !static shrink-0"
-                  >
-                    List it
-                  </Link>
-                }
-              />
-            ))}
+            {unlisted.map((mod) => {
+              const linked = mod.linked_listing_id;
+              const linkedStatus = linked ? statusOf.get(linked) : undefined;
+              return (
+                <ObjectRow
+                  key={mod.id}
+                  title={
+                    [mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw_text || "A part"
+                  }
+                  meta={linkedStatus ? HIDDEN_LISTING_LINE[linkedStatus] ?? null : null}
+                  actions={
+                    <Link
+                      href={linked && linkedStatus ? `/listings/${linked}/edit` : `/sell?car=${sheet.id}&mod=${mod.id}`}
+                      className="relbtn !static shrink-0"
+                    >
+                      {linked && linkedStatus ? "Open listing" : "List it"}
+                    </Link>
+                  }
+                />
+              );
+            })}
           </div>
         </section>
       )}

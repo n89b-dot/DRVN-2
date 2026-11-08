@@ -57,6 +57,7 @@ declare
     'listing_enquiry_reply_allowed(uuid,uuid)',        -- boolean, true only for the listing's own seller answering a buyer who asked about it (R-directcontact, 20261107220600)
     'my_car_vin(uuid)',                                -- the caller's own car's VIN (20261004160000)
     'my_default_offer_floor()',                        -- the caller's own default minimum
+    'my_account_deletion_status()',                    -- the caller's own deletion case: outcome, next step, owner (N35, 20261107220400)
     'my_dispute_evidence_upload_count(uuid)',          -- count of the caller's own files in one order's evidence folder (N247, 20261107220000)
     'my_listing_offer_floor(uuid)',                    -- the caller's own listing's minimum (20261017120000)
     'my_notification_prefs()',                         -- the caller's own notification settings; the column is closed to members (N62, 20261107220020)

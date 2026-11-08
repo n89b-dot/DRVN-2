@@ -7087,6 +7087,17 @@ export type Database = {
         }
         Returns: Json
       }
+      begin_payout_deadline_refund: {
+        Args: {
+          p_actor_role: string
+          p_dispute_outcome: string
+          p_order: string
+          p_payment_reference: string
+          p_reason: string
+          p_requested_by: string
+        }
+        Returns: Json
+      }
       begin_refund_operation: {
         Args: {
           p_actor_role: string
@@ -8194,6 +8205,7 @@ export type Database = {
         Args: { p_car: string; p_items: Json }
         Returns: string
       }
+      my_account_deletion_status: { Args: never; Returns: Json }
       my_car_vin: { Args: { p_car: string }; Returns: string }
       my_deal_listing_ids: { Args: never; Returns: string[] }
       my_default_offer_floor: { Args: never; Returns: number }

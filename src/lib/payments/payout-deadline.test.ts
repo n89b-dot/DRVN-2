@@ -4,9 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * The payout deadline pass (N244, Neil's ruling 8 Nov 2026; the claim,
  * restriction and dispatch fence are proven in SQL by
  * supabase/tests/payout_setup_started_guard.sql). Each claimed order not yet
- * dispatched is refunded in full through the one refund path with a request
- * key fixed by the order, so a retry adopts the same refund; an order already
- * refunded is only settled; an unconfirmed refund retries rather than fails.
+ * dispatched is refunded in full through the one refund path, reserved by
+ * begin_payout_deadline_refund (20261108110000), which adopts the deadline's
+ * own refund in flight and waits while another refund is in flight; an order
+ * already refunded is only settled; an unconfirmed or waiting refund retries
+ * rather than fails. The reservation rules, the claim rotation and the
+ * fences are proven in SQL by supabase/tests/payout_deadline_fences_guard.sql.
  */
 
 const mocks = vi.hoisted(() => ({
@@ -38,7 +41,7 @@ beforeEach(() => {
 });
 
 describe("payout deadline pass (N244)", () => {
-  it("refunds an undispatched day-14 order in full, keyed by the order, then puts the part back", async () => {
+  it("refunds an undispatched day-14 order in full through the deadline's reservation, then puts the part back", async () => {
     mocks.refundOrder.mockResolvedValue({ ok: true, refundedCents: 10000, reversedCents: 0, feeRefundedCents: 1000, fullyRefunded: true });
     const admin = adminFor({ restricted: 1, paused: 2, claimed: 1, orders: [{ order_id: ORDER, status: "paid" }] });
 
@@ -49,10 +52,12 @@ describe("payout deadline pass (N244)", () => {
     expect(input).toMatchObject({
       orderId: ORDER,
       initiator: { kind: "payout_deadline" },
-      requestKey: `payout_deadline:${ORDER}`,
+      payoutDeadline: true,
     });
-    // Omitted amount = everything not yet refunded: a full refund.
+    // The reservation picks the amount (the whole remainder, once no other
+    // refund is in flight) and the key; the pass asks for neither.
     expect(input.amountCents).toBeUndefined();
+    expect(input.requestKey).toBeUndefined();
     expect(admin.rpc).toHaveBeenCalledWith("settle_payout_deadline_cancellation", { p_order: ORDER });
     expect(summary).toEqual({ restricted: 1, paused: 2, claimed: 1, refunded: 1, retrying: 0, failed: 0 });
   });
@@ -80,12 +85,36 @@ describe("payout deadline pass (N244)", () => {
 
   it("reports a refused refund as failed, so the worker family shows it", async () => {
     mocks.refundOrder.mockResolvedValue({ ok: false, refused: true, error: "No payment on file for this order." });
-    const admin = adminFor({ orders: [{ order_id: ORDER, status: "paid" }] });
+    const admin = adminFor({ orders: [{ order_id: ORDER, status: "paid" }] }, () => ({
+      data: { ok: false, complete: false, reason: "The refund is not complete yet." },
+      error: null,
+    }));
 
     const summary = await processPayoutDeadlines(admin as never);
 
     expect(summary).toMatchObject({ failed: 1, refunded: 0 });
     expect(mocks.reportError).toHaveBeenCalled();
+  });
+
+  it("keeps a claim waiting on another refund in flight retrying: not failed, not settled", async () => {
+    mocks.refundOrder.mockResolvedValue({ ok: false, waiting: true, error: "Another refund on this order is still being made." });
+    const admin = adminFor({ orders: [{ order_id: ORDER, status: "paid" }] });
+
+    const summary = await processPayoutDeadlines(admin as never);
+
+    expect(summary).toMatchObject({ retrying: 1, failed: 0, refunded: 0 });
+    expect(admin.rpc).not.toHaveBeenCalledWith("settle_payout_deadline_cancellation", expect.anything());
+    expect(mocks.reportError).not.toHaveBeenCalled();
+  });
+
+  it("settles an order another path already refunded in full (nothing left to refund)", async () => {
+    mocks.refundOrder.mockResolvedValue({ ok: false, refused: true, error: "Nothing left to refund on this order." });
+    const admin = adminFor({ orders: [{ order_id: ORDER, status: "paid" }] });
+
+    const summary = await processPayoutDeadlines(admin as never);
+
+    expect(admin.rpc).toHaveBeenCalledWith("settle_payout_deadline_cancellation", { p_order: ORDER });
+    expect(summary).toMatchObject({ refunded: 1, failed: 0 });
   });
 
   it("does nothing when nothing is due (stub payments, or no day-14 sales)", async () => {

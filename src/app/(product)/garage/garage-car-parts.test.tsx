@@ -7,7 +7,10 @@ const rows = vi.hoisted(() => ({
   listings: [] as { id: string; title: string; price_cents: number; status: string }[],
   mods: [] as { id: string; brand: string | null; product: string | null; raw_text: string | null; linked_listing_id: string | null }[],
   asked: [] as { table: string; filters: unknown[] }[],
+  failing: null as string | null,
 }));
+
+vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 
 /** Answers the tab's two reads and records what it asked for. */
 vi.mock("@/lib/supabase/server", () => ({
@@ -19,7 +22,12 @@ vi.mock("@/lib/supabase/server", () => ({
         select: () => chain,
         eq: (...args: unknown[]) => (filters.push(["eq", ...args]), chain),
         in: (...args: unknown[]) => (filters.push(["in", ...args]), chain),
-        order: () => Promise.resolve({ data: table === "listings" ? rows.listings : rows.mods, error: null }),
+        order: () =>
+          Promise.resolve(
+            rows.failing === table
+              ? { data: null, error: { message: "read failed" } }
+              : { data: table === "listings" ? rows.listings : rows.mods, error: null }
+          ),
       };
       return chain;
     },
@@ -34,7 +42,8 @@ const section = (html: string, label: string) =>
   html.split('<section>').find((s) => s.includes(`>${label}</span>`)) ?? "";
 
 // G-5: the car's Parts tab is what this car has for sale and has sold, plus
-// what came off it and isn't listed — each with List it.
+// what came off it and isn't listed — each with List it, or, when it already
+// has a listing that isn't live, a way back to that listing.
 describe("Garage car Parts tab (G-5)", () => {
   it("reads only this car's listings and its removed mods", async () => {
     rows.asked.length = 0;
@@ -46,6 +55,9 @@ describe("Garage car Parts tab (G-5)", () => {
     const mods = rows.asked.find((a) => a.table === "mod_items")!;
     expect(mods.filters).toContainEqual(["eq", "car_id", "car-1"]);
     expect(mods.filters).toContainEqual(["eq", "status", "removed"]);
+    // Listings of every status, so a came-off part's paused or withdrawn
+    // listing is found rather than dropped.
+    expect(listings.filters.filter((f) => (f as unknown[])[0] === "in")).toEqual([]);
   });
 
   it("groups for sale and sold off this car, and lists what came off unlisted with List it", async () => {
@@ -77,6 +89,43 @@ describe("Garage car Parts tab (G-5)", () => {
     expect(cameOff).not.toContain("Stock Exhaust");
     expect(cameOff).not.toContain("mod=m-listed");
     expect(html.match(/>List it</g)).toHaveLength(1);
+  });
+
+  it("keeps a came-off part whose listing is paused, withdrawn or taken down, opening that listing", async () => {
+    rows.listings = [
+      { id: "l-paused", title: "Stock seats", price_cents: 30000, status: "paused" },
+      { id: "l-withdrawn", title: "Stock bumper", price_cents: 8000, status: "archived" },
+      { id: "l-down", title: "Stock mirrors", price_cents: 4000, status: "removed" },
+    ];
+    rows.mods = [
+      { id: "m-seats", brand: "Recaro", product: "Seats", raw_text: null, linked_listing_id: "l-paused" },
+      { id: "m-bumper", brand: null, product: null, raw_text: "Front bumper", linked_listing_id: "l-withdrawn" },
+      { id: "m-mirrors", brand: "Stock", product: "Mirrors", raw_text: null, linked_listing_id: "l-down" },
+    ];
+    const html = await render();
+    const cameOff = section(html, "Came off, not listed");
+    for (const [name, line, id] of [
+      ["Recaro Seats", "Listing paused", "l-paused"],
+      ["Front bumper", "Listing withdrawn", "l-withdrawn"],
+      ["Stock Mirrors", "Listing taken down", "l-down"],
+    ]) {
+      expect(cameOff).toContain(name);
+      expect(cameOff).toContain(line);
+      expect(cameOff).toMatch(new RegExp(`href="/listings/${id}/edit"[^>]*>Open listing<`));
+    }
+    // None of them is offered as a new listing, and none appears for sale.
+    expect(html).not.toContain(">List it<");
+    expect(section(html, "For sale")).toContain("Nothing listed off this car right now.");
+  });
+
+  it("fails loudly instead of showing an empty tab when a read fails", async () => {
+    rows.listings = [];
+    rows.mods = [];
+    for (const table of ["listings", "mod_items"]) {
+      rows.failing = table;
+      await expect(render()).rejects.toThrow(/Could not load/);
+    }
+    rows.failing = null;
   });
 
   it("says so when nothing is for sale, and shows no empty groups", async () => {
