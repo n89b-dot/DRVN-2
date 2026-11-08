@@ -3,7 +3,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { Client } from "pg";
 
-import { cleanupFixtureUser, fixtureAdmin } from "./fixtures";
+import { cleanupFixtureUser, confirmAdminAuthenticator, fixtureAdmin } from "./fixtures";
 
 function totp(secret: string) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -102,6 +102,7 @@ test("a rights holder's notice is taken down from the admin console", async ({ p
     await expect(secret).toBeVisible();
     await page.getByLabel("Authenticator code").fill(totp((await secret.textContent())!));
     await page.getByRole("button", { name: /verify/i }).click();
+    await confirmAdminAuthenticator(page, admin, actorId, "/admin/copyright");
     await expect(page).toHaveURL(/\/admin\/copyright$/);
 
     const row = page.locator(".jobrow").filter({ hasText: `(${tag})` });

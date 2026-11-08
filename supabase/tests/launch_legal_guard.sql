@@ -43,6 +43,12 @@ begin
   -- Profiles exist for these accounts (handle_new_user, or a repair).
   insert into public.profiles (id) values (v_member), (v_seller), (v_buyer), (v_admin) on conflict (id) do nothing;
   update public.profiles set username = null where id = v_member;
+  -- The admin: a confirmed authenticator (20261107200500), without which a
+  -- membership grants nothing.
+  insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at)
+    values (gen_random_uuid(), v_admin, 'guard', 'totp', 'verified', now(), now());
+  insert into public.admin_users (user_id, role, mfa_factor_id)
+    select v_admin, 'admin', id from auth.mfa_factors where user_id = v_admin;
 
   -- ------------------------------------------------------------------
   -- 1. Age confirmation
@@ -146,8 +152,6 @@ begin
   if not v_failed then raise exception 'A non-admin took content down'; end if;
 
   -- An admin without a fresh step-up: refused.
-  perform set_config('role', 'postgres', true);
-  insert into public.admin_users (user_id, role) values (v_admin, 'admin');
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated', 'aal', 'aal2',
     'amr', json_build_array(json_build_object('method', 'totp', 'timestamp', extract(epoch from now() - interval '1 hour')::bigint)))::text, true);
