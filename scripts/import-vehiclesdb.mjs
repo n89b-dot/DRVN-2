@@ -4,18 +4,30 @@
 // docs/site/vehicles.md). Safe to re-run: pure upserts keyed on vdb_id /
 // case-insensitive name; vPIC-seeded rows are enriched, never duplicated.
 //
-// Usage: node scripts/import-vehiclesdb.mjs
-// Reads SUPABASE_DB_PASSWORD + NEXT_PUBLIC_SUPABASE_URL from .env.local.
+// Usage: node scripts/import-vehiclesdb.mjs --target <name>
+// Reads SUPABASE_DB_PASSWORD + NEXT_PUBLIC_SUPABASE_URL from .env.local. The
+// target must be on supabase/migration-targets.json and be the project
+// .env.local points at; the connection verifies the server's certificate.
 import { readFileSync } from "node:fs";
+import { parseArgs } from "node:util";
+
 import { Client } from "pg";
+
+import { directClientConfig, loadTargets, readDbEnv, resolveTarget } from "./lib/supabase-db.mjs";
 
 const RAW = "https://raw.githubusercontent.com/vehiclesdb/vehiclesdb/main/catalog/car";
 
-const env = readFileSync(".env.local", "utf8");
-const pwd = env.match(/^SUPABASE_DB_PASSWORD=(.+)$/m)?.[1]?.trim();
-const ref = env.match(/^NEXT_PUBLIC_SUPABASE_URL=https:\/\/([a-z0-9]+)\.supabase\.co/m)?.[1];
+const { values } = parseArgs({ options: { target: { type: "string" } } });
+const { password: pwd, ref } = readDbEnv(readFileSync(".env.local", "utf8"));
 if (!pwd || !ref) {
   console.error("need SUPABASE_DB_PASSWORD and NEXT_PUBLIC_SUPABASE_URL in .env.local");
+  process.exit(1);
+}
+let target;
+try {
+  target = resolveTarget({ targets: loadTargets(), name: values.target, envRef: ref });
+} catch (error) {
+  console.error(error.message);
   process.exit(1);
 }
 
@@ -48,10 +60,9 @@ const makePopularity = new Map(
   ]),
 );
 
-const client = new Client({
-  connectionString: `postgresql://postgres:${encodeURIComponent(pwd)}@db.${ref}.supabase.co:5432/postgres`,
-  ssl: { rejectUnauthorized: false },
-});
+const client = new Client(
+  directClientConfig({ host: target.host, password: pwd, applicationName: "drvn-import-vehiclesdb" }),
+);
 await client.connect();
 
 let makesUpserted = 0;

@@ -9,6 +9,11 @@
  * and the terms say what the database does, and mirrors the date rule for
  * display. It never decides a payout.
  *
+ * Since 20261107210000 (N26) the row itself is server-only: it also holds the
+ * fraud thresholds. Anyone reads the public part, `settlement_hold_policy()`,
+ * which says whether each threshold is on but never its amount;
+ * `readSettlementRisk` reads the amounts and needs the service-role client.
+ *
  * Client-safe helpers plus one read; no server-only imports.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -25,7 +30,14 @@ export type PayoutHoldPolicy = {
   holdDays: number;
 };
 
-/** What the database uses when the settings row is missing — today's rule. */
+/**
+ * What the code uses when the settings row is missing. NOT the live rule:
+ * the owner's rule (Neil, 4 October 2026, docs/decisions/payout-hold.md) is
+ * that sellers are paid 2 days after delivery, set on the row by
+ * 20261009100000. This fallback (and the SQL coalesce in
+ * payout_available_at()) still says 7 here; Neil ruled on 7 November 2026
+ * that it becomes 2 as well, which the R-hold follow-up does.
+ */
 export const DEFAULT_PAYOUT_HOLD: PayoutHoldPolicy = { mode: "fixed", holdDays: 7 };
 
 const DAY_MS = 86_400_000;
@@ -87,6 +99,22 @@ function readPolicy(row: { payout_hold_days: number; payout_hold_mode: string } 
   return { mode, holdDays };
 }
 
+/** The public projection's row: periods, and whether each control is on. */
+type HoldPolicyRow = Database["public"]["Functions"]["settlement_hold_policy"]["Returns"][number];
+
+/**
+ * The public part of the settings (settlement_hold_policy, 20261107210000).
+ * `undefined` when it can't be read; `null` when there is no settings row,
+ * which the SQL answers with its own defaults.
+ */
+async function readHoldPolicyRow(
+  supabase: SupabaseClient<Database>
+): Promise<HoldPolicyRow | null | undefined> {
+  const { data, error } = await supabase.rpc("settlement_hold_policy");
+  if (error || !Array.isArray(data)) return undefined;
+  return data[0] ?? null;
+}
+
 /**
  * After how many days an untracked shipment the buyer never confirmed is
  * treated as delivered (settlement_settings.auto_confirm_after_days,
@@ -97,12 +125,9 @@ function readPolicy(row: { payout_hold_days: number; payout_hold_mode: string } 
 export async function readAutoConfirmDays(
   supabase: SupabaseClient<Database>
 ): Promise<number | null | undefined> {
-  const { data, error } = await supabase
-    .from("settlement_settings")
-    .select("auto_confirm_after_days")
-    .limit(1);
-  if (error || !data) return undefined;
-  const days = data[0]?.auto_confirm_after_days ?? null;
+  const row = await readHoldPolicyRow(supabase);
+  if (row === undefined) return undefined;
+  const days = row?.auto_confirm_after_days ?? null;
   if (days === null) return null;
   return Number.isInteger(days) && days > 0 ? days : undefined;
 }
@@ -115,18 +140,43 @@ export async function readAutoConfirmDays(
 export async function readPayoutHoldPolicy(
   supabase: SupabaseClient<Database>
 ): Promise<PayoutHoldPolicy | null> {
-  const { data, error } = await supabase
-    .from("settlement_settings")
-    .select("payout_hold_days, payout_hold_mode")
-    .limit(1);
-  if (error || !data) return null;
-  return readPolicy(data[0]);
+  const row = await readHoldPolicyRow(supabase);
+  if (row === undefined) return null;
+  return readPolicy(row ?? undefined);
+}
+
+/**
+ * The risk controls as the public may know them (N26): how soon a buyer's
+ * confirmation releases a payout, and whether card verification is on —
+ * never the amount it starts at, which would let someone price just under
+ * it. Null when it can't be read.
+ */
+export type PublicRiskControls = {
+  receiptReleaseAfterDays: number;
+  cardVerificationOn: boolean;
+};
+
+export async function readPublicRiskControls(
+  supabase: SupabaseClient<Database>
+): Promise<PublicRiskControls | null> {
+  const row = await readHoldPolicyRow(supabase);
+  if (row === undefined) return null;
+  // A missing row: the SQL's own fallbacks (3 days, both controls off).
+  if (row === null) return { receiptReleaseAfterDays: 3, cardVerificationOn: false };
+  const days = row.receipt_release_after_days;
+  if (!Number.isInteger(days) || days < 0) return null;
+  return {
+    receiptReleaseAfterDays: days,
+    cardVerificationOn: row.card_verification_on === true,
+  };
 }
 
 /**
  * The owner's risk settings beside the hold (20261009100000). Amounts are
  * cents; null means that control is off. tracking_required_from_cents is no
  * longer read: there is no amount-based dispatch rule (20261107200100, N110).
+ * Server-only: the amounts are fraud thresholds, readable by the service
+ * role alone (20261107210000).
  */
 export type SettlementRiskSettings = {
   /** A buyer's "received" releases the payout at once only after this many
@@ -141,7 +191,7 @@ function positiveCents(value: unknown): number | null | undefined {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
-/** The risk settings, or null when they can't be read. */
+/** The risk settings, or null when they can't be read. Pass the service-role client. */
 export async function readSettlementRisk(
   supabase: SupabaseClient<Database>
 ): Promise<SettlementRiskSettings | null> {

@@ -52,10 +52,13 @@ payments or public launch; none of them has been decided in code.
       shortfall from their payout bank account (`debit_negative_balances`).
       Confirm this is adequately disclosed alongside Stripe's Connected
       Account Agreement.
-- [ ] **Card verification threshold.** Terms §1 says card payments of $500
-      or more ask the buyer to verify with their bank; it reads the live
-      setting. Confirm wording. (The $1,000 tracking rule in §7 was removed
-      on 7 November 2026, N110: dispatch has no amount limit, eBay-style.)
+- [ ] **Card verification threshold.** Terms §1 says larger card payments
+      ask the buyer to verify with their bank. The sentence shows only while
+      the control is on, and doesn't name the amount: it is a fraud control,
+      kept private since 20261107210000 (N26), so nobody can price just under
+      it. Confirm the wording without a number is enough. (The $1,000
+      tracking rule in §7 was removed on 7 November 2026, N110: dispatch has
+      no amount limit, eBay-style.)
 - [ ] **Tax.** No sales tax / VAT is calculated or collected anywhere
       (no Stripe Tax). Listing copy says tax is "confirmed at checkout".
       Decide the tax position and who is responsible.

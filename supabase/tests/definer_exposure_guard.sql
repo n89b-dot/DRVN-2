@@ -26,6 +26,7 @@ declare
     'search_listing_ids(text)',           -- ids of parts a signed-out visitor may see; same reason
     'search_update_ids(text)',            -- ids of published updates on visible public builds; same reason
     'search_word_corrections(text)',      -- the words of a query absent from the titles/brands of parts for sale, each with its closest word there; words anyone can read (20261011130000)
+    'settlement_hold_policy()',           -- the public part of settlement_settings: periods, and whether each fraud control is on, never its amount (20261107210000)
     'suspended_profile_ids()'             -- the set the read policies test against, once per query; ids only (20261010095900)
   ];
   -- Callable by signed-in members (not visitors): each answers or acts only
@@ -35,6 +36,7 @@ declare
     'admin_set_agent_beta_step(text,boolean,text)', -- refuses anyone but an admin with step-up (20261024100000)
     'admin_set_agent_spend_limits(numeric,numeric,text)', -- refuses anyone but an admin with step-up (20261024100000)
     'admin_open_agent_chat(uuid,text,uuid,text)', -- admins with step-up only, a named case, audited (20261024100000)
+    'admin_confirmed_factor()',                        -- the caller's own confirmed authenticator id, null for anyone else (20261107200550)
     'admin_enrolment_state()',                         -- the caller's own console membership: pending or confirmed, null otherwise (20261107200500)
     'agent_approval_decide(uuid,text)',                -- the caller's own agent's confirm card (20261021100100)
     'agent_clear_conversation()',                      -- the caller's own agent chat
@@ -58,6 +60,7 @@ declare
     'order_buyer_reviewable(uuid)',                    -- boolean, only for the order's buyer or seller
     'price_comparables(text,text,text,uuid)',          -- aggregates of completed sales and live listings of one product, only from 3 up; no rows or ids (20261020140000)
     'reconcile_admin_external_operation(uuid,bigint,text,text)', -- refuses anyone but an admin with step-up
+    'record_listing_view(uuid,text)',                  -- counts the caller's own view (bump_listing_view's rules) and its arrival surface; no viewer ids stored (OS-R-arrival, 20261107220200)
     'record_listing_edit(uuid,text,uuid,timestamp with time zone,jsonb)', -- the caller's own edit request
     'replay_listing_edit(uuid,text,uuid,timestamp with time zone)',      -- same request, replayed for its owner
     'resolve_product_identity_review(uuid,text,text)', -- refuses anyone but an admin with step-up (20261020120000)

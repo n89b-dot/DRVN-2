@@ -2110,6 +2110,42 @@ export type Database = {
         }
         Relationships: []
       }
+      ledger_reconciliation_runs: {
+        Row: {
+          checked: Json
+          detail: string | null
+          discrepancies: number
+          finished_at: string | null
+          id: string
+          started_at: string
+          status: string
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          checked?: Json
+          detail?: string | null
+          discrepancies?: number
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          window_end: string
+          window_start: string
+        }
+        Update: {
+          checked?: Json
+          detail?: string | null
+          discrepancies?: number
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       likes: {
         Row: {
           created_at: string
@@ -2457,6 +2493,35 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "listing_vehicle_fit_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listing_view_arrivals: {
+        Row: {
+          arrival: string
+          day: string
+          listing_id: string
+          views: number
+        }
+        Insert: {
+          arrival: string
+          day: string
+          listing_id: string
+          views?: number
+        }
+        Update: {
+          arrival?: string
+          day?: string
+          listing_id?: string
+          views?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_view_arrivals_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
             referencedRelation: "listings"
@@ -6141,11 +6206,41 @@ export type Database = {
       activity_post_search_text: { Args: { body: Json }; Returns: string }
       activity_post_visible: { Args: { p_post_id: string }; Returns: boolean }
       actor_name: { Args: { p_id: string }; Returns: string }
-      admin_audit_actor_ids: { Args: { p_query: string }; Returns: string[] }
+      admin_audit_page: {
+        Args: {
+          p_action?: string
+          p_actor?: string
+          p_before_at?: string
+          p_before_id?: number
+          p_from?: string
+          p_limit?: number
+          p_offset?: number
+          p_subject_type?: string
+          p_to?: string
+        }
+        Returns: {
+          action: string
+          actor_id: string
+          created_at: string
+          id: number
+          metadata: Json
+          order_id: string | null
+          reason: string
+          subject_id: string
+          subject_type: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "admin_audit_log"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       admin_cancel_seller_carry_payout: {
         Args: { p_id: string }
         Returns: Json
       }
+      admin_confirmed_factor: { Args: never; Returns: string }
       admin_enrolment_state: { Args: never; Returns: string }
       admin_export_orders: {
         Args: {
@@ -6203,6 +6298,7 @@ export type Database = {
         Returns: Json
       }
       admin_retry_seller_carry_payout: { Args: { p_id: string }; Returns: Json }
+      admin_retry_transfer_intent: { Args: { p_order: string }; Returns: Json }
       admin_role: { Args: never; Returns: string }
       admin_set_agent_beta_step: {
         Args: { p_open: boolean; p_reason: string; p_step: string }
@@ -7813,6 +7909,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      record_listing_view: {
+        Args: { p_arrival: string; p_listing: string }
+        Returns: boolean
+      }
       record_outbound_label_void_observation: {
         Args: {
           p_attempt: number
@@ -8213,6 +8313,17 @@ export type Database = {
       settle_seller_cancellation: {
         Args: { p_actor: string; p_order: string; p_reason?: string }
         Returns: Json
+      }
+      settlement_hold_policy: {
+        Args: never
+        Returns: {
+          auto_confirm_after_days: number
+          auto_confirm_notice_days: number
+          card_verification_on: boolean
+          payout_hold_days: number
+          payout_hold_mode: string
+          receipt_release_after_days: number
+        }[]
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }

@@ -8,7 +8,7 @@ export const metadata = {
   alternates: { canonical: "/privacy" },
 };
 
-const UPDATED = "18 October 2026";
+const UPDATED = "7 November 2026";
 
 /**
  * NOT LEGAL ADVICE — an honest working draft describing what the app actually
@@ -166,7 +166,9 @@ export default function PrivacyPage() {
             imported is sent to Anthropic&apos;s AI service to draft the listing. When you chat
             with your agent, your message and recent chat, and what the agent looks up on DRVN to
             answer you (listings, your own cars and build, and the questions you received about
-            your own listings, but not your order conversations), are sent to the same service.
+            your own listings, but not your order conversations), are sent to the same service. If
+            you paste a link to a product page, DRVN fetches that page and sends the product
+            details it reads there (title, brand, part number, category).
             Card numbers, VINs, email addresses and phone numbers are removed from what you type
             before it&apos;s sent, and your agent&apos;s limits are never sent. Photos you add to
             a message to your agent are sent with that message. Your account details are not
@@ -207,8 +209,8 @@ export default function PrivacyPage() {
           <li>
             <strong>DRVN staff</strong> — can see orders, conversations and dispute evidence when
             handling a report, an order or a dispute. Messages are not end-to-end encrypted. Your
-            chat with your agent is opened only for a report about you or a dispute you&apos;re
-            part of, and each opening is recorded.
+            chat with your agent is opened only for a dispute you&apos;re part of, or a report
+            you made or that is about you or one of your listings, and each opening is recorded.
           </li>
         </ul>
         <p>We do not sell your data and we do not run advertising trackers.</p>

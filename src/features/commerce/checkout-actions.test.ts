@@ -686,6 +686,17 @@ it("says why a basket outside the card-charge bounds was refused, before anythin
   expect(mocks.reportError).not.toHaveBeenCalled();
 });
 
+it("says so when the database refuses a seller whose payouts are off (N244)", async () => {
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  mocks.purchaseBegin.mockResolvedValue({ data: null, error: { code: "LS001", message: "This seller can't take payment yet" } });
+
+  const result = await checkoutCart({}, cartCheckoutForm());
+
+  expect(result.error).toMatch(/payouts aren't set up. Nothing was charged/);
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+  expect(mocks.reportError).not.toHaveBeenCalled();
+});
+
 it("reserves nothing when the saved Stripe customer can't be read", async () => {
   mocks.cartIds.mockResolvedValue(["listing-1"]);
   vi.mocked(getStripeCustomerId).mockRejectedValueOnce(new Error("Stripe customer lookup failed"));
