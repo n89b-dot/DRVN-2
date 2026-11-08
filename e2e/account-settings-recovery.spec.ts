@@ -10,7 +10,8 @@ async function createUser(label: string): Promise<TestUser & { id: string }> {
   const user = {
     email: `e2e-${label}-${token}@drvn.test`,
     password: `Account-${randomUUID()}!`,
-    username: `e2e${label}${token}`.slice(0, 24),
+    // N38: a handle is lowercase a-z, 0-9 and _ only; labels carry hyphens.
+    username: `e2e${label.toLowerCase().replace(/[^a-z0-9_]/g, "")}${token}`.slice(0, 24),
     displayName: `E2E ${label}`,
   };
   const created = await admin.auth.admin.createUser({

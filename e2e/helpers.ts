@@ -20,7 +20,7 @@ export function makeUser(role: string, stamp: number): TestUser {
   return {
     email: `e2e-${role}-${stamp}@drvn.test`,
     password: "e2e-password-123",
-    username: `e2e${role.replace(/[^a-z0-9]/gi, "")}${stamp}`.slice(0, 24),
+    username: `e2e${role.toLowerCase().replace(/[^a-z0-9_]/g, "")}${stamp}`.slice(0, 24),
     displayName: `E2E ${role}`,
   };
 }
