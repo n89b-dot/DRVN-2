@@ -15,6 +15,7 @@ export type Database = {
           affected_data_classes: string[]
           blocker_code: string | null
           completed_at: string | null
+          hold_order_id: string | null
           id: string
           job_id: string | null
           next_action: string
@@ -30,6 +31,7 @@ export type Database = {
           affected_data_classes?: string[]
           blocker_code?: string | null
           completed_at?: string | null
+          hold_order_id?: string | null
           id?: string
           job_id?: string | null
           next_action: string
@@ -45,6 +47,7 @@ export type Database = {
           affected_data_classes?: string[]
           blocker_code?: string | null
           completed_at?: string | null
+          hold_order_id?: string | null
           id?: string
           job_id?: string | null
           next_action?: string
@@ -57,6 +60,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "account_deletion_requests_hold_order_id_fkey"
+            columns: ["hold_order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "account_deletion_requests_job_id_fkey"
             columns: ["job_id"]
@@ -6683,6 +6693,10 @@ export type Database = {
     }
     Functions: {
       account_deletion_blockers: { Args: { p_user: string }; Returns: Json }
+      account_deletion_hold_gate: {
+        Args: { p_job: string; p_lease: string; p_user: string }
+        Returns: Json
+      }
       activity_post_search_text: { Args: { body: Json }; Returns: string }
       activity_post_visible: { Args: { p_post_id: string }; Returns: boolean }
       actor_name: { Args: { p_id: string }; Returns: string }

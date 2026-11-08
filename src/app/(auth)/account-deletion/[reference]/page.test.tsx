@@ -47,7 +47,11 @@ vi.mock("../../login/login-form", () => ({ LoginForm: () => <form data-form="log
 const render = async (reference = REFERENCE) =>
   renderToStaticMarkup(await AccountDeletionStatusPage({ params: Promise.resolve({ reference }) }));
 
-const status = (outcome: string) => ({ data: [{ outcome, updated_at: "2026-11-08T10:00:00Z" }], error: null });
+const status = (outcome: string, hold_order_id: string | null = null) => ({
+  data: [{ outcome, updated_at: "2026-11-08T10:00:00Z", hold_order_id }],
+  error: null,
+});
+const ORDER = "a1b2c3d4-0000-4000-8000-000000000001";
 
 beforeEach(() => {
   db.result = { data: [], error: null };
@@ -67,8 +71,24 @@ describe("deletion status for a member who can't sign in", () => {
   it("shows a hold the worker recorded, without saying the account can still be used", async () => {
     db.result = status("temporary_financial_hold");
     const html = await render();
-    expect(html).toContain("waiting on an open transaction");
+    expect(html).toContain("paused on an open transaction");
     expect(html).not.toMatch(/keep using your account/i);
+    expect(html).not.toContain("/orders/");
+  });
+
+  // OS-W11 follow-up: a hold pauses before the ban, so the member can sign in
+  // and settle the order holding it.
+  it("names the order holding the deletion and links to it through sign-in", async () => {
+    db.result = status("temporary_financial_hold", ORDER);
+    const html = await render();
+    expect(html).toContain("Paused: settle order A1B2C3D4");
+    expect(html).toContain("still sign in to settle it");
+    expect(html).toContain(`href="/login?next=${encodeURIComponent(`/orders/${ORDER}`)}"`);
+  });
+
+  it("never links an order once the case has moved past the hold", async () => {
+    db.result = status("cleanup_pending", ORDER);
+    expect(await render()).not.toContain("/orders/");
   });
 
   it("shows cleanup in progress and a finished deletion", async () => {
