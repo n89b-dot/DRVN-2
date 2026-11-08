@@ -141,7 +141,35 @@ export function clientAddressSource(env: EnvLike = process.env): ClientAddressSo
   return null;
 }
 
+/**
+ * N540: the sandbox override must never be present on a hosted deployment,
+ * whatever the payment mode. It exists only so `next start` (which runs with
+ * NODE_ENV=production) can take stub payments in CI's browser suite and the
+ * local rollback rehearsal, both on a loopback address. A deployment is
+ * hosted when the platform says so (`VERCEL=1`, set on every Vercel build and
+ * function), when its canonical site URL is an https origin that isn't
+ * loopback, or when it holds a live Stripe key. Any of those with the
+ * variable set, to any value, fails boot. Returns the reason, or null.
+ */
+export function stubOverrideProblem(env: EnvLike = process.env): string | null {
+  if (env.PAYMENTS_ALLOW_STUB_IN_PRODUCTION === undefined) return null;
+  const reasons: string[] = [];
+  if (env.VERCEL === "1") reasons.push(`a Vercel deployment${env.VERCEL_ENV ? ` (${env.VERCEL_ENV})` : ""}`);
+  try {
+    const site = new URL(env.NEXT_PUBLIC_SITE_URL || "");
+    const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(site.hostname) || site.hostname.endsWith(".localhost");
+    if (site.protocol === "https:" && !loopback) reasons.push(`a public site URL (${site.origin})`);
+  } catch {
+    // No canonical URL is not, by itself, a hosted deployment.
+  }
+  if (/^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY ?? "")) reasons.push("a live Stripe key");
+  if (!reasons.length) return null;
+  return `PAYMENTS_ALLOW_STUB_IN_PRODUCTION is set on ${reasons.join(", ")}. It is for CI and local rehearsals only and must be absent from every hosted environment (N540): remove the variable from the host's environment.`;
+}
+
 export function resolvePaymentsMode(env: EnvLike = process.env): PaymentsMode {
+  const override = stubOverrideProblem(env);
+  if (override) throw new PaymentsConfigError(override);
   const explicit = env.PAYMENTS_MODE;
   const production = env.NODE_ENV === "production";
   const hasSecret = Boolean(env.STRIPE_SECRET_KEY);

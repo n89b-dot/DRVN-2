@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { clientAddressSource, resolvePaymentsMode, validatePaymentsEnv, PaymentsConfigError } from "./env";
+import { clientAddressSource, resolvePaymentsMode, stubOverrideProblem, validatePaymentsEnv, PaymentsConfigError } from "./env";
 
 /**
  * The fail-closed matrix. The one behavior these exist to pin down forever:
@@ -134,3 +134,42 @@ describe("validatePaymentsEnv", () => {
     expect(() => validatePaymentsEnv({ ...LIVE, TRUST_PROXY_HEADERS: "true", AGENT_MODEL: "claude-next-9" })).not.toThrow();
   });
 });
+
+describe("the sandbox payment override is never on a hosted deployment (N540)", () => {
+  const SANDBOX = { NODE_ENV: "production", PAYMENTS_MODE: "stub", PAYMENTS_ALLOW_STUB_IN_PRODUCTION: "true" };
+
+  it("N540: CI's browser suite and the local rehearsal (loopback, no platform) still boot on stub payments", () => {
+    expect(stubOverrideProblem({ ...SANDBOX, NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3001" })).toBeNull();
+    expect(stubOverrideProblem({ ...SANDBOX, NEXT_PUBLIC_SITE_URL: "https://localhost:3006" })).toBeNull();
+    expect(stubOverrideProblem({ ...SANDBOX })).toBeNull();
+    expect(resolvePaymentsMode({ ...SANDBOX, NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3001" })).toBe("stub");
+  });
+
+  it("N540: boot fails on Vercel, on a public site URL or with a live key, whatever the payment mode", () => {
+    for (const hosted of [
+      { VERCEL: "1", VERCEL_ENV: "production" },
+      { VERCEL: "1", VERCEL_ENV: "preview" },
+      { NEXT_PUBLIC_SITE_URL: "https://drvn.app/" },
+      { NEXT_PUBLIC_SITE_URL: "https://staging.drvn.app" },
+      { STRIPE_SECRET_KEY: "sk_live_x", PAYMENTS_MODE: "stripe" },
+      { STRIPE_SECRET_KEY: "rk_live_x", PAYMENTS_MODE: "stripe" },
+    ]) {
+      const env = { ...SANDBOX, ...hosted };
+      expect(stubOverrideProblem(env), JSON.stringify(hosted)).toMatch(/must be absent from every hosted environment \(N540\)/);
+      expect(() => resolvePaymentsMode(env), JSON.stringify(hosted)).toThrow(PaymentsConfigError);
+      expect(() => validatePaymentsEnv(env), JSON.stringify(hosted)).toThrow(/PAYMENTS_ALLOW_STUB_IN_PRODUCTION is set on/);
+    }
+  });
+
+  it("N540: any value counts, even false, and a fully configured live production with it set refuses to boot", () => {
+    expect(stubOverrideProblem({ PAYMENTS_ALLOW_STUB_IN_PRODUCTION: "false", VERCEL: "1" })).toMatch(/a Vercel deployment/);
+    expect(() =>
+      validatePaymentsEnv({ ...LIVE, ADMIN_ALERT_WEBHOOK_URL: "https://hooks.example/x", VERCEL: "1", PAYMENTS_ALLOW_STUB_IN_PRODUCTION: "true" }),
+    ).toThrow(/N540/);
+  });
+
+  it("N540: with the variable absent, nothing changes", () => {
+    expect(stubOverrideProblem({ VERCEL: "1", NEXT_PUBLIC_SITE_URL: "https://drvn.app", STRIPE_SECRET_KEY: "sk_live_x" })).toBeNull();
+  });
+});
+

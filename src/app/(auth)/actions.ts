@@ -13,8 +13,8 @@ import { landingWithoutUsername, loadHeldDeletion } from "@/lib/held-deletion";
 import { onboardingPath, safeRedirectPath } from "@/lib/safe-redirect";
 import { DISPLAY_NAME_MAX } from "@/lib/limits";
 import { isValidUsername, normalizeUsername, USERNAME_RULE_MESSAGE } from "@/lib/username";
-import { AGE_CONFIRMATION_REQUIRED, ageConfirmedIn } from "@/lib/age-confirmation";
-import { hasAgeConfirmation, recordAgeConfirmation } from "@/lib/age-confirmation-record";
+import { AGE_CONFIRMATION_REQUIRED, ageConfirmationPath, ageConfirmedIn } from "@/lib/age-confirmation";
+import { hasAgeConfirmation, needsReturningAgeConfirmation, recordAgeConfirmation } from "@/lib/age-confirmation-record";
 import { authErrorCode, publicAuthError } from "@/lib/auth-errors";
 import { reportError } from "@/lib/monitoring";
 import { hasRecoveryAuthorisation } from "@/lib/reauthentication";
@@ -40,17 +40,20 @@ export type AuthState = {
  * redirects there on completion instead of unconditionally to /home, which
  * used to drop the original intent for every brand-new account.
  */
-async function destinationForUser(userId: string, requested?: unknown): Promise<string> {
+async function destinationForUser(user: { id: string; created_at?: string | null }, requested?: unknown): Promise<string> {
   const supabase = await createClient();
   const { data: profile } = await supabase
     .from("profiles")
     .select("username")
-    .eq("id", userId)
+    .eq("id", user.id)
     .single();
 
   // OS-W11: a member whose deletion is paused on a hold goes to the order to
   // settle, not to onboarding, even with the handle cleanup cleared.
-  if (!profile?.username) return landingWithoutUsername(await loadHeldDeletion(supabase, userId), requested);
+  if (!profile?.username) return landingWithoutUsername(await loadHeldDeletion(supabase, user.id), requested);
+  // N686: a member from before the 18+ confirmation answers it once, here,
+  // on the way to where they were going.
+  if (await needsReturningAgeConfirmation(user)) return ageConfirmationPath(safeRedirectPath(requested, "") || undefined);
   return safeRedirectPath(requested, "/home");
 }
 
@@ -117,7 +120,7 @@ export async function login(_prev: AuthState, formData: FormData): Promise<AuthS
     return { error: publicAuthError(error, "sign-in") };
   }
 
-  redirect(await destinationForUser(data.user.id, next));
+  redirect(await destinationForUser(data.user, next));
 }
 
 export async function signup(_prev: AuthState, formData: FormData): Promise<AuthState> {
@@ -293,6 +296,29 @@ export async function completeOnboarding(
   // prefetched mid-onboarding would otherwise bounce them straight back.
   revalidatePath("/", "layout");
   redirect(safeRedirectPath(next, "/garage"));
+}
+
+/**
+ * N686: a member who joined before the 18+ confirmation existed confirms it
+ * once (the page is /confirm-age; sign-in sends them there). The server is
+ * the check, as at sign-up: an unticked box is refused, and the record is
+ * written with the service role as 'returning_member'.
+ */
+export async function confirmAge(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const next = formData.get("next");
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!(await hasAgeConfirmation(user.id))) {
+    if (!ageConfirmedIn(formData)) return { error: AGE_CONFIRMATION_REQUIRED, field: "age" };
+    if (!(await recordAgeConfirmation(user.id, "returning_member"))) {
+      return { error: "We couldn't save that. Try again." };
+    }
+  }
+  redirect(safeRedirectPath(next, "/home"));
 }
 
 // ---------- Password reset ----------

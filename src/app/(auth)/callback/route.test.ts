@@ -4,7 +4,10 @@ const mocks = vi.hoisted(() => ({
   exchangeCodeForSession: vi.fn(),
   getUser: vi.fn(),
   profile: vi.fn(),
+  needsAge: vi.fn(),
 }));
+
+vi.mock("@/lib/age-confirmation-record", () => ({ needsReturningAgeConfirmation: mocks.needsAge }));
 
 vi.mock("@/lib/site", () => ({ siteUrl: () => "https://drvn.example" }));
 vi.mock("@/lib/supabase/server", () => ({
@@ -23,6 +26,7 @@ beforeEach(() => {
   mocks.exchangeCodeForSession.mockResolvedValue({ error: null });
   mocks.getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
   mocks.profile.mockReturnValue({ data: { username: "kaito" }, error: null });
+  mocks.needsAge.mockResolvedValue(false);
 });
 
 // Readiness N44: an abandoned Google sign-in is not an expired emailed link.
@@ -64,3 +68,20 @@ describe("successful OAuth returns", () => {
     expect(await callback("code=abc&next=%2Fgarage")).toBe("https://drvn.example/onboarding?next=%2Fgarage");
   });
 });
+
+// N686: a member from before the 18+ confirmation answers it once on the way in.
+describe("an earlier member signing in with Google (N686)", () => {
+  it("N686: goes to /confirm-age first, keeping the destination", async () => {
+    mocks.needsAge.mockResolvedValue(true);
+    expect(await callback("code=abc&next=%2Flistings%2Fabc")).toBe("https://drvn.example/confirm-age?next=%2Flistings%2Fabc");
+    expect(await callback("code=abc")).toBe("https://drvn.example/confirm-age");
+    expect(mocks.needsAge).toHaveBeenCalledWith({ id: "u1" });
+  });
+
+  it("N686: an account with no handle still goes to onboarding, which asks there", async () => {
+    mocks.needsAge.mockResolvedValue(true);
+    mocks.profile.mockReturnValue({ data: { username: null }, error: null });
+    expect(await callback("code=abc")).not.toMatch(/confirm-age/);
+  });
+});
+
