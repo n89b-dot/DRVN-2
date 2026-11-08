@@ -9,15 +9,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * composer so they can keep typing.
  */
 
-const mocks = vi.hoisted(() => ({ send: vi.fn(), clear: vi.fn() }));
+const mocks = vi.hoisted(() => ({ send: vi.fn(), clear: vi.fn(), upload: vi.fn() }));
 
 vi.mock("next/navigation", () => ({ unstable_rethrow: () => {} }));
 vi.mock("./chat", () => ({ sendAgentMessage: mocks.send }));
 vi.mock("./build", () => ({ confirmBuildChange: vi.fn() }));
 vi.mock("./clear-chat", () => ({ clearAgentChat: mocks.clear }));
-vi.mock("@/lib/media-upload", () => ({ uploadImages: vi.fn() }));
+vi.mock("@/lib/media-upload", () => ({ uploadImages: mocks.upload }));
 
 const { AgentChat } = await import("./agent-chat");
+const { announceAgentEvent, AGENT_CHAT_CLEARED } = await import("./chat-events");
 type ChatMessage = import("./chat").ChatMessage;
 
 const message = (id: string, role: ChatMessage["role"], body: string): ChatMessage => ({ id, role, body, cards: [], images: [], created_at: "2026-11-07T10:00:00.000Z" });
@@ -49,6 +50,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   mocks.send.mockReset();
   mocks.clear.mockReset();
+  mocks.upload.mockReset();
 });
 
 afterEach(async () => {
@@ -57,10 +59,10 @@ afterEach(async () => {
   container.remove();
 });
 
-async function mount(initial: ChatMessage[] = []) {
+async function mount(initial: ChatMessage[] = [], props: { jobs?: boolean; userId?: string } = {}) {
   await act(async () => {
     root = createRoot(container);
-    root.render(<AgentChat initial={initial} />);
+    root.render(<AgentChat initial={initial} {...props} />);
   });
 }
 
@@ -136,5 +138,67 @@ describe("Clear chat (N125)", () => {
     });
     expect(log()!.textContent).toContain("Yes, it fits your 2004 WRX.");
     expect(container.textContent).toContain("Couldn't clear your chat. Nothing was deleted; try again.");
+  });
+});
+
+describe("Clear chat drops the photos waiting to send (OS-W08 follow-up)", () => {
+  const ME = "11111111-1111-4111-8111-111111111111";
+  const PHOTO = `https://proj.supabase.co/storage/v1/object/authenticated/agent-chat-photos/${ME}/33333333-3333-4333-8333-333333333333.webp`;
+  const thread = [message("m-1", "member", "Will this fit my car?"), message("m-2", "agent", "Yes, it fits your 2004 WRX.")];
+  const thumbs = () => container.querySelectorAll(".chatbox__thumb");
+  let revoked: string[];
+
+  beforeEach(() => {
+    revoked = [];
+    URL.createObjectURL = (() => "blob:preview-1") as typeof URL.createObjectURL;
+    URL.revokeObjectURL = ((url: string) => void revoked.push(url)) as typeof URL.revokeObjectURL;
+    mocks.upload.mockImplementation(async ({ files }: { files: File[] }) => ({ uploaded: files.map((file) => ({ file, url: PHOTO })), failed: [] }));
+  });
+
+  /** Picks one photo and says it's for a listing, ready to send. */
+  async function attach() {
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    Object.defineProperty(input, "files", { configurable: true, value: [new File([new Uint8Array([1])], "part.jpg", { type: "image/jpeg" })] });
+    await act(async () => {
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await click(button("List this part")!);
+    expect(thumbs()).toHaveLength(1);
+    expect(button("List this part")!.getAttribute("aria-pressed")).toBe("true");
+  }
+
+  /** After a clear: no thumbnail, no photo-job choice, the preview released, and the next message carries neither. */
+  async function expectNothingAttached() {
+    expect(thumbs()).toHaveLength(0);
+    expect(container.textContent).not.toContain("Photos for:");
+    expect(revoked).toEqual(["blob:preview-1"]);
+    mocks.send.mockResolvedValue({ messages: [message("m-3", "member", "hello"), message("m-4", "agent", "Hi.")] });
+    type("hello");
+    await act(async () => {
+      container.querySelector("form:not(dialog form)")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(mocks.send).toHaveBeenCalledOnce();
+    expect(mocks.send.mock.calls[0][0]).toMatchObject({ text: "hello", images: [], photoJob: undefined });
+  }
+
+  it("clearing here: the deleted photos can't be sent afterwards", async () => {
+    mocks.clear.mockResolvedValue({ ok: "Chat cleared." });
+    await mount(thread, { jobs: true, userId: ME });
+    await attach();
+    await click(button("Clear chat")!);
+    const form = [...container.querySelectorAll("dialog form")][0] as HTMLFormElement;
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(log()!.children).toHaveLength(0);
+    await expectNothingAttached();
+  });
+
+  it("cleared elsewhere (Settings, the other copy of the thread): the same", async () => {
+    await mount(thread, { jobs: true, userId: ME });
+    await attach();
+    await act(async () => announceAgentEvent(AGENT_CHAT_CLEARED));
+    expect(log()!.children).toHaveLength(0);
+    await expectNothingAttached();
   });
 });

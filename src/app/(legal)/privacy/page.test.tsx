@@ -42,6 +42,9 @@ describe("the agent's privacy promise matches the code (N422)", () => {
     expect(page).not.toMatch(/opened only for a report about you or a dispute/);
   });
 
+  // The wording only. That the model boundary keeps it (redaction of the
+  // message, history and tool results; no floor or ceiling sent) is proved on
+  // the outbound request bodies in src/lib/ai/run.test.ts (N422).
   it("keeps the redaction and limits promises the model boundary keeps", () => {
     expect(page).toMatch(/Card numbers, VINs, email addresses and phone numbers are removed from what you type before it's sent, and your agent's limits are never sent\./);
   });

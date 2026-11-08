@@ -2,6 +2,7 @@ import "server-only";
 
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
+import { canonicalStorageObject, isOwnedStorageUrl, PUBLIC_MEDIA_BUCKETS } from "@/lib/media-url";
 
 import { AGENT_CHAT_BUCKET, chatPhotoPath } from "./chat-photo-ref";
 
@@ -49,41 +50,73 @@ export async function readChatPhoto(admin: Admin, url: string, maxBytes: number)
 }
 
 /**
+ * Where a chat photo's public copy goes, per bucket. staged_uploads.path is
+ * unique across every bucket (0029: one upload, one fresh path), so a photo
+ * used for both a listing and an update must not land at the same path in
+ * both: the second ledger row would be swallowed and its copy never swept.
+ * listing-images keeps the name copies have had since 20261107220300.
+ */
+const COPY_PREFIX = { "listing-images": "chat-", "activity-images": "chat-update-" } as const;
+
+/**
+ * A photo on a draft from before private chat photos: the member's own
+ * upload to a public bucket, in the one spelling DRVN stores and the
+ * database accepts in a member's photo columns (20261107203000, N55).
+ */
+function legacyPublicPhoto(url: string, ownerId: string): boolean {
+  const object = canonicalStorageObject(url);
+  return Boolean(object && PUBLIC_MEDIA_BUCKETS.includes(object.bucket) && isOwnedStorageUrl(url, ownerId));
+}
+
+/**
  * "Listing from photos" and "Post an update" put chat photos on public
  * pages: each is copied, at that moment, into the member's own folder of the
- * public bucket the page uses, under a name derived from the chat photo so
- * opening the draft twice reuses the copy. The chat copy stays private and
- * goes when the chat is cleared. Returns the public URLs, in order; a photo
- * that can't be copied is left out.
+ * public bucket the page uses, under a name derived from the chat photo and
+ * the bucket, so opening the draft again reuses the copy, even once the
+ * private original has gone. The chat copy stays private and goes when the
+ * chat is cleared. A draft made before chat photos were private keeps its
+ * member's own public photos as they are. Returns the public URLs, in order;
+ * a photo that can't be copied is left out.
  */
 export async function publishChatPhotos(
   admin: Admin,
   ownerId: string,
   urls: string[],
-  bucket: "listing-images" | "activity-images",
+  bucket: keyof typeof COPY_PREFIX,
 ): Promise<string[]> {
   const published: string[] = [];
   for (const url of urls) {
     const path = chatPhotoPath(url, ownerId);
-    if (!path) continue;
+    if (!path) {
+      if (legacyPublicPhoto(url, ownerId)) published.push(url);
+      continue;
+    }
     const file = path.split("/")[1];
-    const target = `${ownerId}/chat-${file}`;
+    const target = `${ownerId}/${COPY_PREFIX[bucket]}${file}`;
     const { data: { publicUrl } } = admin.storage.from(bucket).getPublicUrl(target);
-    const { data, error } = await admin.storage.from(AGENT_CHAT_BUCKET).download(path);
-    if (error || !data) continue;
     // Ledger first, as every public upload does: a crash after the copy still
-    // leaves a sweep candidate if the draft is never saved.
+    // leaves a sweep candidate if the draft is never saved. A row for this
+    // path in another bucket would leave the copy untracked: no copy then.
     const staged = await admin
       .from("staged_uploads")
       .upsert({ owner_id: ownerId, bucket, path: target, url: publicUrl }, { onConflict: "path", ignoreDuplicates: true });
-    if (staged.error) {
-      reportError("[agent] chat photo staging failed", { code: staged.error.code });
+    const tracked = staged.error ? null : await admin.from("staged_uploads").select("id").eq("bucket", bucket).eq("path", target).maybeSingle();
+    if (staged.error || tracked?.error || !tracked?.data) {
+      reportError("[agent] chat photo staging failed", { code: staged.error?.code ?? tracked?.error?.code ?? "untracked" });
       continue;
     }
+    // Copied on an earlier visit: reuse it, before asking for the original,
+    // which the 48-hour sweep or a clear may already have removed.
+    if (await copyExists(admin, bucket, target)) {
+      published.push(publicUrl);
+      continue;
+    }
+    const { data, error } = await admin.storage.from(AGENT_CHAT_BUCKET).download(path);
+    if (error || !data) continue;
     const uploaded = await admin.storage
       .from(bucket)
       .upload(target, data, { contentType: "image/webp", upsert: false, cacheControl: "31536000" });
-    // Already copied on an earlier visit: the same bytes are there.
+    // Copied by a visit running at the same time: the same bytes are there.
     const exists = (uploaded.error as { statusCode?: string } | null)?.statusCode === "409" || /exists/i.test(uploaded.error?.message ?? "");
     if (uploaded.error && !exists) {
       reportError("[agent] chat photo copy failed", { bucket });
@@ -92,6 +125,16 @@ export async function publishChatPhotos(
     published.push(publicUrl);
   }
   return published;
+}
+
+/** Whether a public copy is already there. Unsure counts as no: the upload refuses a duplicate anyway. */
+async function copyExists(admin: Admin, bucket: string, path: string): Promise<boolean> {
+  try {
+    const { data } = await admin.storage.from(bucket).exists(path);
+    return data === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
