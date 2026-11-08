@@ -1463,7 +1463,7 @@
   {
     "os_id": "N499",
     "title": "Transfer crash recovery only searches 1,000 transfers",
-    "status": "OPEN, CLAIMED",
+    "status": "FIXED",
     "plan_ids": [
       "N106"
     ],
@@ -1472,15 +1472,28 @@
       "OS-W20"
     ],
     "pr": 91,
-    "merge_sha": null,
+    "merge_sha": "1dec41f",
     "prs": [
       {
         "number": 91,
-        "merge_sha": null,
-        "merged": false
+        "merge_sha": "1dec41f",
+        "merged": true
       }
     ],
-    "proving_tests": [],
+    "proving_tests": [
+      {
+        "file": "src/lib/payments/transfer-worker.test.ts",
+        "name": "transfer recovery past 1,000 transfers (N106) › finds the exact transfer older than the platform's newest 1,000"
+      },
+      {
+        "file": "src/lib/payments/transfer-worker.test.ts",
+        "name": "transfer recovery past 1,000 transfers (N106) › reconciles a crashed payout among 1,500 transfers and sends it exactly once"
+      },
+      {
+        "file": "src/lib/payments/transfer-worker.test.ts",
+        "name": "N499: crash recovery finds the orphan wherever it sits › N499: the orphan is the 1,001st transfer, and recovery finds it without creating another"
+      }
+    ],
     "inferred": false,
     "section": "Commerce and money"
   },
