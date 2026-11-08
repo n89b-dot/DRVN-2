@@ -56,7 +56,7 @@ Apply after every earlier migration, together with the app from #157: the new wo
 
 | File | Applied to |
 |---|---|
-| `20261108140000_chargeback_holds_deletion.sql` | not applied |
+| `20261108140000_chargeback_holds_deletion.sql` | shared-dev 2026-11-08 |
 
 Apply after `20261108130400`. `account_deletion_blockers` (from `20260905185725`) gains one hold: an unresolved chargeback in `stripe_dispute_journal` on any order the member bought or sold, whatever the order's status (unresolved means not `won`, `warning_closed` or `lost`, as for the payout freeze in `20261107130000`). Restated from `20261108130400` with only the chargeback added: `private.account_deletion_hold_order`, `private.requeue_account_deletion_for_hold`, `pause_account_deletion_hold` and `private.account_deletion_hold_appeared`. New: `private.account_deletion_hold_note`, `private.account_deletion_hold_code` (blocker code `open_chargeback` when the named order waits on the bank) and the deferred constraint trigger `account_deletion_hold_watch` on `stripe_dispute_journal`. The app reads `blocker_code` on the signed-out status page; the old app ignores it. Guard: `deletion_chargeback_hold_guard.sql`.
 
