@@ -22,6 +22,12 @@ export type CapabilityRun = {
   attachments?: readonly string[];
   /** The agent turn's clock: once it fires, a capability isn't started, and one that finishes late is discarded. */
   signal?: AbortSignal;
+  /**
+   * The links the member gave on this turn: those they typed, and the pages
+   * read_part_link read for them (OS-W07 N124). A drafted build link must be
+   * one of these; with none given, a draft carries no link.
+   */
+  memberLinks?: readonly string[];
 };
 
 export type Capability<I extends z.ZodType = z.ZodType, O extends z.ZodType = z.ZodType> = {

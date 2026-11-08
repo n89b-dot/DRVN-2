@@ -511,7 +511,9 @@ export async function readPartLink(url: string): Promise<
   const { fetchPartLink } = await import("@/lib/mods/part-link");
   const result = await fetchPartLink(trimmed, user.id);
   if (!result.ok) return { ok: false, error: result.error };
-  const { ok, ...part } = result;
+  // The mod line's fields only: where the fetch landed is the agent's provenance, not part of the line.
+  const { ok, fetched_url: fetchedUrl, ...part } = result;
+  void fetchedUrl;
   return { ok, part };
 }
 

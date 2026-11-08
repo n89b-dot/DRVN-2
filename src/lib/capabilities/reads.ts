@@ -10,8 +10,10 @@ import { CapabilityError, defineCapability } from "./types";
  * — search, a listing, the owner's car, and the graph-backed product, fitment
  * evidence and price comparables. All R0, all through the member's own client,
  * so row security decides what each one sees. The graph-backed three answer
- * "not enough evidence yet" until B1 lands (products, product_fitments and
- * paid-and-completed comparables); the shapes are final so A4 can rely on them.
+ * "not enough evidence yet" whatever is asked (products, product_fitments and
+ * paid-and-completed comparables aren't read here yet); the shapes are final.
+ * Until they answer, the model is not handed them and nothing advertises them
+ * (OS-R73: allow-list.ts UNADVERTISED_TOOLS, the chat's starters and copy).
  */
 
 const id = z.uuid();
@@ -128,7 +130,7 @@ export const readMyCar = defineCapability({
   },
 });
 
-/** The graph isn't seeded yet (B1): every graph read says so rather than guessing. */
+/** Not wired to the graph yet: every graph read says so rather than guessing. Not advertised to the model (OS-R73). */
 const graphPending = { status: "not_enough_evidence" as const, reason: "graph_pending" as const };
 
 export const readProduct = defineCapability({

@@ -4,7 +4,7 @@ import { unstable_rethrow } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import { AgentResultCard } from "@/components/commerce";
-import { Button, ButtonLink, ChatComposer, FilterButton, MessageBubble, MessageRun, MessageThread, ResultNote } from "@/components/ui";
+import { Button, ButtonLink, ChatComposer, DataRow, FilterButton, MessageBubble, MessageRun, MessageThread, ResultNote } from "@/components/ui";
 import { confirmBuildChange } from "./build";
 import { AGENT_CHAT_CLEARED, useAgentEvent } from "./chat-events";
 import { ClearAgentChat } from "./clear-agent-chat";
@@ -12,28 +12,20 @@ import type { ResolvedCard } from "./cards";
 import { pollAgentReply, sendAgentMessage, type ChatMessage } from "./chat";
 import type { ChatAbout } from "./chat-load";
 import { mergeMessages, waitForReply } from "./reply-wait";
+import { startersFor } from "./starters";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { uploadImages } from "@/lib/media-upload";
 import type { PhotoJob } from "@/lib/agent/photo-job";
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 
-/** Starters above the composer (design 02): each fills the box, never sends. They follow what you opened it from. */
-const STARTERS = ["Will this fit my car?", "What do parts like this sell for?", "Update my build", "Find parts for my car", "What's my agent doing?"];
 /** How often, and for how long, a pending send asks for its reply: past the server's 120 s deadline for one send. */
 const REPLY_POLL_MS = 3_000;
 const REPLY_WAIT_MS = 150_000;
-/** A3d's jobs, once their step is open. */
-const JOB_STARTERS = ["Paste my build", "List the parts that came off", "List this part from my photos", "Post an update"];
 const MAX_PHOTOS = 4;
 /** R-photos: photos go to the model only for one of these jobs, chosen here. */
 const PHOTO_JOB_STARTERS: Record<string, PhotoJob> = { "List this part from my photos": "listing", "Post an update": "update" };
 const PHOTO_JOB_LABEL: Record<PhotoJob, string> = { listing: "List this part", update: "Post an update" };
-function startersFor(about: ChatAbout | null, jobs: boolean): string[] {
-  if (!about) return jobs ? [...STARTERS.slice(0, 3), ...JOB_STARTERS, ...STARTERS.slice(3)] : STARTERS;
-  if (about.kind === "car") return ["Update my build", "Find parts for my car", "What's on this car?"];
-  return about.mine ? ["What do parts like this sell for?", "How is this listing doing?"] : ["Will this fit my car?", "What do parts like this sell for?"];
-}
 
 /**
  * The agent thread on /agent and in the desktop side panel (A3c): the member's messages and the agent's
@@ -307,6 +299,7 @@ export function AgentChat({
         </div>
       )}
 
+      {/* Starters (design 02): each fills the box, never sends. Built from the tools the agent has (starters.ts). */}
       <div className="agentchat__starters mt-4 flex flex-wrap gap-2" role="group" aria-label="Starters">
         {startersFor(context, jobs).map((starter) => (
           <FilterButton
@@ -397,7 +390,8 @@ function BuildChangeCard({ card }: { card: Extract<ResolvedCard, { kind: "build_
     setError(null);
     startTransition(async () => {
       try {
-        const result = await confirmBuildChange(card.id);
+        // What this card showed: Confirm saves that link and no other (N124).
+        const result = await confirmBuildChange(card.id, { productUrl: card.kind === "build_change" ? (card.link?.url ?? null) : null });
         if (result.error) setError(result.error);
         if (result.ok) {
           setApplied(true);
@@ -426,6 +420,13 @@ function BuildChangeCard({ card }: { card: Extract<ResolvedCard, { kind: "build_
         ? `Add to your ${card.carName}; mark ${card.replaces} removed`
         : `Add to your ${card.carName}`;
   const image = !list && card.image ? { src: card.image, alt: card.part } : undefined;
+  // The link the change saves, before Confirm: its host, then its full address (N124).
+  const details =
+    card.kind !== "build_change" ? undefined : card.link ? (
+      <DataRow label="Link goes to" value={card.link.host} note={<span className="break-all">{card.link.url}</span>} />
+    ) : card.linkLeftOff ? (
+      <DataRow label="Link" value="Left off" note="It wasn't a web page address DRVN can show you." />
+    ) : undefined;
   return (
     <div className="grid gap-2">
       <AgentResultCard
@@ -433,6 +434,7 @@ function BuildChangeCard({ card }: { card: Extract<ResolvedCard, { kind: "build_
         title={title}
         meta={meta}
         image={image}
+        details={details}
         href={applied ? card.href : card.editHref}
         action={
           applied ? (
