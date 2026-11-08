@@ -59,8 +59,14 @@ jobs:
       - name: Lint
         run: npm run lint -- --max-warnings 0
 
+      # tests/ci/pr-resolves.test.ts reads the PR's title and description
+      # (docs/ids.md). Passed through env, never interpolated into the script.
+      # Empty on a push, where that check skips.
       - name: Tests
         run: npm test
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
 
       - name: Independent monitor contract
         run: npm run test:monitor
