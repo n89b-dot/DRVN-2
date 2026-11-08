@@ -28,7 +28,7 @@ vi.mock("stripe", async (importOriginal) => {
   return { default: FakeStripe };
 });
 
-import { StripePaymentProvider, provablyNotCreated } from "./stripe";
+import { SELLER_PAYOUTS_OFF_REASON, StripePaymentProvider, provablyNotCreated } from "./stripe";
 
 const request = {
   orderId: "order-b,order-a",
@@ -101,6 +101,16 @@ describe("StripePaymentProvider.createPayment", () => {
       p_key: expect.stringMatching(/^checkout:/),
       p_reason: "amount_too_small",
     });
+  });
+
+  it("never calls Stripe when the database refuses a new payment for a seller whose payouts are off", async () => {
+    // 20261107210050: payouts switched off after an offer was accepted.
+    state.rpc.mockResolvedValue({ data: null, error: { code: "LS001", message: "This seller can't take payment yet" } });
+    const result = await new StripePaymentProvider().createPayment({ ...request, totalCents: 5000 });
+    expect(result).toEqual({ status: "failed", reason: SELLER_PAYOUTS_OFF_REASON });
+    expect(state.create).not.toHaveBeenCalled();
+    expect(state.retrieve).not.toHaveBeenCalled();
+    expect(state.rpc).toHaveBeenCalledTimes(1);
   });
 
   it("keeps an uncertain create unresolved", async () => {

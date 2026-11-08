@@ -1,4 +1,6 @@
+import type { ShippingDetails } from "@/features/commerce/action-types";
 import { getCartIds } from "@/lib/cart";
+import { cartCheckoutRequestKey } from "@/lib/checkout-key";
 import { readGuestOrders } from "@/lib/guest-checkout";
 import { platformFeeCents } from "@/lib/payments/fee";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -58,10 +60,13 @@ export async function loadInFlightCheckout(userId: string | null): Promise<CartS
   if (!userId && !guestOrderIds.length) return null;
 
   const admin = createAdminClient();
+  // Cart orders only: an accepted offer's pending order is finished on its
+  // own page (/orders/<id>/checkout), never folded into a cart checkout.
   let query = admin
     .from("orders")
     .select("id, subtotal_cents, shipping_cents, total_cents, platform_fee_cents, seller_id")
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .is("origin_offer_id", null);
   query = userId ? query.eq("buyer_id", userId) : query.in("id", guestOrderIds);
 
   const { data: orders } = await query;
@@ -134,6 +139,99 @@ export async function loadInFlightCheckout(userId: string | null): Promise<CartS
     // In-flight orders were already rated; their shipping is in the totals.
     drvnLines: [],
   };
+}
+
+/**
+ * OS-W17 (N85): what a signed-in buyer's in-flight checkout was started
+ * with, so a reload can show the same delivery details and resume the same
+ * payment with one press. Null when there's nothing live to resume.
+ */
+export type CheckoutResume = {
+  shipping: ShippingDetails;
+  /** listing id → the server-held shipping quote the attempt froze. */
+  quoteIds: Record<string, string>;
+};
+
+export async function loadCheckoutResume(
+  userId: string | null,
+  rawKey: string | null
+): Promise<CheckoutResume | null> {
+  if (!userId || !rawKey) return null;
+  const admin = createAdminClient();
+  const { data: attempt, error } = await admin
+    .from("purchase_attempts")
+    .select("checkout_context, result")
+    .eq("checkout_request_key", cartCheckoutRequestKey(userId, rawKey))
+    .eq("buyer_id", userId)
+    .maybeSingle();
+  if (error || !attempt) return null;
+
+  const context = attempt.checkout_context;
+  if (!context || typeof context !== "object" || Array.isArray(context) || context.version !== 1) return null;
+  const shipping = context.shipping;
+  const quotes = context.quoteIds;
+  if (!shipping || typeof shipping !== "object" || Array.isArray(shipping)) return null;
+  if (!quotes || typeof quotes !== "object" || Array.isArray(quotes)) return null;
+  const text = (value: unknown) => (typeof value === "string" ? value : null);
+  const resumeShipping: ShippingDetails = {
+    name: text(shipping.name) ?? "",
+    line1: text(shipping.line1) ?? "",
+    line2: text(shipping.line2),
+    city: text(shipping.city) ?? "",
+    postcode: text(shipping.postcode) ?? "",
+    country: text(shipping.country) ?? "",
+    state: text(shipping.state),
+    phone: text(shipping.phone),
+    isCollection: shipping.isCollection === true,
+  };
+  const quoteIds = Object.fromEntries(
+    Object.entries(quotes).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+  );
+
+  const result = attempt.result;
+  const orderIds =
+    result && typeof result === "object" && !Array.isArray(result) && Array.isArray(result.orders)
+      ? result.orders.flatMap((order) =>
+          order && typeof order === "object" && !Array.isArray(order) && typeof order.order_id === "string"
+            ? [order.order_id]
+            : []
+        )
+      : [];
+  if (!orderIds.length) return null;
+  const { data: live } = await admin
+    .from("orders")
+    .select("id")
+    .eq("buyer_id", userId)
+    .in("status", ["pending", "requires_action"])
+    .in("id", orderIds);
+  return live?.length ? { shipping: resumeShipping, quoteIds } : null;
+}
+
+/**
+ * OS-W17 (N85): the listings the buyer's own unfinished checkouts hold, so
+ * the cart can say "your checkout is holding this" instead of "someone else
+ * has this reserved". Maps listing id → where to finish paying for it.
+ */
+export async function loadOwnCheckoutHolds(userId: string | null): Promise<Map<string, string>> {
+  const guestOrderIds = userId ? [] : await readGuestOrders();
+  const holds = new Map<string, string>();
+  if (!userId && !guestOrderIds.length) return holds;
+
+  const admin = createAdminClient();
+  let query = admin
+    .from("orders")
+    .select("id, origin_offer_id, order_items(listing_id)")
+    .in("status", ["pending", "requires_action"]);
+  query = userId ? query.eq("buyer_id", userId) : query.in("id", guestOrderIds);
+  const { data, error } = await query;
+  if (error || !data) return holds;
+  for (const order of data) {
+    const href = order.origin_offer_id ? `/orders/${order.id}/checkout` : "/checkout";
+    for (const item of order.order_items ?? []) {
+      if (item.listing_id) holds.set(item.listing_id, href);
+    }
+  }
+  return holds;
 }
 
 export async function loadCartSummary(): Promise<CartSummary> {

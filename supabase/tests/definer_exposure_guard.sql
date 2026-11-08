@@ -21,6 +21,7 @@ declare
     'mod_purchase_sources(uuid[])',       -- source car of purchased build lines, by unguessable item id
     'profile_follow_counts(uuid)',        -- public follower counts
     'profile_is_visible(uuid)',           -- used by public read policies
+    'profile_shares_deal_with_me(uuid)',  -- used by the suspended-profile read policy: whether the caller shares a conversation or order with that member; boolean, and false for a visitor (N59, 20261107220600)
     'profile_sales_count(uuid)',          -- public sales count for visible profiles
     'search_car_ids(text)',               -- ids of public builds of visible owners; definer so text indexes apply (20261010100100)
     'search_listing_ids(text)',           -- ids of parts a signed-out visitor may see; same reason
@@ -52,6 +53,7 @@ declare
     'execute_admin_command(text,uuid,text,jsonb)',     -- refuses anyone but an admin
     'listing_edit_status(uuid,uuid)',                  -- the caller's own edit request on their own listing
     'listing_question_parent_matches(uuid,uuid)',      -- boolean: a reply's parent is on a listing the caller can see
+    'listing_enquiry_reply_allowed(uuid,uuid)',        -- boolean, true only for the listing's own seller answering a buyer who asked about it (R-directcontact, 20261107220600)
     'my_car_vin(uuid)',                                -- the caller's own car's VIN (20261004160000)
     'my_default_offer_floor()',                        -- the caller's own default minimum
     'my_account_deletion_status()',                    -- the caller's own deletion case: outcome, next step, owner (N35, 20261107220400)

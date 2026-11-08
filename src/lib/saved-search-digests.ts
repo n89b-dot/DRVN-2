@@ -16,13 +16,18 @@ import type { createAdminClient } from "@/lib/supabase/admin";
  * (saved_search_email_cursors), separate from the half-hourly in-app cursor
  * (saved_searches.last_checked_at), so every part published while in-app
  * passes come and go lands in the next digest. Once a day per search,
- * `admitDigests` counts the active matches published in
- * (checked_through, window_end] and hands them to
- * admit_saved_search_digest, which writes the digest and moves the window in
- * one transaction, compare-and-set on where the window started: a crash
- * before it means the next run redoes the same window, and a replay after it
- * is refused. `sendDigests` leases the day's digests, sends each through the
- * email seam and records the outcome, fenced by the attempt number.
+ * `admitDigests` counts the active matches whose publishing transaction is
+ * in [checked_xact, window_xact) (migration 20261107200350: transaction ids,
+ * so a publication in flight when the window closes is in the next one) and
+ * hands them to admit_saved_search_digest, which writes the digest and moves
+ * the window in one transaction, compare-and-set on where the window
+ * started: a crash before it means the next run redoes the same window, and
+ * a replay after it is refused. `sendDigests` leases the day's digests in
+ * batches until none are left or the run's time is up, sends each through
+ * the email seam and records the outcome, fenced by the attempt number. A
+ * digest still unsent at the end of its day is carried into the next day's
+ * window by saved_search_digest_sweep, reaching back at most 7 days (older
+ * matches drop silently); turning an alert off skips its unsent digests.
  */
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -30,7 +35,10 @@ type Admin = ReturnType<typeof createAdminClient>;
 /** Parts listed in one email; the rest are "and N more". */
 export const DIGEST_ITEMS = 5;
 export const DUE_PER_RUN = 200;
-export const SENDS_PER_RUN = 50;
+export const SEND_BATCH = 25;
+/** Time each run gives admission and then sending (maxDuration is 300 s). */
+export const ADMIT_BUDGET_MS = 120_000;
+export const SEND_BUDGET_MS = 120_000;
 
 export type DigestItem = { id: string; title: string; price_cents: number | null };
 
@@ -44,60 +52,97 @@ export type AdmitTally = {
   failed: number;
 };
 
-export async function admitDigests(admin: Admin): Promise<AdmitTally> {
+export async function admitDigests(admin: Admin, deadline = Date.now() + ADMIT_BUDGET_MS): Promise<AdmitTally> {
   const tally: AdmitTally = { checked: 0, admitted: 0, empty: 0, muted: 0, baselines: 0, skipped: 0, failed: 0 };
-  const { data: due, error } = await admin.rpc("saved_search_digests_due", { p_limit: DUE_PER_RUN });
-  if (error) throw new Error(`Due digests lookup: ${error.code}`);
-
-  for (const search of due ?? []) {
-    tally.checked += 1;
-    const params = readSavedSearch(search.params);
-    if (!params) {
-      tally.failed += 1;
-      reportError("[saved-search-digests] unsupported definition", { id: search.saved_search_id });
-      continue;
+  // Batches until nothing is due, a batch moves nothing (every one failed:
+  // the same rows would come back), or the time is up. What is left waits
+  // for the next hourly run with its window unmoved, so nothing is lost.
+  while (Date.now() < deadline) {
+    const { data: due, error } = await admin.rpc("saved_search_digests_due", { p_limit: DUE_PER_RUN });
+    if (error) throw new Error(`Due digests lookup: ${error.code}`);
+    let moved = 0;
+    for (const search of due ?? []) {
+      if (Date.now() >= deadline) break;
+      const outcome = await admitOne(admin, search, tally);
+      if (outcome && MOVED.has(outcome)) moved += 1;
     }
-    const href = marketplaceHref(params);
-    // A database row may have no window yet (null), whatever the type says.
-    const since = search.checked_through as string | null;
-
-    let matchCount = 0;
-    let items: DigestItem[] = [];
-    if (since) {
-      const { data: matches, count, error: matchError } = await listingRowsQuery(admin, params, search.user_id)
-        .gt("published_at", since).lte("published_at", search.window_end).neq("seller_id", search.user_id)
-        .order("published_at", { ascending: false }).order("id").limit(DIGEST_ITEMS);
-      if (matchError) {
-        // The window stays put, so the next hourly run tries the same one.
-        tally.failed += 1;
-        reportError("[saved-search-digests] match query failed", { id: search.saved_search_id, code: matchError.code });
-        continue;
-      }
-      items = (matches ?? []).map((m) => ({ id: m.id, title: m.title, price_cents: m.price_cents }));
-      matchCount = Math.max(count ?? 0, items.length);
-    }
-
-    const { data: outcome, error: admitError } = await admin.rpc("admit_saved_search_digest", {
-      p_saved_search_id: search.saved_search_id,
-      p_window_end: search.window_end,
-      p_match_count: matchCount,
-      p_items: items,
-      p_href: href,
-      ...(since ? { p_expected_through: since } : {}),
-    });
-    if (admitError) {
-      tally.failed += 1;
-      reportError("[saved-search-digests] admission failed", { id: search.saved_search_id, code: admitError.code });
-      continue;
-    }
-    if (outcome === "admitted") tally.admitted += 1;
-    else if (outcome === "empty") tally.empty += 1;
-    else if (outcome === "muted") tally.muted += 1;
-    else if (outcome === "baseline") tally.baselines += 1;
-    // 'stale', 'already_today', 'alert_off', 'gone': someone else moved it.
-    else tally.skipped += 1;
+    if (!moved || (due ?? []).length < DUE_PER_RUN) break;
   }
   return tally;
+}
+
+const MOVED = new Set(["admitted", "empty", "muted", "baseline"]);
+
+type DueSearch = {
+  saved_search_id: string;
+  user_id: string;
+  params: unknown;
+  checked_through: string | null;
+  checked_xact: number | null;
+  window_end: string;
+  window_xact: number;
+  /** The later of midnight (London) seven days before today and when the
+   *  alert was last turned on: nothing published before it is mailed,
+   *  however far back a carried window, or a window start pinned by a long
+   *  transaction, reaches. */
+  window_floor: string;
+};
+
+async function admitOne(admin: Admin, search: DueSearch, tally: AdmitTally): Promise<string | null> {
+  tally.checked += 1;
+  const params = readSavedSearch(search.params);
+  if (!params) {
+    tally.failed += 1;
+    reportError("[saved-search-digests] unsupported definition", { id: search.saved_search_id });
+    return null;
+  }
+  const href = marketplaceHref(params);
+  // A database row may have no window yet (null), whatever the type says.
+  const since = search.checked_through;
+
+  let matchCount = 0;
+  let items: DigestItem[] = [];
+  if (since && search.checked_xact !== null) {
+    // The window is cut on publishing transaction ids, not times:
+    // [checked_xact, window_xact). Every id below window_xact had finished
+    // when the window closed, so a part whose publication was still in
+    // flight then (stamped with a time inside the window, committed after
+    // this query) is in the next window instead of in neither.
+    const { data: matches, count, error: matchError } = await listingRowsQuery(admin, params, search.user_id)
+      .gte("published_xact", search.checked_xact).lt("published_xact", search.window_xact)
+      .gte("published_at", search.window_floor).neq("seller_id", search.user_id)
+      .order("published_at", { ascending: false }).order("id").limit(DIGEST_ITEMS);
+    if (matchError) {
+      // The window stays put, so the next hourly run tries the same one.
+      tally.failed += 1;
+      reportError("[saved-search-digests] match query failed", { id: search.saved_search_id, code: matchError.code });
+      return null;
+    }
+    items = (matches ?? []).map((m) => ({ id: m.id, title: m.title, price_cents: m.price_cents }));
+    matchCount = Math.max(count ?? 0, items.length);
+  }
+
+  const { data: outcome, error: admitError } = await admin.rpc("admit_saved_search_digest", {
+    p_saved_search_id: search.saved_search_id,
+    p_window_end: search.window_end,
+    p_window_xact: search.window_xact,
+    p_match_count: matchCount,
+    p_items: items,
+    p_href: href,
+    ...(since ? { p_expected_through: since } : {}),
+  });
+  if (admitError) {
+    tally.failed += 1;
+    reportError("[saved-search-digests] admission failed", { id: search.saved_search_id, code: admitError.code });
+    return null;
+  }
+  if (outcome === "admitted") tally.admitted += 1;
+  else if (outcome === "empty") tally.empty += 1;
+  else if (outcome === "muted") tally.muted += 1;
+  else if (outcome === "baseline") tally.baselines += 1;
+  // 'stale', 'already_today', 'blocked', 'alert_off', 'gone': nothing moved.
+  else tally.skipped += 1;
+  return outcome;
 }
 
 /** `failed`: digests that will not be sent (rejected, or out of attempts).
@@ -116,37 +161,47 @@ export type ClaimedDigest = {
   digest_day: string;
 };
 
-export async function sendDigests(admin: Admin, transport: EmailTransport, origin: string): Promise<SendTally> {
+export async function sendDigests(
+  admin: Admin, transport: EmailTransport, origin: string, deadline = Date.now() + SEND_BUDGET_MS,
+): Promise<SendTally> {
   const tally: SendTally = { claimed: 0, sent: 0, retrying: 0, failed: 0, errors: 0 };
-  const { data: claimed, error } = await admin.rpc("claim_saved_search_digests", { p_limit: SENDS_PER_RUN });
-  if (error) throw new Error(`Digest claim: ${error.code}`);
-
-  for (const digest of claimed ?? []) {
-    tally.claimed += 1;
-    const outcome = await transport
-      .send({ to: digest.recipient, ...renderDigest(digest, origin), idempotencyKey: `saved-search-digest/${digest.digest_id}` })
-      .catch((cause: unknown) => ({ status: "retry" as const, reason: cause instanceof Error ? cause.message : "send threw" }));
-    const { data: status, error: completeError } = await admin.rpc("complete_saved_search_digest", {
-      p_id: digest.digest_id,
-      p_attempt: digest.attempt,
-      p_outcome: outcome.status,
-      ...(outcome.status === "sent" ? { p_provider_message_id: outcome.providerId ?? undefined } : { p_error: outcome.reason }),
-    });
-    if (completeError) {
-      // The lease runs out and the digest is claimed again; the idempotency
-      // key keeps a provider that honours it from sending it twice.
-      tally.errors += 1;
-      reportError("[saved-search-digests] outcome not recorded", { id: digest.digest_id, code: completeError.code });
-      continue;
-    }
-    if (status === "sent") tally.sent += 1;
-    else if (status === "pending") tally.retrying += 1;
-    else if (status === "failed") {
-      tally.failed += 1;
-      reportError("[saved-search-digests] digest failed", { id: digest.digest_id, attempt: digest.attempt });
-    }
+  // Batches until the day's queue is empty or the time is up, so a busy day
+  // is not capped at one batch an hour. What is left keeps its lease or its
+  // place and goes in the next run; one not sent by the end of its day is
+  // carried into the next day's window by the sweep, never dropped.
+  while (Date.now() < deadline) {
+    const { data: claimed, error } = await admin.rpc("claim_saved_search_digests", { p_limit: SEND_BATCH });
+    if (error) throw new Error(`Digest claim: ${error.code}`);
+    for (const digest of claimed ?? []) await sendOne(admin, transport, origin, digest, tally);
+    if ((claimed ?? []).length < SEND_BATCH) break;
   }
   return tally;
+}
+
+async function sendOne(admin: Admin, transport: EmailTransport, origin: string, digest: ClaimedDigest, tally: SendTally) {
+  tally.claimed += 1;
+  const outcome = await transport
+    .send({ to: digest.recipient, ...renderDigest(digest, origin), idempotencyKey: `saved-search-digest/${digest.digest_id}` })
+    .catch((cause: unknown) => ({ status: "retry" as const, reason: cause instanceof Error ? cause.message : "send threw" }));
+  const { data: status, error: completeError } = await admin.rpc("complete_saved_search_digest", {
+    p_id: digest.digest_id,
+    p_attempt: digest.attempt,
+    p_outcome: outcome.status,
+    ...(outcome.status === "sent" ? { p_provider_message_id: outcome.providerId ?? undefined } : { p_error: outcome.reason }),
+  });
+  if (completeError) {
+    // The lease runs out and the digest is claimed again; the idempotency
+    // key keeps a provider that honours it from sending it twice.
+    tally.errors += 1;
+    reportError("[saved-search-digests] outcome not recorded", { id: digest.digest_id, code: completeError.code });
+    return;
+  }
+  if (status === "sent") tally.sent += 1;
+  else if (status === "pending") tally.retrying += 1;
+  else if (status === "failed") {
+    tally.failed += 1;
+    reportError("[saved-search-digests] digest failed", { id: digest.digest_id, attempt: digest.attempt });
+  }
 }
 
 function escapeHtml(value: string): string {

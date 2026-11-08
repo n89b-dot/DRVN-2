@@ -87,7 +87,7 @@ export const AGENT_MEASURES: readonly MeasureDef[] = [
     definition: "Times the seller's agent asked its owner to accept, that day.",
     basis: COMPUTED },
   { scope: "seller", measure: "approvals_answered", label: "Approvals answered, seller", kind: "share", role: "watch", rowOnlyWithCases: true,
-    definition: "Of those, the share the owner accepted or dismissed (not left waiting).",
+    definition: "Of those, the share the owner answered (not left waiting), including answers that came after the offer expired or could no longer be accepted.",
     basis: { kind: "approximation", note: `Answers given by ${LAST_RECOMPUTE}; a later answer still counts as waiting.` } },
   { scope: "seller", measure: "minutes_to_answer", label: "Time to answer, seller", kind: "minutes", role: "watch", rowOnlyWithCases: true,
     definition: "Median minutes from the agent asking to the owner answering.",

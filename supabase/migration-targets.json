@@ -1,0 +1,20 @@
+{
+  "description": "The only Supabase projects scripts/apply-migration.mjs and scripts/import-vehiclesdb.mjs will connect to. Each run names one with --target, and it must be the project the env file points at. Add a project (production included) by a reviewed PR. Project refs are not secrets; they are in every public project URL.",
+  "targets": {
+    "shared-dev": {
+      "ref": "grunnjojhdevhuckujmc",
+      "note": "shared dev project, drvn-v3"
+    },
+    "staging": {
+      "ref": "zubstjuviwourzgrziqc",
+      "note": "drvn-staging, us-east-1"
+    }
+  },
+  "dynamicSqlAllowed_description": "Files allowed to run risky SQL on a database that already has tables: a top-level TRUNCATE or DROP TABLE, or dynamic SQL (EXECUTE in a DO block, or in a function the file creates and calls) that the runner can't show to be safe. Each entry names the file, the sha256 of its exact bytes (the dry run prints the first 12 characters; `shasum -a 256 <file>` gives all of it) and why it's safe. A destructive baseline (0001) can't be allowed here.",
+  "dynamicSqlAllowed": {
+    "20261011100000_listing_vehicle_fit.sql": {
+      "sha256": "fbfcb7d6bcf35a93bc169835d77909432e2bf7b2cbf69c7b7ef42cd78053d49c",
+      "reason": "empties listing_vehicle_fit, a table derived from listings, and rebuilds it from the active listings in the same transaction"
+    }
+  }
+}

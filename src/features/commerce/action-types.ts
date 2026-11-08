@@ -3,6 +3,8 @@ export type CommerceState = {
   ok?: string;
   /** Client-generated identity for retryable form submissions such as Q&A. */
   operationId?: string;
+  /** Where to go next, e.g. the conversation a "Message seller" landed in. */
+  href?: string;
   /** Set when the processor needs the buyer to confirm in the browser
    *  (Stripe Payment Element). The form swaps to the confirmation step. */
   payment?: CheckoutPayment;
@@ -10,7 +12,24 @@ export type CommerceState = {
 
 /** The payment the server created. `amountCents` is what will be charged —
  *  the only total a checkout shows once it exists (RR-10). */
-export type CheckoutPayment = { clientSecret: string; orderIds: string[]; amountCents: number };
+export type CheckoutPayment = {
+  clientSecret: string;
+  orderIds: string[];
+  amountCents: number;
+  /** OS-W17 (N485): what this payment is for, as the server reserved it —
+   *  not the page-load cart. A part that sold meanwhile is missing here, and
+   *  a changed price shows as the part's price, never as "Shipping". */
+  breakdown?: CheckoutBreakdown;
+};
+
+export type CheckoutBreakdown = {
+  goodsCents: number;
+  shippingCents: number;
+  /** Absent when the line read failed; the totals above still hold. */
+  lines?: { id: string; title: string; priceCents: number }[];
+  /** Parts in the cart that were not available, so aren't in this payment. */
+  skipped?: string[];
+};
 
 export type CheckoutOutcome = {
   error?: string;

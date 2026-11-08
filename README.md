@@ -100,12 +100,15 @@ check enforces, is §4 of `docs/production-runbook.md`.
 ## Database & migrations
 
 Migrations live in `supabase/migrations/` (`0001`–`0057`, then timestamped
-files), applied **in order** with `node scripts/apply-migration.mjs <file>` or
-the SQL editor — never `supabase db push` on the dev project (no CLI history
-exists there; it would run the destructive 0001). A new project seeds its
-history instead (`docs/production-runbook.md` §3). Full procedure,
-order table, and per-migration record: `supabase/MIGRATIONS.md`. Each file is
-idempotent with self-checks that raise on failure.
+files), applied **in order** with `node scripts/apply-migration.mjs --target
+<name> <file>` (a dry run that prints a confirmation code, then the same with
+`--apply --confirm <code>`) or the SQL editor — never `supabase db push` on the
+dev project (its CLI history is incomplete; it would run the destructive
+0001). The runner records each file it applies in the CLI history and refuses
+0001 on a populated database. Full procedure, order table, and per-migration
+record: `supabase/MIGRATIONS.md`. Each file carries self-checks that raise on
+failure; not every file is safe to apply twice, so the runner skips recorded
+ones.
 
 ## Stripe setup
 
@@ -118,7 +121,8 @@ idempotent with self-checks that raise on failure.
 2. Connect (Express) for sellers — onboarding from Selling → Payouts
    (`/payouts`; Settings → Payments links there); `payouts_enabled` syncs via
    `account.updated`.
-3. Point the scheduler at the app: the migrations create nine pg_cron jobs;
+3. Point the scheduler at the app: the migrations create twenty-one pg_cron jobs
+   (`src/lib/job-inventory.ts`);
    the HTTP ones reach `/api/jobs/*` once `job_config` holds the worker URL
    and `CRON_SECRET` (`docs/production-runbook.md` §4). Admin → Payments →
    "Run worker now" runs the money pass by hand.

@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 
+import { Alert, TileHead } from "@/components/ui";
+import { BlockButton } from "@/features/social/block-button";
 import type { DeletionStatus } from "@/lib/account-deletion-status";
 import { AgentChatPrivacy } from "./agent-chat-privacy";
 import { AgentSection } from "./agent-section";
@@ -14,7 +16,6 @@ import { listSavedCards } from "@/lib/payments/customers";
 import { getPaymentProvider, paymentsAreLive } from "@/lib/payments/provider";
 import { integratedShippingEnabled } from "@/lib/shipping/provider";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
-import { Alert } from "@/components/ui";
 import { googleSignInEnabled } from "@/lib/auth-providers";
 import { authenticatedRecently, signsInWithPassword } from "@/lib/reauthentication";
 
@@ -90,6 +91,14 @@ export default async function SettingsPage({
     // N35: where an earlier deletion request stands, the member's own only.
     supabase.rpc("my_account_deletion_status"),
   ]);
+  // N54: who this member has blocked (their own rows only), with names.
+  const { data: blockRows } = await supabase.from("member_blocks").select("blocked_id").eq("blocker_id", user.id).limit(200);
+  const blockedIds = (blockRows ?? []).map((b) => b.blocked_id);
+  const { data: blockedProfiles } = blockedIds.length
+    ? await supabase.from("profiles").select("id, username, display_name").in("id", blockedIds)
+    : { data: [] as { id: string; username: string | null; display_name: string | null }[] };
+  const blockedNames = new Map((blockedProfiles ?? []).map((p) => [p.id, p.display_name ?? (p.username ? `@${p.username}` : "Member")]));
+  const blocked = blockedIds.map((id) => ({ id, name: blockedNames.get(id) ?? "Member" }));
   // AG-7: the agent's mode and how many mandates are live, for the Agent
   // section — only while the Agent tab exists for members at all.
   const [agentMode, { count: agentRunning }] = agentOpen
@@ -158,6 +167,20 @@ export default async function SettingsPage({
           <div className="grid gap-6">
             <AnalyticsConsentForm initialEnabled={analyticsEnabled} />
             {agentChatMessages ? <AgentChatPrivacy messages={agentChatMessages} /> : null}
+            {/* N54: the members this member has blocked, to unblock. */}
+            {blocked.length > 0 && (
+              <div>
+                <TileHead label="Blocked members" />
+                <ul className="grid gap-2">
+                  {blocked.map((b) => (
+                    <li key={b.id} className="flex flex-wrap items-center justify-between gap-2">
+                      <span>{b.name}</span>
+                      <BlockButton memberId={b.id} memberName={b.name} blocked />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         }
         agentSection={agentOpen ? <AgentSection initialMode={agentMode} running={agentRunning ?? 0} /> : undefined}
