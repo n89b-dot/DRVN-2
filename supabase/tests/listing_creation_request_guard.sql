@@ -52,32 +52,18 @@ begin
   -- Member photo writes need the storage origin recorded (20261107203000).
   insert into public.job_config(key, value) values ('media_storage_origin', 'https://proj.supabase.co')
     on conflict (key) do update set value = excluded.value;
-  update public.beta_access_config set enforced=false where singleton=true;
   insert into auth.users(id,email,raw_user_meta_data)
   values
     (seller,'listing-request-seller@drvn.test','{}'),
     (other_seller,'listing-request-other@drvn.test','{}'),
     (uninvited,'listing-request-uninvited@drvn.test','{}');
-  insert into public.beta_invitations(
-    id,email_normalized,roles,token_hash,expires_at,consumed_at,consumed_by
-  ) values
-    (seller_invite,'listing-request-seller@drvn.test',array['seller'],repeat('1',64),now()+interval '1 hour',now(),seller),
-    (other_invite,'listing-request-other@drvn.test',array['seller'],repeat('2',64),now()+interval '1 hour',now(),other_seller);
-  insert into public.beta_memberships(user_id,invitation_id,email_normalized,roles)
-  values
-    (seller,seller_invite,'listing-request-seller@drvn.test',array['seller']),
-    (other_seller,other_invite,'listing-request-other@drvn.test',array['seller']);
-  update public.beta_access_config set enforced=true where singleton=true;
-
+  -- OS-W31: the invite-only beta is gone, so a member with no invitation
+  -- may start a listing too.
   perform set_config('role','authenticated',true);
   perform set_config('request.jwt.claims',jsonb_build_object('sub',uninvited,'role','authenticated')::text,true);
-  begin
-    perform public.claim_listing_creation(gen_random_uuid(),repeat('d',64));
-  exception when insufficient_privilege then
-    rejected := true;
-  end;
-  if not rejected then raise exception 'Uninvited seller claimed listing creation'; end if;
-  rejected := false;
+  if (public.claim_listing_creation(gen_random_uuid(),repeat('d',64)))->>'listing_id' is null then
+    raise exception 'A member without an invitation could not claim listing creation';
+  end if;
 
   perform set_config('request.jwt.claims',jsonb_build_object('sub',seller,'role','authenticated')::text,true);
   first_claim := public.claim_listing_creation(request_id, repeat('a',64));

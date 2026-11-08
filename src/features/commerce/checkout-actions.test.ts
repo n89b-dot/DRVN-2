@@ -4,7 +4,6 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
-  beta: vi.fn(),
   orderRead: vi.fn(),
   freeze: vi.fn(),
   finalize: vi.fn(),
@@ -25,6 +24,9 @@ const mocks = vi.hoisted(() => ({
   paymentMapWrite: vi.fn(),
   paymentMapRead: vi.fn(),
   bindPayment: vi.fn(),
+  guestAdmit: vi.fn(),
+  guestBind: vi.fn(),
+  guestRelease: vi.fn(),
   release: vi.fn(),
   rememberKey: vi.fn(),
   forgetKey: vi.fn(),
@@ -37,11 +39,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("next/headers", () => ({ headers: vi.fn() }));
-vi.mock("@/lib/abuse-identity", () => ({ abuseIdentity: vi.fn() }));
+vi.mock("@/lib/abuse-identity", () => ({ abuseIdentity: vi.fn().mockReturnValue("network:203.0.113.9") }));
 vi.mock("@/lib/cart", () => ({ getCartIds: mocks.cartIds, removeCartIds: mocks.cartRemove }));
 vi.mock("@/lib/guest-checkout", () => ({
   guestCheckoutIdentity: mocks.guestIdentity,
-  isPlausibleEmail: () => true,
+  isPlausibleEmail: vi.fn(() => true),
   setGuestOrders: vi.fn(),
 }));
 vi.mock("./guest-buyer", () => ({ resolveGuestBuyer: mocks.guestBuyer, sendOrderAccessLink: vi.fn() }));
@@ -65,10 +67,6 @@ vi.mock("@/lib/rate-limit", () => ({ RATE_LIMITS: {}, allowAction: vi.fn().mockR
 vi.mock("@/lib/analytics", () => ({ capture: vi.fn() }));
 vi.mock("@/lib/purchase-analytics", () => ({ bindCheckoutAnalytics: mocks.bindAnalytics }));
 vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
-vi.mock("@/lib/beta-access", () => ({
-  getBetaAccess: mocks.beta,
-  betaCommerceError: () => "Buying is limited to invited beta members.",
-}));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getUser: mocks.auth } }),
 }));
@@ -106,6 +104,9 @@ vi.mock("@/lib/supabase/admin", () => ({
         if (name === "freeze_cart_checkout_shipping") return mocks.cartFreeze(args);
         if (name === "purchase_begin") return mocks.purchaseBegin(args);
         if (name === "bind_cart_checkout_payment") return mocks.bindPayment(args);
+        if (name === "guest_hold_admit") return mocks.guestAdmit(args);
+        if (name === "guest_hold_bind") return mocks.guestBind(args);
+        if (name === "guest_hold_release") return mocks.guestRelease(args);
         return mocks.finalize(args);
       },
       from: (table: string) => {
@@ -121,6 +122,10 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 import { checkoutCart, completeReservedOrder } from "./checkout-actions";
 import { getStripeCustomerId } from "@/lib/payments/customers";
+import { guestCheckoutIdentity, isPlausibleEmail } from "@/lib/guest-checkout";
+import { resolveGuestBuyer } from "./guest-buyer";
+import { freezeOrderShipping } from "./checkout-shipping";
+import { GUEST_HOLD_LIMIT_MESSAGE, GUEST_HOLD_TAKEN_MESSAGE } from "./guest-holds";
 import { cartCheckoutRequestKey } from "@/lib/checkout-key";
 
 const pendingOfferOrder = {
@@ -150,7 +155,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.recordAge.mockResolvedValue(true);
   mocks.auth.mockResolvedValue({ data: { user: { id: "buyer-1" } } });
-  mocks.beta.mockResolvedValue({ enforced: true, eligible: true });
   mocks.orderRead.mockResolvedValue({ data: pendingOfferOrder, error: null });
   mocks.freeze.mockResolvedValue({ data: { ok: true, applied: true, total_cents: 5500 }, error: null });
   mocks.finalize.mockResolvedValue({ data: { applied: true }, error: null });
@@ -189,6 +193,9 @@ beforeEach(() => {
     error: null,
   });
   mocks.bindPayment.mockResolvedValue({ data: { ok: true, mapped: 1 }, error: null });
+  mocks.guestAdmit.mockResolvedValue({ data: ["hold-1"], error: null });
+  mocks.guestBind.mockResolvedValue({ data: 1, error: null });
+  mocks.guestRelease.mockResolvedValue({ data: 1, error: null });
   mocks.redirect.mockImplementation((path: string) => { throw new Error(`redirect:${path}`); });
   mocks.release.mockResolvedValue({ outcome: "released" });
   mocks.rememberKey.mockResolvedValue(undefined);
@@ -394,7 +401,6 @@ it("N85: starts a new attempt when the remembered one has lapsed", async () => {
 
 it("N85: a guest's lapsed attempt is not replayed either", async () => {
   mocks.auth.mockResolvedValue({ data: { user: null } });
-  mocks.beta.mockResolvedValue({ enforced: false, eligible: true });
   mocks.cartIds.mockResolvedValue(["listing-1"]);
   mocks.attemptRead.mockResolvedValue({ data: { result: { orders: [{ order_id: "order-1" }], skipped: [] } }, error: null });
   mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "payment_failed" }], error: null });
@@ -577,14 +583,6 @@ it("reports payment failure only after the reservation release is verified", asy
   expect(mocks.cartRemove).not.toHaveBeenCalled();
 });
 
-it("enforces beta access before loading or charging an accepted offer", async () => {
-  mocks.beta.mockResolvedValue({ enforced: true, eligible: false });
-  const result = await completeReservedOrder({}, checkoutForm());
-  expect(result.error).toContain("invited beta");
-  expect(mocks.orderRead).not.toHaveBeenCalled();
-  expect(mocks.createPayment).not.toHaveBeenCalled();
-});
-
 it("refuses the accepted-offer payment route for an ordinary pending order", async () => {
   mocks.orderRead.mockResolvedValue({ data: { ...pendingOfferOrder, origin_offer_id: null }, error: null });
   const result = await completeReservedOrder({}, checkoutForm());
@@ -712,10 +710,91 @@ it("reserves nothing when the saved Stripe customer can't be read", async () => 
   expect(mocks.createPayment).not.toHaveBeenCalled();
 });
 
+// OS-W31: guest checkout opens with the beta gone, so its holds are capped
+// (N89) and its DRVN Shipping path must work for a quote with no buyer.
+function asGuest() {
+  mocks.auth.mockResolvedValue({ data: { user: null } });
+  vi.mocked(guestCheckoutIdentity).mockResolvedValue("guest:device-1");
+  vi.mocked(isPlausibleEmail).mockReturnValue(true);
+  vi.mocked(resolveGuestBuyer).mockResolvedValue({ buyer: { id: "guest-buyer-1", created: false } } as never);
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+}
+
+function guestForm() {
+  const form = cartCheckoutForm();
+  form.set("email", "guest@example.com");
+  form.set("quote_listing-1", "quote-guest");
+  form.set("age_confirmed", "yes");
+  return form;
+}
+
+const buyerlessQuote = { id: "quote-guest", listing_id: "listing-1", buyer_id: null, amount_cents: 500 };
+
+it("guest DRVN Shipping: a buyer-less quote freezes through the guest path, never the signed-in buyer-matched freeze", async () => {
+  asGuest();
+  mocks.plan.mockResolvedValue({ plan: { overrides: { "listing-1": 500 }, quotes: new Map([["listing-1", buyerlessQuote]]) } });
+
+  const result = await checkoutCart({}, guestForm());
+
+  expect(mocks.plan).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+    buyerId: "guest-buyer-1",
+    quoteIds: { "listing-1": "quote-guest" },
+  }));
+  expect(mocks.purchaseBegin).toHaveBeenCalledWith(expect.objectContaining({ p_checkout_request_key: undefined }));
+  expect(mocks.cartFreeze).not.toHaveBeenCalled();
+  expect(vi.mocked(freezeOrderShipping)).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.arrayContaining([expect.objectContaining({ order_id: "order-1" })]),
+    new Map([["listing-1", buyerlessQuote]]),
+  );
+  expect(result.payment?.clientSecret).toBe("secret");
+});
+
+it("admits a guest's holds before reserving anything, keyed by one-way digests of device and network, and binds them after", async () => {
+  asGuest();
+
+  await checkoutCart({}, guestForm());
+
+  const admit = mocks.guestAdmit.mock.calls[0][0] as Record<string, unknown>;
+  expect(admit).toMatchObject({ p_listing_ids: ["listing-1"], p_buyer: "guest-buyer-1" });
+  expect(admit.p_device).toMatch(/^[0-9a-f]{64}$/);
+  expect(admit.p_network).toMatch(/^[0-9a-f]{64}$/);
+  expect(JSON.stringify(admit)).not.toContain("device-1");
+  expect(JSON.stringify(admit)).not.toContain("203.0.113.9");
+  expect(mocks.guestAdmit.mock.invocationCallOrder[0]).toBeLessThan(mocks.purchaseBegin.mock.invocationCallOrder[0]);
+  expect(mocks.guestBind).toHaveBeenCalledWith({ p_hold_ids: ["hold-1"], p_buyer: "guest-buyer-1" });
+  expect(mocks.guestRelease).not.toHaveBeenCalled();
+});
+
+it("refuses a guest over the hold cap (GH429) or on a part another guest holds (GH409) before reserving or charging", async () => {
+  asGuest();
+  mocks.guestAdmit.mockResolvedValueOnce({ data: null, error: { code: "GH429", message: "cap" } });
+  expect(await checkoutCart({}, guestForm())).toEqual({ error: GUEST_HOLD_LIMIT_MESSAGE });
+  mocks.guestAdmit.mockResolvedValueOnce({ data: null, error: { code: "GH409", message: "taken" } });
+  expect(await checkoutCart({}, guestForm())).toEqual({ error: GUEST_HOLD_TAKEN_MESSAGE });
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+});
+
+it("gives a guest's admission back when nothing was reserved", async () => {
+  asGuest();
+  mocks.purchaseBegin.mockResolvedValue({ data: { orders: [], skipped: [{ listing_id: "listing-1", reason: "sold" }] }, error: null });
+
+  await checkoutCart({}, guestForm());
+
+  expect(mocks.guestRelease).toHaveBeenCalledWith({ p_hold_ids: ["hold-1"] });
+  expect(mocks.guestBind).not.toHaveBeenCalled();
+});
+
+it("never admits guest holds for a signed-in buyer", async () => {
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  await checkoutCart({}, cartCheckoutForm());
+  expect(mocks.guestAdmit).not.toHaveBeenCalled();
+});
+
 // R69-age: a guest confirms 18+ before any account is made or emailed.
 it("guest checkout refuses a post without the 18+ box and creates no account", async () => {
   mocks.auth.mockResolvedValue({ data: { user: null } });
-  mocks.beta.mockResolvedValue({ enforced: false, eligible: true });
   mocks.cartIds.mockResolvedValue(["listing-1"]);
   const form = cartCheckoutForm();
   form.set("email", "guest@drvn.test");
@@ -728,7 +807,6 @@ it("guest checkout refuses a post without the 18+ box and creates no account", a
 
 it("guest checkout records the 18+ confirmation against the guest account before the order", async () => {
   mocks.auth.mockResolvedValue({ data: { user: null } });
-  mocks.beta.mockResolvedValue({ enforced: false, eligible: true });
   mocks.cartIds.mockResolvedValue(["listing-1"]);
   mocks.guestBuyer.mockResolvedValue({ buyer: { id: "guest-1", created: false } });
   mocks.recordAge.mockResolvedValue(false);

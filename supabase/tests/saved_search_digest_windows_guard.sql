@@ -41,7 +41,6 @@ declare
   v_code text;
   v_row record;
 begin
-  update public.beta_access_config set enforced = false where singleton;
   insert into auth.users(id, email, confirmed_at) values
     (v_seller, 'window-seller@drvn.test', now()), (v_user, 'window-member@drvn.test', now());
   insert into public.profiles(id, username, payouts_enabled) values (v_seller, 'window_seller', true), (v_user, 'window_member', false)

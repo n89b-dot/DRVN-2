@@ -1288,7 +1288,6 @@ type RefinedRow<K extends keyof GeneratedTables> = {
 /** PostgreSQL function argument nullability is not emitted by Supabase's generator.
  * These explicit domain exceptions match the verified SQL contracts. */
 type NullableArgs = {
-  beta_access_status: "p_user_id";
   begin_admin_external_operation: "p_order";
   begin_refund_operation: "p_amount_cents" | "p_payment_reference" | "p_refund_reference";
   begin_request_refund_operation: "p_amount_cents";

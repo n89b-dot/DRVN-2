@@ -20,7 +20,6 @@ declare
   v_expected uuid[];
   v_reader record;
 begin
-  update public.beta_access_config set enforced = false where singleton;
   insert into auth.users(id, email) values
     (v_author, 'post-rules-author@drvn.test'), (v_suspended, 'post-rules-suspended@drvn.test'), (v_viewer, 'post-rules-viewer@drvn.test');
   insert into public.profiles(id, username) values

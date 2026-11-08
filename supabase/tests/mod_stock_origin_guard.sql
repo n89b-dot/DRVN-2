@@ -25,7 +25,6 @@ begin
     raise exception 'Modification sheet function bypasses caller RLS';
   end if;
 
-  update public.beta_access_config set enforced = false where singleton;
   insert into auth.users(id, email) values (owner_id, 'stock-origin-owner@drvn.test');
   insert into public.profiles(id, username) values (owner_id, 'stock_origin_owner')
   on conflict (id) do update set username = excluded.username;

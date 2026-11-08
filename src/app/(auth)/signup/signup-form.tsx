@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState, useState, type FormEvent } from "react";
 
-import { Alert, Button, ButtonLink, Checkbox, PasswordField, TextField } from "@/components/ui";
+import { Alert, Button, Checkbox, PasswordField, TextField } from "@/components/ui";
 import {
   AGE_CONFIRMATION_FIELD,
   AGE_CONFIRMATION_HINT,
@@ -17,13 +17,9 @@ import { OAuthButton } from "../oauth-button";
 
 export function SignupForm({
   next,
-  invite,
-  betaEnforced,
   google = false,
 }: {
   next?: string;
-  invite?: string;
-  betaEnforced: boolean;
   /** Google sign-in is switched on in Supabase (lib/auth-providers). */
   google?: boolean;
 }) {
@@ -55,38 +51,11 @@ export function SignupForm({
       <h1 className="mt-2 text-[clamp(26px,4vw,36px)] font-[600] leading-[1.05] tracking-[-0.02em]">
         Join <span className="text-live">DRVN.</span>
       </h1>
-      {/* The reason to join stays in the card; beta mechanics live in the
-          notices below, not in its place. */}
       <p className="mt-3 text-body text-dim">Show your build. Sell your parts. Find what fits.</p>
 
-      {betaEnforced && !invite ? (
-        /* Invite-only and no invitation: the form used to stay on screen with
-           a disabled button, so every "Join" and "Add your car" ended at a
-           control that could never work. Say what's going on and keep the
-           visitor moving — browsing and the marketplace need no account. */
-        <div className="mt-6">
-          <Alert role="status" title="Joining is by invitation for now">
-            Accounts open with an invitation link while DRVN is in beta. If someone sent you one,
-            open it from that email. You can still browse every build and part without an account.
-          </Alert>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <ButtonLink href="/explore" variant="live">
-              Explore builds
-            </ButtonLink>
-            <ButtonLink href="/marketplace" variant="ghost">
-              Shop parts
-            </ButtonLink>
-          </div>
-        </div>
-      ) : (
+      {/* OS-W31: joining is open; the invitation step is gone. */}
         <form action={action} onSubmit={onSubmit} noValidate className="mt-6">
-          {betaEnforced && (
-            <Alert className="mb-5" title="You've been invited">
-              Use the email address this invitation was sent to.
-            </Alert>
-          )}
           {next && <input type="hidden" name="next" value={next} />}
-          {invite && <input type="hidden" name="invite" value={invite} />}
           {state.error && !state.field && (
             <Alert tone="live" role="alert" className="mb-5" title="Couldn't create your account">
               {state.error}
@@ -145,7 +114,7 @@ export function SignupForm({
             pendingLabel="Creating…"
             className="w-full"
           >
-            {betaEnforced ? "Accept invitation" : "Create account"}
+            Create account
           </Button>
           <p className="field__hint mt-3 text-center">
             By creating an account you agree to the{" "}
@@ -159,7 +128,6 @@ export function SignupForm({
             .
           </p>
         </form>
-      )}
 
       <div className="authswap">
         <Link href={`/login${carry}`} className="jumplink">
@@ -167,7 +135,7 @@ export function SignupForm({
         </Link>
       </div>
 
-      {!betaEnforced && google && (
+      {google && (
         <div className="mt-6">
           <span className="microlabel">Or use an account you already have</span>
           <div className="mt-3">

@@ -19,7 +19,6 @@ declare
   got uuid[];
   doc jsonb;
 begin
-  update public.beta_access_config set enforced = false where singleton;
   insert into auth.users(id, email) values (v_seller, 'published-seller@drvn.test');
   insert into public.profiles(id, username) values (v_seller, 'published_seller')
     on conflict (id) do update set username = excluded.username;

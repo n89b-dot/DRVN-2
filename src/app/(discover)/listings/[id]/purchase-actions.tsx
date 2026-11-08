@@ -27,9 +27,6 @@ import { NegotiateForMe } from "./negotiate-for-me";
 export function PurchaseActions({
   listingId,
   isLoggedIn,
-  betaEnforced,
-  buyerEligible,
-  accessUnavailable = false,
   isOwn,
   isActive,
   paymentsLive,
@@ -48,10 +45,6 @@ export function PurchaseActions({
   myOffer?: { id: string; amountCents: number; counterCents: number | null } | null;
   listingId: string;
   isLoggedIn: boolean;
-  betaEnforced: boolean;
-  buyerEligible: boolean;
-  /** The beta check itself failed — still no buying, but it isn't a "no". */
-  accessUnavailable?: boolean;
   isOwn: boolean;
   isActive: boolean;
   paymentsLive: boolean;
@@ -136,20 +129,6 @@ export function PurchaseActions({
   }
 
   function runBuyNow() {
-    if (accessUnavailable) {
-      setCartState({
-        error: "We couldn't check your buying access just now. Reload the page and try again.",
-      });
-      return;
-    }
-    if (betaEnforced && !isLoggedIn) {
-      router.push(`/login?next=${encodeURIComponent(detailPath)}`);
-      return;
-    }
-    if (!buyerEligible) {
-      setCartState({ error: "Buying is limited to invited beta members." });
-      return;
-    }
     startTransition(async () => {
       const fd = new FormData();
       fd.set("listing_id", listingId);
@@ -199,7 +178,7 @@ export function PurchaseActions({
           the same width, then the offer as a text action — four equal
           buttons made none of them the obvious next step. */}
       <Button variant="live" disabled={pending} onClick={runBuyNow} className="w-full">
-        {pending ? "Processing…" : betaEnforced && !isLoggedIn ? "Sign in to buy" : "Buy now"}
+        {pending ? "Processing…" : "Buy now"}
       </Button>
       {cartState?.ok ? (
         <a href="/cart" className="btn btn--ghost w-full">
@@ -361,7 +340,7 @@ export function PurchaseActions({
           </span>
         </span>
         <Button variant="live" disabled={pending} onClick={runBuyNow} className="min-w-0 flex-1">
-          {pending ? "Processing…" : betaEnforced && !isLoggedIn ? "Sign in to buy" : "Buy now"}
+          {pending ? "Processing…" : "Buy now"}
         </Button>
         {/* Offer takes its own width and Buy takes the rest, so the
             visitor's "Sign in to buy" keeps its bracket furniture instead of

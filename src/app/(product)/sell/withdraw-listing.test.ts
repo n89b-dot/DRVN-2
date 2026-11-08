@@ -18,7 +18,6 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/revalidate", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/analytics", () => ({ capture: vi.fn() }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
-vi.mock("@/lib/beta-access", () => ({ getBetaAccess: async () => ({ eligible: true }), betaCommerceError: () => "beta" }));
 vi.mock("@/lib/payments/connect", () => ({ sellerCanPublish: async () => true }));
 vi.mock("@/lib/media-lifecycle", () => ({ deleteMediaIfUnreferenced: vi.fn(), finalizeMediaUrls: vi.fn(), scheduleMediaCleanup: vi.fn() }));
 vi.mock("@/lib/listing-import/consume", () => ({ consumeListingImport: vi.fn() }));

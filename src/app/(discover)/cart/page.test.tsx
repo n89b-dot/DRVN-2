@@ -35,9 +35,6 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@/lib/cart", () => ({ getCartIds: mocks.cartIds }));
 vi.mock("@/lib/checkout-data", () => ({ loadOwnCheckoutHolds: mocks.holds }));
-vi.mock("@/lib/beta-access", () => ({
-  getBetaAccess: async () => ({ enforced: false, eligible: true, unavailable: false }),
-}));
 vi.mock("@/lib/payments/provider", () => ({ paymentsAreLive: () => false }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 vi.mock("@/features/commerce/cart-remove-button", () => ({ CartRemoveButton: () => <button>Remove</button> }));

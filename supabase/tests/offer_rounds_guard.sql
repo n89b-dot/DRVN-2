@@ -20,7 +20,6 @@ declare
   n integer;
   denied boolean := false;
 begin
-  update public.beta_access_config set enforced = false where singleton = true;
   insert into auth.users(id, email) values
     (seller, 'rounds-seller@drvn.test'), (buyer, 'rounds-buyer@drvn.test'), (stranger, 'rounds-stranger@drvn.test');
   insert into public.listings(id, seller_id, title, category, price_cents, shipping_cents, status)

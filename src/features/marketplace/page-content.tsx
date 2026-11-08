@@ -6,7 +6,6 @@ import { fetchListings } from "@/lib/marketplace/query";
 import { CATEGORY_REDIRECTS, categoryHref, hasMarketplaceSearch, marketplaceHref, marketplacePath, normalizeMarketplaceState, type RawMarketplaceParams } from "@/lib/marketplace/state";
 import { getCategory } from "@/lib/marketplace/taxonomy";
 import { getPageClient, getPublicPageClient, getViewer } from "@/lib/supabase/page-context";
-import { betaAccessIsEnforced } from "@/lib/beta-access";
 import { ActiveFilters } from "@/app/(discover)/marketplace/active-filters";
 import { CategoryNav, CategorySheet, CategorySidebarList } from "@/app/(discover)/marketplace/category-nav";
 import { FilterBar } from "@/app/(discover)/marketplace/filter-bar";
@@ -51,7 +50,7 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
   // so they read live; the shared copy is for the category pages, sorts and
   // vehicle filters every signed-out visitor sees the same.
   const freeForm = [filters.q, filters.brand, filters.location, filters.min, filters.max, filters.ymin, filters.ymax].some(Boolean);
-  const [supabase, user, betaEnforced] = await Promise.all([freeForm ? getPageClient() : getPublicPageClient(), getViewer(), betaAccessIsEnforced()]);
+  const [supabase, user] = await Promise.all([freeForm ? getPageClient() : getPublicPageClient(), getViewer()]);
   const vehiclePromise = filters.vehicle ? resolveVehicleFilter(filters.vehicle) : Promise.resolve(null);
   // A4: offer "Turn this into filters" for a sentence-like search with no
   // filters on yet, when the model is on and the chat step is open.
@@ -138,11 +137,11 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
       )}
       <PageHead className="pagehead--task marketplace-head" title={title} sub={!category ? "Find parts for modified cars. See the car a part came off, when the seller links one." : undefined} reveal={false}>
         {/* Signed out, the loudest thing in the header is "Join DRVN" — say
-            plainly that shopping doesn't need it. The invite-only beta closes
-            guest checkout, so the promise follows the gate. */}
+            plainly that shopping doesn't need it: guest checkout is open
+            (OS-W31), capped at two live holds per device and network. */}
         {!user && (
           <p className="marketplace-head__visitor">
-            {betaEnforced ? "No account needed to browse" : "No account needed to buy"} · Payment held until it arrives ·{" "}
+            No account needed to buy · Payment held until it arrives ·{" "}
             <Link href="/protection" className="jumplink">Buyer protection</Link>
           </p>
         )}

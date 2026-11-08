@@ -25,7 +25,6 @@ declare
   v_slug text;
   v_carless_slug text;
 begin
-  update public.beta_access_config set enforced = false where singleton;
   insert into auth.users(id, email) values
     (v_author, 'sitemap-guard-author@drvn.test'), (v_suspended, 'sitemap-guard-suspended@drvn.test');
   insert into auth.users(id, email)
