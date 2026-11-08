@@ -36,7 +36,7 @@ TLS. Details: "Recording without running" below.
 
 | File | Applied to |
 |---|---|
-| `20261108180000_deletion_late_holds_and_previews.sql` | not applied |
+| `20261108180000_deletion_late_holds_and_previews.sql` | shared-dev 2026-11-08; staging 2026-11-08 |
 
 From Codex's post-merge review of #149. Apply after `20261108140000`, together with the app from the same PR: the new worker never lifts the ban on a scrubbed case (it reads `scrubbed_at`, and the gate's and finalise's new `scrubbed` key), and the console shows `blocker_code`. The old worker still runs against the new database (no signature changes), but it would still lift the ban on a scrubbed case before calling the pause, so deploy both together.
 
