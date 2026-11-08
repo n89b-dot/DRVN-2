@@ -4,16 +4,18 @@ import {execFileSync} from 'node:child_process';
 import {resolve,relative,join,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-export const REQUIRED_GATES=['unit','typecheck','lint','sql','schema-parity','build','browser-first-attempt','stripe-api','hosted-provider','invitation-boundaries','privacy','accessibility','operations','restore-rollback','staging-soak'];
+export const REQUIRED_GATES=['unit','typecheck','lint','sql','schema-parity','build','browser-first-attempt','stripe-api','hosted-provider','guest-hold-caps','privacy','accessibility','operations','restore-rollback','staging-soak'];
 const digest = value => createHash('sha256').update(value).digest('hex');
 export function validateConfiguration(config) {
- const allowed=['environmentId','canonicalOrigin','supabaseProjectRef','paymentMode','shippingMode','analyticsEnabled','searchEnabled','betaRequired','operator'];
+ const allowed=['environmentId','canonicalOrigin','supabaseProjectRef','paymentMode','shippingMode','analyticsEnabled','searchEnabled','guestCheckout','operator'];
  if (!config || Object.keys(config).some(key=>!allowed.includes(key)) || allowed.some(key=>!(key in config))) throw new Error('Candidate configuration must use the exact non-secret field inventory');
  for(const field of ['environmentId','supabaseProjectRef','operator']) if(typeof config[field]!=='string'||!config[field].trim()) throw new Error(`Missing candidate ${field}`);
  const origin=new URL(config.canonicalOrigin);
  if(origin.protocol!=='https:'||origin.username||origin.password||origin.pathname!=='/'||origin.search||origin.hash)throw new Error('Candidate requires a canonical HTTPS origin');
  if(config.paymentMode!=='stripe-test'||!['stub','easypost-test'].includes(config.shippingMode))throw new Error('Staging candidate must use test providers');
- if(config.betaRequired!==true || typeof config.analyticsEnabled!=='boolean'||typeof config.searchEnabled!=='boolean')throw new Error('Explicit beta and optional-provider decisions required');
+ // R-rcconfig (remediation plan B3): the invite-only beta was removed (#126); guest checkout is open with
+ // holds capped per device, network and listing (20261107220800), so the candidate declares that, not a beta.
+ if(config.guestCheckout!=='capped' || typeof config.analyticsEnabled!=='boolean'||typeof config.searchEnabled!=='boolean')throw new Error('Explicit guest-checkout and optional-provider decisions required');
  return config;
 }
 function treeFiles(root,base=root) {

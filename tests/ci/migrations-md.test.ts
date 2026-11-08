@@ -120,3 +120,59 @@ describe("supabase/MIGRATIONS.md records every migration (OS-signals)", () => {
     expect(stale, "Remove these from supabase/migrations-md-baseline.json \"unrecorded\": they now have a row or no file").toEqual([]);
   });
 });
+
+const PENDING = path.join(root, "supabase/migrations-staging-pending.json");
+const TWO_DAYS = 2 * 24 * 60 * 60 * 1000;
+
+/** A dated migration's timestamp as UTC milliseconds, or null for the four-digit baseline files. */
+export function fileTime(file: string): number | null {
+  const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})_/.exec(file);
+  return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : null;
+}
+
+/** Files whose vocabulary cells never name staging, though the file is two days old or more and not listed as pending. */
+export function behindStaging(rows: Map<string, string[]>, pending: Record<string, string>, now: number): string[] {
+  const late: string[] = [];
+  for (const [file, cells] of rows) {
+    const vocabulary = cells.filter(isVocabulary);
+    if (!vocabulary.length || vocabulary.some((c) => /(^|; )staging /.test(c))) continue;
+    const at = fileTime(file);
+    if (at === null || now - at < TWO_DAYS || pending[file]) continue;
+    late.push(`${file}: "${vocabulary.join(" / ")}"`);
+  }
+  return late.sort();
+}
+
+describe("staging stays level with shared dev (R-staging-behind)", () => {
+  const now = Date.UTC(2026, 10, 10, 12);
+
+  it("R-staging-behind: a row without staging is allowed for two days, then fails unless listed as pending", () => {
+    const rows = new Map([
+      ["20261108100000_a.sql", ["shared-dev 2026-11-08"]],
+      ["20261109140000_b.sql", ["shared-dev 2026-11-09"]],
+      ["20261107140000_c.sql", ["not applied"]],
+      ["20261107150000_d.sql", ["shared-dev 2026-11-07; staging 2026-11-07"]],
+      ["20261101000000_e.sql", ["shared dev project (2026-11-01)"]],
+      ["0040_f.sql", ["shared-dev 2026-09-01"]],
+      ["20261106000000_g.sql", ["shared-dev 2026-11-06"]],
+    ]);
+    expect(behindStaging(rows, { "20261106000000_g.sql": "staging credential unavailable" }, now)).toEqual([
+      '20261107140000_c.sql: "not applied"',
+      '20261108100000_a.sql: "shared-dev 2026-11-08"',
+    ]);
+  });
+
+  it("R-staging-behind: every migration two days old or more is recorded on staging, or listed as pending with a reason", () => {
+    const rows = recordedCells(fs.readFileSync(MIGRATIONS_MD, "utf8"));
+    const pending = (JSON.parse(fs.readFileSync(PENDING, "utf8")) as { pending: Record<string, string> }).pending;
+    for (const [file, reason] of Object.entries(pending)) {
+      expect(fs.existsSync(path.join(MIGRATIONS_DIR, file)), `${file} is listed as pending but has no file`).toBe(true);
+      expect(reason.trim().length, `${file} needs a reason`).toBeGreaterThan(0);
+    }
+    expect(
+      behindStaging(rows, pending, Date.now()),
+      "Apply these to staging with the runner and add their staging cell (supabase/MIGRATIONS.md), or list them in supabase/migrations-staging-pending.json with the reason",
+    ).toEqual([]);
+  });
+});
+
