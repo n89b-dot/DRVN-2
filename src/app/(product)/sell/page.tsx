@@ -5,7 +5,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Alert, Foot, PageHead } from "@/components/ui";
-import { getBetaAccess } from "@/lib/beta-access";
 import { capture } from "@/lib/analytics";
 import { sourceLabelFor } from "@/lib/listing-import/engine";
 import {
@@ -25,7 +24,6 @@ import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { getVehicleMakes } from "@/lib/vehicles/vpic";
 
 import { SellForm, type SellFormInitialValues } from "./sell-form";
-import { SellerAccessNotice } from "./seller-access-notice";
 import { reportError } from "@/lib/monitoring";
 import { orderCars } from "@/lib/cars/order";
 import type { TurnCard } from "@/lib/ai/run";
@@ -133,7 +131,6 @@ export default async function SellPage({
   // One parallel round. The access check, the form's data, the import under
   // review and the pre-fill mod line used to load in up to six steps.
   const [
-    betaAccess,
     { data: cars, error },
     makes,
     canPublish,
@@ -143,7 +140,6 @@ export default async function SellPage({
     { data: importRow },
     { data: prefillMod },
   ] = await Promise.all([
-    getBetaAccess(user.id, "seller"),
     supabase
       .from("cars")
       .select("id, name, make, model, year, created_at")
@@ -189,7 +185,6 @@ export default async function SellPage({
           .maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
-  if (!betaAccess.eligible) return <SellerAccessNotice unavailable={betaAccess.unavailable} />;
 
   const drvnShipping = {
     enabled: integratedShippingEnabled(),

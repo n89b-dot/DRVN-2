@@ -15,6 +15,10 @@
     "20261011100000_listing_vehicle_fit.sql": {
       "sha256": "fbfcb7d6bcf35a93bc169835d77909432e2bf7b2cbf69c7b7ef42cd78053d49c",
       "reason": "empties listing_vehicle_fit, a table derived from listings, and rebuilds it from the active listings in the same transaction"
+    },
+    "20261107220800_open_beta_and_guest_holds.sql": {
+      "sha256": "bcc44bfb5e731c10937225e57e1b6587037d115fb8674c7b333d1e29c761dc23",
+      "reason": "OS-W31 (Neil's ruling: remove the invite-only beta) drops public.beta_access_config, its one-row on/off switch, and private.beta_signup_claims, short-lived signup claims nothing reads once the beta is gone; invitation and membership history is kept"
     }
   }
 }

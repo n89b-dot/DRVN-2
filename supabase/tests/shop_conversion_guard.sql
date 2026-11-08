@@ -27,7 +27,6 @@ declare
   result jsonb;
   rejected boolean;
 begin
-  update public.beta_access_config set enforced=false where singleton;
   insert into auth.users(id,email) values
     (actor,'shop-conversion-actor@drvn.test'),
     (failing,'shop-conversion-failure@drvn.test'),
@@ -76,13 +75,12 @@ begin
     raise exception 'Legacy partial shop conversion was not repaired';
   end if;
 
-  update public.beta_access_config set enforced=true where singleton;
+  -- OS-W31: the invite-only beta is gone, so any member may become a shop.
   perform pg_temp.impersonate(other_user);
-  rejected:=false;
-  begin perform public.become_shop(); exception when others then rejected:=true; end;
+  perform public.become_shop();
   perform pg_temp.back_to_admin();
-  if not rejected or (select profile_type from public.profiles where id=other_user)<>'user' then
-    raise exception 'Uninvited account crossed the shop conversion boundary';
+  if (select profile_type from public.profiles where id=other_user)<>'shop' then
+    raise exception 'A member without an invitation could not become a shop';
   end if;
 
   if has_function_privilege('anon','public.become_shop()','execute') then

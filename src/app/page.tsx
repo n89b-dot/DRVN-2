@@ -11,7 +11,6 @@ import {
   Media,
   PageHead,
 } from "@/components/ui";
-import { betaAccessIsEnforced } from "@/lib/beta-access";
 import { hydrateListingCards } from "@/lib/marketplace/query";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { LANDING_DESCRIPTION, LANDING_SUB } from "@/lib/share-copy";
@@ -103,7 +102,6 @@ export default async function LandingPage() {
     { data: trendingRows },
     { count: liveListingCount },
     { count: publicCarCount },
-    betaEnforced,
   ] = await Promise.all([
     supabase
       .from("listings")
@@ -139,7 +137,6 @@ export default async function LandingPage() {
     }),
     supabase.from("listings").select("id", { count: "exact", head: true }).eq("status", "active"),
     supabase.from("cars").select("id", { count: "exact", head: true }).eq("is_public", true),
-    betaAccessIsEnforced(),
   ]);
 
   // One hydration for every listing on the page: photo, seller, source car.
@@ -390,7 +387,7 @@ export default async function LandingPage() {
                 <li>
                   <span>
                     Pay through DRVN. The seller isn’t paid until it arrives
-                    {betaEnforced ? ". Buying opens to invited members during the beta." : ", and you don’t need an account to buy."}
+                    , and you don’t need an account to buy.
                   </span>
                 </li>
               </ol>

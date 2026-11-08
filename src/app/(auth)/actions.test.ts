@@ -12,8 +12,6 @@ const mocks = vi.hoisted(() => ({
   updateUser: vi.fn(),
   profileUpdate: vi.fn(),
   adminInsert: vi.fn(),
-  getBetaAccess: vi.fn(),
-  prepareBetaSignup: vi.fn(),
   reportError: vi.fn(),
   hasAgeConfirmation: vi.fn(),
   recordAgeConfirmation: vi.fn(),
@@ -25,7 +23,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock("next/headers", () => ({ headers: async () => new Headers({ origin: "https://drvn.example" }) }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/lib/beta-access", () => ({ getBetaAccess: mocks.getBetaAccess, prepareBetaSignup: mocks.prepareBetaSignup }));
 vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
 vi.mock("@/lib/age-confirmation-record", () => ({
   hasAgeConfirmation: mocks.hasAgeConfirmation,
@@ -88,8 +85,6 @@ beforeEach(() => {
   mocks.signUp.mockResolvedValue({ data: { user: { id: "new", identities: [{ id: "i1" }] }, session: null }, error: null });
   mocks.hasAgeConfirmation.mockResolvedValue(true);
   mocks.recordAgeConfirmation.mockResolvedValue(true);
-  mocks.prepareBetaSignup.mockResolvedValue({ enforced: false });
-  mocks.getBetaAccess.mockResolvedValue({ enforced: false, eligible: true });
   mocks.updateUser.mockResolvedValue({ error: null });
   mocks.getUser.mockResolvedValue({ data: { user: { id: "u1", user_metadata: { avatar_url: "https://img.example/a.png" } } } });
   mocks.profileUpdate.mockReturnValue({ data: [{ id: "u1" }], error: null });
@@ -190,23 +185,21 @@ describe("password reset throttling", () => {
 describe("sign-up throttling", () => {
   const attempt = () => signup({}, form({ email: " New@DRVN.test ", password: "long-enough-pass", age_confirmed: "yes" }));
 
-  it("counts the hashed email and the network before the invitation check or Supabase", async () => {
+  it("counts the hashed email and the network before Supabase", async () => {
     await expect(attempt()).rejects.toThrow("redirect:/login?message=check-email");
     expect(subjects().map(([action]) => action)).toEqual(["sign-up", "sign-up-email", "sign-up-network"]);
     expect(subjects()[0][1]).toMatch(/^email:[0-9a-f]{64}:network:abc$/);
     expect(JSON.stringify(subjects())).not.toContain("new@drvn");
-    expect(mocks.allowAction.mock.invocationCallOrder[0]).toBeLessThan(mocks.prepareBetaSignup.mock.invocationCallOrder[0]);
+    expect(mocks.allowAction.mock.invocationCallOrder[0]).toBeLessThan(mocks.signUp.mock.invocationCallOrder[0]);
     expect(mocks.signUp).toHaveBeenCalledOnce();
   });
 
   it("sends no confirmation email once any key is exhausted", async () => {
     for (const exhausted of ["sign-up", "sign-up-email", "sign-up-network"]) {
       mocks.signUp.mockClear();
-      mocks.prepareBetaSignup.mockClear();
       mocks.allowAction.mockImplementation(async (rule: { action: string }) => rule.action !== exhausted);
       await expect(attempt()).resolves.toMatchObject({ error: "Too many sign-up attempts. Wait a while and try again." });
       expect(mocks.signUp).not.toHaveBeenCalled();
-      expect(mocks.prepareBetaSignup).not.toHaveBeenCalled();
     }
   });
 
@@ -298,15 +291,11 @@ describe("onboarding an account with no profile", () => {
     await expect(finish()).resolves.toEqual({ error: "That username is taken." });
   });
 
-  it("refuses without creating anything when the existing access check says no, and says how to leave", async () => {
-    mocks.getBetaAccess.mockResolvedValue({ enforced: true, eligible: false });
-    const result = await finish();
-    expect(result.error).toMatch(/Sign out below/);
-    expect(mocks.profileUpdate).not.toHaveBeenCalled();
-    expect(mocks.adminInsert).not.toHaveBeenCalled();
-
-    mocks.getBetaAccess.mockResolvedValue({ enforced: true, eligible: false, unavailable: true });
-    await expect(finish()).resolves.toEqual({ error: "That didn't go through. Try again in a moment." });
+  // OS-W31 (#86 follow-up): the invite-only beta is gone, so no access check
+  // can refuse onboarding; the missing-profile repair above still runs.
+  it("never asks the removed beta whether this account may finish", async () => {
+    const source = (await import("node:fs")).readFileSync("src/app/(auth)/actions.ts", "utf8");
+    expect(source).not.toMatch(/beta-access|getBetaAccess|prepareBetaSignup|beta_claim_id/);
   });
 });
 

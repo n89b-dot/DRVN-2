@@ -26,7 +26,6 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/revalidate", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/analytics", () => ({ capture: vi.fn() }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
-vi.mock("@/lib/beta-access", () => ({ getBetaAccess: async () => ({ eligible: true }), betaCommerceError: () => "beta" }));
 vi.mock("@/lib/payments/connect", () => ({ sellerCanPublish: async () => state.canPublish }));
 vi.mock("@/lib/rate-limit", () => ({ RATE_LIMITS: { createListing: {} }, allowAction: async () => true, rateLimitMessage: () => "slow down" }));
 vi.mock("@/lib/media-lifecycle", () => ({

@@ -21,7 +21,6 @@ declare
   v_order uuid;
   stats record;
 begin
-  update public.beta_access_config set enforced = false where singleton = true;
   insert into auth.users(id, email, raw_user_meta_data) values
     (seller, 'garage-stats-seller@drvn.test', '{}'),
     (buyer, 'garage-stats-buyer@drvn.test', '{}'),

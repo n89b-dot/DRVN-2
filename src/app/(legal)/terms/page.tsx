@@ -108,9 +108,8 @@ export default async function TermsPage() {
           and password, or with Google where it&apos;s offered.
         </p>
         <p>
-          DRVN is in an invited beta. While invitations are switched on, joining — and buying and
-          selling — is open only to members with an invitation sent to their email address.
-          Browsing needs no account.
+          Browsing needs no account, and you can buy as a guest with just an email address.
+          A guest checkout holds up to two parts at a time.
         </p>
         <p>
           You can delete your account at any time from{" "}

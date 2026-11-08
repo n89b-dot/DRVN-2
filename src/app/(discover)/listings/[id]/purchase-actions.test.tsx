@@ -39,8 +39,6 @@ function render(myOffer: { id: string; amountCents: number; counterCents: number
       <PurchaseActions
         listingId="listing-1"
         isLoggedIn
-        betaEnforced={false}
-        buyerEligible
         isOwn={false}
         isActive
         paymentsLive={false}

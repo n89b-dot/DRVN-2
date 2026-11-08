@@ -19,7 +19,6 @@ import { createClient } from "@/lib/supabase/server";
 
 import { CartRemoveButton } from "@/features/commerce/cart-remove-button";
 import { reportError } from "@/lib/monitoring";
-import { getBetaAccess } from "@/lib/beta-access";
 
 import { cartErrorMessage } from "./cart-errors";
 
@@ -59,18 +58,11 @@ export default async function CartPage({
   // OS-W17 (N85): parts the buyer's own checkout is holding are theirs to
   // finish paying for, not "someone else's reservation".
   const ownHolds = ids.length ? await loadOwnCheckoutHolds(user?.id ?? null) : new Map<string, string>();
-  const betaAccess = await getBetaAccess(user?.id, "buyer");
-  const checkoutHref = betaAccess.enforced && !user
-    ? "/login?next=%2Fcheckout"
-    : "/checkout";
-  const checkoutLabel = betaAccess.enforced && !user ? "Sign in to check out" : "Proceed to checkout";
-  // Said up front rather than after the click: a signed-in member without
-  // buyer access (or whose check failed) has no checkout to proceed to.
-  const checkoutBlocked = betaAccess.unavailable
-    ? "We couldn't check your buying access just now. Reload the page to try again."
-    : user && !betaAccess.eligible
-      ? "Buying is limited to invited members during the beta. Your cart stays here, and existing orders are unaffected."
-      : null;
+  // OS-W31: checkout is open to everyone, guests included (their holds are
+  // capped in the database, N89).
+  const checkoutHref = "/checkout";
+  const checkoutLabel = "Proceed to checkout";
+  const checkoutBlocked: string | null = null;
 
   const { data: listings, error } = ids.length
     ? await supabase
