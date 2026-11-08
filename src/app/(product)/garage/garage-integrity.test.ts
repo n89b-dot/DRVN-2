@@ -28,7 +28,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 import { STALE_MOD_SHEET } from "@/lib/mods/sheet-revision";
 
-import { confirmLostModSave, saveModItems, saveShowcase } from "./actions";
+import { confirmLostModSave, saveModItems, saveShowcase, unlinkModListing } from "./actions";
 
 const line = {
   id: "12345678-1234-4234-8234-123456789012",
@@ -87,5 +87,41 @@ describe("N66 the showcase is replaced in one database call", () => {
   it("tells the member the old showcase is untouched when the save fails", async () => {
     mocks.rpc.mockReturnValue({ data: null, error: { code: "XX000", message: "boom" } });
     expect((await saveShowcase("car", "u", [{ x: 0.1, y: 0.1, modItemId: null, label: "a" }])).error).toContain("previous one is unchanged");
+  });
+});
+
+describe("OS-W23 follow-up: unlinking a listing can't authorise a stale overwrite", () => {
+  it("unlinks in one call over the revision the editor holds and hands back the revision it produced", async () => {
+    mocks.rpc.mockReturnValue({ data: { revision: "rev-2", listing_id: "listing" }, error: null });
+    const result = await unlinkModListing("car", "line", "rev-1");
+    // One database call: no separate revision reads around a table update,
+    // which let a line added in between be adopted unseen.
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    expect(mocks.rpc).toHaveBeenCalledWith("unlink_mod_listing", {
+      p_car: "car",
+      p_mod_item: "line",
+      p_expected_revision: "rev-1",
+    });
+    expect(result).toEqual({ ok: "Link removed.", revision: "rev-2" });
+    expect(mocks.refresh).toHaveBeenCalledWith("/listings/listing");
+  });
+
+  it("is refused as stale, with no revision to adopt, when the sheet changed elsewhere first", async () => {
+    mocks.rpc.mockReturnValue({ data: null, error: { code: "40001", hint: "stale_mod_sheet", message: "x" } });
+    const result = await unlinkModListing("car", "line", "rev-old");
+    expect(result).toEqual({ error: STALE_MOD_SHEET, stale: true });
+    expect(result.revision).toBeUndefined();
+  });
+
+  it("never unlinks without the revision the editor loaded", async () => {
+    expect((await unlinkModListing("car", "line", "")).error).toBeTruthy();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("hands back no revision when the database didn't return one", async () => {
+    mocks.rpc.mockReturnValue({ data: null, error: null });
+    const result = await unlinkModListing("car", "line", "rev-1");
+    expect(result.error).toBeTruthy();
+    expect(result.revision).toBeUndefined();
   });
 });
