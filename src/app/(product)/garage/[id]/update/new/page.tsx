@@ -9,6 +9,8 @@ import type { TurnCard } from "@/lib/ai/run";
 import { isOwnedStorageUrl } from "@/lib/media-url";
 import { loadTaggableParts } from "@/features/composer/taggable-parts";
 
+import { modPickerLabel, seedChangeBlocks } from "./seed-blocks";
+
 import { createRichActivityPost, discardActivityDraft, saveActivityDraft } from "../../../actions";
 
 export const metadata = { title: "New update - DRVN" };
@@ -54,14 +56,8 @@ export default async function NewUpdatePage({
     loadTaggableParts(supabase, user.id),
   ]);
   const draftBlocks = draft ? normalizeBlocks(draft.body) : null;
-  const mods = (modRows ?? []).map((mod) => ({
-    id: mod.id,
-    // Parts that came off stay pickable and say so: an update is very often
-    // *about* the part that just left the car.
-    label:
-      ([mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw_text || "Build entry") +
-      (mod.status === "removed" ? " — off the car" : ""),
-  }));
+  // Parts that came off stay pickable and say so (modPickerLabel).
+  const mods = (modRows ?? []).map((mod) => ({ id: mod.id, label: modPickerLabel(mod) }));
 
   // Passive-affordance seeds (§W): "Create an update from these changes" /
   // "Share these in an update" prepopulate the composer — visibly, as normal
@@ -95,24 +91,7 @@ export default async function NewUpdatePage({
     }
   }
   if (!draftBlocks?.length && !seededBlocks.length) {
-    const parseLabels = (raw?: string) =>
-      (raw ?? "")
-        .split("|")
-        .map((label) => label.trim().slice(0, 80))
-        .filter(Boolean)
-        .slice(0, 3);
-    const byLabel = new Map(mods.map((mod) => [mod.label, mod.id]));
-    for (const label of parseLabels(seeds.added)) {
-      seededBlocks.push({
-        type: "mod",
-        action: "installed",
-        modItemId: byLabel.get(label) ?? null,
-        label,
-      });
-    }
-    for (const label of parseLabels(seeds.removed)) {
-      seededBlocks.push({ type: "mod", action: "removed", modItemId: null, label });
-    }
+    seededBlocks.push(...seedChangeBlocks(seeds, modRows ?? []));
     const photoCount = Math.min(Number(seeds.photos) || 0, 12);
     if (photoCount >= 1) {
       const { data: latest } = await supabase
