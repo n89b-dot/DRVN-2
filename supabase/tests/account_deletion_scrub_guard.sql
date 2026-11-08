@@ -55,20 +55,20 @@ begin
      or not pg_temp.raises(format('update public.profiles set username = %L where id = %L', 'ab', o), '23514')
      or not pg_temp.raises(format('update public.profiles set username = %L where id = %L', repeat('a', 31), o), '23514')
      or not pg_temp.raises(format('update public.profiles set username = %L where id = %L', 'has space', o), '23514') then
-    raise exception 'FAIL U1: a handle outside lowercase a-z, 0-9 and _ at 3-30 characters was accepted';
+    raise exception 'FAIL U1: a handle outside lowercase a-z, 0-9 and _ at 3-30 characters was accepted (N38)';
   end if;
   update public.profiles set username = repeat('a', 30) where id = o;
   update public.profiles set username = 'olly_other' where id = o;
 
   if not pg_temp.raises(format('update public.profiles set username = %L where id = %L', 'admin', o), '23505')
      or not pg_temp.raises(format('update public.profiles set username = %L where id = %L', 'support', o), '23505') then
-    raise exception 'FAIL U2: a reserved handle was taken';
+    raise exception 'FAIL U2: a reserved handle was taken (N38)';
   end if;
 
   if public.username_available('admin') <> 'taken' or public.username_available('olly_other') <> 'taken'
      or public.username_available('Neil') <> 'invalid' or public.username_available('ab') <> 'invalid'
      or public.username_available(null) <> 'invalid' or public.username_available('fresh_handle_9') <> 'available' then
-    raise exception 'FAIL U3: availability does not follow the rules';
+    raise exception 'FAIL U3: availability does not follow the rules (N38)';
   end if;
 
   -- U4: the audit-and-fix the migration ran, against handles that existed
@@ -87,7 +87,7 @@ begin
   update public.profiles set created_at = now() - interval '3 days', username = 'drvn' where id = u7;
   alter table public.profiles enable trigger profiles_username_choice;
   if private.audit_and_fix_usernames() <> 6 then
-    raise exception 'FAIL U4a: the audit did not record exactly the six problem handles';
+    raise exception 'FAIL U4a: the audit did not record exactly the six problem handles (N38)';
   end if;
   if (select username from public.profiles where id = u1) is distinct from 'neil'
      or (select username from public.profiles where id = u2) is not null
@@ -96,16 +96,16 @@ begin
      or (select username from public.profiles where id = u5) is not null
      or (select username from public.profiles where id = u6) is not null
      or (select username from public.profiles where id = u7) is distinct from 'drvn' then
-    raise exception 'FAIL U4b: remediation did not lowercase the unambiguous, clear the rest and keep a held reserved name';
+    raise exception 'FAIL U4b: remediation did not lowercase the unambiguous, clear the rest and keep a held reserved name (N38)';
   end if;
   if not exists (select 1 from private.username_audit where user_id = u2 and problem = 'case_collision' and action = 'cleared' and old_username = 'Neil')
      or not exists (select 1 from private.username_audit where user_id = u3 and action = 'lowercased' and new_username = 'bob')
      or not exists (select 1 from private.username_audit where user_id = u6 and action = 'cleared')
      or not exists (select 1 from private.username_audit where user_id = u7 and problem = 'reserved' and action = 'kept') then
-    raise exception 'FAIL U4c: the audit does not say what happened to each handle';
+    raise exception 'FAIL U4c: the audit does not say what happened to each handle (N38)';
   end if;
   if private.audit_and_fix_usernames() <> 0 then
-    raise exception 'FAIL U4d: a second audit found work the first left';
+    raise exception 'FAIL U4d: a second audit found work the first left (N38)';
   end if;
   alter table public.profiles add constraint profiles_username_format
     check (username is null or username ~ '^[a-z0-9_]{3,30}$');
@@ -114,10 +114,10 @@ begin
      or has_table_privilege('authenticated', 'private.username_tombstones', 'select')
      or has_table_privilege('authenticated', 'private.reserved_usernames', 'select')
      or has_table_privilege('authenticated', 'private.username_audit', 'select') then
-    raise exception 'FAIL U5: the username rules are exposed wrongly';
+    raise exception 'FAIL U5: the username rules are exposed wrongly (N38)';
   end if;
   if has_function_privilege('authenticated', 'private.audit_and_fix_usernames()', 'execute') then
-    raise exception 'FAIL U6: members can run the username remediation';
+    raise exception 'FAIL U6: members can run the username remediation (N38)';
   end if;
 
   -- ---------- N16: the scrub ----------
@@ -154,7 +154,7 @@ begin
 
   -- S1: nothing to scrub without a deletion under way.
   if not pg_temp.raises(format('select public.scrub_deleted_account(%L, %L, %L)', m, digest, 'test-v1'), '55000') then
-    raise exception 'FAIL S1: an account was scrubbed with no deletion requested';
+    raise exception 'FAIL S1: an account was scrubbed with no deletion requested (N16)';
   end if;
 
   -- S2: never while money is still moving.
@@ -163,7 +163,7 @@ begin
   insert into public.remediation_jobs (kind, dedup_key, payload) values ('delete_account', 'delete:' || held, jsonb_build_object('user_id', held));
   insert into public.account_deletion_requests (user_id, outcome, next_action) values (held, 'cleanup_pending', 'x');
   if not pg_temp.raises(format('select public.scrub_deleted_account(%L, %L, %L)', held, digest, 'test-v1'), '55000') then
-    raise exception 'FAIL S2: an account with an order in progress was scrubbed';
+    raise exception 'FAIL S2: an account with an order in progress was scrubbed (N16)';
   end if;
 
   insert into public.remediation_jobs (kind, dedup_key, payload) values ('delete_account', 'delete:' || m, jsonb_build_object('user_id', m));
@@ -175,7 +175,7 @@ begin
   if (select email from auth.users where id = m) is not null
      or (select raw_user_meta_data from auth.users where id = m) <> '{}'::jsonb
      or exists (select 1 from public.account_emails where user_id = m) then
-    raise exception 'FAIL S3: the sign-in email or metadata survived';
+    raise exception 'FAIL S3: the sign-in email or metadata survived (N16)';
   end if;
 
   -- S4: the profile, and the handle retired.
@@ -185,7 +185,7 @@ begin
      or not exists (select 1 from private.username_tombstones where username = 'dana_deletes')
      or public.username_available('dana_deletes') <> 'taken'
      or not pg_temp.raises(format('update public.profiles set username = %L where id = %L', 'dana_deletes', u2), '23505') then
-    raise exception 'FAIL S4: the profile kept personal fields, or its handle can be taken again';
+    raise exception 'FAIL S4: the profile kept personal fields, or its handle can be taken again (N16)';
   end if;
 
   -- S5: addresses.
@@ -194,7 +194,7 @@ begin
                 or ship_city is not null or ship_postcode is not null or ship_state is not null or ship_phone is not null))
      or (select accepted_checkout_shipping from public.orders where id = bought) <> '{"country":"GB","isCollection":false}'::jsonb
      or exists (select 1 from public.purchase_attempts where buyer_id = m and (checkout_context ? 'shipping' or checkout_context ? 'destinationHash')) then
-    raise exception 'FAIL S5: an address survived';
+    raise exception 'FAIL S5: an address survived (N16)';
   end if;
 
   -- S6: party labels, on both sides.
@@ -202,7 +202,7 @@ begin
      or (select seller_label from public.orders where id = sold) <> 'Deleted member'
      or (select seller_label from public.orders where id = bought) <> 'Olly'
      or (select buyer_label from public.orders where id = sold) <> 'Olly' then
-    raise exception 'FAIL S6: order party labels were not scrubbed, or the other party''s were';
+    raise exception 'FAIL S6: order party labels were not scrubbed, or the other party''s were (N16)';
   end if;
 
   -- S7: what they wrote is gone; what the other party wrote is not.
@@ -212,14 +212,14 @@ begin
      or exists (select 1 from public.listing_questions where author_id = m and body <> 'Removed: this member deleted their account.')
      or exists (select 1 from public.activity_comments where author_id = m)
      or (conv is not null and (select last_message_preview from public.conversations where id = conv) ilike '%07000%') then
-    raise exception 'FAIL S7: message, question or comment bodies survived, or the other party''s were touched';
+    raise exception 'FAIL S7: message, question or comment bodies survived, or the other party''s were touched (N16)';
   end if;
 
   -- S8: their own social record.
   if exists (select 1 from public.follows where follower_id = m or target_id = m)
      or exists (select 1 from public.saved_searches where user_id = m)
      or exists (select 1 from public.notifications where user_id = m) then
-    raise exception 'FAIL S8: follows, saved searches or notifications survived';
+    raise exception 'FAIL S8: follows, saved searches or notifications survived (N16)';
   end if;
 
   -- S9: transaction keys are kept.
@@ -228,7 +228,7 @@ begin
      or (select ship_country from public.orders where id = bought) <> 'GB'
      or (select buyer_id from public.orders where id = bought) <> m
      or not exists (select 1 from public.profiles where id = m) then
-    raise exception 'FAIL S9: a transaction key went with the personal data';
+    raise exception 'FAIL S9: a transaction key went with the personal data (N16)';
   end if;
 
   -- S10: the keyed digest and the 6-year clock, from the later of now and
@@ -241,7 +241,7 @@ begin
      or 'financial record retention duration' = any (req.policy_decisions_pending)
      or 'eventual identity anonymization' = any (req.policy_decisions_pending)
      or not ('backup expiry' = any (req.policy_decisions_pending)) then
-    raise exception 'FAIL S10: digest or retention clock wrong (%)', row_to_json(req);
+    raise exception 'FAIL S10: digest or retention clock wrong (%) (N16)', row_to_json(req);
   end if;
 
   -- S11: resumable — a second run changes nothing and keeps the first digest.
@@ -249,21 +249,21 @@ begin
   if (r->>'messages')::int <> 0 or (r->>'questions')::int <> 0
      or (select email_digest from public.account_deletion_requests where user_id = m) <> digest
      or (select retain_until from public.account_deletion_requests where user_id = m) <> later + interval '6 years' then
-    raise exception 'FAIL S11: a second scrub rewrote the record (%)', r;
+    raise exception 'FAIL S11: a second scrub rewrote the record (%) (N16)', r;
   end if;
 
   -- The frozen accepted-offer address still can't be edited by anything else.
   if not pg_temp.raises(format('update public.orders set ship_country = %L where id = %L', 'FR', bought), 'P0001') then
-    raise exception 'FAIL S11b: an accepted-offer delivery address became editable';
+    raise exception 'FAIL S11b: an accepted-offer delivery address became editable (N16)';
   end if;
 
   -- S12: members can't call the scrub.
   if has_function_privilege('authenticated', 'public.scrub_deleted_account(uuid,text,text)', 'execute')
      or has_function_privilege('anon', 'public.scrub_deleted_account(uuid,text,text)', 'execute') then
-    raise exception 'FAIL S12: a member can call the deletion scrub';
+    raise exception 'FAIL S12: a member can call the deletion scrub (N16)';
   end if;
 
-  raise notice 'all account deletion scrub and username checks passed';
+  raise notice 'all account deletion scrub (N16) and username (N38) checks passed';
 end $$;
 
 rollback;

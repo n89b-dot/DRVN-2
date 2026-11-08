@@ -14,11 +14,20 @@ const state = vi.hoisted(() => ({
   request: { id: "req-1", email_digest: null as string | null },
   scrubError: null as { message: string } | null,
   finished: [] as unknown[],
+  stripeCustomer: null as string | null,
+  stripeDeleted: [] as string[],
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("./job-lease", () => ({ jobHeartbeat: () => async () => {} }));
-vi.mock("./payments/stripe", () => ({ stripeClient: vi.fn() }));
+vi.mock("./payments/stripe", () => ({
+  stripeClient: () => ({
+    customers: {
+      retrieve: async (id: string) => ({ id, deleted: false, metadata: { user_id: "u-1" } }),
+      del: async (id: string) => { state.calls.push("stripe-delete"); state.stripeDeleted.push(id); return { id, deleted: true }; },
+    },
+  }),
+}));
 vi.mock("@/lib/media-lifecycle", () => ({ removeMediaObject: vi.fn() }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 vi.mock("@/lib/account-export-worker", () => ({ purgeAccountExportsForUser: vi.fn(async () => { state.calls.push("purge-exports"); }) }));
@@ -28,7 +37,7 @@ vi.mock("@/lib/supabase/admin", () => ({
     const chain = (table: string): unknown => {
       const result = () => {
         if (table === "account_deletion_requests") return { data: state.request, error: null };
-        if (table === "profiles") return { data: { stripe_customer_id: null }, error: null };
+        if (table === "profiles") return { data: { stripe_customer_id: state.stripeCustomer }, error: null };
         return { data: [], error: null };
       };
       const proxy: unknown = new Proxy(function () {}, {
@@ -71,6 +80,8 @@ beforeEach(() => {
   state.request = { id: "req-1", email_digest: null };
   state.scrubError = null;
   state.finished = [];
+  state.stripeCustomer = null;
+  state.stripeDeleted = [];
   vi.stubEnv("ACCOUNT_EMAIL_DIGEST_KEY", "k".repeat(40));
 });
 
@@ -92,6 +103,13 @@ describe("N16 deletion scrub in the worker", () => {
     state.request = { id: "req-1", email_digest: "a".repeat(64) };
     await processAccountDeletions();
     expect(state.rpcArgs.scrub_deleted_account).toEqual({ p_user: "u-1", p_email_digest: null, p_digest_key: null });
+  });
+
+  it("N439: a trader's saved cards are deleted too, though their account is kept for its orders", async () => {
+    state.stripeCustomer = "cus_123";
+    await expect(processAccountDeletions()).resolves.toMatchObject({ outcome: "operator_attention" });
+    expect(state.stripeDeleted).toEqual(["cus_123"]);
+    expect(state.calls.indexOf("scrub_deleted_account")).toBeLessThan(state.calls.indexOf("stripe-delete"));
   });
 
   it("a scrub that fails leaves the job to retry, and nothing after it runs", async () => {

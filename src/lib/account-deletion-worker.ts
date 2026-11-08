@@ -119,6 +119,17 @@ export async function processAccountDeletions() {
         return { completed, continued: 1, outcome: "temporary_financial_hold" as const };
       }
       await purgeAccountExportsForUser(uid);
+      // N439 (N16): saved cards go for every deleted account, traders
+      // included. Past charges and refunds hang on the charge, not the
+      // customer, so the transaction keys are unaffected.
+      if (job.payload.stripe_customer_id) {
+        const stripe = stripeClient();
+        const customer = await stripe.customers.retrieve(job.payload.stripe_customer_id, {}, { timeout: 10000, maxNetworkRetries: 0 });
+        if (!customer.deleted) {
+          if (customer.metadata.user_id !== uid) throw new Error("Customer ownership requires operator review");
+          await stripe.customers.del(customer.id, {}, { timeout: 10000, maxNetworkRetries: 0 });
+        }
+      }
       if (outcome === "operator_attention") {
         const retained = await admin.from("account_deletion_requests").update({
           outcome: "operator_attention",
@@ -137,14 +148,6 @@ export async function processAccountDeletions() {
         const acknowledged = await admin.rpc("finish_remediation_job", { p_id: job.id, p_lease: job.lease_id, p_error: undefined });
         if (acknowledged.error) throw new Error("Deletion outcome acknowledgement failed");
         return { completed, outcome: "operator_attention" as const };
-      }
-      if (job.payload.stripe_customer_id) {
-        const stripe = stripeClient();
-        const customer = await stripe.customers.retrieve(job.payload.stripe_customer_id, {}, { timeout: 10000, maxNetworkRetries: 0 });
-        if (!customer.deleted) {
-          if (customer.metadata.user_id !== uid) throw new Error("Customer ownership requires operator review");
-          await stripe.customers.del(customer.id, {}, { timeout: 10000, maxNetworkRetries: 0 });
-        }
       }
       await heartbeat();
       if (account.user) {

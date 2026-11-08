@@ -17,6 +17,39 @@ recorded file is skipped, and a destructive baseline (0001) is refused on a
 database with any table in `public`. Details: "Applying without Docker or
 psql" below.
 
+## November 7 — Cloud A blocker batches: OS-W21 OS-W23 OS-R-arrival OS-W08 OS-W11 OS-W32 OS-W33 OS-W31 OS-W34
+
+| File | Applied to |
+|---|---|
+| `20261107220000_social_write_quotas.sql` | not applied |
+| `20261107220010_car_reports_and_hiding.sql` | not applied |
+| `20261107220020_notification_prefs_private.sql` | not applied |
+| `20261107220100_garage_integrity.sql` | not applied |
+| `20261107220110_mod_sheet_lost_save.sql` | not applied |
+| `20261107220200_listing_view_arrivals.sql` | not applied |
+| `20261107220300_private_agent_chat_photos.sql` | not applied |
+| `20261107220400_account_privacy_lifecycle.sql` | not applied |
+| `20261107220500_username_rules.sql` | not applied |
+| `20261107220510_account_deletion_scrub.sql` | not applied |
+| `20261107220600_blocks_and_message_seller.sql` | not applied |
+| `20261107220700_withdraw_listing.sql` | not applied |
+| `20261107220800_open_beta_and_guest_holds.sql` | not applied |
+
+"Not applied" means not applied by the cloud session that wrote these (it can't reach any hosted database); whoever applies one updates its cell. Apply in version order, after every earlier migration, each with the app from the PR that added it (#95 W21, #105 W23, #109 R-arrival, #116 W08, #119 W11, #149 W34, #121 W32, #122 W33, #126 W31).
+
+- **`220000`–`220020` (OS-W21):** database write quotas on social and message writes (RL429), car reports and moderation holds, notification prefs closed to other members (`my_notification_prefs()`).
+- **`220100`, `220110` (OS-W23):** `save_mod_items(uuid,jsonb,text)` replaces the two-argument one, refusing a stale sheet (40001, hint `stale_mod_sheet`); `mod_sheet_revision_if_matches` lets a lost save's retry converge; gallery and showcase caps for member writes. The app must ship with it: the old two-argument call is dropped.
+- **`220200` (OS-R-arrival):** `record_listing_view` records the arrival surface.
+- **`220300` (OS-W08):** the private `agent-chat-photos` bucket; `agent_chat_append` accepts only that bucket's authenticated URLs.
+- **`220400` (OS-W11):** suspended members keep export and deletion; `my_account_deletion_status()`. Keeps #112's fresh sign-in check in `request_account_deletion`.
+- **`220500` (OS-W34, N38):** audits and fixes existing usernames **on the data** (lowercases the unambiguous, clears the rest back to onboarding; every change in `private.username_audit`), then adds `profiles_username_format`, reserved names and tombstones. Read `private.username_audit` after applying: a cleared member chooses a new handle at onboarding.
+- **`220510` (OS-W34, N16):** `scrub_deleted_account` and the retention columns. It writes `auth.users` and `auth.identities` as a definer function: confirm on the hosted project that the migration role may update them (if not, deletions fail loudly and retry). Redefines `guard_accepted_checkout_shipping`.
+- **`220600` (OS-W32):** `member_blocks` and the block triggers (BL403), suspended-member visibility, Message seller and the first-contact limit (RL429 with no detail).
+- **`220700` (OS-W33):** `withdraw_listing(uuid)`; deleting a listing with offers is refused (LW409).
+- **`220800` (OS-W31):** removes the invite-only beta (drops `beta_access_config` and `private.beta_signup_claims`: allow-listed for the runner in `migration-targets.json`) and caps guest holds. Ship the app from #126 with it: the old app reads the dropped beta functions.
+
+Guards: `social_moderation_guard`, `garage_integrity_guard`, `agent_chat_photos_guard`, `account_privacy_lifecycle_guard`, `account_deletion_scrub_guard`, `blocks_and_message_seller_guard`, `withdraw_listing_guard`, `open_beta_guest_holds_guard`. Checked on a fresh `supabase/postgres` (CI's pinned image) with the CI shim: every migration applies and every SQL guard passes.
+
 ## November 8 — Payout setup: started to sell, 14 days to finish, N244 (not applied anywhere)
 
 | File | Applied to |
