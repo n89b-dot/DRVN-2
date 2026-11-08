@@ -8,9 +8,13 @@
 --          payment that had already succeeded. The expiry cron
 --          (release_expired_reservations) failed the same way, and so would
 --          any other round DRVN writes itself (account deletion's expiry, a
---          system withdrawal). A round with actor_role 'system' is DRVN's
---          move, not contact between the two: it is exempt. Member and agent
---          moves (actor_role buyer or seller) are still checked.
+--          system withdrawal). Moves that only end a negotiation are now
+--          exempt: any round DRVN writes (actor_role 'system'), any expiry,
+--          a decline by either party and a withdrawal by the offer's maker
+--          (the coordinator's ruling on #128, in line with Neil's block
+--          ruling: a block stops new messages, offers, follows and replies).
+--          New offers, counters, accepts and below-minimum attempts by a
+--          member or the agent are still refused.
 --   2. P1  Forged events skipped the block check and the first-contact limit.
 --          Both skip kind = 'event' (lifecycle notes are DRVN's), but
 --          guard_message_insert only turns a member's 'event' back into a
@@ -126,12 +130,20 @@ begin
       v_actor := new.buyer_id;
       v_other := v_seller;
     when 'offer_rounds' then
-      -- DRVN's own moves — a lapsed offer expiring, rival offers expiring
-      -- when the part sells (purchase_finalize, after the payment
-      -- succeeded), a withdrawal DRVN makes — are not contact, and refusing
-      -- them would roll back the work they're part of. A member's or the
-      -- agent's move (actor_role buyer or seller) is still checked.
-      if new.actor_role = 'system' then return new; end if;
+      -- Moves that end a negotiation only reduce contact, so a block never
+      -- stops them: DRVN's own moves (a lapsed offer expiring, rival offers
+      -- expiring when the part sells — purchase_finalize, after the payment
+      -- succeeded — a withdrawal DRVN makes), any expiry, a decline by
+      -- either party, and the offer's maker withdrawing it. Refusing them
+      -- would roll back the work they're part of, or leave the blocked
+      -- offer stuck open. New proposals and agreement — an offer, a
+      -- counter, an accept, a below-minimum attempt — by a member or the
+      -- agent are still refused.
+      if new.actor_role = 'system'
+         or new.kind in ('expire', 'decline')
+         or (new.kind = 'withdraw' and new.actor_role = 'buyer') then
+        return new;
+      end if;
       select l.seller_id into v_seller from public.listings l where l.id = new.listing_id;
       v_actor := new.buyer_id;
       v_other := v_seller;

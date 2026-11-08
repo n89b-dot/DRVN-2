@@ -1,7 +1,9 @@
--- OS-W32 follow-up (20261107230000): DRVN's own offer moves aren't stopped by
--- a block, a member can't forge a lifecycle event past the block or the
--- first-contact limit, blocks and follows serialise on one pair lock, and
--- listing enquiries count in the Buying and Selling inbox filters.
+-- OS-W32 follow-up (20261107230000): moves that end a negotiation (DRVN's,
+-- an expiry, a decline by either party, the maker's withdrawal) go through a
+-- block while new terms don't, a member can't forge a lifecycle event past
+-- the block or the first-contact limit, blocks and follows serialise on one
+-- pair lock, and listing enquiries count in the Buying and Selling inbox
+-- filters.
 begin;
 
 do $$
@@ -54,8 +56,9 @@ begin
   perform set_config('role', 'none', true);
   perform set_config('request.jwt.claims', '', true);
 
-  -- ---------- 1. DRVN's moves go through a block; members' don't ----------
-  -- A member's (or the agent's) move is still refused.
+  -- ---------- 1. ending moves go through a block; new terms don't ----------
+  -- Counters and accepts, from either side (a member's or the agent's), are
+  -- still refused across a block.
   select coalesce(max(round_no), 0) + 1 into v_round from public.offer_rounds where offer_id = sold_offer;
   refused := null;
   begin
@@ -63,7 +66,73 @@ begin
     values (sold_offer, v_round, sold_part, pest, 'seller', 'counter', 45000, seller);
   exception when sqlstate 'BL403' then refused := 'yes';
   end;
-  if refused is null then raise exception 'FAIL 1: a member''s offer move went through a block'; end if;
+  if refused is null then raise exception 'FAIL 1: the blocker''s counter went through a block'; end if;
+  refused := null;
+  begin
+    insert into public.offer_rounds(offer_id, round_no, listing_id, buyer_id, actor_role, kind, amount_cents, actor_member_id)
+    values (sold_offer, v_round, sold_part, pest, 'buyer', 'counter', 42000, pest);
+  exception when sqlstate 'BL403' then refused := 'yes';
+  end;
+  if refused is null then raise exception 'FAIL 1a: the blocked member''s counter went through a block'; end if;
+  refused := null;
+  begin
+    insert into public.offer_rounds(offer_id, round_no, listing_id, buyer_id, actor_role, kind, amount_cents, actor_member_id)
+    values (sold_offer, v_round, sold_part, pest, 'seller', 'accept', 40000, seller);
+  exception when sqlstate 'BL403' then refused := 'yes';
+  end;
+  if refused is null then raise exception 'FAIL 1b: the blocker''s accept went through a block'; end if;
+  refused := null;
+  begin
+    insert into public.offer_rounds(offer_id, round_no, listing_id, buyer_id, actor_role, kind, amount_cents, actor_member_id)
+    values (sold_offer, v_round, sold_part, pest, 'buyer', 'accept', 40000, pest);
+  exception when sqlstate 'BL403' then refused := 'yes';
+  end;
+  if refused is null then raise exception 'FAIL 1c: the blocked member''s accept went through a block'; end if;
+  refused := null;
+  begin
+    insert into public.offer_rounds(offer_id, round_no, listing_id, buyer_id, actor_role, kind, amount_cents, actor_member_id)
+    values (sold_offer, v_round, sold_part, pest, 'buyer', 'below_minimum', 1000, pest);
+  exception when sqlstate 'BL403' then refused := 'yes';
+  end;
+  if refused is null then raise exception 'FAIL 1d: a below-minimum attempt went through a block'; end if;
+  -- (A new offer across the block is refused on offers itself: the #121
+  -- guard's FAIL 8 and 9.)
+
+  -- Ending moves go through: a decline by either party and a withdrawal by
+  -- the offer's maker, recorded as rounds on offers the two already had.
+  -- Each is a savepoint that's rolled back, so the offers stay open for the
+  -- checks below.
+  refused := null;
+  begin
+    insert into public.offer_rounds(offer_id, round_no, listing_id, buyer_id, actor_role, kind, actor_member_id)
+    values (sold_offer, v_round, sold_part, pest, 'seller', 'decline', seller);
+    raise exception using errcode = 'P0001', message = 'w32f-undo';
+  exception when sqlstate 'BL403' then refused := 'blocker decline';
+            when raise_exception then null;
+  end;
+  begin
+    insert into public.offer_rounds(offer_id, round_no, listing_id, buyer_id, actor_role, kind, actor_member_id)
+    values (sold_offer, v_round, sold_part, pest, 'buyer', 'decline', pest);
+    raise exception using errcode = 'P0001', message = 'w32f-undo';
+  exception when sqlstate 'BL403' then refused := 'blocked member decline';
+            when raise_exception then null;
+  end;
+  begin
+    insert into public.offer_rounds(offer_id, round_no, listing_id, buyer_id, actor_role, kind, actor_member_id)
+    values (sold_offer, v_round, sold_part, pest, 'buyer', 'withdraw', pest);
+    raise exception using errcode = 'P0001', message = 'w32f-undo';
+  exception when sqlstate 'BL403' then refused := 'maker withdraw';
+            when raise_exception then null;
+  end;
+  if refused is not null then raise exception 'FAIL 1e: a block refused an ending move (%)', refused; end if;
+  -- The offer's maker is the buyer: the seller can't "withdraw" it.
+  refused := null;
+  begin
+    insert into public.offer_rounds(offer_id, round_no, listing_id, buyer_id, actor_role, kind, actor_member_id)
+    values (sold_offer, v_round, sold_part, pest, 'seller', 'withdraw', seller);
+  exception when sqlstate 'BL403' then refused := 'yes';
+  end;
+  if refused is null then raise exception 'FAIL 1f: a withdrawal by someone other than the offer''s maker went through a block'; end if;
 
   -- The expiry cron expires the blocked member's lapsed offer.
   perform public.release_expired_reservations();
