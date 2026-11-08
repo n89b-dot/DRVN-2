@@ -49,12 +49,12 @@ begin
      or has_function_privilege('authenticated', 'private.account_deletion_hold_code(uuid)', 'execute')
      or has_function_privilege('anon', 'private.account_deletion_hold_note(uuid)', 'execute')
      or has_function_privilege('anon', 'private.account_deletion_hold_code(uuid)', 'execute') then
-    raise exception 'FAIL 1: a member or visitor can call the chargeback hold helpers';
+    raise exception 'FAIL 1: a member or visitor can call the chargeback hold helpers (OS-W11)';
   end if;
 
   -- 1. A completed order alone holds nothing.
   if (public.account_deletion_blockers(buyer)->>'financial_hold')::boolean then
-    raise exception 'FAIL 2: a completed order with no chargeback held the deletion';
+    raise exception 'FAIL 2: a completed order with no chargeback held the deletion (OS-W11)';
   end if;
 
   -- 2. Every unresolved state holds both parties; every terminal one clears.
@@ -63,16 +63,16 @@ begin
   foreach st in array array['open', 'loss_pending', 'recovery'] loop
     update public.stripe_dispute_journal set state = st where dispute_id = 'dp_cbh_done';
     if not (public.account_deletion_blockers(buyer)->>'financial_hold')::boolean then
-      raise exception 'FAIL 3: a % chargeback did not hold the buyer''s deletion', st;
+      raise exception 'FAIL 3: a % chargeback did not hold the buyer''s deletion (OS-W11)', st;
     end if;
     if not (public.account_deletion_blockers(seller)->>'financial_hold')::boolean then
-      raise exception 'FAIL 4: a % chargeback did not hold the seller''s deletion', st;
+      raise exception 'FAIL 4: a % chargeback did not hold the seller''s deletion (OS-W11)', st;
     end if;
   end loop;
   foreach st in array array['won', 'warning_closed', 'lost'] loop
     update public.stripe_dispute_journal set state = st where dispute_id = 'dp_cbh_done';
     if (public.account_deletion_blockers(buyer)->>'financial_hold')::boolean then
-      raise exception 'FAIL 5: a % chargeback still held the deletion', st;
+      raise exception 'FAIL 5: a % chargeback still held the deletion (OS-W11)', st;
     end if;
   end loop;
   update public.stripe_dispute_journal set state = 'open' where dispute_id = 'dp_cbh_done';
@@ -86,18 +86,18 @@ begin
 
   gate := public.account_deletion_hold_gate(buyer_job, buyer_lease, buyer);
   if not (gate->>'held')::boolean or (gate->>'hold_order_id')::uuid is distinct from done_order then
-    raise exception 'FAIL 6: the gate did not hold on the chargeback or name its order (%)', gate;
+    raise exception 'FAIL 6: the gate did not hold on the chargeback or name its order (%) (OS-W11)', gate;
   end if;
   perform public.pause_account_deletion_hold(buyer_job, buyer_lease, buyer);
   if (select blocker_code from public.account_deletion_requests where user_id = buyer) is distinct from 'open_chargeback' then
-    raise exception 'FAIL 7: the paused case does not record open_chargeback';
+    raise exception 'FAIL 7: the paused case does not record open_chargeback (OS-W11)';
   end if;
   if (select next_action from public.account_deletion_requests where user_id = buyer)
      not like 'Order ' || upper(left(done_order::text, 8)) || ' has an open bank chargeback.%' then
-    raise exception 'FAIL 8: the next step does not say the order waits on the bank';
+    raise exception 'FAIL 8: the next step does not say the order waits on the bank (OS-W11)';
   end if;
   if not ('chargebacks' = any((select affected_data_classes from public.account_deletion_requests where user_id = buyer))) then
-    raise exception 'FAIL 9: the paused case does not list chargebacks';
+    raise exception 'FAIL 9: the paused case does not list chargebacks (OS-W11)';
   end if;
 
   -- 4. Any other hold keeps the settle wording and the old code. The seller's
@@ -112,7 +112,7 @@ begin
   if (select hold_order_id from public.account_deletion_requests where user_id = seller) is distinct from open_order
      or (select blocker_code from public.account_deletion_requests where user_id = seller) <> 'active_financial_obligations'
      or (select next_action from public.account_deletion_requests where user_id = seller) not like 'Settle order %' then
-    raise exception 'FAIL 10: an ordinary hold lost its settle wording or code';
+    raise exception 'FAIL 10: an ordinary hold lost its settle wording or code (OS-W11)';
   end if;
 
   -- 5. A chargeback opened after the case finished puts it back in the queue.
@@ -126,23 +126,23 @@ begin
   insert into public.stripe_dispute_journal(dispute_id, payment_reference, amount_cents, currency, state, last_event_id, last_event_created, order_ids)
   values ('dp_cbh_won', 'pi_cbh_late', 5000, 'usd', 'won', 'evt_cbh_2', 2, array[late_order]);
   if (select status from public.remediation_jobs where id = late_job) <> 'completed' then
-    raise exception 'FAIL 11: a resolved chargeback requeued a finished case';
+    raise exception 'FAIL 11: a resolved chargeback requeued a finished case (OS-W11)';
   end if;
 
   -- Then one recorded before it was matched to its order, and linked later.
   insert into public.stripe_dispute_journal(dispute_id, payment_reference, amount_cents, currency, state, last_event_id, last_event_created, order_ids)
   values ('dp_cbh_late', 'pi_cbh_late', 5000, 'usd', 'open', 'evt_cbh_3', 3, '{}');
   if (select status from public.remediation_jobs where id = late_job) <> 'completed' then
-    raise exception 'FAIL 12: a chargeback with no order requeued a case';
+    raise exception 'FAIL 12: a chargeback with no order requeued a case (OS-W11)';
   end if;
   update public.stripe_dispute_journal set order_ids = array[late_order] where dispute_id = 'dp_cbh_late';
   if (select status from public.remediation_jobs where id = late_job) <> 'pending' then
-    raise exception 'FAIL 13: a chargeback linked after the case finished did not requeue it';
+    raise exception 'FAIL 13: a chargeback linked after the case finished did not requeue it (OS-W11)';
   end if;
   if (select outcome from public.account_deletion_requests where user_id = late_seller) <> 'temporary_financial_hold'
      or (select blocker_code from public.account_deletion_requests where user_id = late_seller) is distinct from 'open_chargeback'
      or (select hold_order_id from public.account_deletion_requests where user_id = late_seller) is distinct from late_order then
-    raise exception 'FAIL 14: the requeued case is not held on the chargeback';
+    raise exception 'FAIL 14: the requeued case is not held on the chargeback (OS-W11)';
   end if;
 
   raise notice 'all deletion chargeback hold checks passed';
