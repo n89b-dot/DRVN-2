@@ -328,7 +328,8 @@ facts the drafts had to work around". Several were fixed on 3–5 October:
 - Orders never auto-completed: **partly fixed** (a carrier delivery scan now
   starts the payout clock; an auto-confirm rule for untracked shipments is
   built but off, pending the owner's choice).
-- Payout hold: now an owner setting rather than a fixed 7 days (§3.5).
+- Payout hold: now an owner setting rather than a fixed 7 days, set to 2 days
+  after delivery (§3.5).
 - Connect `account.updated` not received: **fixed** (second webhook endpoint).
 
 The privacy policy already reflects the photo change; check the other wording
@@ -354,6 +355,6 @@ Each points to where it lives. Q1–Q11 come from
 | Q11 | Privacy: lawful bases per purpose; international transfer mechanism (US processors); DPAs; provider erasure; internal policy on staff reading messages; whether opt-in-in-Settings without a banner is enough for analytics | §5, §6, §9 |
 | Q12 | Retention: approve or change `docs/owner/retention-proposal.md`, in particular financial records (6 years proposed), personal details on orders (2 years), dispute evidence (2 years), raw webhook payloads (90 days), and the backup statement (30 days) | proposal §3–4 |
 | Q13 | YouTube embeds load from Google without a choice. Disclose, or switch to click-to-load? | §5, §6 |
-| Q14 | If the owner keeps a short hold: paying sellers on day 7 while buyers can report problems for 30 days (and change-of-mind returns run to 60), given recovery depends on the seller's Stripe balance. If auto-confirm is turned on: the wording for "marked delivered after N days without a reported problem", and whether an in-app-only warning is enough notice | §3.5, §3.6 |
+| Q14 | If the owner keeps a short hold: paying sellers on day 2 while buyers can report problems for 30 days (and change-of-mind returns run to 60), given recovery depends on the seller's Stripe balance. If auto-confirm is turned on: the wording for "marked delivered after N days without a reported problem", and whether an in-app-only warning is enough notice | §3.5, §3.6 |
 | Q15 | Guest checkout: is creating an account from a typed email, and telling a visitor that an address is already registered, acceptable? What should the guest's email say? | §7 |
 | Q16 | Offers: the terms call an offer "a promise you intend to keep" but nothing binds the buyer. Is that the wording you want? | §3.2 |

@@ -2500,6 +2500,35 @@ export type Database = {
           },
         ]
       }
+      listing_view_arrivals: {
+        Row: {
+          arrival: string
+          day: string
+          listing_id: string
+          views: number
+        }
+        Insert: {
+          arrival: string
+          day: string
+          listing_id: string
+          views?: number
+        }
+        Update: {
+          arrival?: string
+          day?: string
+          listing_id?: string
+          views?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_view_arrivals_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       listings: {
         Row: {
           allows_collection: boolean
@@ -6177,11 +6206,41 @@ export type Database = {
       activity_post_search_text: { Args: { body: Json }; Returns: string }
       activity_post_visible: { Args: { p_post_id: string }; Returns: boolean }
       actor_name: { Args: { p_id: string }; Returns: string }
-      admin_audit_actor_ids: { Args: { p_query: string }; Returns: string[] }
+      admin_audit_page: {
+        Args: {
+          p_action?: string
+          p_actor?: string
+          p_before_at?: string
+          p_before_id?: number
+          p_from?: string
+          p_limit?: number
+          p_offset?: number
+          p_subject_type?: string
+          p_to?: string
+        }
+        Returns: {
+          action: string
+          actor_id: string
+          created_at: string
+          id: number
+          metadata: Json
+          order_id: string | null
+          reason: string
+          subject_id: string
+          subject_type: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "admin_audit_log"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       admin_cancel_seller_carry_payout: {
         Args: { p_id: string }
         Returns: Json
       }
+      admin_confirmed_factor: { Args: never; Returns: string }
       admin_enrolment_state: { Args: never; Returns: string }
       admin_export_orders: {
         Args: {
@@ -7850,6 +7909,10 @@ export type Database = {
           p_result: Json
         }
         Returns: undefined
+      }
+      record_listing_view: {
+        Args: { p_arrival: string; p_listing: string }
+        Returns: boolean
       }
       record_outbound_label_void_observation: {
         Args: {

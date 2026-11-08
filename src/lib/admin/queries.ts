@@ -1513,7 +1513,7 @@ export type AuditLogResult = { rows: AuditRow[]; page: number; hasMore: boolean 
 
 export type AuditFilters = {
   action?: string;
-  /** Actor by username/display name — resolved to ids here. */
+  /** Actor by username/display name — matched inside the database query. */
   actorQuery?: string;
   subjectType?: AdminAuditLogEntry["subject_type"];
   /** ISO timestamps — inclusive start, exclusive end. */
@@ -1521,36 +1521,37 @@ export type AuditFilters = {
   to?: string;
 };
 
-/** The audit actors whose name matches, found in the database rather than
- *  as the first 20 matching members (only admins act, so it's a few ids). */
-async function auditActorIds(a: Admin, query: string): Promise<string[]> {
-  const { data, error } = await a.rpc("admin_audit_actor_ids", { p_query: query.trim() });
-  unlessFailed("audit actors", error);
-  return (data ?? []) as string[];
+/** One page of admin_audit_page (20261107200550): every filter, the actor's
+ *  name included, runs inside the database's own paged query, so no search
+ *  ever becomes a list of ids in a URL (a name matching 1,000 historical
+ *  actors made a ~39 KB request that was refused). */
+async function auditPage(
+  a: Admin,
+  filters: AuditFilters,
+  page: { offset?: number; limit: number; before?: { at: string; id: number } }
+): Promise<AdminAuditLogEntry[]> {
+  const { data, error } = await a.rpc("admin_audit_page", {
+    p_action: filters.action?.trim() || undefined,
+    p_actor: filters.actorQuery?.trim() || undefined,
+    p_subject_type: filters.subjectType,
+    p_from: filters.from,
+    p_to: filters.to,
+    p_before_at: page.before?.at,
+    p_before_id: page.before?.id,
+    p_offset: page.offset ?? 0,
+    p_limit: page.limit,
+  });
+  // N138: a failed read is an error page, never "No actions recorded".
+  unlessFailed("the audit log", error);
+  return (data ?? []) as AdminAuditLogEntry[];
 }
 
 export async function getAuditLog(opts: AuditFilters & { page?: number } = {}): Promise<AuditLogResult> {
   const a = await admin();
   const page = Math.max(0, opts.page ?? 0);
   const size = AUDIT_PAGE_SIZE;
-  let builder = a
-    .from("admin_audit_log")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .range(page * size, page * size + size);
-  if (opts.action) builder = builder.ilike("action", `${opts.action}%`);
-  if (opts.subjectType) builder = builder.eq("subject_type", opts.subjectType);
-  if (opts.from) builder = builder.gte("created_at", opts.from);
-  if (opts.to) builder = builder.lt("created_at", opts.to);
-  if (opts.actorQuery?.trim()) {
-    const ids = await auditActorIds(a, opts.actorQuery);
-    if (!ids.length) return { rows: [], page, hasMore: false };
-    builder = builder.in("actor_id", ids);
-  }
-  // N138: a failed read is an error page, never "No actions recorded".
-  const { data, error } = await builder;
-  unlessFailed("the audit log", error);
-  const fetched = data ?? [];
+  // One extra row = a cheap hasMore signal.
+  const fetched = await auditPage(a, opts, { offset: page * size, limit: size + 1 });
   const hasMore = fetched.length > size;
   const rows = fetched.slice(0, size);
   const parties = await partiesFor(a, rows.map((r) => r.actor_id));
@@ -1574,34 +1575,21 @@ export class ExportTooLargeError extends Error {
 
 /**
  * Every audit row matching the filters, newest first, read in keyset pages
- * by id until a short page, so the file is complete whatever its size (the
+ * (created_at, then id) until a short page, so the file is complete whatever its size (the
  * old export asked for 5,000 and PostgREST quietly sent 1,000). A failed
  * page throws: the route answers with an error, not a partial file.
  */
 export async function exportAuditRows(filters: AuditFilters, limit = EXPORT_ROW_LIMIT): Promise<AuditRow[]> {
   const a = await admin();
-  let actorIds: string[] | null = null;
-  if (filters.actorQuery?.trim()) {
-    actorIds = await auditActorIds(a, filters.actorQuery);
-    if (!actorIds.length) return [];
-  }
   const rows: AdminAuditLogEntry[] = [];
-  let after: number | null = null;
+  let before: { at: string; id: number } | undefined;
   for (;;) {
-    let builder = a.from("admin_audit_log").select("*").order("id", { ascending: false }).limit(EXPORT_PAGE_SIZE);
-    if (filters.action) builder = builder.ilike("action", `${filters.action}%`);
-    if (filters.subjectType) builder = builder.eq("subject_type", filters.subjectType);
-    if (filters.from) builder = builder.gte("created_at", filters.from);
-    if (filters.to) builder = builder.lt("created_at", filters.to);
-    if (actorIds) builder = builder.in("actor_id", actorIds);
-    if (after != null) builder = builder.lt("id", after);
-    const { data, error } = await builder;
-    unlessFailed("the audit log export", error);
-    const page = data ?? [];
+    const page = await auditPage(a, filters, { limit: EXPORT_PAGE_SIZE, before });
     rows.push(...page);
     if (rows.length > limit) throw new ExportTooLargeError(limit);
     if (page.length < EXPORT_PAGE_SIZE) break;
-    after = page[page.length - 1].id;
+    const last = page[page.length - 1];
+    before = { at: last.created_at, id: last.id };
   }
   const parties = await partiesFor(a, rows.map((r) => r.actor_id));
   return rows.map((r) => ({ ...r, actor: parties.get(r.actor_id) ?? null }));

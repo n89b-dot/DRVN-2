@@ -30,6 +30,8 @@ begin
   insert into public.admin_users(user_id, role, note, mfa_factor_id)
   select f.user_id, case when f.user_id = actor then 'admin' else 'viewer' end, 'guard', f.id
   from auth.mfa_factors f where f.user_id in (actor, viewer);
+  -- Its session was raised to AAL2 with that factor (20261107200550); the claims carry it.
+  insert into auth.sessions(id, user_id, factor_id, aal, created_at, updated_at) select f.user_id, f.user_id, f.id, 'aal2', now(), now() from auth.mfa_factors f where f.user_id = actor;
   insert into public.orders(id, buyer_id, seller_id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, currency)
   values (ord, buyer, seller, 'paid', 5000, 0, 500, 5000, 'USD'),
          (fresh_ord, buyer, seller, 'paid', 5000, 0, 500, 5000, 'USD'),
@@ -40,7 +42,7 @@ begin
   op_id := (op->>'operationId')::uuid;
   select max(id) into seen from public.admin_audit_log where metadata->>'operationId' = op_id::text;
 
-  stepped_up := jsonb_build_object('sub', actor, 'role', 'authenticated', 'aal', 'aal2',
+  stepped_up := jsonb_build_object('sub', actor, 'role', 'authenticated', 'aal', 'aal2', 'session_id', actor,
     'amr', jsonb_build_array(jsonb_build_object('method', 'totp', 'timestamp', extract(epoch from now()))));
 
   -- 1. No step-up, no reconciliation — even for a full admin.

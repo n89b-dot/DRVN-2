@@ -38,7 +38,7 @@ vi.mock("@/lib/supabase/server", () => ({
         }),
       },
     },
-    rpc: async (name: string) => ({ data: name === "admin_role" ? state.role : null, error: null }),
+    rpc: async (name: string) => ({ data: name === "admin_role" ? state.role : name === "is_admin" ? state.role !== null : null, error: null }),
   }),
 }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));

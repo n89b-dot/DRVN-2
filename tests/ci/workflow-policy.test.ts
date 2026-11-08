@@ -200,4 +200,12 @@ describe("lint (N21)", () => {
     expect(config).toContain('"intelligence-os-export/**"');
     expect(config).toContain('"design-mockups/**"');
   });
+
+  it("ESLint itself skips the export, so its generated files can't fail --max-warnings 0 (N425)", async () => {
+    const { ESLint } = await import("eslint");
+    const eslint = new ESLint({ cwd: root });
+    expect(await eslint.isPathIgnored(path.join(root, "intelligence-os-export/support/bundle.js"))).toBe(true);
+    // The ignore is that folder only: app code is still linted.
+    expect(await eslint.isPathIgnored(path.join(root, "src/lib/payments/stripe.ts"))).toBe(false);
+  }, 30_000);
 });

@@ -752,6 +752,10 @@ were diffed against a fresh database: only the intended lines changed.
 `20261006100200` then sets the owner's decisions (Neil, 4 Oct): hold mode
 `claim_window` (7-day floor) and auto-confirm after 21 days. Guards that test
 the fixed 7-day mechanism pin it inside their own rolled-back transaction.
+(Superseded: `20261009100000` sets the live rule to `fixed`, 2 days after
+delivery; `docs/decisions/payout-hold.md`. The code and SQL fallback for a
+missing settings row is still 7 here; Neil ruled on 7 Nov 2026 that it
+becomes 2, in the R-hold follow-up.)
 `20261006100300` adds `seller_payout_dates()`: a seller reads the payout date
 already set on their own orders, so the ledger shows the date the database
 pays on rather than re-dating delivered orders with whatever the setting is
