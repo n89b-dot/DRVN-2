@@ -16,8 +16,9 @@
 --      fenced by attempt, a retry backs off, a sent digest is never claimed
 --      again and a replayed outcome changes nothing.
 --   H. Crash: a send whose lease ran out is claimed again as the next
---      attempt, and the earlier attempt can no longer record; after five
---      attempts it fails.
+--      attempt, and the earlier attempt can no longer record; a lease that
+--      runs out after 25 attempts fails it, and a retry is never terminal
+--      (both as of 20261107200350).
 --   I. Claim re-checks: opted out since admission, no confirmed address,
 --      account closing, alert off: skipped with the reason.
 --   J. The sweep expires what was not sent on its day and prunes after 90 days.
@@ -75,7 +76,7 @@ begin
 
   -- B. Baseline.
   delete from public.saved_search_email_cursors where saved_search_id = v_search;
-  v_out := public.admit_saved_search_digest(v_search, now(), 4, v_items, '/marketplace?q=zzquiet');
+  v_out := public.admit_saved_search_digest(v_search, now(), private.snapshot_xmin(), 4, v_items, '/marketplace?q=zzquiet');
   if v_out <> 'baseline' or exists (select 1 from public.saved_search_email_digests where saved_search_id = v_search)
      or (select checked_through from public.saved_search_email_cursors where saved_search_id = v_search) <> now() then
     raise exception 'FAIL B: a search with no window got %, not a baseline', v_out;
@@ -84,7 +85,7 @@ begin
 
   -- C. Admission.
   update public.saved_search_email_cursors set checked_through = v_old where saved_search_id = v_search;
-  v_out := public.admit_saved_search_digest(v_search, now(), 3, v_items, '/marketplace?q=zzquiet', v_old);
+  v_out := public.admit_saved_search_digest(v_search, now(), private.snapshot_xmin(), 3, v_items, '/marketplace?q=zzquiet', v_old);
   select id into v_digest from public.saved_search_email_digests where saved_search_id = v_search;
   if v_out <> 'admitted' or v_digest is null then raise exception 'FAIL C1: admission gave %', v_out; end if;
   if not exists (select 1 from public.saved_search_email_digests where id = v_digest and digest_day = v_today
@@ -98,17 +99,17 @@ begin
   raise notice 'PASS C: one admission, one digest, window moved';
 
   -- D. Once a day.
-  v_out := public.admit_saved_search_digest(v_search, now(), 3, v_items, '/marketplace?q=zzquiet', v_old);
+  v_out := public.admit_saved_search_digest(v_search, now(), private.snapshot_xmin(), 3, v_items, '/marketplace?q=zzquiet', v_old);
   if v_out <> 'stale' then raise exception 'FAIL D1: a replayed admission gave %', v_out; end if;
   if private.saved_search_digest_day(now() - interval '1 second') = v_today then
     update public.saved_search_email_cursors set checked_through = now() - interval '1 second' where saved_search_id = v_search;
-    v_out := public.admit_saved_search_digest(v_search, now(), 5, v_items, '/marketplace?q=zzquiet', now() - interval '1 second');
+    v_out := public.admit_saved_search_digest(v_search, now(), private.snapshot_xmin(), 5, v_items, '/marketplace?q=zzquiet', now() - interval '1 second');
     if v_out <> 'already_today' then raise exception 'FAIL D2: a second window the same day gave %', v_out; end if;
   end if;
   -- Even with the window forced back a day, the day's digest is not doubled
   -- and the window does not move past matches that were not written.
   update public.saved_search_email_cursors set checked_through = v_old where saved_search_id = v_search;
-  v_out := public.admit_saved_search_digest(v_search, now(), 5, v_items, '/marketplace?q=zzquiet', v_old);
+  v_out := public.admit_saved_search_digest(v_search, now(), private.snapshot_xmin(), 5, v_items, '/marketplace?q=zzquiet', v_old);
   if v_out <> 'already_today' or (select checked_through from public.saved_search_email_cursors where saved_search_id = v_search) <> v_old then
     raise exception 'FAIL D3: the unique key did not hold the day (got %)', v_out;
   end if;
@@ -128,7 +129,7 @@ begin
   insert into public.saved_searches(user_id, name, params, alert) values
     (v_user, 'Zz empty', '{"_version":"2","q":"zzempty"}', true) returning id into v_empty;
   update public.saved_search_email_cursors set checked_through = v_old where saved_search_id = v_empty;
-  v_out := public.admit_saved_search_digest(v_empty, now(), 0, '[]'::jsonb, '/marketplace?q=zzempty', v_old);
+  v_out := public.admit_saved_search_digest(v_empty, now(), private.snapshot_xmin(), 0, '[]'::jsonb, '/marketplace?q=zzempty', v_old);
   if v_out <> 'empty' or exists (select 1 from public.saved_search_email_digests where saved_search_id = v_empty)
      or (select checked_through from public.saved_search_email_cursors where saved_search_id = v_empty) <> now() then
     raise exception 'FAIL E1: an empty window gave %', v_out;
@@ -138,7 +139,7 @@ begin
   insert into public.saved_searches(user_id, name, params, alert) values
     (v_other, 'Zz muted', '{"_version":"2","q":"zzmuted"}', true) returning id into v_muted;
   update public.saved_search_email_cursors set checked_through = v_old where saved_search_id = v_muted;
-  v_out := public.admit_saved_search_digest(v_muted, now(), 2, v_items, '/marketplace?q=zzmuted', v_old);
+  v_out := public.admit_saved_search_digest(v_muted, now(), private.snapshot_xmin(), 2, v_items, '/marketplace?q=zzmuted', v_old);
   if v_out <> 'muted' or exists (select 1 from public.saved_search_email_digests where saved_search_id = v_muted)
      or (select checked_through from public.saved_search_email_cursors where saved_search_id = v_muted) <> now() then
     raise exception 'FAIL E2: a member with saved-search emails off got %', v_out;
@@ -147,7 +148,7 @@ begin
   insert into public.saved_searches(user_id, name, params, alert) values
     (v_other, 'Zz muted kind', '{"_version":"2","q":"zzmutedkind"}', true) returning id into v_muted_kind;
   update public.saved_search_email_cursors set checked_through = v_old where saved_search_id = v_muted_kind;
-  v_out := public.admit_saved_search_digest(v_muted_kind, now(), 2, v_items, '/marketplace?q=zzmutedkind', v_old);
+  v_out := public.admit_saved_search_digest(v_muted_kind, now(), private.snapshot_xmin(), 2, v_items, '/marketplace?q=zzmutedkind', v_old);
   if v_out <> 'muted' or exists (select 1 from public.saved_search_email_digests where saved_search_id = v_muted_kind) then
     raise exception 'FAIL E3: a member with saved-search matches off got %', v_out;
   end if;
@@ -157,7 +158,7 @@ begin
     (v_other, 'Zz off', '{"_version":"2","q":"zzoff"}', true) returning id into v_off;
   update public.saved_search_email_cursors set checked_through = v_old where saved_search_id = v_off;
   update public.saved_searches set alert = false where id = v_off;
-  v_out := public.admit_saved_search_digest(v_off, now(), 2, v_items, '/marketplace?q=zzoff', v_old);
+  v_out := public.admit_saved_search_digest(v_off, now(), private.snapshot_xmin(), 2, v_items, '/marketplace?q=zzoff', v_old);
   if v_out <> 'alert_off' or exists (select 1 from public.saved_search_email_digests where saved_search_id = v_off)
      or (select checked_through from public.saved_search_email_cursors where saved_search_id = v_off) <> v_old then
     raise exception 'FAIL E4: a search with its alert off got %', v_out;
@@ -251,14 +252,17 @@ begin
   if public.complete_saved_search_digest(v_second, 1, 'sent', 'zz-late') <> 'stale' then
     raise exception 'FAIL H2: the crashed attempt recorded after its lease was taken over';
   end if;
-  update public.saved_search_email_digests set attempts = 5, next_attempt_at = now() - interval '1 second' where id = v_second;
+  -- (20261107200350: a lease running out is a crash; 25 of them fail it.)
+  update public.saved_search_email_digests set attempts = 25, next_attempt_at = now() - interval '1 second' where id = v_second;
   select count(*) into n from public.claim_saved_search_digests(200, 300) c where c.digest_id = v_second;
   if n <> 0 or (select status from public.saved_search_email_digests where id = v_second) <> 'failed' then
-    raise exception 'FAIL H3: a fifth lease that ran out was retried';
+    raise exception 'FAIL H3: a twenty-fifth lease that ran out was retried';
   end if;
+  -- A retry is never terminal within the day (20261107200350): hourly at most.
   update public.saved_search_email_digests set status = 'sending', attempts = 5, next_attempt_at = now() + interval '1 minute' where id = v_second;
-  if public.complete_saved_search_digest(v_second, 5, 'retry', null, 'still busy') <> 'failed' then
-    raise exception 'FAIL H4: a fifth failed attempt was retried';
+  v_out := public.complete_saved_search_digest(v_second, 5, 'retry', null, 'still busy');
+  if v_out <> 'pending' or (select next_attempt_at from public.saved_search_email_digests where id = v_second) <> now() + interval '60 minutes' then
+    raise exception 'FAIL H4: a fifth retry was not kept for later in the day (got %)', v_out;
   end if;
   raise notice 'PASS H: crash recovery is fenced and bounded';
 
@@ -326,8 +330,8 @@ begin
   raise notice 'PASS K: scheduled and in the inventory';
 
   -- L. Members.
-  if has_function_privilege('authenticated', 'public.admit_saved_search_digest(uuid, timestamptz, integer, jsonb, text, timestamptz)', 'execute')
-     or has_function_privilege('anon', 'public.admit_saved_search_digest(uuid, timestamptz, integer, jsonb, text, timestamptz)', 'execute')
+  if has_function_privilege('authenticated', 'public.admit_saved_search_digest(uuid, timestamptz, bigint, integer, jsonb, text, timestamptz)', 'execute')
+     or has_function_privilege('anon', 'public.admit_saved_search_digest(uuid, timestamptz, bigint, integer, jsonb, text, timestamptz)', 'execute')
      or has_function_privilege('authenticated', 'public.claim_saved_search_digests(integer, integer)', 'execute')
      or has_function_privilege('anon', 'public.claim_saved_search_digests(integer, integer)', 'execute')
      or has_function_privilege('authenticated', 'public.complete_saved_search_digest(uuid, integer, text, text, text)', 'execute')

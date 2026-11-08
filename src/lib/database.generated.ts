@@ -2589,6 +2589,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -2628,6 +2629,7 @@ export type Database = {
           part_number_compact?: string | null
           price_cents: number
           published_at?: string | null
+          published_xact?: number | null
           removed_at?: string | null
           removed_reason?: string | null
           reserved_until?: string | null
@@ -2667,6 +2669,7 @@ export type Database = {
           part_number_compact?: string | null
           price_cents?: number
           published_at?: string | null
+          published_xact?: number | null
           removed_at?: string | null
           removed_reason?: string | null
           reserved_until?: string | null
@@ -2757,6 +2760,39 @@ export type Database = {
           reason?: string
         }
         Relationships: []
+      }
+      member_blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_blocks_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_blocks_blocker_id_fkey"
+            columns: ["blocker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {
@@ -5086,17 +5122,23 @@ export type Database = {
       }
       saved_search_email_cursors: {
         Row: {
+          activated_at: string
           checked_through: string
+          checked_xact: number
           saved_search_id: string
           updated_at: string
         }
         Insert: {
+          activated_at: string
           checked_through: string
+          checked_xact: number
           saved_search_id: string
           updated_at?: string
         }
         Update: {
+          activated_at?: string
           checked_through?: string
+          checked_xact?: number
           saved_search_id?: string
           updated_at?: string
         }
@@ -5129,7 +5171,9 @@ export type Database = {
           status: string
           updated_at: string
           window_end: string
+          window_end_xact: number | null
           window_start: string
+          window_start_xact: number | null
         }
         Insert: {
           attempts?: number
@@ -5149,7 +5193,9 @@ export type Database = {
           status?: string
           updated_at?: string
           window_end: string
+          window_end_xact?: number | null
           window_start: string
+          window_start_xact?: number | null
         }
         Update: {
           attempts?: number
@@ -5169,7 +5215,9 @@ export type Database = {
           status?: string
           updated_at?: string
           window_end?: string
+          window_end_xact?: number | null
           window_start?: string
+          window_start_xact?: number | null
         }
         Relationships: [
           {
@@ -6371,6 +6419,7 @@ export type Database = {
           p_match_count: number
           p_saved_search_id: string
           p_window_end: string
+          p_window_xact: number
         }
         Returns: string
       }
@@ -6406,6 +6455,12 @@ export type Database = {
       }
       agent_chat_card_ok: { Args: { p_card: Json }; Returns: boolean }
       agent_chat_message_json: { Args: { p_id: string }; Returns: Json }
+      agent_chat_photos_expired: {
+        Args: { p_limit?: number; p_older_than?: string }
+        Returns: {
+          name: string
+        }[]
+      }
       agent_chat_turn_begin: {
         Args: {
           p_body: string
@@ -7239,6 +7294,10 @@ export type Database = {
           questions: number
         }[]
       }
+      listing_enquiry_reply_allowed: {
+        Args: { p_buyer: string; p_listing: string }
+        Returns: boolean
+      }
       listing_public_offer_floor: {
         Args: { p_listing: string }
         Returns: number
@@ -7340,6 +7399,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7425,6 +7485,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7505,6 +7566,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7589,6 +7651,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7652,6 +7715,7 @@ export type Database = {
           part_number_compact: string | null
           price_cents: number
           published_at: string | null
+          published_xact: number | null
           removed_at: string | null
           removed_reason: string | null
           reserved_until: string | null
@@ -7884,6 +7948,7 @@ export type Database = {
       }
       profile_is_visible: { Args: { p_id: string }; Returns: boolean }
       profile_sales_count: { Args: { p_profile: string }; Returns: number }
+      profile_shares_deal_with_me: { Args: { p_id: string }; Returns: boolean }
       prune_listing_edit_requests: { Args: never; Returns: number }
       prune_rate_limits: { Args: never; Returns: undefined }
       purchase_begin: {
@@ -8213,10 +8278,13 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: {
           checked_through: string
+          checked_xact: number
           params: Json
           saved_search_id: string
           user_id: string
           window_end: string
+          window_floor: string
+          window_xact: number
         }[]
       }
       search_car_ids: { Args: { p_query: string }; Returns: string[] }

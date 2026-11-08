@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { allowAction } from "@/lib/rate-limit";
 import { ensureMediaStorageOrigin } from "@/lib/media-lifecycle";
+import { AGENT_CHAT_BUCKET, chatPhotoRef } from "@/lib/agent/chat-photo-ref";
 
 const BUCKETS = new Set(["avatars", "car-images", "activity-images", "listing-images"]);
 /**
@@ -15,6 +16,14 @@ const BUCKETS = new Set(["avatars", "car-images", "activity-images", "listing-im
  * never comes here: it is kept exactly as uploaded, as a record.
  */
 const MESSAGE_BUCKET = "message-photos";
+/**
+ * Photos sent to the agent (R81, OS-W08): private, `<owner>/<uuid>.webp`,
+ * written only here with the service role. No public URL exists; the chat
+ * shows them through signed links and the message stores their Storage
+ * "authenticated" address. They aren't on the staging ledger: the agent
+ * sweep deletes every one after 48 hours (agent_chat_photos_expired).
+ */
+const CHAT_BUCKET = AGENT_CHAT_BUCKET;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LIMIT = 11 * 1024 * 1024;
 const HEIC_REFUSAL = "This HEIC photo can't be processed. Save it as a JPEG and try again — on iPhone, Settings › Camera › Formats › Most Compatible takes JPEGs.";
@@ -28,6 +37,7 @@ function validPrefix(bucket: string, prefix: string, userId: string): boolean {
   const parts = prefix.split("/");
   if (parts[0] !== userId) return false;
   if (bucket === MESSAGE_BUCKET) return parts.length === 2 && UUID.test(parts[1]) && parts[1] !== userId;
+  if (bucket === CHAT_BUCKET) return parts.length === 1;
   return BUCKETS.has(bucket) && parts.length <= 4;
 }
 
@@ -75,6 +85,11 @@ export async function POST(request: Request) {
     heic = false; // decoded: any later failure is ours, not the format's
     const path = `${prefix}/${randomUUID()}.webp`;
     const admin = createAdminClient();
+    if (bucket === CHAT_BUCKET) {
+      const stored = await admin.storage.from(CHAT_BUCKET).upload(path, normalized, { contentType: "image/webp", upsert: false });
+      if (stored.error) throw new Error("Storage unavailable");
+      return Response.json({ url: chatPhotoRef(process.env.NEXT_PUBLIC_SUPABASE_URL!, path), path });
+    }
     // The database refuses member photo references until it knows our
     // storage origin; record it before handing out a URL to save.
     await ensureMediaStorageOrigin(admin);

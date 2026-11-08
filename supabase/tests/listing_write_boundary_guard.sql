@@ -4,10 +4,13 @@
 -- app in front. Each rule the sell form checks must hold here too.
 --
 --   N69   column grants, frozen server fields, insert states, gallery /
---         fitment / part-number bounds, a live listing keeps a photo
+--         fitment / part-number bounds, content frozen on a reserved
+--         listing (20261107210050), a live listing keeps a photo
 --   N244  payouts before going live (insert, publish, the creation RPC);
 --         checkout skips or refuses a seller who can't be paid, including
---         one whose payouts lapsed after publishing; stub mode exempt
+--         one whose payouts lapsed after publishing; no new payment starts
+--         for one whose payouts lapsed after an offer was accepted
+--         (20261107210050); stub mode exempt
 --   N72   (claim rebinding is in listing_creation_request_guard.sql)
 --   N71   a seller's own "Mark sold" doesn't count as a sale
 --   N26   the settlement row is private; the hold policy projection is
@@ -47,6 +50,10 @@ declare
   rejected boolean;
   i integer;
   listing_payload jsonb;
+  offered uuid := gen_random_uuid();
+  offer_id uuid;
+  offer_order uuid;
+  prepared jsonb;
 begin
   insert into public.job_config(key, value) values ('media_storage_origin', 'https://proj.supabase.co')
     on conflict (key) do update set value = excluded.value;
@@ -245,7 +252,27 @@ begin
   exception when insufficient_privilege then rejected := true;
   end;
   if not rejected then raise exception 'FAIL 5: a photo was moved between listings'; end if;
-  raise notice 'PASS 5: gallery, fitment and part numbers are bounded and frozen while reserved';
+  -- The listing row itself: a seller's own content fields are frozen too,
+  -- not only price and shipping (20261107210050).
+  foreach col in array array['title', 'description', 'condition', 'brand', 'location', 'compatibility_notes',
+                             'part_number', 'grade', 'allows_collection', 'show_offer_floor'] loop
+    rejected := false;
+    begin
+      execute format(
+        'update public.listings set %I = %s where id = $1', col,
+        case col
+          when 'condition' then '''for_parts'''
+          when 'grade' then '''c'''
+          when 'allows_collection' then 'not allows_collection'
+          when 'show_offer_floor' then 'not show_offer_floor'
+          else '''Swapped under the buyer'''
+        end
+      ) using held;
+    exception when object_not_in_prerequisite_state then rejected := true;
+    end;
+    if not rejected then raise exception 'FAIL 5: a member changed % on a reserved listing', col; end if;
+  end loop;
+  raise notice 'PASS 5: gallery, fitment, part numbers and the listing''s own content are frozen while reserved';
 
   -- ==========================================================
   -- N244 6. Going live needs payouts
@@ -329,12 +356,46 @@ begin
   exception when sqlstate 'LS001' then rejected := true;
   end;
   if not rejected then raise exception 'FAIL 7b: a part of an unpaid seller was reserved'; end if;
+  -- Payouts lapse after an offer is accepted (20261107210050): the part is
+  -- already reserved, so no new reservation happens, but no new payment
+  -- may start. One prepared while payouts were on is the same payment, and
+  -- still replays for reconciliation.
+  update public.profiles set payouts_enabled = true where id = unpaid;
+  insert into public.listings(id, seller_id, title, category, price_cents, shipping_cents, status)
+  values (offered, unpaid, 'Accepted offer part', 'performance', 8000, 0, 'active');
+  insert into public.offers(listing_id, buyer_id, amount_cents, status)
+  values (offered, buyer, 7000, 'open') returning id into offer_id;
+  offer_order := public.offer_accept_begin(offer_id, unpaid);
+  if offer_order is null or (select status from public.listings where id = offered) <> 'reserved' then
+    raise exception 'FAIL 7c: the offer fixture was not accepted';
+  end if;
+  update public.profiles set payouts_enabled = false where id = unpaid;
+  rejected := false;
+  begin
+    perform public.prepare_payment_request('order:' || offer_order,
+      jsonb_build_object('orderIds', jsonb_build_array(offer_order), 'buyerId', buyer, 'totalCents', 7000));
+  exception when sqlstate 'LS001' then rejected := true;
+  end;
+  if not rejected then raise exception 'FAIL 7c: a new payment started for a seller whose payouts lapsed after acceptance'; end if;
+  if exists (select 1 from public.payment_requests where operation_key = 'order:' || offer_order) then
+    raise exception 'FAIL 7c: the refused payment left a request behind';
+  end if;
+  -- Prepared while payouts were on, then they lapse: the replay still answers.
+  update public.profiles set payouts_enabled = true where id = unpaid;
+  prepared := public.prepare_payment_request('order:' || offer_order,
+    jsonb_build_object('orderIds', jsonb_build_array(offer_order), 'buyerId', buyer, 'totalCents', 7000));
+  update public.profiles set payouts_enabled = false where id = unpaid;
+  prepared := public.prepare_payment_request('order:' || offer_order,
+    jsonb_build_object('orderIds', jsonb_build_array(offer_order), 'buyerId', buyer, 'totalCents', 7000));
+  if prepared->>'correlation_id' is null then
+    raise exception 'FAIL 7c: an existing payment request could not be replayed after payouts lapsed';
+  end if;
   -- Stub payments reserve as before.
   insert into public.job_config(key, value) values ('payments_mode', 'stub');
   update public.listings set status = 'reserved', reserved_until = now() + interval '15 minutes' where id = lapsed;
   update public.listings set status = 'active', reserved_until = null where id = lapsed;
   delete from public.job_config where key = 'payments_mode';
-  raise notice 'PASS 7: checkout skips or refuses a seller whose payouts are off, including after publishing';
+  raise notice 'PASS 7: checkout skips or refuses a seller whose payouts are off, including after publishing and after an accepted offer';
 
   -- ==========================================================
   -- N71 8. "Mark sold" is not a sale

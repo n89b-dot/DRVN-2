@@ -36,6 +36,7 @@ import { listingShareDescription } from "@/lib/share-copy";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
 
 import { ReportButton } from "@/features/moderation/report-button";
+import { MessageSellerButton } from "@/features/commerce/message-seller";
 import { PurchaseActions } from "./purchase-actions";
 import { AskAgentButton } from "@/features/agent/ask-agent-button";
 import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
@@ -556,6 +557,18 @@ export default async function ListingPage({
                   </span>
                 </span>
               </Link>
+            )}
+            {/* R-directcontact: a buyer may ask the seller about this part;
+                the conversation is theirs to continue in Messages. */}
+            {seller && !isOwn && ["active", "sold"].includes(listing.status) && (
+              <div className="mt-2">
+                <MessageSellerButton
+                  listingId={listing.id}
+                  sellerName={sellerName}
+                  isLoggedIn={Boolean(user)}
+                  loginHref={`/login?next=${encodeURIComponent(`/listings/${listing.id}`)}`}
+                />
+              </div>
             )}
             {sourceCar?.is_public && (
               <div className="pdp__source">

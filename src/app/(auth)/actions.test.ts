@@ -290,3 +290,47 @@ describe("onboarding an account with no profile", () => {
     expect(source).not.toMatch(/beta-access|getBetaAccess|prepareBetaSignup|beta_claim_id/);
   });
 });
+
+// F-3 (PRD 2026-09-24): sign-up and return-to-where-you-were are unchanged;
+// "Add your car" carries next=/garage through sign-up; an account with
+// nowhere to return to finishes onboarding on the garage, which opens on the
+// add-car form when it is empty; "Skip — just browsing" goes to Home.
+describe("sign-up and return (F-3)", () => {
+  const signUpAs = (next?: string) =>
+    signup({}, form({ email: "new@drvn.test", password: "long-enough-pw", ...(next ? { next } : {}) }));
+
+  it("carries Add your car's next=/garage into the confirmation link and the email notice", async () => {
+    await expect(signUpAs("/garage")).rejects.toThrow("redirect:/login?message=check-email&next=%2Fgarage");
+    const redirectTo = new URL(mocks.signUp.mock.calls[0][0].options.emailRedirectTo);
+    expect(redirectTo.pathname).toBe("/callback");
+    expect(redirectTo.searchParams.get("next")).toBe("/garage");
+  });
+
+  it("carries next=/garage straight into onboarding when sign-up opens a session", async () => {
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "new" }, session: { access_token: "t" } }, error: null });
+    await expect(signUpAs("/garage")).rejects.toThrow("redirect:/onboarding?next=%2Fgarage");
+  });
+
+  it("keeps any other return target, and drops an off-site one", async () => {
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "new" }, session: { access_token: "t" } }, error: null });
+    await expect(signUpAs("/listings/abc")).rejects.toThrow("redirect:/onboarding?next=%2Flistings%2Fabc");
+    await expect(signUpAs("https://evil.example/x")).rejects.toThrow(/^redirect:\/onboarding$/);
+  });
+
+  const onboard = (next?: string) =>
+    completeOnboarding({}, form({ username: "kaito_r", display_name: "Kaito", ...(next !== undefined ? { next } : {}) }));
+
+  it("finishes on the garage (add-car) when there is nowhere to return to", async () => {
+    await expect(onboard()).rejects.toThrow(/^redirect:\/garage$/);
+    await expect(onboard("")).rejects.toThrow(/^redirect:\/garage$/);
+  });
+
+  it("sends “Skip — just browsing” (next=/home) to Home", async () => {
+    await expect(onboard("/home")).rejects.toThrow(/^redirect:\/home$/);
+  });
+
+  it("returns to where the visitor was when there is a target", async () => {
+    await expect(onboard("/listings/abc")).rejects.toThrow(/^redirect:\/listings\/abc$/);
+    await expect(onboard("//evil.example")).rejects.toThrow(/^redirect:\/garage$/);
+  });
+});

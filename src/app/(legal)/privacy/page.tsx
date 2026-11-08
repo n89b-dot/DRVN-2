@@ -171,7 +171,8 @@ export default function PrivacyPage() {
             details it reads there (title, brand, part number, category).
             Card numbers, VINs, email addresses and phone numbers are removed from what you type
             before it&apos;s sent, and your agent&apos;s limits are never sent. Photos you add to
-            a message to your agent are sent with that message. Your account details are not
+            a message to your agent are sent with it only when you ask it to list a part or post an
+            update from them; an ordinary chat message sends no photos. Your account details are not
             sent.
           </li>
           <li>

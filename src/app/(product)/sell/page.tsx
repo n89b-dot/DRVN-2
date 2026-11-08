@@ -27,6 +27,7 @@ import { SellForm, type SellFormInitialValues } from "./sell-form";
 import { reportError } from "@/lib/monitoring";
 import { orderCars } from "@/lib/cars/order";
 import type { TurnCard } from "@/lib/ai/run";
+import { publishChatPhotos } from "@/lib/agent/chat-photos";
 import { isOwnedStorageUrl } from "@/lib/media-url";
 
 /** AG-7: why "Let DRVN handle offers" can't be turned on, when it can't. */
@@ -288,7 +289,11 @@ export default async function SellPage({
         partNumber: card.part_number ?? undefined,
         category,
         subcategory,
-        images: card.images.filter((url) => isOwnedStorageUrl(url, user.id)).map((url) => ({ url, alt: null })),
+        // R81: the chat's photos are private; the listing gets its own public
+        // copies, made now, in the member's listing-images folder.
+        images: (await publishChatPhotos(createAdminClient(), user.id, card.images, "listing-images"))
+          .filter((url) => isOwnedStorageUrl(url, user.id))
+          .map((url) => ({ url, alt: null })),
       };
       fromAgent = true;
     }

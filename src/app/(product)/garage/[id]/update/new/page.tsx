@@ -6,8 +6,12 @@ import { normalizeBlocks } from "@/lib/activity-blocks";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { BuildStoryComposer } from "@/features/composer/composer";
 import type { TurnCard } from "@/lib/ai/run";
+import { publishChatPhotos } from "@/lib/agent/chat-photos";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isOwnedStorageUrl } from "@/lib/media-url";
 import { loadTaggableParts } from "@/features/composer/taggable-parts";
+
+import { modPickerLabel, seedChangeBlocks } from "./seed-blocks";
 
 import { createRichActivityPost, discardActivityDraft, saveActivityDraft } from "../../../actions";
 
@@ -54,14 +58,8 @@ export default async function NewUpdatePage({
     loadTaggableParts(supabase, user.id),
   ]);
   const draftBlocks = draft ? normalizeBlocks(draft.body) : null;
-  const mods = (modRows ?? []).map((mod) => ({
-    id: mod.id,
-    // Parts that came off stay pickable and say so: an update is very often
-    // *about* the part that just left the car.
-    label:
-      ([mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw_text || "Build entry") +
-      (mod.status === "removed" ? " — off the car" : ""),
-  }));
+  // Parts that came off stay pickable and say so (modPickerLabel).
+  const mods = (modRows ?? []).map((mod) => ({ id: mod.id, label: modPickerLabel(mod) }));
 
   // Passive-affordance seeds (§W): "Create an update from these changes" /
   // "Share these in an update" prepopulate the composer — visibly, as normal
@@ -89,30 +87,15 @@ export default async function NewUpdatePage({
         const label = onCar.get(modId);
         if (label) seededBlocks.push({ type: "mod", action: "installed", modItemId: modId, label });
       }
-      const urls = card.images.filter((url) => isOwnedStorageUrl(url, user.id));
+      // R81: the chat's photos are private; the update gets public copies,
+      // made now, in the member's activity-images folder.
+      const urls = (await publishChatPhotos(createAdminClient(), user.id, card.images, "activity-images")).filter((url) => isOwnedStorageUrl(url, user.id));
       if (urls.length) seededBlocks.push({ type: "images", urls });
       seededBlocks.push({ type: "text", style: "normal", text: card.body });
     }
   }
   if (!draftBlocks?.length && !seededBlocks.length) {
-    const parseLabels = (raw?: string) =>
-      (raw ?? "")
-        .split("|")
-        .map((label) => label.trim().slice(0, 80))
-        .filter(Boolean)
-        .slice(0, 3);
-    const byLabel = new Map(mods.map((mod) => [mod.label, mod.id]));
-    for (const label of parseLabels(seeds.added)) {
-      seededBlocks.push({
-        type: "mod",
-        action: "installed",
-        modItemId: byLabel.get(label) ?? null,
-        label,
-      });
-    }
-    for (const label of parseLabels(seeds.removed)) {
-      seededBlocks.push({ type: "mod", action: "removed", modItemId: null, label });
-    }
+    seededBlocks.push(...seedChangeBlocks(seeds, modRows ?? []));
     const photoCount = Math.min(Number(seeds.photos) || 0, 12);
     if (photoCount >= 1) {
       const { data: latest } = await supabase
