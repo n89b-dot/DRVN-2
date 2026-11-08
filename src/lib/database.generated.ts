@@ -535,6 +535,24 @@ export type Database = {
         }
         Relationships: []
       }
+      age_confirmations: {
+        Row: {
+          age_confirmed_at: string
+          source: string
+          user_id: string
+        }
+        Insert: {
+          age_confirmed_at?: string
+          source: string
+          user_id: string
+        }
+        Update: {
+          age_confirmed_at?: string
+          source?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       agent_approvals: {
         Row: {
           amount_cents: number | null
@@ -1861,6 +1879,103 @@ export type Database = {
           {
             foreignKeyName: "conversations_participant_b_fkey"
             columns: ["participant_b"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copyright_blocked_media: {
+        Row: {
+          blocked_at: string
+          notice_id: string
+          object_key: string
+        }
+        Insert: {
+          blocked_at?: string
+          notice_id: string
+          object_key: string
+        }
+        Update: {
+          blocked_at?: string
+          notice_id?: string
+          object_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copyright_blocked_media_notice_id_fkey"
+            columns: ["notice_id"]
+            isOneToOne: false
+            referencedRelation: "copyright_notices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copyright_notices: {
+        Row: {
+          accurate_and_authorised: boolean
+          claimant_address: string
+          claimant_email: string
+          claimant_name: string
+          claimant_phone: string | null
+          content_urls: string[]
+          created_at: string
+          good_faith: boolean
+          id: string
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          rights_holder: string | null
+          signature: string
+          status: string
+          submitted_by: string | null
+          takedown: Json | null
+          work_description: string
+        }
+        Insert: {
+          accurate_and_authorised: boolean
+          claimant_address: string
+          claimant_email: string
+          claimant_name: string
+          claimant_phone?: string | null
+          content_urls: string[]
+          created_at?: string
+          good_faith: boolean
+          id?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          rights_holder?: string | null
+          signature: string
+          status?: string
+          submitted_by?: string | null
+          takedown?: Json | null
+          work_description: string
+        }
+        Update: {
+          accurate_and_authorised?: boolean
+          claimant_address?: string
+          claimant_email?: string
+          claimant_name?: string
+          claimant_phone?: string | null
+          content_urls?: string[]
+          created_at?: string
+          good_faith?: boolean
+          id?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          rights_holder?: string | null
+          signature?: string
+          status?: string
+          submitted_by?: string | null
+          takedown?: Json | null
+          work_description?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copyright_notices_resolved_by_fkey"
+            columns: ["resolved_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -4171,6 +4286,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      policy_announcements: {
+        Row: {
+          announced_at: string
+          body: string
+          href: string
+          key: string
+          recipients: number
+          title: string
+        }
+        Insert: {
+          announced_at?: string
+          body: string
+          href: string
+          key: string
+          recipients?: number
+          title: string
+        }
+        Update: {
+          announced_at?: string
+          body?: string
+          href?: string
+          key?: string
+          recipients?: number
+          title?: string
+        }
+        Relationships: []
       }
       product_fitments: {
         Row: {
@@ -6839,6 +6981,10 @@ export type Database = {
         Returns: undefined
       }
       agent_usage_retention_sweep: { Args: never; Returns: number }
+      announce_policy_update: {
+        Args: { p_body: string; p_href: string; p_key: string; p_title: string }
+        Returns: number
+      }
       apply_stripe_dispute_event: {
         Args: {
           p_amount: number
@@ -7156,6 +7302,15 @@ export type Database = {
       continue_account_export: {
         Args: { p_job: string; p_lease: string }
         Returns: undefined
+      }
+      copyright_takedown: {
+        Args: {
+          p_listing_ids: string[]
+          p_media_urls: string[]
+          p_note: string
+          p_notice: string
+        }
+        Returns: Json
       }
       create_protection_return: {
         Args: {
@@ -7985,6 +8140,18 @@ export type Database = {
       }
       my_car_vin: { Args: { p_car: string }; Returns: string }
       my_default_offer_floor: { Args: never; Returns: number }
+      my_listing_enquiries: {
+        Args: { p_others: string[] }
+        Returns: {
+          last_at: string
+          listing_id: string
+          other_id: string
+          price_cents: number
+          seller_id: string
+          status: string
+          title: string
+        }[]
+      }
       my_listing_offer_floor: { Args: { p_listing: string }; Returns: number }
       not_received_refund_due: { Args: { p_order: string }; Returns: boolean }
       not_received_refunds_due: {
@@ -8382,6 +8549,10 @@ export type Database = {
       }
       refresh_marketplace_facet_counts: { Args: never; Returns: undefined }
       refresh_search_words: { Args: never; Returns: undefined }
+      reject_copyright_notice: {
+        Args: { p_note: string; p_notice: string }
+        Returns: undefined
+      }
       release_cart_checkout: {
         Args: {
           p_buyer: string

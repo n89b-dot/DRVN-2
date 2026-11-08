@@ -100,7 +100,9 @@ export default async function TermsPage() {
         <h2>2. Your account</h2>
         <p>
           You need an account to sell or post. You must be at least 18, provide accurate
-          information, and keep your sign-in details to yourself. One person, one account.
+          information, and keep your sign-in details to yourself. We ask you to confirm you&apos;re
+          18 or over when you join, when you first sign in with Google, and when you buy without an
+          account; we keep that you confirmed, never your date of birth. One person, one account.
           You&apos;re responsible for activity under your account. You can sign in with an email
           and password, or with Google where it&apos;s offered.
         </p>
@@ -295,12 +297,20 @@ export default async function TermsPage() {
           legal rights buyer and seller have against each other.
         </p>
 
-        <h2>9. Your content</h2>
+        <h2 id="copyright">9. Your content and other people&apos;s copyright</h2>
         <p>
           Your photos, descriptions and build posts stay yours. By posting them you grant DRVN a
           licence to display and distribute them on the platform and in links shared elsewhere. You
           confirm you have the right to post them. A listing you sell is frozen onto the order —
           photos included — as the record of the sale, even if you later edit or delete it.
+        </p>
+        <p>
+          Don&apos;t post photos or text that someone else owns without their permission, and that
+          includes what a listing import brings in from another site. A rights holder can send us a{" "}
+          <Link href="/copyright">copyright notice</Link>. When a notice is complete we remove the
+          content wherever DRVN holds it — the one exception to the frozen order record above — and
+          tell you what was removed and why. If you think it was a mistake, reply to us with your
+          reasons. Accounts that repeatedly post other people&apos;s work are suspended.
         </p>
 
         <h2>10. Reviews</h2>
@@ -325,10 +335,16 @@ export default async function TermsPage() {
           liability that cannot lawfully be limited, including for death, personal injury or fraud.
         </p>
 
-        <h2>13. Changes</h2>
+        <h2 id="changes">13. Changes</h2>
         <p>
           We may update these terms. Material changes will be announced in the app before they take
-          effect, and continuing to use DRVN afterwards means you accept them.
+          effect — every member gets a notification linking here — and the date at the top changes.
+          Continuing to use DRVN afterwards means you accept them.
+        </p>
+        <p>
+          <strong>7 November 2026:</strong> new members confirm they&apos;re 18 or over (section
+          2), and rights holders can send a copyright notice, which can remove content from orders
+          too (section 9).
         </p>
 
         <h2>14. Contact</h2>

@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { useActionState, useState, type FormEvent } from "react";
 
-import { Alert, Button, PasswordField, TextField } from "@/components/ui";
+import { Alert, Button, Checkbox, PasswordField, TextField } from "@/components/ui";
+import {
+  AGE_CONFIRMATION_FIELD,
+  AGE_CONFIRMATION_HINT,
+  AGE_CONFIRMATION_LABEL,
+  AGE_CONFIRMATION_REQUIRED,
+  AGE_CONFIRMATION_VALUE,
+} from "@/lib/age-confirmation";
 
 import { signup, type AuthState } from "../actions";
 import { OAuthButton } from "../oauth-button";
@@ -27,9 +34,9 @@ export function SignupForm({
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     const found = validateSignup(new FormData(event.currentTarget));
     setErrors(found);
-    if (found.email || found.password) {
+    if (found.email || found.password || found.age) {
       event.preventDefault();
-      const first = found.email ? "signup-email" : "signup-password";
+      const first = found.email ? "signup-email" : found.password ? "signup-password" : "signup-age";
       document.getElementById(first)?.focus();
     }
   }
@@ -84,6 +91,22 @@ export function SignupForm({
             error={errors.password ?? (state.field === "password" ? state.error : undefined)}
             onInput={() => clear("password")}
           />
+          {/* R69-age: the Terms require 18+; the action refuses without it. */}
+          <Checkbox
+            id="signup-age"
+            name={AGE_CONFIRMATION_FIELD}
+            value={AGE_CONFIRMATION_VALUE}
+            label={AGE_CONFIRMATION_LABEL}
+            hint={
+              <span id="signup-age-hint">
+                {(errors.age ?? (state.field === "age" ? state.error : undefined)) || AGE_CONFIRMATION_HINT}
+              </span>
+            }
+            aria-describedby="signup-age-hint"
+            aria-invalid={Boolean(errors.age ?? (state.field === "age" ? state.error : undefined)) || undefined}
+            className="mb-4"
+            onChange={() => clear("age")}
+          />
           <Button
             type="submit"
             variant="live"
@@ -124,7 +147,7 @@ export function SignupForm({
   );
 }
 
-type FieldErrors = { email?: string; password?: string };
+type FieldErrors = { email?: string; password?: string; age?: string };
 
 function validateSignup(data: FormData): FieldErrors {
   const email = String(data.get("email") ?? "").trim();
@@ -135,5 +158,6 @@ function validateSignup(data: FormData): FieldErrors {
     errors.email = "That doesn't look like an email address.";
   if (!password) errors.password = "Choose a password.";
   else if (password.length < 8) errors.password = "Use at least 8 characters.";
+  if (data.get(AGE_CONFIRMATION_FIELD) !== AGE_CONFIRMATION_VALUE) errors.age = AGE_CONFIRMATION_REQUIRED;
   return errors;
 }

@@ -11,6 +11,8 @@ import { allowAction, RATE_LIMITS, type RateLimitRule } from "@/lib/rate-limit";
 import { siteUrl } from "@/lib/site";
 import { onboardingPath, safeRedirectPath } from "@/lib/safe-redirect";
 import { DISPLAY_NAME_MAX } from "@/lib/limits";
+import { AGE_CONFIRMATION_REQUIRED, ageConfirmedIn } from "@/lib/age-confirmation";
+import { hasAgeConfirmation, recordAgeConfirmation } from "@/lib/age-confirmation-record";
 import { authErrorCode, publicAuthError } from "@/lib/auth-errors";
 import { reportError } from "@/lib/monitoring";
 import { hasRecoveryAuthorisation } from "@/lib/reauthentication";
@@ -21,7 +23,7 @@ export type AuthState = {
   error?: string;
   ok?: string;
   /** Which field the error belongs under; none means the whole form. */
-  field?: "email" | "password";
+  field?: "email" | "password" | "age";
   /** The email the person typed, handed back so a failed sign-up keeps it. */
   email?: string;
 };
@@ -123,13 +125,18 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   // round-trip, and is validated as an internal path before it's used.
   const next = safeRedirectPath(formData.get("next"), "");
   // Every failure keeps what was typed and says which field it's about.
-  const fail = (error: string, field?: "email" | "password"): AuthState => ({ error, field, email });
+  const fail = (error: string, field?: AuthState["field"]): AuthState => ({ error, field, email });
 
   if (!email || !password) {
     return fail("Email and password are required.", email ? "password" : "email");
   }
   if (password.length < 8) {
     return fail("Password must be at least 8 characters.", "password");
+  }
+  // R69-age: checked here, not only in the form, so posting to the action
+  // without the box ticked creates nothing and sends no email.
+  if (!ageConfirmedIn(formData)) {
+    return fail(AGE_CONFIRMATION_REQUIRED, "age");
   }
   // N42: counted before Supabase is asked,
   // so a throttled attempt can't send a confirmation email to anyone. Same
@@ -163,6 +170,13 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
           ? "email"
           : undefined;
     return fail(publicAuthError(error, "sign-up"), field);
+  }
+
+  // The answer is kept against the new account, so onboarding doesn't ask
+  // again. Supabase returns no identities for an address that already has an
+  // account; nothing is recorded against someone else's account then.
+  if (data.user?.id && data.user.identities?.length) {
+    await recordAgeConfirmation(data.user.id, "email_signup");
   }
 
   // If email confirmation is disabled, a session exists now → onboarding.
@@ -214,6 +228,16 @@ export async function completeOnboarding(
 
   if (!user) {
     redirect("/login");
+  }
+
+  // R69-age: an account that didn't confirm at sign-up or checkout (a first
+  // Google sign-in) confirms here. The database also refuses the handle
+  // without the record (20261107231001), so skipping this form gets nowhere.
+  if (!(await hasAgeConfirmation(user.id))) {
+    if (!ageConfirmedIn(formData)) return { error: AGE_CONFIRMATION_REQUIRED, field: "age" };
+    if (!(await recordAgeConfirmation(user.id, "onboarding"))) {
+      return { error: "We couldn't save that. Try again." };
+    }
   }
 
   // OS-W31: the invite-only beta is gone, so every account can finish

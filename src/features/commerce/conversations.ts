@@ -4,7 +4,7 @@ import type { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 
 import { messageDealKey, type TimelineMessage } from "./conversation-timeline";
-import { dealEvents, enquiryDeal, offerDeal, orderDeal, sortDeals, type Deal, type DealEvent, type OfferDealRow, type OrderDealRow } from "./deals";
+import { dealEvents, enquiryDeal, offerDeal, orderDeal, sortDeals, type Deal, type DealEvent, type EnquiryDealRow, type OfferDealRow, type OrderDealRow } from "./deals";
 
 /**
  * Reads behind /messages. A conversation is one pair of people
@@ -59,11 +59,50 @@ const ORDER_COLUMNS =
 const OFFER_COLUMNS =
   "id, status, buyer_id, listing_id, amount_cents, counter_amount_cents, created_at, countered_at, responded_at, updated_at, expires_at, round_count, listings!inner(id, title, seller_id)";
 
-type DealRows = { orders: OrderDealRow[]; offers: OfferDealRow[] };
+type DealRows = { orders: OrderDealRow[]; offers: OfferDealRow[]; enquiries: EnquiryDealRow[] };
+
+/** One listing a pair has messaged about with no offer or order
+ *  (R-directcontact), from my_listing_enquiries. */
+export type EnquiryTopicRow = {
+  other_id: string;
+  listing_id: string;
+  last_at: string;
+  title: string;
+  seller_id: string;
+  status: string;
+  price_cents: number;
+};
 
 /**
- * Every order and offer between `me` and each of `others`, keyed by the other
- * person. RLS already limits both tables to deals the reader is party to.
+ * Each of `others`' enquiry topics with `me`: one per listing, newest first,
+ * and only a listing that is one of theirs.
+ */
+export function enquiriesByPerson(rows: EnquiryTopicRow[], me: string, others: string[]): Map<string, EnquiryDealRow[]> {
+  const byPerson = new Map<string, EnquiryDealRow[]>(others.map((id) => [id, []]));
+  const seen = new Set<string>();
+  for (const row of [...rows].sort((a, b) => b.last_at.localeCompare(a.last_at))) {
+    const bucket = byPerson.get(row.other_id);
+    if (!bucket) continue;
+    if (row.seller_id !== me && row.seller_id !== row.other_id) continue;
+    const key = `${row.other_id}:${row.listing_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    bucket.push({
+      listing_id: row.listing_id,
+      seller_id: row.seller_id,
+      title: row.title,
+      status: row.status,
+      price_cents: row.price_cents,
+      at: row.last_at,
+    });
+  }
+  return byPerson;
+}
+
+/**
+ * Every order, offer and listing enquiry between `me` and each of `others`,
+ * keyed by the other person. RLS already limits all three to deals the
+ * reader is party to.
  */
 export async function loadDealRows(
   supabase: Supabase,
@@ -71,11 +110,11 @@ export async function loadDealRows(
   others: string[],
   { images = false }: { images?: boolean } = {},
 ): Promise<Map<string, DealRows>> {
-  const byPerson = new Map<string, DealRows>(others.map((id) => [id, { orders: [], offers: [] }]));
+  const byPerson = new Map<string, DealRows>(others.map((id) => [id, { orders: [], offers: [], enquiries: [] }]));
   if (!others.length) return byPerson;
   const list = others.join(",");
 
-  const [ordersRes, offersBuyingRes, offersSellingRes] = await Promise.all([
+  const [ordersRes, offersBuyingRes, offersSellingRes, enquiriesRes] = await Promise.all([
     supabase
       .from("orders")
       .select(ORDER_COLUMNS)
@@ -96,19 +135,26 @@ export async function loadDealRows(
       .eq("listings.seller_id", me)
       .order("created_at", { ascending: false })
       .limit(200),
+    // R-directcontact: a listing asked about with no offer or order yet is a
+    // deal too — in the inbox and its Buying/Selling filters, and in the
+    // thread's composer. One row per listing over the pair's whole history
+    // (20261107230000), so an old topic survives any number of newer
+    // messages.
+    supabase.rpc("my_listing_enquiries", { p_others: others }),
   ]);
-  for (const res of [ordersRes, offersBuyingRes, offersSellingRes]) {
+  for (const res of [ordersRes, offersBuyingRes, offersSellingRes, enquiriesRes]) {
     if (res.error) reportError("[messages] deal lookup failed", res.error);
   }
 
   const orders = ordersRes.data ?? [];
   const offers = [...(offersBuyingRes.data ?? []), ...(offersSellingRes.data ?? [])];
+  const enquiries = enquiriesByPerson(enquiriesRes.data ?? [], me, others);
 
   let orderImages = new Map<string, string>();
   let listingImages = new Map<string, string>();
   if (images) {
     const itemIds = orders.map((o) => o.order_items?.[0]?.id).filter((x): x is string => Boolean(x));
-    const listingIds = [...new Set(offers.map((f) => f.listing_id))];
+    const listingIds = [...new Set([...offers.map((f) => f.listing_id), ...[...enquiries.values()].flat().map((e) => e.listing_id)])];
     const [snapRes, listingRes] = await Promise.all([
       itemIds.length
         ? supabase.from("order_item_snapshot_images").select("order_item_id, url, position").in("order_item_id", itemIds).order("position")
@@ -173,12 +219,22 @@ export async function loadDealRows(
     });
   }
 
+  for (const [other, rows] of enquiries) {
+    const bucket = byPerson.get(other);
+    if (!bucket) continue;
+    bucket.enquiries = rows.map((e) => ({ ...e, image: listingImages.get(e.listing_id) ?? null }));
+  }
+
   return byPerson;
 }
 
 export function dealsFrom(rows: DealRows | undefined, me: string): Deal[] {
   if (!rows) return [];
-  return sortDeals([...rows.orders.map((o) => orderDeal(o, me)), ...rows.offers.map((f) => offerDeal(f, me))]);
+  return sortDeals([
+    ...rows.orders.map((o) => orderDeal(o, me)),
+    ...rows.offers.map((f) => offerDeal(f, me)),
+    ...(rows.enquiries ?? []).map((e) => enquiryDeal(e, me)),
+  ]);
 }
 
 // ---------------------------------------------------------------------------
@@ -369,19 +425,9 @@ export async function loadThread(
 
   const person = toPerson(people.get(target.otherId), target.otherId);
   const rows = dealRowsMap.get(target.otherId);
-  // R-directcontact: listings asked about with no offer or order yet are
-  // deals too, so the seller can answer in the same conversation.
-  const enquiryAt = new Map<string, string>();
-  for (const m of rowsDesc) {
-    if (m.listing_id && !m.order_id && !m.offer_id && !enquiryAt.has(m.listing_id)) enquiryAt.set(m.listing_id, m.created_at);
-  }
-  const { data: enquiryListings } = enquiryAt.size
-    ? await supabase.from("listings").select("id, title, seller_id, status, price_cents").in("id", [...enquiryAt.keys()])
-    : { data: [] as { id: string; title: string; seller_id: string; status: string; price_cents: number }[] };
-  const enquiries = (enquiryListings ?? [])
-    .filter((l) => l.seller_id === me || l.seller_id === target.otherId)
-    .map((l) => enquiryDeal({ listing_id: l.id, seller_id: l.seller_id, title: l.title, status: l.status, price_cents: l.price_cents, at: enquiryAt.get(l.id)! }, me));
-  const deals = sortDeals([...dealsFrom(rows, me), ...enquiries]);
+  // Listing enquiries come with the deal rows (loadDealRows), across the
+  // whole history, so the seller can answer in the same conversation.
+  const deals = dealsFrom(rows, me);
   const events = dealEvents(rows?.orders ?? [], rows?.offers ?? [], me, person.firstName);
   // Only events inside the loaded window (or all, when the whole history is here).
   const hasEarlier = rowsDesc.length === THREAD_WINDOW;

@@ -10,6 +10,8 @@ import { abuseIdentity } from "@/lib/abuse-identity";
 import { getCartIds, removeCartIds } from "@/lib/cart";
 import { guestCheckoutIdentity, isPlausibleEmail, setGuestOrders } from "@/lib/guest-checkout";
 import { resolveGuestBuyer, sendOrderAccessLink } from "./guest-buyer";
+import { AGE_CONFIRMATION_REQUIRED, ageConfirmedIn } from "@/lib/age-confirmation";
+import { recordAgeConfirmation } from "@/lib/age-confirmation-record";
 import { admitGuestHolds, settleGuestHolds } from "./guest-holds";
 import { freezeOrderShipping, hashDestination, planCartFulfillment, type FulfillmentPlan } from "./checkout-shipping";
 import { getPaymentProvider } from "@/lib/payments/provider";
@@ -787,6 +789,9 @@ export async function checkoutCart(
     const email = String(formData.get("email") ?? "").trim();
     if (!email) return { error: "Add an email so we can send your order confirmation." };
     if (!isPlausibleEmail(email)) return { error: "That email doesn't look right." };
+    // R69-age: asked before any account is made or emailed, and checked
+    // here, so a post that skips the box creates nothing.
+    if (!ageConfirmedIn(formData)) return { error: AGE_CONFIRMATION_REQUIRED };
 
     const { buyer, error: buyerError } = await resolveGuestBuyer(
       email,
@@ -796,6 +801,9 @@ export async function checkoutCart(
 
     buyerId = buyer.id;
     guestEmail = email;
+    if (!(await recordAgeConfirmation(buyer.id, "guest_checkout"))) {
+      return { error: "We couldn't start that purchase. Nothing was charged." };
+    }
 
     // A brand-new account has no display name, so the seller would see
     // "DRVN member" against an order that has a real name on the parcel.

@@ -6,7 +6,13 @@ import { useActionState, useId, useState } from "react";
 
 import { AnimatePresence, motion } from "motion/react";
 
-import { Button, Select, Stepper, TextField } from "@/components/ui";
+import { Button, Checkbox, Select, Stepper, TextField } from "@/components/ui";
+import {
+  AGE_CONFIRMATION_FIELD,
+  AGE_CONFIRMATION_HINT,
+  AGE_CONFIRMATION_LABEL,
+  AGE_CONFIRMATION_VALUE,
+} from "@/lib/age-confirmation";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import { springs, transitions } from "@/lib/motion";
 import { checkoutCart, type CommerceState } from "@/features/commerce/actions";
@@ -148,6 +154,8 @@ export function CheckoutSteps({
   // the form filled in, not blank.
   const [email, setEmail] = useState("");
   const [saved, setSaved] = useState(false);
+  // Kept across "Change address", which remounts the form.
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
   const errorId = useId();
 
   // DRVN Shipping (0053): the address submit fetches rates first; payment
@@ -445,6 +453,17 @@ export function CheckoutSteps({
                     </Link>
                   </>
                 }
+              />
+              {/* R69-age: asked before the order email; the action checks it. */}
+              <Checkbox
+                id="checkout-age"
+                name={AGE_CONFIRMATION_FIELD}
+                value={AGE_CONFIRMATION_VALUE}
+                required
+                checked={ageConfirmed}
+                onChange={(event) => setAgeConfirmed(event.target.checked)}
+                label={AGE_CONFIRMATION_LABEL}
+                hint={AGE_CONFIRMATION_HINT}
               />
             </fieldset>
           )}
