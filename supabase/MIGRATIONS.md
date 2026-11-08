@@ -23,6 +23,8 @@ recorded file is skipped, and a destructive baseline (0001) is refused on a
 database with any table in `public`. Details: "Applying without Docker or
 psql" below.
 
+**A merged migration is never renamed** (#97). Apply order on every target is merge order, so filename order must stay the same as merge order. A pull request may only add migration files, each with a timestamp later than every file already on `main`, and may never rename or remove a file `main` has. If `main` gains a later file before yours merges, rename yours (it is not merged yet) to a timestamp after it. `tests/ci/migration-order.test.ts` fails a PR that breaks either rule, naming the file. Find what a merge added with `git diff --diff-filter=A`, never by name.
+
 **Recording files that already ran** (OS-R-migrations): `--record-only` writes
 history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
