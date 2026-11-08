@@ -166,23 +166,26 @@ as $$
    where ord.buyer_id = (select auth.uid()) and oi.listing_id is not null;
 $$;
 
-revoke all on function public.my_deal_listing_ids() from public, anon;
-grant execute on function public.my_deal_listing_ids() to authenticated, service_role;
+-- Callable by visitors too, like suspended_profile_ids(): a policy runs as
+-- the caller, and a plan made for one role can be reused under another in
+-- the same session (a cached SQL function's plan). A visitor gets no rows.
+revoke all on function public.my_deal_listing_ids() from public;
+grant execute on function public.my_deal_listing_ids() to anon, authenticated, service_role;
 
 comment on function public.my_deal_listing_ids() is
-  'OS-W33: ids of listings the caller made an offer on or ordered, for the archived-listing read policies; ids only, the caller''s own.';
+  'OS-W33: ids of listings the caller made an offer on or ordered, for the archived-listing read policies; ids only, the caller''s own; none for a visitor.';
 
 -- Archived only: a removed listing stays moderation's, and a paused or
 -- draft one stays its seller's. The restrictive "suspended listing
 -- visibility" still applies on top.
 drop policy if exists "deal participants read archived listings" on public.listings;
 create policy "deal participants read archived listings" on public.listings
-  for select to authenticated
+  for select to anon, authenticated
   using (status = 'archived' and id in (select public.my_deal_listing_ids()));
 
 drop policy if exists "deal participants read archived listing images" on public.listing_images;
 create policy "deal participants read archived listing images" on public.listing_images
-  for select to authenticated
+  for select to anon, authenticated
   using (
     listing_id in (select public.my_deal_listing_ids())
     and exists (select 1 from public.listings l where l.id = listing_images.listing_id and l.status = 'archived')

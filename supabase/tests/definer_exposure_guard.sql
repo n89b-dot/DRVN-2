@@ -18,6 +18,7 @@ declare
     'listing_watch_counts(uuid[])',       -- counts only, for listings the caller can see (R2-09)
     'marketplace_search_capped_ids(text,text,text,text,text,text,integer,integer,integer)', -- the newest 1,001 ids marketplace_search_ids would give, within filters a visitor can apply; callers re-read under RLS (20261011130000)
     'marketplace_search_ids(text)',       -- ids of active parts of visible sellers matching a search; callers re-read under RLS
+    'my_deal_listing_ids()',              -- used by the archived-listing read policies: ids of listings the caller offered on or ordered; none for a visitor (OS-W33, 20261108110100)
     'mod_purchase_sources(uuid[])',       -- source car of purchased build lines, by unguessable item id
     'profile_follow_counts(uuid)',        -- public follower counts
     'profile_is_visible(uuid)',           -- used by public read policies
@@ -55,7 +56,6 @@ declare
     'listing_question_parent_matches(uuid,uuid)',      -- boolean: a reply's parent is on a listing the caller can see
     'listing_enquiry_reply_allowed(uuid,uuid)',        -- boolean, true only for the listing's own seller answering a buyer who asked about it (R-directcontact, 20261107220600)
     'my_car_vin(uuid)',                                -- the caller's own car's VIN (20261004160000)
-    'my_deal_listing_ids()',                           -- ids of the listings the caller offered on or ordered, for the archived-listing read policies; the caller's own (OS-W33, 20261108110100)
     'my_default_offer_floor()',                        -- the caller's own default minimum
     'my_dispute_evidence_upload_count(uuid)',          -- count of the caller's own files in one order's evidence folder (N247, 20261107220000)
     'my_listing_offer_floor(uuid)',                    -- the caller's own listing's minimum (20261017120000)

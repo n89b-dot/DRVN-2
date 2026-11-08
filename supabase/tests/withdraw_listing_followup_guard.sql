@@ -122,11 +122,11 @@ begin
   if exists (select 1 from public.my_deal_listing_ids()) then raise exception 'FAIL 19: deal listing ids leak to a member with no deals'; end if;
   perform set_config('role', 'anon', true);
   perform set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
-  if exists (select 1 from public.listings where id = part) then raise exception 'FAIL 20: a visitor reads a withdrawn listing'; end if;
-  perform set_config('role', 'none', true);
-  if has_function_privilege('anon', 'public.my_deal_listing_ids()', 'execute') then
-    raise exception 'FAIL 21: visitors can call my_deal_listing_ids';
+  if exists (select 1 from public.listings where id = part) or exists (select 1 from public.listing_images where listing_id = part) then
+    raise exception 'FAIL 20: a visitor reads a withdrawn listing';
   end if;
+  if exists (select 1 from public.my_deal_listing_ids()) then raise exception 'FAIL 21: deal listing ids leak to a visitor'; end if;
+  perform set_config('role', 'none', true);
 
   raise notice 'all withdraw listing followup checks passed';
 end $$;
