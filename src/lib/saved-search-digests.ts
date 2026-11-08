@@ -26,8 +26,8 @@ import type { createAdminClient } from "@/lib/supabase/admin";
  * batches until none are left or the run's time is up, sends each through
  * the email seam and records the outcome, fenced by the attempt number. A
  * digest still unsent at the end of its day is carried into the next day's
- * window by saved_search_digest_sweep; turning an alert off skips its
- * unsent digests.
+ * window by saved_search_digest_sweep, reaching back at most 7 days (older
+ * matches drop silently); turning an alert off skips its unsent digests.
  */
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -81,6 +81,9 @@ type DueSearch = {
   checked_xact: number | null;
   window_end: string;
   window_xact: number;
+  /** Midnight (London) seven days before today: nothing older is mailed,
+   *  however far back a carried window reaches. */
+  window_floor: string;
 };
 
 async function admitOne(admin: Admin, search: DueSearch, tally: AdmitTally): Promise<string | null> {
@@ -104,7 +107,8 @@ async function admitOne(admin: Admin, search: DueSearch, tally: AdmitTally): Pro
     // flight then (stamped with a time inside the window, committed after
     // this query) is in the next window instead of in neither.
     const { data: matches, count, error: matchError } = await listingRowsQuery(admin, params, search.user_id)
-      .gte("published_xact", search.checked_xact).lt("published_xact", search.window_xact).neq("seller_id", search.user_id)
+      .gte("published_xact", search.checked_xact).lt("published_xact", search.window_xact)
+      .gte("published_at", search.window_floor).neq("seller_id", search.user_id)
       .order("published_at", { ascending: false }).order("id").limit(DIGEST_ITEMS);
     if (matchError) {
       // The window stays put, so the next hourly run tries the same one.

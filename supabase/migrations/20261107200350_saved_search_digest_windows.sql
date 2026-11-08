@@ -38,6 +38,13 @@
 --    next admission covers both days. Admission waits ('blocked', and not in
 --    the due list) while a search has an unsent digest from an earlier day,
 --    so a window never moves past matches that were not sent.
+--    A carried window reaches back at most 7 days: no match published
+--    before midnight (London) seven days before the current day is ever
+--    mailed. The due list returns that floor (window_floor) and the worker
+--    filters published_at on it; admission and the sweep record a window
+--    start no earlier than it. So the first email after a long outage, or
+--    after a provider is first configured, covers at most the last 7 days of
+--    still-active matches, and older ones drop silently.
 -- 3. Alert restarts. Turning an alert off now skips its unsent digests in the
 --    same statement (skip_reason 'alert_off'), so off and on again before the
 --    next claim cannot send the old window.
@@ -60,6 +67,16 @@ stable
 set search_path = public, pg_temp
 as $$ select pg_snapshot_xmin(pg_current_snapshot())::text::bigint $$;
 revoke all on function private.snapshot_xmin() from public, anon, authenticated;
+
+-- The oldest publication any window may still mail: midnight in London,
+-- seven days before the current London day.
+create or replace function private.saved_search_digest_floor()
+returns timestamptz
+language sql
+stable
+set search_path = public, pg_temp
+as $$ select ((private.saved_search_digest_day(now()) - 7)::timestamp at time zone 'Europe/London') $$;
+revoke all on function private.saved_search_digest_floor() from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 1. Which transaction published a part
@@ -145,13 +162,14 @@ revoke all on function public.saved_search_email_window_start() from public, ano
 drop function if exists public.saved_search_digests_due(integer);
 create function public.saved_search_digests_due(p_limit integer default 200)
 returns table(saved_search_id uuid, user_id uuid, params jsonb, checked_through timestamptz, checked_xact bigint,
-              window_end timestamptz, window_xact bigint)
+              window_end timestamptz, window_xact bigint, window_floor timestamptz)
 language sql
 stable
 security definer
 set search_path = public, pg_temp
 as $$
-  select s.id, s.user_id, s.params, c.checked_through, c.checked_xact, now(), private.snapshot_xmin()
+  select s.id, s.user_id, s.params, c.checked_through, c.checked_xact, now(), private.snapshot_xmin(),
+         private.saved_search_digest_floor()
   from public.saved_searches s
   left join public.saved_search_email_cursors c on c.saved_search_id = s.id
   where s.alert
@@ -232,7 +250,8 @@ begin
       (saved_search_id, digest_day, window_start, window_end, window_start_xact, window_end_xact,
        search_name, href, match_count, items)
     values
-      (p_saved_search_id, v_today, v_cursor.checked_through, p_window_end, v_cursor.checked_xact, p_window_xact,
+      (p_saved_search_id, v_today, greatest(v_cursor.checked_through, private.saved_search_digest_floor()), p_window_end,
+       v_cursor.checked_xact, p_window_xact,
        v_search.name, p_href, p_match_count, p_items)
     on conflict (saved_search_id, digest_day) do nothing
     returning id into v_id;
@@ -254,7 +273,8 @@ grant execute on function public.admit_saved_search_digest(uuid, timestamptz, bi
 -- ---------------------------------------------------------------------------
 -- Latest: 20261107200300. Changed: an unsent digest from an earlier day
 -- rewinds its search's window to the digest's start ('carried'), so the next
--- admission mails those matches with the new ones; only a digest whose
+-- admission mails those matches with the new ones (back to the 7-day
+-- floor at most: the recorded start is never earlier); only a digest whose
 -- window can't be restored (the window has moved since, or a digest from
 -- before this migration with no transaction ids) is 'expired'. The search
 -- row is locked before the digest, the same order as admission and the
@@ -285,7 +305,8 @@ begin
     if not found then continue; end if;
 
     update public.saved_search_email_cursors c
-       set checked_through = v_digest.window_start, checked_xact = v_digest.window_start_xact, updated_at = now()
+       set checked_through = greatest(v_digest.window_start, private.saved_search_digest_floor()),
+           checked_xact = v_digest.window_start_xact, updated_at = now()
      where c.saved_search_id = v_digest.saved_search_id
        and c.checked_through = v_digest.window_end
        and v_digest.window_start_xact is not null;

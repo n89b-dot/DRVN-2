@@ -8130,6 +8130,7 @@ export type Database = {
           saved_search_id: string
           user_id: string
           window_end: string
+          window_floor: string
           window_xact: number
         }[]
       }

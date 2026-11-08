@@ -40,6 +40,9 @@ const db = vi.hoisted(() => {
   // The oldest transaction still running: pg_snapshot_xmin(pg_current_snapshot()).
   const xmin = () => Math.min(state.xact.next, ...state.inflight.map((l) => l.published_xact));
   const today = () => day(now());
+  // Midnight seven days before today (UTC here; London in the database).
+  const floor = () => new Date(Date.parse(`${today()}T00:00:00.000Z`) - 7 * 86_400_000).toISOString();
+  const later = (a: string, b: string) => (a > b ? a : b);
   const unsentBefore = (id: string) =>
     state.digests.some((d) => d.saved_search_id === id && ["pending", "sending"].includes(d.status) && d.digest_day < today());
   const wants = (user: string) => state.prefs[user]?.saved_searches !== false && state.prefs[user]?.saved_search_emails !== false;
@@ -51,7 +54,7 @@ const db = vi.hoisted(() => {
         const cursor = state.cursors.get(d.saved_search_id);
         d.status = "skipped";
         if (cursor?.through === d.window_end) {
-          state.cursors.set(d.saved_search_id, { through: d.window_start, xact: d.window_start_xact });
+          state.cursors.set(d.saved_search_id, { through: later(d.window_start, floor()), xact: d.window_start_xact });
           d.skip_reason = "carried"; carried += 1;
         } else d.skip_reason = "expired";
       }
@@ -64,7 +67,7 @@ const db = vi.hoisted(() => {
         .map((s) => ({
           saved_search_id: s.id, user_id: s.user_id, params: s.params,
           checked_through: state.cursors.get(s.id)?.through ?? null, checked_xact: state.cursors.get(s.id)?.xact ?? null,
-          window_end: now(), window_xact: xmin(),
+          window_end: now(), window_xact: xmin(), window_floor: floor(),
         })),
     admit_saved_search_digest: (a) => {
       const search = state.searches.find((s) => s.id === a.p_saved_search_id);
@@ -87,7 +90,7 @@ const db = vi.hoisted(() => {
       if ((a.p_match_count as number) > 0 && wants(search.user_id)) {
         if (state.digests.some((d) => d.saved_search_id === search.id && d.digest_day === day(now()))) return "already_today";
         state.digests.push({
-          id: `digest-${state.digests.length + 1}`, saved_search_id: search.id, digest_day: day(now()), window_start: through,
+          id: `digest-${state.digests.length + 1}`, saved_search_id: search.id, digest_day: day(now()), window_start: later(through, floor()),
           window_end: a.p_window_end as string, search_name: search.name, href: a.p_href as string, match_count: a.p_match_count as number,
           items: a.p_items, status: "pending", attempts: 0, next_attempt_at: Date.now(), skip_reason: null,
           window_start_xact: cursor.xact, window_end_xact: next.xact,
@@ -418,6 +421,33 @@ describe("a busy day drains fully (follow-up)", () => {
     expect(first).toMatchObject({ status: "skipped", skip_reason: "carried" });
     expect(second).toMatchObject({ status: "sent", match_count: 2, window_start: "2026-11-07T08:41:00.000Z", window_start_xact: 50 });
     expect(db.send.mock.lastCall![0].subject).toBe("2 new parts match E46 coilovers");
+  });
+});
+
+describe("a carried window reaches back at most 7 days", () => {
+  it("ten days of unsent digests yield one email covering the last seven", async () => {
+    db.transport = { name: "test", send: db.send };
+    db.send.mockResolvedValue({ status: "retry", reason: "provider down" });
+    db.cursors.set("search", { through: "2026-10-31T08:41:00.000Z", xact: 50 });
+    // A part a day for ten days, each day's digest never sent and carried.
+    for (let d = 1; d <= 10; d += 1) {
+      const date = `2026-11-${String(d).padStart(2, "0")}`;
+      publish(`${date}T07:00:00Z`, `Part of day ${d}`);
+      at(`${date}T08:41:00Z`); await runDigests();
+      at(`${date}T23:41:00Z`); await runDigests();
+    }
+    db.send.mockResolvedValue({ status: "sent", providerId: "provider-id" });
+    publish("2026-11-11T07:00:00Z", "Part of day 11");
+    at("2026-11-11T08:41:00Z"); await runDigests();
+
+    const sent = db.digests.filter((d) => d.status === "sent");
+    expect(sent).toHaveLength(1);
+    // From midnight on 4 November: days 4 to 11, and nothing from days 1 to 3.
+    expect(sent[0]).toMatchObject({ window_start: "2026-11-04T00:00:00.000Z", match_count: 8 });
+    const titles = (sent[0].items as { title: string }[]).map((item) => item.title);
+    expect(titles).toContain("Part of day 11");
+    expect(titles).not.toContain("Part of day 3");
+    expect(db.send.mock.lastCall![0].subject).toBe("8 new parts match E46 coilovers");
   });
 });
 

@@ -14,6 +14,9 @@
 --   D. A retry is never terminal within the day: hourly at most.
 --   E. Alert restarts: turning an alert off skips its unsent digests, so off
 --      and on again before the next claim cannot send the old window.
+--   F. A carried window reaches back at most 7 days: the floor is London
+--      midnight seven days before today, the due list hands it to the worker,
+--      and a ten-day carry rewinds to it, not past it.
 begin;
 
 do $$
@@ -23,7 +26,8 @@ declare
   v_car uuid := gen_random_uuid();
   v_make bigint; v_model bigint;
   v_live uuid; v_draft uuid;
-  v_search uuid; v_restart uuid;
+  v_search uuid; v_restart uuid; v_far uuid;
+  v_floor timestamptz;
   v_today date := private.saved_search_digest_day(now());
   v_items jsonb := jsonb_build_array(jsonb_build_object('id', gen_random_uuid(), 'title', 'Zzwindow part', 'price_cents', 1000));
   v_old timestamptz := now() - interval '2 days';
@@ -165,6 +169,34 @@ begin
     raise exception 'FAIL E3: a digest leased before the alert went off came back (got %)', v_out;
   end if;
   raise notice 'PASS E: an alert restart cannot send the old window';
+
+  -- F. The 7-day floor.
+  v_floor := private.saved_search_digest_floor();
+  if v_floor <> ((v_today - 7)::timestamp at time zone 'Europe/London') then
+    raise exception 'FAIL F1: the floor is % not London midnight seven days before today', v_floor;
+  end if;
+  insert into public.saved_searches(user_id, name, params, alert) values (v_user, 'Zz far', '{"_version":"2","q":"zzfar"}', true)
+    returning id into v_far;
+  if exists (select 1 from public.saved_search_digests_due(500) d where d.window_floor <> v_floor) then
+    raise exception 'FAIL F2: the due list does not carry the floor';
+  end if;
+  -- Ten days of carried windows: the digest from yesterday started ten days ago.
+  insert into public.saved_search_email_digests(saved_search_id, digest_day, window_start, window_end, window_start_xact, window_end_xact,
+                                                search_name, href, match_count, items)
+  values (v_far, v_today - 1, now() - interval '10 days', now() - interval '1 day', v_xmin - 1, v_xmin,
+          'Zz far', '/marketplace?q=zzfar', 1, v_items) returning id into v_digest;
+  update public.saved_search_email_cursors set checked_through = now() - interval '1 day', checked_xact = v_xmin where saved_search_id = v_far;
+  perform public.saved_search_digest_sweep();
+  if (select skip_reason from public.saved_search_email_digests where id = v_digest) is distinct from 'carried'
+     or (select checked_through from public.saved_search_email_cursors where saved_search_id = v_far) <> v_floor then
+    raise exception 'FAIL F3: a ten-day carry rewound past the 7-day floor';
+  end if;
+  v_out := public.admit_saved_search_digest(v_far, now(), private.snapshot_xmin(), 1, v_items, '/marketplace?q=zzfar', v_floor);
+  if v_out <> 'admitted' or (select window_start from public.saved_search_email_digests
+                             where saved_search_id = v_far and digest_day = v_today) <> v_floor then
+    raise exception 'FAIL F4: the carried digest does not start at the floor (got %)', v_out;
+  end if;
+  raise notice 'PASS F: a carried window reaches back at most 7 days';
 
   raise notice 'all saved-search digest window checks passed';
 end;
