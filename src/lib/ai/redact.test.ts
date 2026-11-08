@@ -38,4 +38,15 @@ describe("card redaction and ids", () => {
     expect(redactForStorage(json).text).toBe(JSON.stringify({ approval_id: id, message: `my card is ${CARD_REMOVED}` }));
     expect(redactForModel(`listing ${id}, card 4242 4242 4242 4242`)).toBe(`listing ${id}, card ${CARD_REMOVED}`);
   });
+
+  it("still sends an email as [email] when it contains a UUID, while a plain UUID survives", () => {
+    const id = CORRUPTED_BEFORE[0];
+    expect(redactForModel(`write to alice+${id}@example.com`)).toBe("write to [email]");
+    expect(redactForModel(`write to alice+aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee@example.com today`)).toBe("write to [email] today");
+    expect(redactForModel(`reply via seller@${id}.reply.example.com`)).toBe("reply via [email]");
+    expect(redactForModel(`listing ${id}, email bob@example.com, phone 555-123-4567`)).toBe(
+      `listing ${id}, email [email], phone [phone]`
+    );
+    expect(redactForModel(id)).toBe(id);
+  });
 });

@@ -28,13 +28,29 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
-## November 8 — audited exports, old photo metadata, storage reference report: N531, N627, N232 (not applied anywhere)
+## November 8 — files merged with no entry here (record gaps after #143)
+
+These four merged on 8 Nov 2026 after `tests/ci/migrations-md.test.ts` (#143) and before anyone added their rows, which left `main` red. `node scripts/apply-migration.mjs --target shared-dev --status` (read-only, 8 Nov) lists each of them, and the three `120000`–`120020` files above, as applied on the shared dev project. They are not on staging or production.
 
 | File | Applied to |
 |---|---|
-| `20261108120000_admin_export_audit.sql` | — |
-| `20261108120010_photo_metadata_scrub.sql` | — |
-| `20261108120020_storage_reference_report.sql` | — |
+| `20261108130000_guest_holds_by_request.sql` | shared-dev 2026-11-08 |
+| `20261108130100_social_moderation_races.sql` | shared-dev 2026-11-08 |
+| `20261108130300_dispute_evidence_attach_cap.sql` | shared-dev 2026-11-08 |
+| `20261108130500_agent_redact_skips_ids.sql` | shared-dev 2026-11-08 |
+
+- **`130000`** — OS-W17/N89 checkout follow-up (#152); see that PR.
+- **`130100`** — OS-W21 follow-up (#154): a moderation hold always takes the car's row lock; the dispute-evidence upload count locks the uploader's folder; `listing_save` notifications are de-duplicated; `take_down_reported_content` closes every report on a post and its replies in one transaction. Guards: `social_moderation_guard.sql`, `social_moderation_race_guard.sql`.
+- **`130300`** — OS-W29 (#156): a BEFORE INSERT trigger holds the 8-photo dispute-evidence limit under a per-order-and-uploader lock. Guard: `dispute_evidence_cap_race_guard.sql`.
+- **`130500`** — #158: `agent_redact_cards` never scans UUID-shaped text, so card redaction can't corrupt ids. Guards: `agent_redact_ids_guard.sql`, `agent_tool_audit_guard.sql`.
+
+## November 8 — audited exports, old photo metadata, storage reference report: N531, N627, N232 (shared dev)
+
+| File | Applied to |
+|---|---|
+| `20261108120000_admin_export_audit.sql` | shared-dev 2026-11-08 |
+| `20261108120010_photo_metadata_scrub.sql` | shared-dev 2026-11-08 |
+| `20261108120020_storage_reference_report.sql` | shared-dev 2026-11-08 |
 
 Apply in order, after every earlier migration, **before the app from #148 serves the console**: the new export route records every download through `record_admin_export` and refuses to send a file it can't record, so without `120000` every CSV export answers 503.
 

@@ -98,9 +98,14 @@ function redactCardRuns(text: string): string {
 
 /** Cards, VINs, emails and phones out, for anything sent to the model. */
 export function redactForModel(text: string): string {
-  return outsideIds(text, (piece) => {
+  // Emails first, over the whole text: an address can contain a UUID
+  // (alice+<uuid>@example.com), and the split below would break it into
+  // pieces EMAIL can't match. Only the digit rules (cards, phones) and VINs
+  // run between the UUIDs, which their digit groups could otherwise trip.
+  const withoutEmails = text.replace(EMAIL, "[email]");
+  return outsideIds(withoutEmails, (piece) => {
     // A VIN has letters and digits; a 17-digit run is a number, not a VIN.
     const withoutVins = redactCardRuns(piece).replace(VIN, (match) => (/[A-Z]/i.test(match) && /\d/.test(match) ? VIN_REMOVED : match));
-    return withoutVins.replace(EMAIL, "[email]").replace(PHONE, (match) => (match.replace(/\D/g, "").length >= 7 ? "[phone]" : match));
+    return withoutVins.replace(PHONE, (match) => (match.replace(/\D/g, "").length >= 7 ? "[phone]" : match));
   });
 }
