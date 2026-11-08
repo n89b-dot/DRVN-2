@@ -86,6 +86,17 @@ export type TrackingEvent = {
   city: string | null;
   state_code: string | null;
   country: string | null;
+  /** Where the scan happened: postcode / ZIP, when the carrier gives one.
+   *  Delivery proof (N95) matches the delivered scan against the order. */
+  postalCode?: string | null;
+};
+
+/** The delivery destination as the carrier reports it (N95). */
+export type TrackingDestination = {
+  postalCode: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
 };
 
 export type TrackingSummary = {
@@ -94,8 +105,15 @@ export type TrackingSummary = {
   carrier: string | null;
   state: TrackingState;
   estDeliveryAt: string | null;
+  /** The carrier's own delivered scan time — never filled in with "now". */
   deliveredAt: string | null;
   events: TrackingEvent[];
+  /** Who signed for it, when the carrier collected a signature (N95: a
+   *  $750+ order needs one to defend a not-received case). */
+  signedBy?: string | null;
+  /** The carrier's destination, when it reports one separately from the
+   *  delivered scan's location. */
+  destination?: TrackingDestination | null;
 };
 
 export type AddressVerification = {

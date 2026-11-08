@@ -50,4 +50,11 @@ describe("checkoutTotals (RR-10)", () => {
     const t = checkoutTotals({ ...base, flatShippingCents: 800, quotedLines: 1, selectedQuoteCents: 999, admittedCents: 11_234 });
     expect(t).toEqual({ shipping: formatPrice(1_234), total: formatPrice(11_234), complete: true });
   });
+
+  it("N485: a price rise between page load and payment is goods, not shipping", () => {
+    // The page loaded goods at 10,000; the server reserved them at 12,000
+    // with 500 shipping, and charges 12,500.
+    const t = checkoutTotals({ ...base, flatShippingCents: 500, admittedCents: 12_500, admittedGoodsCents: 12_000 });
+    expect(t).toEqual({ shipping: formatPrice(500), total: formatPrice(12_500), complete: true });
+  });
 });

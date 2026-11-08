@@ -3,6 +3,9 @@ import { notFound, redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
 import { PageHead } from "@/components/ui";
+import { pickupHandoffState } from "@/lib/domain/pickup-handoff";
+import { orderHasUnresolvedChargeback } from "@/lib/payments/chargeback-state";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 import { RedeemPickupForm } from "../pickup-controls";
@@ -32,10 +35,18 @@ export default async function PickupRedeemPage({
   // RLS scopes orders to participants; only the seller confirms a handoff.
   const { data: order } = await supabase
     .from("orders")
-    .select("id, seller_id, status, is_collection, pickup_ready_at")
+    .select("id, seller_id, status, pre_dispute_status, is_collection, pickup_ready_at")
     .eq("id", id)
     .maybeSingle();
   if (!order || order.seller_id !== user.id) notFound();
+
+  // The same rule as pickup_redeem (pickupHandoffState): a paid collection,
+  // or one in an open case that was never handed over and has no unresolved
+  // bank chargeback. The journal is service-role; read only for the seller.
+  const handoff = pickupHandoffState(order, {
+    chargebackOpen:
+      order.status === "disputed" && (await orderHasUnresolvedChargeback(createAdminClient(), order.id)),
+  });
 
   return (
     <div className="mx-auto w-full max-w-[480px] px-5 pb-10">
@@ -57,12 +68,20 @@ export default async function PickupRedeemPage({
       />
 
       <Rv className="tile">
-        {order.status === "delivered" || order.status === "completed" ? (
+        {handoff === "done" ? (
           <p className="spec-note">This pickup is already confirmed — all done.</p>
-        ) : !order.is_collection || order.status !== "paid" ? (
+        ) : handoff === "not_waiting" ? (
           <p className="spec-note">This order isn&apos;t waiting for a pickup handoff.</p>
         ) : (
-          <RedeemPickupForm orderId={id} initialToken={token} />
+          <>
+            {order.status === "disputed" && (
+              <p className="spec-note">
+                The buyer reported a problem with this order. Handing it over is recorded on the
+                case, which stays open until it&apos;s closed.
+              </p>
+            )}
+            <RedeemPickupForm orderId={id} initialToken={token} />
+          </>
         )}
       </Rv>
     </div>

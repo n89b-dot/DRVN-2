@@ -648,6 +648,8 @@ export type ListingActionState = {
   ok?: string;
   /** The refusal is the payout-onboarding gate — link the seller there. */
   needsOnboarding?: boolean;
+  /** N77: the listing has offers, so it is withdrawn rather than deleted. */
+  withdrawInstead?: boolean;
 } | null;
 
 export async function setListingStatus(
@@ -763,6 +765,11 @@ export async function deleteListing(
   // a title snapshot, so removing a sold listing no longer breaks receipts.
   const { error } = await supabase.from("listings").delete().eq("id", id).eq("seller_id", user.id);
   if (error) {
+    // N77 (20261107220700): a listing with offers is withdrawn, not deleted,
+    // so the buyers keep their history and are told.
+    if (error.code === "LW409") {
+      return { error: "This listing has offers, so it's withdrawn instead of deleted — the buyers keep their history.", withdrawInstead: true };
+    }
     // The 0012 delete guard refuses reserved/sold rows with a 42501.
     return {
       error: error.code === "42501"
@@ -780,6 +787,38 @@ export async function deleteListing(
   // The seller ledger is where "Listing deleted" actually renders — the old
   // /sell?deleted=1 landing had no handler for the param.
   redirect("/listings?deleted=1");
+}
+
+/**
+ * Withdraws a listing (N77, Neil's ruling: withdraw, don't delete). One
+ * database step (withdraw_listing, 20261107220700) takes the listing lock
+ * first — as offer moves and checkout do — ends every live offer with a
+ * listing-withdrawal reason, tells each buyer, and archives the listing.
+ * Nothing is deleted. A reserved or sold listing belongs to its order.
+ */
+export async function withdrawListing(
+  _prev: ListingActionState,
+  formData: FormData
+): Promise<ListingActionState> {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return { error: "Missing listing." };
+  const { data, error } = await supabase.rpc("withdraw_listing", { p_listing: id });
+  if (error) {
+    if (error.code === "LW423") return { error: "This listing is mid-checkout or sold — the order decides it now." };
+    if (error.code === "P0002") return { error: "That listing isn't yours or no longer exists." };
+    return { error: "Couldn't withdraw it. Nothing changed — try again." };
+  }
+  const ended = Number((data as { offers_ended?: number } | null)?.offers_ended ?? 0);
+  revalidatePath("/listings");
+  revalidatePath(`/listings/${id}`);
+  revalidatePath("/offers");
+  revalidatePath("/marketplace");
+  return {
+    ok: ended
+      ? `Withdrawn. ${ended} open offer${ended === 1 ? "" : "s"} ended, and ${ended === 1 ? "the buyer was" : "the buyers were"} told.`
+      : "Withdrawn. It's archived, with its history kept.",
+  };
 }
 
 /**

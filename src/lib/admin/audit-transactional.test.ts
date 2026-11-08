@@ -32,4 +32,20 @@ describe("suspension commands run in the database", () => {
       )
     ).rejects.toThrow("already suspended");
   });
+
+  it("the dispute reopen (N91) runs in the database, audited with it", async () => {
+    session.rpc.mockResolvedValueOnce({ data: { reopenedFrom: "history-1", previousOutcome: "closed_by_buyer" }, error: null });
+    const mutate = vi.fn();
+    const result = await auditedAction(
+      admin as never,
+      { actorId: "admin-1", action: "dispute.reopen", subjectType: "dispute", subjectId: "order-1", orderId: "order-1", reason: "New evidence" },
+      mutate
+    );
+    expect(session.rpc).toHaveBeenCalledWith(
+      "execute_admin_command",
+      expect.objectContaining({ p_action: "dispute.reopen", p_subject: "order-1", p_reason: "New evidence" })
+    );
+    expect(mutate).not.toHaveBeenCalled();
+    expect(result).toEqual({ reopenedFrom: "history-1", previousOutcome: "closed_by_buyer" });
+  });
 });

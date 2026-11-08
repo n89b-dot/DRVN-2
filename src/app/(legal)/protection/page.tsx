@@ -4,6 +4,8 @@ import { Rv } from "@/components/livesheet";
 import {
   AUTO_REFUND_AFTER_DAYS,
   DISPUTE_WINDOW_DAYS,
+  ESCALATION_CLOSES_DAYS,
+  REFUND_OFFER_HOURS,
   SELLER_RESPONSE_DAYS,
 } from "@/features/commerce/disputes";
 import { RETURN_SHIP_DAYS, SELLER_INSPECT_HOURS } from "@/lib/domain/return-policy";
@@ -119,7 +121,7 @@ export default function ProtectionPage() {
             car</b> — not a guarantee from DRVN. Aftermarket parts especially can vary by trim,
             options and model year. Always confirm before buying; the Q&amp;A on every listing
             exists for exactly that. If a part arrives and genuinely doesn&apos;t fit a vehicle
-            the seller listed, that&apos;s a &quot;wrong item&quot; dispute and the process below
+            the seller listed, that&apos;s a &quot;doesn&apos;t fit as listed&quot; dispute and the process below
             applies.
           </p>
         </Rv>
@@ -130,8 +132,9 @@ export default function ProtectionPage() {
           <p className="mt-2 text-body leading-relaxed">
             Problems are handled on the order page, in the open, with a clock on every step. Valid
             reasons: the item never arrived, arrived damaged, is significantly not as described,
-            or is the wrong item. Changed your mind isn&apos;t covered — this is a used-parts
-            marketplace between real people.
+            is counterfeit, doesn&apos;t fit as listed, or is the wrong item. Changed your mind
+            isn&apos;t covered — this is a used-parts marketplace between real people. Every
+            business-day clock counts Monday to Friday.
           </p>
           <table className="spec mt-3">
             <thead className="sr-only">
@@ -147,30 +150,36 @@ export default function ProtectionPage() {
                 </td>
                 <td>
                   Open a dispute from the order page (&quot;Report a problem&quot;). Attach photos —
-                  in a condition argument, photos beat adjectives. If the order never arrived,
-                  there&apos;s no deadline.
+                  in a condition argument, photos beat adjectives. If the order never arrived, you
+                  can report it from the latest delivery date shown on the order — fixed when you
+                  paid, from the seller&apos;s handling time and the delivery estimate — until{" "}
+                  {DISPUTE_WINDOW_DAYS} days after it, even if it was never dispatched. For
+                  collection, the date is when the seller had to make it available.
                 </td>
               </tr>
               <tr>
                 <td>
-                  <b>Seller&apos;s move — {SELLER_RESPONSE_DAYS} days</b>
+                  <b>Seller&apos;s move — {SELLER_RESPONSE_DAYS} business days</b>
                 </td>
                 <td>
                   The seller sees your case and can resolve it three ways: a <b>partial refund</b>{" "}
                   (you keep the item — sensible when return postage makes no sense), a{" "}
                   <b>full refund</b>, or <b>&quot;send it back, then I refund&quot;</b> — a proper
-                  return with tracking. Or they keep talking it through in the order conversation.
-                  Most disputes end here.
+                  return with tracking. If it never arrived, they can add tracking — dispatch stays
+                  open during the case. A refund offer stands for {REFUND_OFFER_HOURS} hours. Most
+                  disputes end here.
                 </td>
               </tr>
               <tr>
                 <td>
-                  <b>After {SELLER_RESPONSE_DAYS} days of silence</b>
+                  <b>{SELLER_RESPONSE_DAYS} to {ESCALATION_CLOSES_DAYS} business days</b>
                 </td>
                 <td>
-                  You can <b>ask DRVN to step in</b> — a button on the order. The case goes to
-                  DRVN support, who review the listing, the order record and both sides&apos;
-                  photos, and decide it.
+                  Either side can <b>ask DRVN to step in</b> — a button on the order. The case
+                  goes to DRVN support, who review the listing, the order record and both
+                  sides&apos; photos, and decide it. If it never arrived and there&apos;s no valid
+                  tracking — a carrier delivery to your address, scanned in time — you&apos;re
+                  refunded in full. A resolved dispute is final.
                 </td>
               </tr>
               <tr>

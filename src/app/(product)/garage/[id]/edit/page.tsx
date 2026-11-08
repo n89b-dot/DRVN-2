@@ -53,6 +53,13 @@ export default async function CarEditPage({
     .eq("car_id", id)
     .maybeSingle();
 
+  // N65: the sheet revision is read before the sheet itself, so it can only
+  // be older than what the editor shows (a save is then refused and the
+  // member reloads), never newer (which would let this tab erase lines it
+  // never loaded).
+  const { data: modRevision, error: revisionError } = await supabase.rpc("mod_sheet_revision", { p_car: id });
+  if (revisionError || !modRevision) throw new Error("Couldn't load this build sheet.");
+
   const [imagesResult, modsResult, postsResult, hotspotsResult, profileResult] =
     await Promise.all([
       supabase.from("car_images").select("*").eq("car_id", id).order("position"),
@@ -141,7 +148,7 @@ export default async function CarEditPage({
           coverImageUrl={car.cover_image_url}
           coverFocal={{ x: car.cover_focal_x, y: car.cover_focal_y }}
         />
-        <ModsEditor carId={car.id} carMake={car.make} initialMods={mods ?? []} draft={draft} />
+        <ModsEditor carId={car.id} carMake={car.make} initialMods={mods ?? []} initialRevision={modRevision} draft={draft} />
         <ShowcaseEditor
           carId={car.id}
           images={images ?? []}

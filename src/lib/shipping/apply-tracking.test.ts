@@ -20,6 +20,8 @@ function query(result: QueryResult) {
   return builder;
 }
 
+const proofRecorded: QueryResult = { data: { ok: true, verdict: "review" }, error: null };
+
 function adminWith(...results: QueryResult[]) {
   const builders = results.map(query);
   return {
@@ -28,8 +30,22 @@ function adminWith(...results: QueryResult[]) {
       if (!next) throw new Error("Unexpected database query");
       return next;
     }),
+    rpc: vi.fn(async () => proofRecorded),
   };
 }
+
+/** The order facts delivery proof reads (N95). */
+const proofOrder: QueryResult = {
+  data: {
+    ship_postcode: "89501",
+    ship_city: "Reno",
+    ship_country: "US",
+    deliver_by: "2026-09-10T00:00:00.000Z",
+    created_at: "2026-09-01T00:00:00.000Z",
+    total_cents: 5000,
+  },
+  error: null,
+};
 
 function shipment(overrides: Partial<Shipment> = {}): Shipment {
   return {
@@ -132,9 +148,11 @@ describe("tracking replay convergence", () => {
     const admin = adminWith(
       { data: null, error: { code: "23505" } },
       { data: null, error: null },
+      { data: null, error: null },
       { data: { status: "shipped" }, error: null },
       { data: [{ status: "delivered", direction: "outbound" }], error: null },
-      { data: { id: "order_1" }, error: null }
+      { data: { id: "order_1" }, error: null },
+      proofOrder
     );
 
     await expect(applyTrackingSummary(admin as never, shipment(), summary())).resolves.toEqual({
@@ -166,6 +184,7 @@ describe("tracking replay convergence", () => {
     const admin = adminWith(
       { data: null, error: { code: "23505" } },
       { data: null, error: null },
+      { data: null, error: null },
       { data: { status: "shipped" }, error: null },
       { data: [{ status: "delivered", direction: "outbound" }], error: null },
       { data: { id: "order_1" }, error: null }
@@ -174,6 +193,8 @@ describe("tracking replay convergence", () => {
     await expect(
       applyTrackingSummary(admin as never, shipment(), summary({ state: "in_transit" }))
     ).resolves.toMatchObject({ orderEffect: "delivered", statusChanged: false });
+    // A delayed in-transit payload never rewrites the delivery proof.
+    expect(admin.rpc).not.toHaveBeenCalled();
   });
 });
 
@@ -264,6 +285,75 @@ describe("tracking effect failures", () => {
     );
     await expect(applyTrackingSummary(admin as never, shipment(), summary())).rejects.toThrow(
       "order shipped update failed; retry required"
+    );
+  });
+});
+
+describe("an open case and delivery proof (N6, N95)", () => {
+  it("records dispatch on an undispatched order in a not-received case without closing it", async () => {
+    const admin = adminWith(
+      { data: null, error: null }, // event insert
+      { data: null, error: null }, // paid -> shipped finds nothing: the order is disputed
+      { data: { id: "order_1" }, error: null } // disputed, pre_dispute_status paid -> shipped
+    );
+    await expect(
+      applyTrackingSummary(admin as never, shipment({ status: "in_transit" }), summary({ state: "in_transit", deliveredAt: null }))
+    ).resolves.toMatchObject({ orderEffect: "shipped" });
+    expect(admin.rpc).not.toHaveBeenCalled();
+  });
+
+  it("records a delivered parcel's proof from the carrier's own evidence", async () => {
+    const admin = adminWith(
+      { data: null, error: { code: "23505" } },
+      { data: null, error: { code: "23505" } },
+      { data: null, error: { code: "23505" } },
+      { data: null, error: null },
+      { data: null, error: null },
+      { data: { status: "disputed" }, error: null },
+      { data: [{ status: "delivered", direction: "outbound" }], error: null },
+      { data: null, error: null }, // shipped -> delivered: the order is disputed
+      { data: { id: "order_1" }, error: null }, // disputed case moves to delivered
+      proofOrder
+    );
+    const delivered = summary({
+      signedBy: null,
+      destination: { postalCode: "89501-1234", city: "Reno", state: "NV", country: "US" },
+      events: [
+        { providerEventRef: "a", state: "pre_transit", description: "Label", occurredAt: "2026-09-02T09:00:00.000Z", city: null, state_code: null, country: null },
+        { providerEventRef: "b", state: "in_transit", description: "Accepted", occurredAt: "2026-09-03T09:00:00.000Z", city: "Sparks", state_code: "NV", country: "US" },
+        { providerEventRef: "c", state: "delivered", description: "Delivered", occurredAt: "2026-09-05T10:00:00.000Z", city: "Reno", state_code: "NV", country: "US", postalCode: "89501" },
+      ],
+    });
+    await expect(applyTrackingSummary(admin as never, shipment(), delivered)).resolves.toMatchObject({
+      orderEffect: "delivered",
+    });
+    expect(admin.rpc).toHaveBeenCalledWith("record_delivery_proof", {
+      p_shipment: "shipment_1",
+      p_carrier_delivered_at: "2026-09-05T10:00:00.000Z",
+      p_destination_postcode: "89501-1234",
+      p_destination_city: "Reno",
+      p_first_scan_at: "2026-09-03T09:00:00.000Z",
+      p_signed_by: undefined,
+      p_evidence_at: "2026-09-05T10:00:00.000Z",
+      p_destination_match: "postcode",
+      p_verdict: "verified",
+      p_reasons: [],
+    });
+  });
+
+  it("retries when the proof can't be recorded", async () => {
+    const admin = adminWith(
+      { data: null, error: { code: "23505" } },
+      { data: null, error: null },
+      { data: null, error: null },
+      { data: { status: "shipped" }, error: null },
+      { data: [{ status: "delivered", direction: "outbound" }], error: null },
+      { data: { id: "order_1" }, error: null },
+      proofOrder
+    );
+    admin.rpc.mockResolvedValueOnce({ data: null, error: { code: "08006" } });
+    await expect(applyTrackingSummary(admin as never, shipment(), summary())).rejects.toThrow(
+      "delivery proof could not be recorded; retry required"
     );
   });
 });

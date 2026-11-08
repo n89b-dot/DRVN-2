@@ -326,6 +326,48 @@ export async function adminResolveForSeller(
   }
 }
 
+/**
+ * N91: a resolved in-app dispute is final for the members. Support may reopen
+ * it: execute_admin_command('dispute.reopen') opens a follow-up case with the
+ * previous category and reason, with support from the start, on a fresh
+ * clock, and keeps the previous case and its resolution in
+ * order_dispute_history. Audited in the same transaction.
+ */
+export async function adminReopenDispute(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const orderId = field(formData, "order_id");
+  const reason = field(formData, "reason");
+  if (!orderId) return { error: "Missing order." };
+  if (!reason) return { error: "A reason is required — it goes in the audit log." };
+
+  try {
+    await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: "dispute.reopen",
+        subjectType: "dispute",
+        subjectId: orderId,
+        orderId,
+        reason,
+      },
+      async () => {
+        throw new Error("dispute.reopen runs in the database.");
+      }
+    );
+    revalidateOrder(orderId);
+    return { ok: "Dispute reopened. The earlier decision stays on record." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not reopen the dispute." };
+  }
+}
+
 // ---------- Listings ----------
 
 export async function adminRemoveListing(
