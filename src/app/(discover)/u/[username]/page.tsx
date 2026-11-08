@@ -13,6 +13,7 @@ import { ProfileBody } from "@/components/profile/profile-body";
 import { initialsFrom, splitLinks } from "@/components/profile/helpers";
 import { FollowButton } from "@/features/social/buttons";
 import { ReportButton } from "@/features/moderation/report-button";
+import { BlockButton } from "@/features/social/block-button";
 import { loadProfileView, PROFILE_UPDATES_MAX_PAGE } from "@/lib/profile-data";
 import { parsePageParam } from "@/lib/page-param";
 import { getPublicPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
@@ -229,6 +230,8 @@ export default async function PublicProfilePage({
           (isShop ? "parts" : undefined)
         }
         basePath={`/u/${profile.username}`}
+        /* P-3: the owner also sees Saved — only theirs, never a visitor's. */
+        savedHref={isOwner ? "/saved" : undefined}
         storeNote={profile.store_note}
         partsCount={partsForSale}
         partsPanel={
@@ -247,13 +250,15 @@ export default async function PublicProfilePage({
         }
       />
       {user?.id !== profile.id && (
-        <div className="mt-8 border-t border-[color:var(--rule-soft)] pt-4">
+        <div className="mt-8 flex flex-wrap items-center gap-4 border-t border-[color:var(--rule-soft)] pt-4">
           <ReportButton
             subjectType="user"
             subjectId={profile.id}
             subjectLabel={`@${profile.username}`}
             isLoggedIn={Boolean(user)}
           />
+          {/* N54: private; they aren't told. */}
+          {user && <BlockButton memberId={profile.id} memberName={`@${profile.username}`} />}
         </div>
       )}
     </div>

@@ -3,6 +3,7 @@
 import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
+import { BLOCKED_MESSAGE, isBlockedError } from "@/lib/blocks";
 import { isDatabaseQuotaError } from "@/lib/db-write-quotas";
 import { reportError } from "@/lib/monitoring";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -196,6 +197,7 @@ export async function askQuestion(_prev: CommerceState, formData: FormData): Pro
   if (error) {
     const committed = await existingQuestion();
     if (committed.error || !committed.data || !matches(committed.data)) {
+      if (isBlockedError(error)) return withOperation({ error: BLOCKED_MESSAGE });
       // The database holds the same limit (N247) for writes that skip this action.
       if (isDatabaseQuotaError(error)) return withOperation({ error: rateLimitMessage(RATE_LIMITS.askQuestion) });
       // A suspended member's insert is refused by policy (20260929120000).

@@ -24,7 +24,7 @@ language sql as $$
   select set_config('role', 'authenticated', true);
   select set_config(
     'request.jwt.claims',
-    json_build_object('sub', uid::text, 'role', 'authenticated', 'aal', 'aal2')::text,
+    json_build_object('sub', uid::text, 'role', 'authenticated', 'aal', 'aal2', 'session_id', uid::text)::text,
     true
   );
 $$;
@@ -67,7 +67,11 @@ begin
   values (v_civilian, v_seller, 'paid', 30000, 3000, 1000, 31000, 'USD')
   returning id into v_order;
 
-  insert into public.admin_users (user_id, note) values (v_admin, 'guard fixture');
+  -- A confirmed authenticator (20261107200500): without one no admin privilege.
+  insert into auth.mfa_factors(id, user_id, friendly_name, factor_type, status, created_at, updated_at) values (gen_random_uuid(), v_admin, 'guard', 'totp', 'verified', now(), now());
+  insert into public.admin_users (user_id, note, mfa_factor_id) select v_admin, 'guard fixture', id from auth.mfa_factors where user_id = v_admin;
+  -- Its session was raised to AAL2 with that factor (20261107200550); the claims carry it.
+  insert into auth.sessions(id, user_id, factor_id, aal, created_at, updated_at) select f.user_id, f.user_id, f.id, 'aal2', now(), now() from auth.mfa_factors f where f.user_id = v_admin;
 
   -- ---------- 1. admin_users unreachable from client roles ----------
   perform pg_temp.impersonate(v_civilian);

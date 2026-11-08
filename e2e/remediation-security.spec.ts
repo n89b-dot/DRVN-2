@@ -4,6 +4,7 @@ import { promisify } from "node:util";
 import { createClient } from "@supabase/supabase-js";
 import { expect, test } from "@playwright/test";
 import { assertAccessible } from "./accessibility";
+import { confirmAdminAuthenticator } from "./fixtures";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const admin = () => createClient(url, process.env.SUPABASE_SECRET_KEY!, { auth: { persistSession: false } });
@@ -44,6 +45,8 @@ test("admin access requires TOTP and respects membership revocation", async ({ p
     const key = page.locator("code"); await expect(key).toBeVisible();
     await page.getByLabel("Authenticator code").fill(totp((await key.textContent())!));
     await page.getByRole("button", { name: /Verify/ }).click();
+    // N136: the console opens only once the operator confirms the authenticator.
+    await confirmAdminAuthenticator(page, user.client, user.id, "/admin");
     await expect(page).toHaveURL(/\/admin$/);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await assertAccessible(page, "admin overview");
@@ -85,7 +88,9 @@ test("admin access requires TOTP and respects membership revocation", async ({ p
     await page.goto("/admin"); await expect(page).toHaveURL(/\/admin-verify/);
     await page.getByRole("button", { name: "Set up authenticator" }).click();
     await expect(key).toBeVisible(); await page.getByLabel("Authenticator code").fill(totp((await key.textContent())!));
-    await page.getByRole("button", { name: /Verify/ }).click(); await expect(page).toHaveURL(/\/admin$/);
+    await page.getByRole("button", { name: /Verify/ }).click();
+    // The recovered member's new authenticator needs the operator's confirmation too.
+    await confirmAdminAuthenticator(page, user.client, user.id, "/admin"); await expect(page).toHaveURL(/\/admin$/);
     const journal = await operator.client.from("admin_audit_log").insert({ actor_id: operator.id, action: "admin.mfa_recovery", subject_type: "user", subject_id: user.id, reason: "Synthetic factor reenrolled and stale admin token rejected", metadata: { operationId: recovery.data, phase: "completed" } }); if (journal.error) throw journal.error;
     const revoked = await user.client.from("admin_users").delete().eq("user_id", user.id); if (revoked.error) throw revoked.error;
     expect((await page.goto("/admin"))?.status()).toBe(404);

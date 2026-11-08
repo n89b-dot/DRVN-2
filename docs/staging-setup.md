@@ -84,25 +84,28 @@ every table in `public`.
    `SUPABASE_DB_PASSWORD=<staging password>`. The runner reads `.env.local`
    from the current directory — doing this in your normal checkout would
    target the dev project.
-2. Apply every migration in order, stopping on the first failure:
+2. Dry-run, then apply every migration in order (the run stops on the first
+   failure; `staging` is in `supabase/migration-targets.json`):
    ```bash
-   for f in supabase/migrations/*.sql; do
-     echo "== $f"; node scripts/apply-migration.mjs "$f" || break
-   done
+   node scripts/apply-migration.mjs --target staging supabase/migrations/*.sql
+   node scripts/apply-migration.mjs --target staging --apply --confirm <code from the dry run> supabase/migrations/*.sql
    ```
    Do **not** apply `supabase/tests/ci_shim.sql` — it is CI-only and rewrites
-   auth helpers.
-3. Seed the CLI migration history from the same files —
-   `docs/production-runbook.md` §3 has the generator. Re-run it after every
-   later migration.
+   auth helpers (the runner only takes files from `supabase/migrations/`).
+3. The runner records each file in the CLI migration history as it applies
+   it. Staging's first 229 files went in before it did, and their history was
+   seeded by hand (`docs/production-runbook.md` §3); later files are recorded
+   by the runner.
 4. Verify in the SQL editor:
    - `select extname from pg_extension where extname in ('pg_cron','pg_net');`
      → both. (0020 swallows a pg_net install failure with a NOTICE; if it is
      missing, enable it under Database → Extensions and re-apply
      `0020_transfer_scheduling.sql`.)
-   - `select jobname, schedule from cron.job order by 1;` → the 19 `drvn-*`
-     jobs the migrations schedule (as of 7 Nov 2026; the same list as on
-     shared dev).
+   - `select jobname, schedule from cron.job order by 1;` → the twenty-one
+     `drvn-*` jobs in runbook §4 (`private.scheduled_job_inventory()`).
+     Staging listed 19 on 7 Nov 2026, before `20261107200300` and
+     `20261107210100` added `drvn-saved-search-digests` and
+     `drvn-ledger-reconciliation`; apply them and the count is twenty-one.
    - `select id, public from storage.buckets order by 1;` → `account-exports`
      f, `activity-images` t, `avatars` t, `car-images` t, `dispute-evidence`
      f, `listing-images` t, `message-photos` f. **Buckets and their policies
@@ -182,7 +185,12 @@ Emails:
 | `EASYPOST_API_KEY` | EasyPost **test** key (`EZTK…`), step 6 |
 | `EASYPOST_WEBHOOK_SECRET` | step 6 |
 | `SHIPPING_MODE` + `SHIPPING_ALLOW_STUB_IN_PRODUCTION=true` | only if the candidate declares `shippingMode: "stub"` |
-| `ANTHROPIC_API_KEY` | optional (step 0.3), from the Anthropic console |
+| `ANTHROPIC_API_KEY` | optional (step 0.3), from the Anthropic console. One key serves the listing importer and the agent; unset, both report disabled |
+| `AGENT_MODEL`, `AGENT_AI_MODE`, `AGENT_MAX_ITERATIONS` | optional. Model (default `claude-opus-5-5`; one of the priced models in `src/lib/ai/config.ts`), mode `anthropic` \| `stub` \| `disabled`, tool-loop cap 1–20 (default 8). Runbook §4 has each row |
+| `AGENTS_BETA` | `on` only if staging exercises the agent; the steps still open from `/admin/agent` (runbook §13e) |
+| `AGENT_WORKER_DATABASE_URL` | only if staging exercises the agent: the `agent_worker` login through the transaction pooler, after runbook §13a. Without it `/api/jobs/agent` runs no worker pass |
+| `LISTING_IMPORT_MODEL`, `LISTING_IMPORT_AI_MODE` | optional importer model and mode override. Never set `LISTING_IMPORT_ALLOW_STUB_IN_PRODUCTION`, `LISTING_IMPORT_ALLOW_PRIVATE_HOSTS` or `LISTING_IMPORT_PUBLIC_BROWSER_ENABLED` on staging — the last two are ignored in production anyway |
+| `DRVN_PUBLIC_CACHE` | leave unset (`off` is for the isolated e2e stack) |
 | `TYPESENSE_URL`, `TYPESENSE_API_KEY` | optional (step 0.3) |
 | `POSTHOG_KEY`, `POSTHOG_HOST` | optional (step 0.3) |
 
@@ -270,6 +278,11 @@ GitHub → repository → Settings → Secrets and variables → Actions:
 - variable `DRVN_MONITOR_ORIGIN` = the staging origin
 - secret `DRVN_MONITOR_SECRET` = the staging `CRON_SECRET`
 
+The `--watch` mode's variables (`DRVN_MONITOR_ALERT_URL`,
+`DRVN_MONITOR_HEARTBEAT_URL`, `DRVN_MONITOR_STATE_FILE`,
+`DRVN_MONITOR_INTERVAL_MS`) belong to a separately run monitor host, not to
+this workflow or the hosting project (runbook §9b).
+
 Run "Independent worker monitor" once by hand (Actions → workflow_dispatch).
 It fails while any daily family has never run — expected until after the
 first 03:37 UTC. Then pause the worker (clear `job_config`), confirm the
@@ -302,7 +315,10 @@ insert into public.admin_users (user_id, note)
 values ('<auth.users id>', 'staging operator') on conflict do nothing;
 ```
 
-Enrol TOTP at `/admin-verify`. Now do step 2.5 (turn the gate on), then
+Enrol TOTP at `/admin-verify`, then confirm that factor as the operator
+(`docs/production-runbook.md` §5, steps 3–4: check the reference shown on
+the page against `auth.mfa_factors`, then `select public.confirm_admin_mfa(…)`).
+Until then the membership is pending and the console stays closed. Now do step 2.5 (turn the gate on), then
 create invitations for testers from Admin → Invitations.
 
 ## 13. Release-candidate evidence — the 15 gates [ENGINEER, OWNER reviews]

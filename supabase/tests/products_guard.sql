@@ -44,7 +44,11 @@ declare
   denied boolean;
 begin
   insert into auth.users(id, email) values (v_seller, 'products-seller@example.test'), (v_admin, 'products-admin@example.test');
-  insert into public.admin_users(user_id, note) values (v_admin, 'products guard');
+  -- A confirmed authenticator (20261107200500): without one no admin privilege.
+  insert into auth.mfa_factors(id, user_id, friendly_name, factor_type, status, created_at, updated_at) values (gen_random_uuid(), v_admin, 'guard', 'totp', 'verified', now(), now());
+  insert into public.admin_users(user_id, note, mfa_factor_id) select v_admin, 'products guard', id from auth.mfa_factors where user_id = v_admin;
+  -- Its session was raised to AAL2 with that factor (20261107200550); the claims carry it.
+  insert into auth.sessions(id, user_id, factor_id, aal, created_at, updated_at) select f.user_id, f.user_id, f.id, 'aal2', now(), now() from auth.mfa_factors f where f.user_id = v_admin;
   insert into public.cars(id, owner_id, name, slug, is_public, make, model, year)
   values (v_car, v_seller, 'Project', 'products-guard-car', true, 'Volkswagen', 'Golf', 2016);
 
@@ -183,7 +187,7 @@ begin
   denied := false;
   begin perform public.resolve_product_identity_review(v_review, 'merge', 'no step-up'); exception when insufficient_privilege then denied := true; end;
   if not denied then raise exception 'FAIL 5a: a decision without a step-up was allowed'; end if;
-  v_admin_claims := jsonb_build_object('sub', v_admin, 'role', 'authenticated', 'aal', 'aal2',
+  v_admin_claims := jsonb_build_object('sub', v_admin, 'role', 'authenticated', 'aal', 'aal2', 'session_id', v_admin,
     'amr', jsonb_build_array(jsonb_build_object('method', 'totp', 'timestamp', extract(epoch from now())::bigint)))::text;
   perform set_config('request.jwt.claims', v_admin_claims, true);
   perform public.resolve_product_identity_review(v_review, 'merge', 'Delphi number is a rebadged Bosch part (guard)');

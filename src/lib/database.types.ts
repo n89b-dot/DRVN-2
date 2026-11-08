@@ -984,6 +984,9 @@ export type TransferIntent = {
   source_transaction: string | null;
   /** Frozen at dispatch (20260905173052): what the transfer actually sent. */
   dispatch_amount_cents: number | null;
+  /** The provider may already hold this transfer (20260905173052): the
+   *  worker looks Stripe up before it sends anything. */
+  provider_call_may_have_occurred?: boolean;
   attempts: number;
   last_error: string | null;
   /** Lease fields (0026): who claimed the row and until when. */
@@ -1111,7 +1114,9 @@ export type PaymentRecoveryKind =
   | "capture_unresolved"
   | "transfer_unresolved"
   | "refund_lifecycle_unresolved"
-  | "refund_late_failure";
+  | "refund_late_failure"
+  /** Daily Stripe ↔ ledger reconciliation (20261107210100, N115). */
+  | "ledger_discrepancy";
 
 export type PaymentRecovery = {
   id: string;

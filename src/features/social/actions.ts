@@ -5,6 +5,7 @@ import { revalidatePath } from "@/lib/revalidate";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 import { allowAction, RATE_LIMITS, rateLimitMessage } from "@/lib/rate-limit";
+import { BLOCKED_MESSAGE, isBlockedError } from "@/lib/blocks";
 import { isDatabaseQuotaError } from "@/lib/db-write-quotas";
 
 export type SaveTargetType = "listing" | "car" | "profile" | "post";
@@ -60,6 +61,7 @@ async function setRelationship(
   });
   // The thing was deleted (a tab left open on it): trying again can't help.
   if (result.error?.code === "23503") return { error: "That's no longer on DRVN." } as const;
+  if (isBlockedError(result.error)) return { error: BLOCKED_MESSAGE } as const;
   // The database's own quota (N247) — the same limit, held below the app.
   if (isDatabaseQuotaError(result.error)) return { error: rateLimitMessage(rule ?? RATE_LIMITS.follow) } as const;
   if (result.error || result.data !== active) {

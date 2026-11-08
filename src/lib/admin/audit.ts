@@ -21,6 +21,24 @@ export type AuditEntry = {
   metadata?: Record<string, unknown>;
 };
 
+/**
+ * Thrown by an external operation's mutation when it is PROVEN that nothing
+ * was done and nothing is still on its way — a refund refused before it was
+ * reserved, or declined by Stripe at creation (N134). auditedAction then asks
+ * the database to close the request as not applied, which it does only when
+ * the durable refund records agree; anything less keeps the fence for the
+ * operator's reconciliation, exactly like an unknown outcome.
+ */
+export class RefusedOperationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RefusedOperationError";
+  }
+}
+
+/** External actions whose refusals the database can check against records. */
+const RELEASABLE_ON_REFUSAL = new Set(["order.force_refund"]);
+
 export async function writeAudit(admin: Admin, entry: AuditEntry): Promise<void> {
   const { error } = await admin.from("admin_audit_log").insert({
     actor_id: entry.actorId,
@@ -80,6 +98,15 @@ export async function auditedAction<T>(
   if (reused && entry.action !== "recovery.replace_refund") throw new Error(`Operation ${operationId} is awaiting reconciliation. Resume its existing provider operation; do not create another.`);
   let result: T;
   try { result = await mutate(); } catch (error) {
+    if (error instanceof RefusedOperationError && RELEASABLE_ON_REFUSAL.has(entry.action)) {
+      // A proven refusal leaves nothing to reconcile: close the request so the
+      // next attempt isn't blocked — if the refund records agree.
+      const { data: release, error: releaseError } = await admin.rpc("release_refused_admin_refund", {
+        p_actor: entry.actorId, p_operation: operationId, p_detail: error.message,
+      });
+      if (!releaseError && (release as { released?: boolean } | null)?.released) throw error;
+      reportError("[admin] refused operation kept for reconciliation", { operationId, releaseError, release });
+    }
     try { await writeAudit(admin, { ...entry, metadata: { ...entry.metadata, operationId, phase: "failed_or_requires_reconciliation" } }); }
     catch { reportError("[admin] operation needs reconciliation", { operationId }); }
     throw error;

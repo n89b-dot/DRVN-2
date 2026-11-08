@@ -3,8 +3,7 @@ import { notFound } from "next/navigation";
 
 import { ObjectRow, PageHead, TileHead } from "@/components/ui";
 import { writeAudit } from "@/lib/admin/audit";
-import { getAdminContext } from "@/lib/admin/guard";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { adminReadClient, requireAdminRead } from "@/lib/admin/guard";
 
 import { AgentChatGate } from "../../agent-admin-forms";
 import { approvalTitle, eventLine, limitsLine } from "./view";
@@ -28,10 +27,11 @@ const when = (iso: string | null) =>
  */
 export default async function AdminAgentMember({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const context = await getAdminContext();
-  if (!context) notFound();
-  const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("id, username, display_name").eq("id", id).maybeSingle();
+  const context = await requireAdminRead();
+  const admin = await adminReadClient();
+  const { data: profile, error: profileError } = await admin.from("profiles").select("id, username, display_name").eq("id", id).maybeSingle();
+  // A failed read is an error page, not "no such member" (N138).
+  if (profileError) throw new Error("Couldn't load this member. Try again.");
   if (!profile) notFound();
   let showLimits = context.role === "admin";
   if (showLimits) {

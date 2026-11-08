@@ -1,6 +1,7 @@
 "use server";
 
 import { allowAction, RATE_LIMITS, rateLimitMessage } from "@/lib/rate-limit";
+import { BLOCKED_MESSAGE, isBlockedError } from "@/lib/blocks";
 import { isDatabaseQuotaError } from "@/lib/db-write-quotas";
 import { createClient } from "@/lib/supabase/server";
 import { SUSPENDED_MESSAGE, isSuspended } from "@/lib/suspension";
@@ -89,6 +90,7 @@ export async function addComment(_prev: CommentState, formData: FormData): Promi
     .from("activity_comments")
     .insert({ post_id: postId, author_id: user.id, body });
   if (error) {
+    if (isBlockedError(error)) return { error: BLOCKED_MESSAGE };
     // The database holds the same limit (N247) for writes that skip this action.
     if (isDatabaseQuotaError(error)) return { error: rateLimitMessage(RATE_LIMITS.addComment) };
     if (await isSuspended(supabase, user.id)) return { error: SUSPENDED_MESSAGE };

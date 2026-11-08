@@ -19,7 +19,8 @@ import type {
 import { buildOrderTimeline, type TimelineEvent } from "./diagnostics";
 import { countOpenIdentityReviews } from "./product-identity";
 import { signEvidenceUrls } from "@/lib/evidence-urls";
-import { createAdminClient } from "@/lib/supabase/admin";
+import type { createAdminClient } from "@/lib/supabase/admin";
+import { adminReadClient } from "./guard";
 import { reportError } from "@/lib/monitoring";
 import { postHeadline } from "@/lib/activity/headline";
 
@@ -32,13 +33,16 @@ import { postHeadline } from "@/lib/activity/headline";
  * suspension state cannot read via PostgREST grants. The RLS `is_admin()`
  * policies still exist and are CI-verified (admin_guard.sql); they are the
  * database-level twin for any future direct-PostgREST surface. Access control
- * for these queries is `getAdminContext()` at the layout AND per-action
- * re-checks — never assume colocation with the product app.
+ * for these queries is inside them (N11): every read takes its client from
+ * `admin()`, which runs requireAdminRead() for the request (current member,
+ * AAL2, TOTP in the last 15 minutes) before the service-role client exists.
+ * The layout's check is for the chrome only; a hand-made RSC or route request
+ * that skips it still meets this one.
  */
 
 type Admin = ReturnType<typeof createAdminClient>;
 
-const admin = (): Admin => createAdminClient();
+const admin = (): Promise<Admin> => adminReadClient();
 
 /** Days of silence after which a dispute is flagged as over SLA. */
 /**
@@ -117,7 +121,7 @@ async function moneyWindow(a: Admin, from: string, to: string): Promise<MoneyWin
 
 /** Every overview read is checked: a failed count must not render as 0. */
 export async function getOverview(): Promise<AdminOverview> {
-  const a = admin();
+  const a = await admin();
   const now = new Date().toISOString();
   const since7d = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const since14d = new Date(Date.now() - 14 * 86_400_000).toISOString();
@@ -199,13 +203,56 @@ export type PartyRef = {
   displayName: string | null;
 };
 
+/** Ids per `in (...)` lookup: short enough for any URL, whatever the page. */
+const LOOKUP_CHUNK = 100;
+/** PostgREST's row cap per request (supabase/config.toml max_rows). */
+const MAX_ROWS = 1000;
+
+function chunks<T>(list: T[], size = LOOKUP_CHUNK): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out;
+}
+
+/**
+ * Names for a set of member ids. Looked up in chunks, so a long export's
+ * thousand ids never become one over-long URL, and a failed lookup is an
+ * error rather than a blank name (N133).
+ */
 async function partiesFor(a: Admin, ids: (string | null)[]): Promise<Map<string, PartyRef>> {
   const unique = [...new Set(ids.filter((id): id is string => Boolean(id)))];
-  if (!unique.length) return new Map();
-  const { data } = await a.from("profiles").select("id, username, display_name").in("id", unique);
-  return new Map(
-    (data ?? []).map((p) => [p.id, { id: p.id, username: p.username, displayName: p.display_name }])
-  );
+  const map = new Map<string, PartyRef>();
+  for (const part of chunks(unique)) {
+    const { data, error } = await a.from("profiles").select("id, username, display_name").in("id", part);
+    unlessFailed("member names", error);
+    for (const p of data ?? []) map.set(p.id, { id: p.id, username: p.username, displayName: p.display_name });
+  }
+  return map;
+}
+
+/** Every order_items row for these orders, chunked by order and paged past
+ *  the row cap, so a multi-item order never loses lines. */
+async function orderItemsFor(
+  a: Admin,
+  orderIds: string[],
+  columns: "order_id, title" | "order_id, condition_snapshot"
+): Promise<{ order_id: string; title: string | null; condition_snapshot?: unknown }[]> {
+  const rows: { order_id: string; title: string | null; condition_snapshot?: unknown }[] = [];
+  for (const part of chunks([...new Set(orderIds)])) {
+    for (let from = 0; ; from += MAX_ROWS) {
+      const { data, error } = await a
+        .from("order_items")
+        .select(columns)
+        .in("order_id", part)
+        .order("id")
+        .range(from, from + MAX_ROWS - 1);
+      unlessFailed("order items", error);
+      const page = (data ?? []) as unknown as typeof rows;
+      rows.push(...page);
+      if (page.length < MAX_ROWS) break;
+    }
+  }
+  return rows;
 }
 
 // ---------- Disputes ----------
@@ -255,12 +302,11 @@ export async function getDisputeQueue(
     /** Only rows already past the SLA window — the escalation view. */
     overSlaOnly?: boolean;
     page?: number;
-    pageSize?: number;
   } = {}
 ): Promise<DisputeQueueResult> {
-  const a = admin();
+  const a = await admin();
   const page = Math.max(0, opts.page ?? 0);
-  const size = Math.min(Math.max(1, opts.pageSize ?? DISPUTES_PAGE_SIZE), 5000);
+  const size = DISPUTES_PAGE_SIZE;
   const q = opts.query?.trim();
 
   // Resolve free-text search to id sets first: parties by name, orders by
@@ -365,12 +411,9 @@ export async function getDisputeQueue(
  *  titlesFor, so the queue's grade column doesn't cost an N+1. */
 async function gradesFor(a: Admin, orderIds: string[]): Promise<Map<string, string | null>> {
   if (!orderIds.length) return new Map();
-  const { data: items } = await a
-    .from("order_items")
-    .select("order_id, condition_snapshot")
-    .in("order_id", orderIds);
+  const items = await orderItemsFor(a, orderIds, "order_id, condition_snapshot");
   const map = new Map<string, string | null>();
-  for (const item of items ?? []) {
+  for (const item of items) {
     if (map.has(item.order_id)) continue;
     const snapshot = item.condition_snapshot as { grade?: string | null } | null;
     map.set(item.order_id, snapshot?.grade ?? null);
@@ -389,12 +432,9 @@ async function countDisputes(a: Admin, scope: "open" | "resolved"): Promise<numb
 
 async function titlesFor(a: Admin, orderIds: string[]): Promise<Map<string, string>> {
   if (!orderIds.length) return new Map();
-  const { data: items } = await a
-    .from("order_items")
-    .select("order_id, title")
-    .in("order_id", orderIds);
+  const items = await orderItemsFor(a, orderIds, "order_id, title");
   const map = new Map<string, string[]>();
-  for (const item of items ?? []) {
+  for (const item of items) {
     const list = map.get(item.order_id) ?? [];
     list.push(item.title ?? "Part");
     map.set(item.order_id, list);
@@ -455,7 +495,7 @@ export type AdminOrderDetail = {
 };
 
 export async function getOrderDetail(orderId: string): Promise<AdminOrderDetail | null> {
-  const a = admin();
+  const a = await admin();
   const { data: order, error: orderError } = await a.from("orders").select("*").eq("id", orderId).maybeSingle();
   unlessFailed("the order", orderError);
   if (!order) return null;
@@ -647,14 +687,12 @@ export type OrdersSearchOpts = {
   /** Inclusive order-total bounds, in cents. */
   minCents?: number;
   maxCents?: number;
-  /** Export path: rows per page (defaults to ORDERS_PAGE_SIZE, capped at 5000). */
-  pageSize?: number;
 };
 
 export async function searchOrders(opts: OrdersSearchOpts): Promise<AdminOrdersResult> {
-  const a = admin();
+  const a = await admin();
   const page = Math.max(0, opts.page ?? 0);
-  const size = Math.min(Math.max(1, opts.pageSize ?? ORDERS_PAGE_SIZE), 5000);
+  const size = ORDERS_PAGE_SIZE;
   let builder = a
     .from("orders")
     .select("id, status, created_at, total_cents, refunded_cents, currency, buyer_id, seller_id, transfer_reference")
@@ -739,7 +777,7 @@ export async function getOrderStatusCounts(opts: {
   from?: string;
   to?: string;
 }): Promise<Record<string, number>> {
-  const a = admin();
+  const a = await admin();
   const counts = await Promise.all(
     opts.statuses.map(async (status) => {
       let b = a.from("orders").select("id", { count: "exact", head: true }).eq("status", status);
@@ -784,7 +822,7 @@ export async function searchListings(opts: {
   category?: string;
   page?: number;
 }): Promise<AdminListingsResult> {
-  const a = admin();
+  const a = await admin();
   const page = Math.max(0, opts.page ?? 0);
   let builder = a
     .from("listings")
@@ -866,87 +904,49 @@ export type AdminUsersResult = {
 };
 
 /**
- * Derived states (sellers, console membership) resolve to id sets BEFORE the
- * profiles query, so state filters and pagination compose in the database — a
- * suspended seller past any fetch cap still shows under its filter.
+ * One database query (admin_users_page, 20261107200520): the search, the
+ * derived states (sellers, sellers without payouts, console members) and the
+ * per-member counts are joins there, so a filter never depends on a fetch
+ * cap or a list of ids in a URL (N133) — a seller past any row limit still
+ * shows under its filter, and the total is exact.
  */
 export async function searchUsers(
   query?: string,
   state: UserStateFilter = "all",
   page = 0
 ): Promise<AdminUsersResult> {
-  const a = admin();
+  const a = await admin();
   page = Math.max(0, page);
-
-  let constrainIds: string[] | null = null;
-  if (state === "sellers" || state === "no_payouts") {
-    const [listings, sales] = await Promise.all([
-      a.from("listings").select("seller_id").limit(10_000),
-      a.from("orders").select("seller_id").limit(10_000),
-    ]);
-    constrainIds = [
-      ...new Set(
-        [...(listings.data ?? []), ...(sales.data ?? [])]
-          .map((r) => r.seller_id)
-          .filter((id): id is string => Boolean(id))
-      ),
-    ];
-  } else if (state === "admins") {
-    const { data } = await a.from("admin_users").select("user_id");
-    constrainIds = (data ?? []).map((r) => r.user_id);
-  }
-  if (constrainIds && !constrainIds.length) return { rows: [], total: 0, page, hasMore: false };
-
-  let builder = a
-    .from("profiles")
-    .select(
-      "id, username, display_name, profile_type, created_at, suspended_at, suspended_reason, payouts_enabled",
-      { count: "exact" }
-    )
-    .order("created_at", { ascending: false })
-    .range(page * USERS_PAGE_SIZE, page * USERS_PAGE_SIZE + USERS_PAGE_SIZE - 1);
-  const text = query?.trim() ?? "";
-  if (text.includes("@")) {
-    // Support mail arrives by email address: match the account's email.
-    const { data: byEmail, error: emailError } = await a
-      .from("account_emails")
-      .select("user_id")
-      .ilike("email", `%${text.replace(/[%_\\]/g, "")}%`)
-      .limit(50);
-    unlessFailed("users", emailError);
-    builder = builder.in("id", (byEmail ?? []).map((row) => row.user_id));
-  } else if (text) {
-    builder = builder.or(`username.ilike.%${orText(text)}%,display_name.ilike.%${orText(text)}%`);
-  }
-  if (state === "suspended") builder = builder.not("suspended_at", "is", null);
-  if (state === "no_payouts") builder = builder.eq("payouts_enabled", false);
-  if (constrainIds) builder = builder.in("id", constrainIds);
-
-  const { data: profiles, count: total, error: usersError } = await builder;
-  unlessFailed("users", usersError);
-  const rows = profiles ?? [];
-  if (!rows.length) return { rows: [], total: total ?? 0, page, hasMore: false };
-
-  const ids = rows.map((p) => p.id);
-  const partyClause = `seller_id.in.(${ids.join(",")}),buyer_id.in.(${ids.join(",")})`;
-  const [listings, sales, disputes, admins] = await Promise.all([
-    a.from("listings").select("seller_id").in("seller_id", ids),
-    // A sale is an order that was paid — cancelled and abandoned ones aren't.
-    a.from("orders").select("seller_id").in("seller_id", ids).in("status", ["paid", "shipped", "delivered", "completed", "disputed"]),
-    // Only this page's parties — never the whole orders table.
-    a.from("orders").select("seller_id, buyer_id").not("disputed_at", "is", null).or(partyClause),
-    a.from("admin_users").select("user_id").in("user_id", ids),
-  ]);
-
-  const count = (list: (string | null)[] | undefined, id: string) =>
-    (list ?? []).filter((x) => x === id).length;
-  const adminSet = new Set((admins.data ?? []).map((r) => r.user_id));
-
+  const { data, error } = await a.rpc("admin_users_page", {
+    p_query: query?.trim() || undefined,
+    p_state: state,
+    p_offset: page * USERS_PAGE_SIZE,
+    p_limit: USERS_PAGE_SIZE,
+  });
+  unlessFailed("users", error);
+  const result = (data ?? { total: 0, rows: [] }) as unknown as {
+    total: number;
+    rows: {
+      id: string;
+      username: string | null;
+      display_name: string | null;
+      profile_type: string;
+      created_at: string;
+      suspended_at: string | null;
+      suspended_reason: string | null;
+      payouts_enabled: boolean;
+      listing_count: number;
+      sale_count: number;
+      dispute_count: number;
+      is_admin: boolean;
+    }[];
+  };
+  const total = Number(result.total ?? 0);
   return {
     page,
-    total: total ?? rows.length,
-    hasMore: (page + 1) * USERS_PAGE_SIZE < (total ?? 0),
-    rows: rows.map((p) => ({
+    total,
+    hasMore: (page + 1) * USERS_PAGE_SIZE < total,
+    rows: (result.rows ?? []).map((p) => ({
       id: p.id,
       username: p.username,
       displayName: p.display_name,
@@ -955,12 +955,10 @@ export async function searchUsers(
       suspendedAt: p.suspended_at,
       suspendedReason: p.suspended_reason,
       payoutsEnabled: p.payouts_enabled,
-      listingCount: count(listings.data?.map((l) => l.seller_id), p.id),
-      saleCount: count(sales.data?.map((o) => o.seller_id), p.id),
-      disputeCount:
-        count(disputes.data?.map((o) => o.seller_id), p.id) +
-        count(disputes.data?.map((o) => o.buyer_id), p.id),
-      isAdmin: adminSet.has(p.id),
+      listingCount: Number(p.listing_count),
+      saleCount: Number(p.sale_count),
+      disputeCount: Number(p.dispute_count),
+      isAdmin: p.is_admin,
     })),
   };
 }
@@ -1015,14 +1013,17 @@ const USER_DETAIL_LIST_LIMIT = 20;
  * and every admin action that ever touched them.
  */
 export async function getUserDetail(userId: string): Promise<AdminUserDetail | null> {
-  const a = admin();
-  const { data: profile } = await a
+  const a = await admin();
+  const { data: profile, error: profileError } = await a
     .from("profiles")
     .select(
       "id, username, display_name, profile_type, created_at, suspended_at, suspended_reason, payouts_enabled, stripe_account_id"
     )
     .eq("id", userId)
     .maybeSingle();
+  // N138: a failed read is an error, not "no such member" (the page 404s
+  // only on null, which now means the member genuinely isn't there).
+  unlessFailed("this member", profileError);
   if (!profile) return null;
 
   const orderCols =
@@ -1093,6 +1094,24 @@ export async function getUserDetail(userId: string): Promise<AdminUserDetail | n
       .eq("subject_type", "user")
       .eq("subject_id", userId),
   ]);
+
+  // Each part of the sheet fails loudly rather than reading as "none".
+  for (const [label, result] of [
+    ["their purchases", purchases],
+    ["their sales", sales],
+    ["their listings", listings],
+    ["reports about them", reports],
+    ["their admin history", auditRows],
+    ["their console membership", adminRow],
+    ["their purchase count", purchaseCount],
+    ["their sale count", saleCount],
+    ["their listing count", listingCount],
+    ["their dispute count", disputeCount],
+    ["their lost-dispute count", disputesLostCount],
+    ["their report count", reportCount],
+  ] as const) {
+    unlessFailed(label, result.error);
+  }
 
   const purchaseRows = purchases.data ?? [];
   const saleRows = sales.data ?? [];
@@ -1174,7 +1193,7 @@ export async function getReports(
   scope: "open" | "closed",
   opts: { reason?: Report["reason"]; page?: number } = {}
 ): Promise<AdminReportsResult> {
-  const a = admin();
+  const a = await admin();
   const page = Math.max(0, opts.page ?? 0);
   // Status, reason and paging all belong to the database — the old capped
   // fetch-then-filter could hide open reports beyond the cap.
@@ -1297,7 +1316,7 @@ export type PaymentsOps = {
 };
 
 export async function getPaymentsOps(opts: { query?: string } = {}): Promise<PaymentsOps> {
-  const a = admin();
+  const a = await admin();
   const [recoveries, intents, events, refundOps, alerts, carryPayouts] = await Promise.all([
     a
       .from("payment_recoveries")
@@ -1436,7 +1455,7 @@ export async function getPaymentsOps(opts: { query?: string } = {}): Promise<Pay
  * still owed; it now stays at the top, with its attempts and last failure, and
  * the same Replay (idempotent handlers, applied only on a confirmed outcome).
  */
-async function withUnprocessedEvents(a: ReturnType<typeof admin>, recent: WebhookEvent[]): Promise<WebhookEvent[]> {
+async function withUnprocessedEvents(a: Admin, recent: WebhookEvent[]): Promise<WebhookEvent[]> {
   const { data, error } = await a
     .from("webhook_events")
     .select("*")
@@ -1457,49 +1476,144 @@ export const AUDIT_PAGE_SIZE = 50;
 
 export type AuditLogResult = { rows: AuditRow[]; page: number; hasMore: boolean };
 
-export async function getAuditLog(
-  opts: {
-    action?: string;
-    /** Actor by username/display name — resolved to ids here. */
-    actorQuery?: string;
-    subjectType?: AdminAuditLogEntry["subject_type"];
-    page?: number;
-    /** ISO timestamps — inclusive start, exclusive end. */
-    from?: string;
-    to?: string;
-    /** Export path: rows per page (defaults to AUDIT_PAGE_SIZE, capped at 5000). */
-    pageSize?: number;
-  } = {}
-): Promise<AuditLogResult> {
-  const a = admin();
+export type AuditFilters = {
+  action?: string;
+  /** Actor by username/display name — matched inside the database query. */
+  actorQuery?: string;
+  subjectType?: AdminAuditLogEntry["subject_type"];
+  /** ISO timestamps — inclusive start, exclusive end. */
+  from?: string;
+  to?: string;
+};
+
+/** One page of admin_audit_page (20261107200550): every filter, the actor's
+ *  name included, runs inside the database's own paged query, so no search
+ *  ever becomes a list of ids in a URL (a name matching 1,000 historical
+ *  actors made a ~39 KB request that was refused). */
+async function auditPage(
+  a: Admin,
+  filters: AuditFilters,
+  page: { offset?: number; limit: number; before?: { at: string; id: number } }
+): Promise<AdminAuditLogEntry[]> {
+  const { data, error } = await a.rpc("admin_audit_page", {
+    p_action: filters.action?.trim() || undefined,
+    p_actor: filters.actorQuery?.trim() || undefined,
+    p_subject_type: filters.subjectType,
+    p_from: filters.from,
+    p_to: filters.to,
+    p_before_at: page.before?.at,
+    p_before_id: page.before?.id,
+    p_offset: page.offset ?? 0,
+    p_limit: page.limit,
+  });
+  // N138: a failed read is an error page, never "No actions recorded".
+  unlessFailed("the audit log", error);
+  return (data ?? []) as AdminAuditLogEntry[];
+}
+
+export async function getAuditLog(opts: AuditFilters & { page?: number } = {}): Promise<AuditLogResult> {
+  const a = await admin();
   const page = Math.max(0, opts.page ?? 0);
-  const size = Math.min(Math.max(1, opts.pageSize ?? AUDIT_PAGE_SIZE), 5000);
-  let builder = a
-    .from("admin_audit_log")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .range(page * size, page * size + size);
-  if (opts.action) builder = builder.ilike("action", `${opts.action}%`);
-  if (opts.subjectType) builder = builder.eq("subject_type", opts.subjectType);
-  if (opts.from) builder = builder.gte("created_at", opts.from);
-  if (opts.to) builder = builder.lt("created_at", opts.to);
-  if (opts.actorQuery?.trim()) {
-    const q = opts.actorQuery.trim();
-    const { data: actors } = await a
-      .from("profiles")
-      .select("id")
-      .or(`username.ilike.%${q}%,display_name.ilike.%${q}%`)
-      .limit(20);
-    const ids = (actors ?? []).map((u) => u.id);
-    if (!ids.length) return { rows: [], page, hasMore: false };
-    builder = builder.in("actor_id", ids);
-  }
-  const { data } = await builder;
-  const fetched = data ?? [];
+  const size = AUDIT_PAGE_SIZE;
+  // One extra row = a cheap hasMore signal.
+  const fetched = await auditPage(a, opts, { offset: page * size, limit: size + 1 });
   const hasMore = fetched.length > size;
   const rows = fetched.slice(0, size);
   const parties = await partiesFor(a, rows.map((r) => r.actor_id));
   return { rows: rows.map((r) => ({ ...r, actor: parties.get(r.actor_id) ?? null })), page, hasMore };
+}
+
+// ---------- Exports (N133) ----------
+
+/** Rows per export request, under PostgREST's 1,000-row cap. */
+export const EXPORT_PAGE_SIZE = 500;
+/** The most one CSV holds. Past it the export is refused, never cut short. */
+export const EXPORT_ROW_LIMIT = 100_000;
+
+/** More rows match than one file holds: the admin narrows the filters. */
+export class ExportTooLargeError extends Error {
+  constructor(readonly limit: number) {
+    super(`More than ${limit.toLocaleString("en-US")} rows match. Narrow the dates or filters and export again.`);
+    this.name = "ExportTooLargeError";
+  }
+}
+
+/**
+ * Every audit row matching the filters, newest first, read in keyset pages
+ * (created_at, then id) until a short page, so the file is complete whatever its size (the
+ * old export asked for 5,000 and PostgREST quietly sent 1,000). A failed
+ * page throws: the route answers with an error, not a partial file.
+ */
+export async function exportAuditRows(filters: AuditFilters, limit = EXPORT_ROW_LIMIT): Promise<AuditRow[]> {
+  const a = await admin();
+  const rows: AdminAuditLogEntry[] = [];
+  let before: { at: string; id: number } | undefined;
+  for (;;) {
+    const page = await auditPage(a, filters, { limit: EXPORT_PAGE_SIZE, before });
+    rows.push(...page);
+    if (rows.length > limit) throw new ExportTooLargeError(limit);
+    if (page.length < EXPORT_PAGE_SIZE) break;
+    const last = page[page.length - 1];
+    before = { at: last.created_at, id: last.id };
+  }
+  const parties = await partiesFor(a, rows.map((r) => r.actor_id));
+  return rows.map((r) => ({ ...r, actor: parties.get(r.actor_id) ?? null }));
+}
+
+export type OrderExportView = "orders" | "disputes_open" | "disputes_resolved";
+
+export type OrderExportFilters = {
+  query?: string;
+  /** Orders view only. */
+  status?: OrderStatus;
+  from?: string;
+  to?: string;
+  minCents?: number;
+  maxCents?: number;
+  /** Disputes views only. */
+  category?: DisputeCategory;
+};
+
+export type OrderExportRow = Database["public"]["Functions"]["admin_export_orders"]["Returns"][number];
+
+/**
+ * Every order (or dispute) matching the console's filters, in the view's own
+ * order, read through admin_export_orders (20261107200520) in keyset pages
+ * until a short page. Names and titles are joined in the database, so no
+ * lookup depends on a URL's length. Complete, refused past the limit, or an
+ * error — never quietly short.
+ */
+export async function exportOrderRows(
+  view: OrderExportView,
+  filters: OrderExportFilters,
+  limit = EXPORT_ROW_LIMIT
+): Promise<OrderExportRow[]> {
+  const a = await admin();
+  const rows: OrderExportRow[] = [];
+  let cursor: { at: string; id: string } | null = null;
+  for (;;) {
+    const { data, error } = await a.rpc("admin_export_orders", {
+      p_view: view,
+      p_query: filters.query?.trim() || undefined,
+      p_status: filters.status,
+      p_category: filters.category,
+      p_from: filters.from,
+      p_to: filters.to,
+      p_min_cents: filters.minCents,
+      p_max_cents: filters.maxCents,
+      p_after_at: cursor?.at,
+      p_after_id: cursor?.id,
+      p_limit: EXPORT_PAGE_SIZE,
+    });
+    unlessFailed(view === "orders" ? "the orders export" : "the disputes export", error);
+    const page = (data ?? []) as OrderExportRow[];
+    rows.push(...page);
+    if (rows.length > limit) throw new ExportTooLargeError(limit);
+    if (page.length < EXPORT_PAGE_SIZE) break;
+    const last = page[page.length - 1];
+    cursor = { at: last.sort_at, id: last.id };
+  }
+  return rows;
 }
 
 // ---------- Nav counts ----------
@@ -1512,7 +1626,7 @@ export type NavCounts = { disputes: number | null; reports: number | null; money
  *  This runs in the console layout, so a failed count degrades its badge
  *  instead of throwing the whole console into the error page. */
 export async function getNavCounts(): Promise<NavCounts> {
-  const a = admin();
+  const a = await admin();
   const [disputes, reports, recoveries, stuck, products] = await Promise.all([
     a.from("orders").select("id", { count: "exact", head: true }).eq("status", "disputed"),
     a.from("reports").select("id", { count: "exact", head: true }).eq("status", "open"),
@@ -1567,7 +1681,7 @@ export type AdminIdentity = {
  * than depending on the caller's RLS session shape.
  */
 export async function getAdminIdentity(userId: string): Promise<AdminIdentity> {
-  const a = admin();
+  const a = await admin();
   const { data } = await a
     .from("profiles")
     .select("username, display_name")
@@ -1577,7 +1691,7 @@ export async function getAdminIdentity(userId: string): Promise<AdminIdentity> {
 }
 
 export async function getAdminRoster(): Promise<AdminRosterRow[]> {
-  const a = admin();
+  const a = await admin();
   const { data: rows } = await a
     .from("admin_users")
     .select("user_id, role, note, created_at")
@@ -1614,7 +1728,7 @@ export type WorkerJobRow = {
  * snapshot can't be read, so the console says so instead of looking healthy.
  */
 export async function getWorkerJobs(): Promise<WorkerJobRow[] | null> {
-  const { data, error } = await admin().rpc("worker_health_snapshot", {});
+  const { data, error } = await (await admin()).rpc("worker_health_snapshot", {});
   if (error || !data) return null;
   const snapshot = data as {
     families?: { family: string; stale: boolean; last_success: string | null; last_failure: string | null }[];
@@ -1661,7 +1775,7 @@ export async function listOpsCases(opts: {
   kind?: OpsCase["kind"];
   assignee?: string;
 } = {}): Promise<OpsCaseRow[]> {
-  const a = admin();
+  const a = await admin();
   let query = a
     .from("ops_cases")
     .select("*")
@@ -1751,7 +1865,7 @@ export type OpenOperation = {
 };
 
 export async function getOpenOperations(limit = 50): Promise<OpenOperation[]> {
-  const a = admin();
+  const a = await admin();
   const { data: requested, error } = await a
     .from("admin_audit_log")
     .select("id, action, subject_type, subject_id, order_id, reason, created_at, actor_id, metadata")

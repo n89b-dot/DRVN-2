@@ -88,6 +88,11 @@ export type RefundOrderOutcome =
        *  is only unknown — a timeout, a failed lookup — which the sweep keeps
        *  counting as retrying, so worker health sees it (N391). */
       providerPending?: boolean;
+      /** Proven: no refund was made or is still on its way from this request
+       *  (refused before anything was reserved, or Stripe declined to create
+       *  it). Lets a caller's request fence close without a reconciliation
+       *  (N134). Never set when the outcome is unknown. */
+      refused?: true;
     };
 
 function initiatorLabel(initiator: RefundInitiator): string {
@@ -327,11 +332,11 @@ export async function refundOrder(
     .select("id, status, total_cents, refunded_cents")
     .eq("id", orderId)
     .maybeSingle();
-  if (orderError) return { ok: false, error: "The order could not be checked — try again." };
-  if (!order) return { ok: false, error: "Order not found." };
+  if (orderError) return { ok: false, refused: true, error: "The order could not be checked — try again." };
+  if (!order) return { ok: false, refused: true, error: "Order not found." };
 
   if (["pending", "requires_action", "payment_failed", "cancelled"].includes(order.status)) {
-    return { ok: false, error: "No captured payment on this order to refund." };
+    return { ok: false, refused: true, error: "No captured payment on this order to refund." };
   }
 
   const { data: payment, error: paymentError } = await admin
@@ -339,14 +344,14 @@ export async function refundOrder(
     .select("id, provider_reference, amount_cents, refunded_cents, status")
     .eq("order_id", orderId)
     .maybeSingle();
-  if (paymentError) return { ok: false, error: "The payment could not be checked — try again." };
+  if (paymentError) return { ok: false, refused: true, error: "The payment could not be checked — try again." };
   if (!payment?.provider_reference) {
-    return { ok: false, error: "No payment on file for this order." };
+    return { ok: false, refused: true, error: "No payment on file for this order." };
   }
 
   if (input.amountCents !== undefined) {
     if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
-      return { ok: false, error: "Refund amount must be a positive whole amount." };
+      return { ok: false, refused: true, error: "Refund amount must be a positive whole amount." };
     }
   }
 
@@ -394,7 +399,8 @@ export async function refundOrder(
   }
   const begin = begun as { ok: boolean; error?: string; operation_id?: string };
   if (!begin.ok || !begin.operation_id) {
-    return { ok: false, error: begin.error ?? "The refund could not be started." };
+    // The database answered and reserved nothing ("nothing left to refund").
+    return { ok: false, refused: true, error: begin.error ?? "The refund could not be started." };
   }
 
   return runRefundOperation(admin, begin.operation_id);
@@ -492,7 +498,8 @@ export async function runRefundOperation(
     };
   }
   if (op.status === "failed") {
-    return { ok: false, error: "Refund failed." };
+    // Terminal: Stripe refused it, or it never had a payment to refund.
+    return { ok: false, refused: true, error: "Refund failed." };
   }
   if (op.status === "provider_pending" || op.status === "requested") {
     return {
@@ -517,7 +524,7 @@ export async function runRefundOperation(
 async function ensureProviderRefund(
   admin: Admin,
   op: RefundOpRow
-): Promise<{ ok: true } | { ok: false; error: string; pending?: boolean; providerPending?: boolean }> {
+): Promise<{ ok: true } | { ok: false; error: string; pending?: boolean; providerPending?: boolean; refused?: true }> {
   let wasPending = op.status === "provider_pending";
   if (op.replaces_adjustment_id) {
     const {data: claim, error} = await admin.rpc("claim_refund_replacement_provider", {p_operation: op.id});
@@ -594,7 +601,7 @@ async function ensureProviderRefund(
 
   if (!op.payment_reference) {
     await failOperation(admin, op, "No payment reference on the operation.");
-    return { ok: false, error: "No payment on file for this order." };
+    return { ok: false, refused: true, error: "No payment on file for this order." };
   }
 
   let failureReason = "The refund could not be processed.";
@@ -616,7 +623,8 @@ async function ensureProviderRefund(
     if ((result.status === "failed" || result.status === "canceled") && !result.reference) {
       failureReason = result.reason ?? "The provider refused the refund.";
       await failOperation(admin, op, failureReason);
-      return { ok: false, error: failureReason };
+      // Stripe declined to create a refund: nothing exists to reconcile.
+      return { ok: false, refused: true, error: failureReason };
     }
     const recorded = await recordProviderObservation(
       admin,

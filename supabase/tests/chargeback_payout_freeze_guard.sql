@@ -61,7 +61,7 @@ create function pg_temp.w18_admin_close(p_admin uuid, p_order uuid) returns void
 begin
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims', json_build_object('sub', p_admin, 'role', 'authenticated',
-    'aal', 'aal2', 'amr', json_build_array(json_build_object('method', 'totp',
+    'aal', 'aal2', 'session_id', p_admin, 'amr', json_build_array(json_build_object('method', 'totp',
     'timestamp', extract(epoch from now())::bigint)))::text, true);
   perform public.execute_admin_command('dispute.resolve_for_seller', p_order, 'chargeback guard: seller shipped');
   perform set_config('role', 'none', true);
@@ -144,7 +144,11 @@ begin
   insert into auth.users(id, email) values
     (seller, 'w18-seller@example.test'), (buyer, 'w18-buyer@example.test'),
     (actor, 'w18-admin@example.test');
-  insert into public.admin_users(user_id) values (actor);
+  -- A confirmed authenticator (20261107200500): without one no admin privilege.
+  insert into auth.mfa_factors(id, user_id, friendly_name, factor_type, status, created_at, updated_at) values (gen_random_uuid(), actor, 'guard', 'totp', 'verified', now(), now());
+  insert into public.admin_users(user_id, mfa_factor_id) select actor, id from auth.mfa_factors where user_id = actor;
+  -- Its session was raised to AAL2 with that factor (20261107200550); the claims carry it.
+  insert into auth.sessions(id, user_id, factor_id, aal, created_at, updated_at) select f.user_id, f.user_id, f.id, 'aal2', now(), now() from auth.mfa_factors f where f.user_id = actor;
 
   -- 1. In-app dispute first, then the chargeback. The chargeback can't own the
   --    order's dispute fields, so it is only in the journal ('recovery') and

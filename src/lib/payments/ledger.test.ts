@@ -163,7 +163,7 @@ describe("getSellerLedger", () => {
     const result = await getSellerLedger(
       fakeClient({
         orders: { data: [{ ...order, refunded_cents: 0 }], error: null },
-        settlement_settings: { data: [{ payout_hold_days: 14, payout_hold_mode: "fixed" }], error: null },
+        settlement_hold_policy: { data: [{ payout_hold_days: 14, payout_hold_mode: "fixed" }], error: null },
       }),
       "seller"
     );
@@ -181,7 +181,7 @@ describe("getSellerLedger", () => {
           data: [{ order_id: "order-1", title: "Intake", quantity: 1, return_policy: { returns_accepted: true, window_days: 60 } }],
           error: null,
         },
-        settlement_settings: { data: [{ payout_hold_days: 7, payout_hold_mode: "claim_window" }], error: null },
+        settlement_hold_policy: { data: [{ payout_hold_days: 7, payout_hold_mode: "claim_window" }], error: null },
       }),
       "seller"
     );
@@ -196,7 +196,7 @@ describe("getSellerLedger", () => {
     const result = await getSellerLedger(
       fakeClient({
         orders: { data: [delivered, { ...delivered, id: "order-2" }], error: null },
-        settlement_settings: { data: [{ payout_hold_days: 7, payout_hold_mode: "claim_window" }], error: null },
+        settlement_hold_policy: { data: [{ payout_hold_days: 7, payout_hold_mode: "claim_window" }], error: null },
         // Only order-1 has a stamped date; order-2 falls back to the rule.
         seller_payout_dates: { data: [{ order_id: "order-1", available_at: "2026-09-09T00:00:00+00:00" }], error: null },
       }),
@@ -228,7 +228,7 @@ describe("getSellerLedger", () => {
     const result = await getSellerLedger(
       fakeClient({
         orders: { data: [order], error: null },
-        settlement_settings: { data: null, error: { message: "timeout" } },
+        settlement_hold_policy: { data: null, error: { message: "timeout" } },
       }),
       "seller"
     );

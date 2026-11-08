@@ -37,11 +37,13 @@ if [[ -z "$secret" ]]; then
 fi
 
 # route  interval-seconds  (matches cron.job on the shared project; listing
-# imports has no database schedule, so it runs daily here as its route asks)
+# imports is scheduled daily there too, by 20261004150000's
+# drvn-listing-import-sweep at 03:37 UTC)
 jobs=(
   "search 120"
   "account-deletions 300"
   "transfers 600"
+  "agent 300"
   "saved-searches 1800"
   "saved-search-digests 3600"
   "media-gc 86400"
