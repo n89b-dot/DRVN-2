@@ -27,7 +27,7 @@ import { requiredRead } from "@/lib/supabase/required-read";
 import { HomeFeedMore } from "./feed-more";
 import { splitHomeFeed } from "./fold";
 import { Greeting } from "./greeting";
-import { HOME_FEED_PAGE_SIZE, type HomeTab } from "./tabs";
+import { HOME_FEED_PAGE_SIZE, homeTabHref, homeTabs, resolveHomeTab, type HomeTab } from "./tabs";
 import { PostUpdatePrompt } from "./post-update-prompt";
 import { orderCars, withMainCar } from "@/lib/cars/order";
 import { AccountRowList, ListingRow } from "@/components/commerce";
@@ -161,14 +161,7 @@ export default async function HomePage({
 
   // Someone who follows nobody opens on For you: an empty Following tab is a
   // true answer and a useless first screen.
-  const tab: HomeTab =
-    tabParam === "following" || tabParam === "foryou"
-      ? tabParam
-      : tabParam === "local" && place
-        ? "local"
-        : followsNothing
-          ? "foryou"
-          : "following";
+  const tab = resolveHomeTab(tabParam, { followsNothing, hasPlace: Boolean(place) });
 
   const feedPromise: Promise<{ items: FeedItem[]; hasMore: boolean; nextCursor?: FeedCursor | null }> =
     tab === "following"
@@ -205,18 +198,8 @@ export default async function HomePage({
   // A count that couldn't be read is left off the card, never shown as 0.
   const statsBy = new Map((garageStats.error ? [] : (garageStats.data ?? [])).map((row) => [row.car_id, row]));
 
-  const tabs: { key: HomeTab; label: string }[] = [
-    { key: "following", label: "Following" },
-    { key: "foryou", label: "For you" },
-    ...(place ? [{ key: "local" as const, label: place.label }] : []),
-  ];
-  const hrefFor = (key: HomeTab) => {
-    const params = new URLSearchParams();
-    // The default tab needs no parameter, so a bare /home stays shareable.
-    if (key !== (followsNothing ? "foryou" : "following")) params.set("tab", key);
-    const query = params.toString();
-    return query ? `/home?${query}` : "/home";
-  };
+  const tabs = homeTabs(place?.label);
+  const hrefFor = (key: HomeTab) => homeTabHref(key, followsNothing);
 
   const initials = (profile?.display_name ?? "?")
     .split(" ")

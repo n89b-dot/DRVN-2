@@ -74,7 +74,8 @@ export type AnalyticsEvent =
   /** AG-7: the member changed their agent's mode; `ended` counts the live mandates it stopped. */
   | { event: "agent_mode_set"; props: { mode: "off" | "suggest" | "act"; ended: number } }
   | { event: "agent_tab_viewed"; props: { needs: "0" | "1" | "2-5" | "6+" } }
-  | { event: "agent_approval_answered"; props: { choice: "accept" | "dismiss" } }
+  /** `outcome` is what the database reported (N128): only "accepted" is a sale. */
+  | { event: "agent_approval_answered"; props: { choice: "accept" | "dismiss"; outcome: "accepted" | "expired" | "refused" | "noop" | "dismissed" | "unknown" } }
   /** One message to the agent (A3c): how many tools it used, and whether the model answered. */
   | { event: "agent_chat_turn"; props: { tool_calls: number; ok: boolean } }
   /** Confirm on an "Update my build" card (A3c): whether it replaced a part. */

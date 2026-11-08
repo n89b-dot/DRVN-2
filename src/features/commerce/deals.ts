@@ -52,10 +52,23 @@ export type OfferDealRow = {
   image?: string | null;
 };
 
+/** A buyer's question to the seller about a listing, with no offer or order
+ *  yet (R-directcontact, 20261107220600: "Message seller"). */
+export type EnquiryDealRow = {
+  listing_id: string;
+  seller_id: string;
+  title: string;
+  status: string;
+  price_cents: number;
+  image?: string | null;
+  /** The latest message about it. */
+  at: string;
+};
+
 export type Deal = {
-  /** `order:<id>` / `offer:<id>` — also the composer's "about" value. */
+  /** `order:<id>` / `offer:<id>` / `listing:<id>` — also the composer's "about" value. */
   key: string;
-  kind: "order" | "offer";
+  kind: "order" | "offer" | "listing";
   id: string;
   side: DealSide;
   title: string;
@@ -247,6 +260,28 @@ export function offerDeal(offer: OfferDealRow, me: string, now = Date.now()): De
 const TONE_RANK: Record<DealTone, number> = { move: 0, ok: 1, quiet: 2 };
 
 /** Your move first, then anything still in progress, then newest. */
+/** A listing enquiry as a deal: the buyer asked, the seller answers. */
+export function enquiryDeal(row: EnquiryDealRow, me: string): Deal {
+  const side: DealSide = row.seller_id === me ? "selling" : "buying";
+  const active = row.status === "active";
+  return {
+    key: `listing:${row.listing_id}`,
+    kind: "listing",
+    id: row.listing_id,
+    side,
+    title: row.title,
+    image: row.image ?? null,
+    amountCents: row.price_cents,
+    status: row.status,
+    label: side === "buying" ? "You asked about it" : "Asked about your listing",
+    tone: "quiet",
+    active,
+    href: `/listings/${row.listing_id}`,
+    action: null,
+    at: row.at,
+  };
+}
+
 export function sortDeals(deals: Deal[]): Deal[] {
   return [...deals].sort((a, b) => {
     if (a.active !== b.active) return a.active ? -1 : 1;

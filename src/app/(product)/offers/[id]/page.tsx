@@ -326,12 +326,18 @@ export default async function OfferThreadPage({
             {priceLine && <span className="order__meta basis-full">{priceLine.text}</span>}
           </div>
         )}
-        {buyerMandateLive && ownMandate && (
-          <div className="mt-3 grid gap-2 border-t border-[color:var(--rule-soft)] pt-3">
-            <StopBuyerAgent mandateId={ownMandate.id} offerId={offer.id} />
-            <p className="field__hint !mt-0">
-              Your agent is negotiating this part within your max. Stopping it leaves this offer as it stands.
-            </p>
+        {/* Mounted for any buyer mandate here, live or not, so "Stop
+            negotiating for me" keeps its "Stopped." when this page comes back
+            with the mandate revoked (StopBuyerAgent renders only this visit's
+            result once it isn't live; empty:hidden drops the rule then). */}
+        {isBuyer && ownMandate && (
+          <div className="mt-3 grid gap-2 border-t border-[color:var(--rule-soft)] pt-3 empty:hidden">
+            <StopBuyerAgent mandateId={ownMandate.id} offerId={offer.id} live={buyerMandateLive} />
+            {buyerMandateLive && (
+              <p className="field__hint !mt-0">
+                Your agent is negotiating this part within your max. Stopping it leaves this offer as it stands.
+              </p>
+            )}
           </div>
         )}
         {agentChat && (
