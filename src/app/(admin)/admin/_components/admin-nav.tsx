@@ -22,6 +22,7 @@ const LINKS: ConsoleRoute[] = [
   { href: "/admin/users", label: "Users", note: "Suspend, restore, inspect", icon: "user" },
   { href: "/admin/invitations", label: "Invitations", note: "Control beta membership", icon: "user" },
   { href: "/admin/reports", label: "Reports", note: "User-flagged listings & sellers", icon: "flag" },
+  { href: "/admin/copyright", label: "Copyright", note: "Rights holders' takedown notices", icon: "flag" },
   { href: "/admin/payments", label: "Payments", note: "Recoveries and stuck transfers", icon: "card" },
   { href: "/admin/agent", label: "Agent", note: "Kill switches and health", icon: "gauge" },
   { href: "/admin/products", label: "Products", note: "Part identity the graph couldn't decide", icon: "box" },

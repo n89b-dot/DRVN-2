@@ -35,6 +35,7 @@ export const ADMIN_CAPABILITIES: AdminCapability[] = [
   { family: "invitation.", description: "Issue and revoke beta invitations", requires: "admin" },
   { family: "operation.", description: "Record the outcome of a provider operation that lost its answer", requires: "admin" },
   { family: "product.", description: "Decide product identity: merge, keep separate, dismiss", requires: "admin" },
+  { family: "copyright.", description: "Act on copyright notices: take content down, or close with no action", requires: "admin" },
   { family: "agent.", description: "Pause and resume the agent: everyone, one side, one member, mandate, listing or account", requires: "admin" },
 ];
 

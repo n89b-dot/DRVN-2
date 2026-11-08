@@ -30,6 +30,8 @@ export async function signUp(page: Page, user: TestUser) {
   await page.goto("/signup");
   await page.getByLabel(/email/i).fill(user.email);
   await page.getByLabel(/^password$/i).fill(user.password);
+  // R69-age: sign-up asks for the 18+ confirmation (and onboarding then doesn't).
+  await page.getByLabel(/18 or over/i).check();
   await page.getByRole("button", { name: /sign up|create account/i }).click();
 
   // With email confirmation off, signup lands on onboarding.

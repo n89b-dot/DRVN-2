@@ -1,10 +1,12 @@
 import { randomBytes } from "node:crypto";
-import type { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
+import { blockedMediaKeys, imageRequestObjectKey } from "@/lib/copyright/blocked-media";
 import { buildContentSecurityPolicy, reportingEndpointsHeader } from "@/lib/csp";
 import { updateSession } from "@/lib/supabase/proxy";
 
 export async function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname === "/_next/image") return imageGate(request);
   const nonce = randomBytes(24).toString("base64");
   const configured = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "https://unconfigured.invalid");
   const local = process.env.E2E_TEST_PROJECT_REF === "local-drvn-remediation" && ["localhost", "127.0.0.1"].includes(configured.hostname) && configured.port === "54321";
@@ -21,9 +23,28 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+/**
+ * Optimised images (R69-dmca): a photo a copyright takedown removed is
+ * refused here, before Next.js can serve the resized copy it keeps for a
+ * month (src/lib/copyright/blocked-media.ts). Nothing else runs for images:
+ * no session refresh, no policy headers, as before this gate existed.
+ */
+async function imageGate(request: NextRequest) {
+  const key = imageRequestObjectKey(request.nextUrl);
+  if (key && (await blockedMediaKeys()).has(key)) {
+    return new NextResponse("This image was removed after a copyright notice.", {
+      status: 451,
+      headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+  return NextResponse.next();
+}
+
 export const config = {
   matcher: [
     // Run on everything except static assets and images
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico)$).*)",
+    // …and on optimised images, for the copyright gate alone.
+    "/_next/image",
   ],
 };

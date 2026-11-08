@@ -924,7 +924,7 @@ export type AdminUser = {
   created_at: string;
 };
 
-export type AdminAuditSubjectType = "order" | "listing" | "user" | "report" | "dispute" | "payment" | "product_review" | "agent";
+export type AdminAuditSubjectType = "order" | "listing" | "user" | "report" | "dispute" | "payment" | "product_review" | "agent" | "copyright_notice";
 
 export type AdminAuditLogEntry = {
   id: number;
@@ -945,6 +945,8 @@ export type ReportReason =
   | "scam_or_fraud"
   | "offensive_content"
   | "wrong_category"
+  /** 20261107231002: a member's report that a listing or photo copies someone's work. */
+  | "copyright"
   | "other";
 
 /** 'post' and 'comment' since 20260928182300 (a post, or a reply on one);

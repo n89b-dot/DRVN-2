@@ -159,6 +159,7 @@ test("admin creates, copies and revokes an invitation while expired links fail c
       await page.goto(attempt.url);
       await page.getByLabel(/^email$/i).fill(attempt.email);
       await page.getByLabel(/^password$/i).fill("invitation-password-123");
+      await page.getByLabel(/18 or over/i).check();
       await page.getByRole("button", { name: "Accept invitation" }).click();
       await expect(
         page.getByRole("alert").filter({ hasText: "This invitation is invalid or no longer available." })

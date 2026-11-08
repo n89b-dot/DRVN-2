@@ -21,6 +21,7 @@ const REASON_LABEL: Record<string, string> = {
   scam_or_fraud: "Scam or fraud",
   offensive_content: "Offensive content",
   wrong_category: "Wrong category",
+  copyright: "Copyright",
   other: "Other",
 };
 

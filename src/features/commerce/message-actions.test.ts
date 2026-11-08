@@ -15,13 +15,14 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
   }),
 }) }));
 import { sendThreadMessage } from "./message-actions";
-const saved = { sender_id: "buyer", body: "Hello", order_id: "order", offer_id: null };
+const saved = { sender_id: "buyer", recipient_id: "seller", body: "Hello", order_id: "order", offer_id: null, listing_id: "listing", attachments: [] as string[] };
 function form() { const data = new FormData(); data.set("message_id", "12345678-1234-4234-8234-123456789012"); data.set("order_id", "order"); data.set("body", "Hello"); return data; }
 beforeEach(() => {
   vi.clearAllMocks(); mocks.suspended.mockReturnValue(false); mocks.allow.mockResolvedValue(true); mocks.read.mockResolvedValue({ data: null, error: null }); mocks.insert.mockResolvedValue({ error: null });
   mocks.admin.mockReturnValue({ from: (table: string) => {
     const query = { select: () => query, eq: () => query, limit: () => query,
-      maybeSingle: async () => ({ data: table === "orders" ? { id: "order", buyer_id: "buyer", seller_id: "seller" } : { listing_id: "listing" } }) };
+      maybeSingle: async () => ({ data: table === "orders" ? { id: "order", buyer_id: "buyer", seller_id: "seller" }
+        : table === "listings" ? { id: "part-1", seller_id: "seller" } : { listing_id: "listing" } }) };
     return query;
   } });
 });
@@ -34,6 +35,24 @@ describe("message submission recovery", () => {
   it.each([{ ...saved, sender_id: "seller" }, { ...saved, body: "Different" }, { ...saved, order_id: "other" }])("does not adopt a mismatched message", async (data) => {
     mocks.read.mockResolvedValue({ data });
     expect((await sendThreadMessage({}, form())).error).toBeTruthy(); expect(mocks.insert).not.toHaveBeenCalled();
+  });
+  describe("a listing enquiry retry (no order or offer to tell contexts apart)", () => {
+    const enquiry = { ...saved, order_id: null, listing_id: "part-1" };
+    function enquiryForm() { const data = new FormData(); data.set("message_id", "12345678-1234-4234-8234-123456789012"); data.set("listing_id", "part-1"); data.set("body", "Hello"); return data; }
+    it("adopts the same enquiry", async () => {
+      mocks.read.mockResolvedValue({ data: enquiry });
+      expect(await sendThreadMessage({}, enquiryForm())).toEqual({ ok: "Sent." });
+      expect(mocks.insert).not.toHaveBeenCalled(); expect(mocks.allow).not.toHaveBeenCalled();
+    });
+    it.each([{ ...enquiry, listing_id: "part-2" }, { ...enquiry, recipient_id: "someone-else" }])("does not adopt one about another listing or to someone else", async (data) => {
+      mocks.read.mockResolvedValue({ data });
+      expect((await sendThreadMessage({}, enquiryForm())).error).toMatch(/changed/); expect(mocks.insert).not.toHaveBeenCalled();
+    });
+    it("does not count a lost enquiry insert as sent when the stored row differs", async () => {
+      mocks.read.mockResolvedValueOnce({ data: null }).mockResolvedValueOnce({ data: { ...enquiry, listing_id: "part-2" } });
+      mocks.insert.mockResolvedValue({ error: { code: "23505" } });
+      expect((await sendThreadMessage({}, enquiryForm())).error).toContain("Try again");
+    });
   });
   it("reconciles an insert response lost after commit", async () => {
     mocks.read.mockResolvedValueOnce({ data: null }).mockResolvedValueOnce({ data: saved });

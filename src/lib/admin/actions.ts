@@ -20,6 +20,8 @@ import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { reportError } from "@/lib/monitoring";
 import { scheduleMediaCleanup } from "@/lib/media-lifecycle";
+import { takedownTargets } from "@/lib/copyright/notice";
+import { copyrightHosts } from "@/lib/copyright/hosts";
 import type { ReportSubjectType } from "@/lib/database.types";
 import { closeSiblingReports, outcomeForResolution, reporterNotice, type ReporterOutcome } from "./report-outcome";
 
@@ -1723,4 +1725,104 @@ export async function adminCaseUpdate(formData: FormData) {
   }
   revalidatePath("/admin/cases");
   return { ok: "Case updated." };
+}
+
+// ---------- Copyright notices (R69-dmca) ----------
+
+/**
+ * Acts on a copyright notice: removes the listings it names and purges the
+ * photos wherever DRVN holds them, buyers' order snapshots included. The
+ * database function (copyright_takedown, 20261107231002) checks the admin
+ * and a fresh step-up itself, does all of it in one transaction and writes
+ * the audit row; this parses the form, then tells the members whose content
+ * went, starts the storage deletion, and clears the cached pages. The proxy
+ * refuses the photos' cached optimised copies within 15 seconds
+ * (src/lib/copyright/blocked-media.ts).
+ */
+export async function adminCopyrightTakedown(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const noticeId = field(formData, "notice_id");
+  const note = field(formData, "reason");
+  if (!noticeId) return { error: "Missing notice." };
+  if (!note) return { error: "A note is required — it goes in the audit log and to the member." };
+  const { listingIds, mediaUrls, other } = takedownTargets(
+    [field(formData, "listing_ids"), field(formData, "media_urls"), field(formData, "more")],
+    copyrightHosts()
+  );
+  if (other.length) {
+    return { error: `Not a DRVN listing or photo link: ${other.slice(0, 3).join(", ")}. Open it and paste its photo links instead.` };
+  }
+  if (!listingIds.length && !mediaUrls.length) return { error: "Name at least one listing or photo to take down." };
+
+  const session = await createClient();
+  const { data, error } = await session.rpc("copyright_takedown", {
+    p_notice: noticeId,
+    p_listing_ids: listingIds,
+    p_media_urls: mediaUrls,
+    p_note: note,
+  });
+  if (error) {
+    if (error.code === "42501") return { error: "Confirm your authenticator again, then retry." };
+    return { error: error.message };
+  }
+  const result = data as {
+    removedListings: string[];
+    objects: string[];
+    stillReferenced: string[];
+    owners: string[];
+  };
+
+  if (result.owners.length) {
+    const { error: noteError } = await ctx.admin.from("notifications").insert(
+      result.owners.map((userId) => ({
+        user_id: userId,
+        kind: "copyright_takedown",
+        section: "marketplace" as const,
+        title: "Content removed after a copyright notice",
+        body: `${note} If you think this was a mistake, reply to hello@drvn.app with your reasons.`,
+        href: "/copyright",
+        actor_id: null,
+      }))
+    );
+    if (noteError) reportError("[admin] copyright takedown notification failed", { noticeId, noteError });
+    // The photos are queued under their owners; take them out of storage now
+    // rather than at the next scheduled run.
+    for (const owner of result.owners) scheduleMediaCleanup(owner);
+  }
+  revalidatePath("/", "layout");
+  revalidatePath("/admin", "layout");
+
+  const removed = `${result.removedListings.length} listing(s) and ${result.objects.length} photo(s) taken down`;
+  return result.stillReferenced.length
+    ? { ok: `${removed}. Still named elsewhere (a post's text or a message), remove by hand: ${result.stillReferenced.join(", ")}` }
+    : { ok: `${removed}, order snapshots included.` };
+}
+
+export async function adminRejectCopyrightNotice(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const noticeId = field(formData, "notice_id");
+  const note = field(formData, "reason");
+  if (!noticeId) return { error: "Missing notice." };
+  if (!note) return { error: "A note is required — it goes in the audit log." };
+
+  const session = await createClient();
+  const { error } = await session.rpc("reject_copyright_notice", { p_notice: noticeId, p_note: note });
+  if (error) {
+    if (error.code === "42501") return { error: "Confirm your authenticator again, then retry." };
+    return { error: error.message };
+  }
+  revalidatePath("/admin", "layout");
+  return { ok: "Notice closed with no action. Reply to the claimant with the reason." };
 }

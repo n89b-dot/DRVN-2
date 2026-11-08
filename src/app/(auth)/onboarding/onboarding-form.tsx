@@ -2,7 +2,13 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 
-import { Button, CountedField, TextField } from "@/components/ui";
+import { Button, Checkbox, CountedField, TextField } from "@/components/ui";
+import {
+  AGE_CONFIRMATION_FIELD,
+  AGE_CONFIRMATION_HINT,
+  AGE_CONFIRMATION_LABEL,
+  AGE_CONFIRMATION_VALUE,
+} from "@/lib/age-confirmation";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import { DISPLAY_NAME_MAX } from "@/lib/limits";
 
@@ -10,7 +16,16 @@ import { completeOnboarding, logout, type AuthState } from "../actions";
 
 type Availability = "idle" | "checking" | "available" | "taken" | "invalid" | "unknown";
 
-export function OnboardingForm({ email, next }: { email: string; next?: string }) {
+export function OnboardingForm({
+  email,
+  next,
+  askAge = false,
+}: {
+  email: string;
+  next?: string;
+  /** No 18+ confirmation on record yet (a first Google sign-in). */
+  askAge?: boolean;
+}) {
   const [state, action, pending] = useActionState<AuthState, FormData>(completeOnboarding, {});
   // Controlled fields must not replace what was typed before hydration
   // (see useHydrated): they stay disabled until the page is live.
@@ -81,7 +96,7 @@ export function OnboardingForm({ email, next }: { email: string; next?: string }
           onChange={(e) => handleUsernameChange(e.target.value)}
           className="max-w-none"
           hint="Letters, numbers, underscores. Usernames are permanent once set — choose carefully."
-          error={state.error}
+          error={state.field === "age" ? undefined : state.error}
           status={
             availability === "checking"
               ? "Checking availability…"
@@ -104,6 +119,21 @@ export function OnboardingForm({ email, next }: { email: string; next?: string }
           autoComplete="name"
           hint="You can change this any time in settings."
         />
+        {askAge && (
+          <Checkbox
+            id="onb-age"
+            name={AGE_CONFIRMATION_FIELD}
+            value={AGE_CONFIRMATION_VALUE}
+            required
+            label={AGE_CONFIRMATION_LABEL}
+            hint={
+              <span id="onb-age-hint">{state.field === "age" ? state.error : AGE_CONFIRMATION_HINT}</span>
+            }
+            aria-describedby="onb-age-hint"
+            aria-invalid={state.field === "age" || undefined}
+            className="mt-2"
+          />
+        )}
         {next ? (
           <Button
             type="submit"
