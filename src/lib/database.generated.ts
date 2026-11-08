@@ -7712,6 +7712,15 @@ export type Database = {
         Args: { p_brand: string; p_part_number: string; p_product: string }
         Returns: string
       }
+      mod_sheet_matches: {
+        Args: { p_car: string; p_items: Json }
+        Returns: boolean
+      }
+      mod_sheet_revision: { Args: { p_car: string }; Returns: string }
+      mod_sheet_revision_if_matches: {
+        Args: { p_car: string; p_items: Json }
+        Returns: string
+      }
       my_car_vin: { Args: { p_car: string }; Returns: string }
       my_default_offer_floor: { Args: never; Returns: number }
       my_listing_offer_floor: { Args: { p_listing: string }; Returns: number }
@@ -8142,6 +8151,10 @@ export type Database = {
         Args: { p_actor: string; p_shipment: string }
         Returns: Json
       }
+      replace_car_showcase: {
+        Args: { p_car: string; p_image_url: string; p_pins: Json }
+        Returns: number
+      }
       replay_listing_edit: {
         Args: {
           p_expected_updated_at: string
@@ -8200,7 +8213,7 @@ export type Database = {
         Returns: string
       }
       save_mod_items: {
-        Args: { p_car_id: string; p_items: Json }
+        Args: { p_car_id: string; p_expected_revision: string; p_items: Json }
         Returns: Json
       }
       saved_counts: {

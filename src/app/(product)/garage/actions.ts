@@ -1,5 +1,6 @@
 "use server";
 
+import { STALE_MOD_SHEET } from "@/lib/mods/sheet-revision";
 import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 
@@ -372,24 +373,11 @@ export type ModItemInput = {
  * Existing ids update in place so listing links survive; stable new ids make a
  * repeated request converge after a committed response is lost.
  */
-export async function saveModItems(carId: string, items: ModItemInput[]): Promise<ActionState> {
-  const { supabase, user } = await requireUser();
-  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  if (!carId || items.length > 200 || items.some((item) => !uuid.test(item.id))) {
-    return { error: "The modification sheet is invalid. Reload and try again." };
-  }
-  if (new Set(items.map((item) => item.id)).size !== items.length) {
-    return { error: "The modification sheet contains duplicate lines." };
-  }
-
-  // Ownership is enforced by RLS, but check up front for a clean error.
-  const { data: car, error: carError } = await supabase
-    .from("cars")
-    .select("id, slug, owner_id")
-    .eq("id", carId)
-    .maybeSingle();
-  if (carError || !car || car.owner_id !== user.id) return { error: "Car not found." };
-
+/** The build sheet's current revision (N65), for a caller that changed one
+ *  line elsewhere (unlinking a listing) and must move its own token on. */
+/** The sheet exactly as save_mod_items receives it, so a lost save can be
+ *  compared with what the database holds (mod_sheet_revision_if_matches). */
+function modSheetPayload(items: ModItemInput[], userId: string) {
   // These three render on the public build page, so none is taken as typed:
   // the link must be http(s), the thumbnail must be one this member uploaded
   // (an arbitrary host is a tracking pixel on somebody's build), and the
@@ -403,7 +391,7 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
       return null;
     }
   };
-  const payload = items.map((item) => {
+  return items.map((item) => {
     const link = linkOf(item.product_url);
     return {
     id: item.id,
@@ -423,7 +411,7 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
     // that came off last month keeps that date through every later save.
     status: item.status === "removed" ? "removed" : "installed",
     product_url: link ? link.toString() : null,
-    image_url: item.image_url && isOwnedStorageUrl(item.image_url, user.id) ? item.image_url : null,
+    image_url: item.image_url && isOwnedStorageUrl(item.image_url, userId) ? item.image_url : null,
     source_domain: link ? link.hostname.replace(/^www\./, "").toLowerCase() : null,
     ref_price_cents:
       typeof item.ref_price_cents === "number" && Number.isFinite(item.ref_price_cents)
@@ -433,19 +421,70 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
     origin: item.origin === "stock" ? "stock" : "aftermarket",
     };
   });
+}
+
+export async function modSheetRevision(carId: string): Promise<string | null> {
+  const { supabase } = await requireUser();
+  if (!carId) return null;
+  const { data, error } = await supabase.rpc("mod_sheet_revision", { p_car: carId });
+  return error ? null : (data ?? null);
+}
+
+/**
+ * N65 follow-up: after a save's response was lost, the editor asks whether
+ * the sheet is exactly what that save sent. If so it gets the current
+ * revision (its own write committed); otherwise null, and its next save is
+ * still checked against the revision it loaded.
+ */
+export async function confirmLostModSave(carId: string, items: ModItemInput[]): Promise<string | null> {
+  const { supabase, user } = await requireUser();
+  if (!carId || items.length > 200) return null;
+  const { data, error } = await supabase.rpc("mod_sheet_revision_if_matches", {
+    p_car: carId,
+    p_items: modSheetPayload(items, user.id),
+  });
+  return error ? null : (data ?? null);
+}
+
+export async function saveModItems(
+  carId: string,
+  items: ModItemInput[],
+  expectedRevision: string
+): Promise<ActionState & { revision?: string; stale?: boolean }> {
+  const { supabase, user } = await requireUser();
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!carId || !expectedRevision || items.length > 200 || items.some((item) => !uuid.test(item.id))) {
+    return { error: "The modification sheet is invalid. Reload and try again." };
+  }
+  if (new Set(items.map((item) => item.id)).size !== items.length) {
+    return { error: "The modification sheet contains duplicate lines." };
+  }
+
+  // Ownership is enforced by RLS, but check up front for a clean error.
+  const { data: car, error: carError } = await supabase
+    .from("cars")
+    .select("id, slug, owner_id")
+    .eq("id", carId)
+    .maybeSingle();
+  if (carError || !car || car.owner_id !== user.id) return { error: "Car not found." };
+
+  const payload = modSheetPayload(items, user.id);
   const { data, error } = await supabase.rpc("save_mod_items", {
     p_car_id: carId,
     p_items: payload,
+    p_expected_revision: expectedRevision,
   });
+  if (error?.code === "40001" && error.hint === "stale_mod_sheet") return { error: STALE_MOD_SHEET, stale: true };
   if (error) return { error: error.message };
-  if ((data as unknown as { outcome?: string } | null)?.outcome !== "saved") {
+  const saved = data as unknown as { outcome?: string; revision?: string } | null;
+  if (saved?.outcome !== "saved") {
     return { error: "The modification sheet was not saved." };
   }
 
   // Mods are searchable build content (brief §20) — resync the car's document.
   revalidatePath(`/garage/${carId}/edit`);
   revalidatePath(`/cars/${car.slug}`);
-  return { ok: "Build saved." };
+  return { ok: "Build saved.", revision: saved.revision };
 }
 
 /**
@@ -569,8 +608,9 @@ export type ShowcasePinInput = {
 
 /**
  * The annotated showcase (§U): ONE image, up to 8 pins, each snapshotting its
- * label. Delete-and-reinsert like the gallery/fitment savers; RLS scopes both
- * statements to the owner, and the image must be one of this car's photos.
+ * label. N66: replaced by one database function in one transaction
+ * (replace_car_showcase), which checks the owner, the photo and every pin's
+ * part before touching anything — a failed save leaves the old showcase.
  */
 export async function saveShowcase(
   carId: string,
@@ -591,22 +631,14 @@ export async function saveShowcase(
       label: pin.label.trim().slice(0, 80),
     }));
 
-  if (sane.length > 0) {
-    const { data: image } = await supabase
-      .from("car_images")
-      .select("id")
-      .eq("car_id", carId)
-      .eq("url", imageUrl)
-      .maybeSingle();
-    if (!image) return { error: "Pick one of this car's photos for the showcase." };
-  }
-
-  await supabase.from("car_hotspots").delete().eq("car_id", carId);
-  if (sane.length > 0) {
-    const { error } = await supabase
-      .from("car_hotspots")
-      .insert(sane.map((pin) => ({ car_id: carId, image_url: imageUrl, ...pin })));
-    if (error) return { error: "Couldn't save the showcase." };
+  const { error } = await supabase.rpc("replace_car_showcase", {
+    p_car: carId,
+    p_image_url: imageUrl,
+    p_pins: sane,
+  });
+  if (error) {
+    // The function's own refusals are written for the member (22023).
+    return { error: error.code === "22023" ? error.message : "Couldn't save the showcase. Your previous one is unchanged." };
   }
 
   const { data: car } = await supabase.from("cars").select("slug").eq("id", carId).maybeSingle();
