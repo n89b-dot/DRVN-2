@@ -19,10 +19,12 @@ import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { capture } from "@/lib/analytics";
 import { createClient } from "@/lib/supabase/server";
-import type { Json, PurchaseBeginResult } from "@/lib/database.types";
+import type { Json, OrderStatus, PurchaseBeginResult } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
 import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
-import type { CommerceState, CheckoutOutcome, ShippingDetails } from "./action-types";
+import { cartCheckoutRequestKey, forgetCheckoutKey, rememberCheckoutKey } from "@/lib/checkout-key";
+import type { CheckoutBreakdown, CommerceState, CheckoutOutcome, ShippingDetails } from "./action-types";
+import { releaseCartCheckout } from "./checkout-release";
 
 const PAYMENT_SETTLED_ORDER_STATUSES = new Set([
   "paid",
@@ -32,6 +34,98 @@ const PAYMENT_SETTLED_ORDER_STATUSES = new Set([
   "refunded",
   "disputed",
 ]);
+
+const LIVE_ORDER_STATUSES: OrderStatus[] = ["pending", "requires_action"];
+const TERMINAL_ORDER_STATUSES = new Set(["payment_failed", "cancelled"]);
+
+/** purchase_begin's refusal text for the per-buyer cap (5 unfinished). */
+const UNRESOLVED_CHECKOUT_CAP_ERROR = "Too many unresolved checkouts";
+const UNRESOLVED_CHECKOUT_CAP_MESSAGE =
+  "You have 5 checkouts waiting for payment. Finish one from your orders, or wait for an unpaid one to lapse (holds last 15 minutes), then try again. Nothing was charged.";
+const OWN_HOLD_MESSAGE =
+  "Your checkout is already holding these parts. Finish paying in the checkout you started, or check your orders. If you don't, the hold lapses within 15 minutes. Nothing new was charged.";
+const RELEASE_UNRESOLVED_MESSAGE =
+  "Your earlier payment for these parts is still being confirmed, so they stay held for now. Check your orders in a few minutes before trying again. Nothing new was charged.";
+
+/** The listings among `listingIds` that the buyer's own unfinished
+ *  checkouts are holding. A failed read holds nothing (the caller falls back
+ *  to its general message). */
+async function ownHeldListingIds(
+  admin: ReturnType<typeof createAdminClient>,
+  buyerId: string,
+  /** Omitted: every listing the buyer's unfinished checkouts hold. */
+  listingIds?: string[]
+): Promise<Set<string>> {
+  const { data, error } = await admin
+    .from("orders")
+    .select("id, order_items(listing_id)")
+    .eq("buyer_id", buyerId)
+    .in("status", LIVE_ORDER_STATUSES);
+  if (error || !Array.isArray(data)) return new Set();
+  const wanted = listingIds ? new Set(listingIds) : null;
+  const held = new Set<string>();
+  for (const order of data) {
+    for (const item of order.order_items ?? []) {
+      if (item.listing_id && (!wanted || wanted.has(item.listing_id))) held.add(item.listing_id);
+    }
+  }
+  return held;
+}
+
+/** True when a saved attempt exists under this payment key and none of its
+ *  orders is still waiting for payment. Unknown (a failed read) is "not
+ *  over": replaying is always the safe default, never a second reservation. */
+async function attemptIsOver(idempotencyKey: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data: attempt, error } = await admin
+    .from("purchase_attempts")
+    .select("result")
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle();
+  if (error || !attempt) return false;
+  const result = attempt.result;
+  const orderIds =
+    result && typeof result === "object" && !Array.isArray(result) && Array.isArray(result.orders)
+      ? result.orders.flatMap((order) =>
+          order && typeof order === "object" && !Array.isArray(order) && typeof order.order_id === "string"
+            ? [order.order_id]
+            : []
+        )
+      : [];
+  if (!orderIds.length) return false;
+  const { data: orders, error: ordersError } = await admin
+    .from("orders")
+    .select("id, status")
+    .in("id", orderIds);
+  if (ordersError || orders?.length !== orderIds.length) return false;
+  return orders.every((order) => TERMINAL_ORDER_STATUSES.has(order.status));
+}
+
+/** OS-W17 (N485): the payment step's breakdown, from what was reserved. */
+async function admittedBreakdown(
+  admin: ReturnType<typeof createAdminClient>,
+  result: PurchaseBeginResult,
+  skipped: CheckoutOutcome["skipped"]
+): Promise<CheckoutBreakdown> {
+  const orderIds = result.orders.map((order) => order.order_id);
+  const breakdown: CheckoutBreakdown = {
+    goodsCents: result.orders.reduce((sum, order) => sum + order.subtotal_cents, 0),
+    shippingCents: result.orders.reduce((sum, order) => sum + order.shipping_cents, 0),
+    skipped: skipped.length ? skipped.map((s) => s.title) : undefined,
+  };
+  const { data: items, error } = await admin
+    .from("order_items")
+    .select("listing_id, title, price_cents")
+    .in("order_id", orderIds);
+  if (!error && Array.isArray(items) && items.length) {
+    breakdown.lines = items.map((item) => ({
+      id: item.listing_id ?? item.title ?? "part",
+      title: item.title ?? "Part",
+      priceCents: item.price_cents,
+    }));
+  }
+  return breakdown;
+}
 
 async function requireUser() {
   const supabase = await createClient();
@@ -105,6 +199,11 @@ async function purchaseListings(
     // purchase_begin leaves out a part whose seller can't be paid; any other
     // reservation of one is refused (20261107210000, N244).
     if (error.code === PAYOUTS_NOT_READY_CODE) return { ...empty, error: SELLER_CANNOT_TAKE_PAYMENT_MESSAGE };
+    // OS-W17 (N88): purchase_begin's cap on unfinished checkouts is a
+    // refusal the buyer can act on, not a failure to report.
+    if (error.message?.includes(UNRESOLVED_CHECKOUT_CAP_ERROR)) {
+      return { ...empty, error: UNRESOLVED_CHECKOUT_CAP_MESSAGE };
+    }
     reportError("[commerce] purchase_begin failed", { buyerId, error });
     return { ...empty, error: error.message?.includes("at most") ? error.message : "We couldn't start that purchase. Nothing was charged." };
   }
@@ -117,12 +216,19 @@ async function purchaseListings(
   }));
 
   if (!result.orders?.length) {
+    // OS-W17 (N85): "sold or are your own" was wrong when the buyer's own
+    // unfinished checkout is what holds them.
+    const heldByBuyer = skipped.length
+      ? await ownHeldListingIds(admin, buyerId, skipped.map((s) => s.listingId))
+      : new Set<string>();
     return {
       ...empty,
       skipped,
-      error: skipped.length
-        ? "Nothing was available — those parts have sold or are your own."
-        : "Nothing purchasable in that request.",
+      error: skipped.length && skipped.every((s) => heldByBuyer.has(s.listingId))
+        ? OWN_HOLD_MESSAGE
+        : skipped.length
+          ? "Nothing was available — those parts have sold or are your own."
+          : "Nothing purchasable in that request.",
     };
   }
   const idempotencyKey = options.idempotencyKey;
@@ -351,7 +457,12 @@ async function purchaseListings(
       orderIds: allOrderIds,
       purchased: [],
       skipped,
-      payment: { clientSecret: payment.clientSecret, orderIds: allOrderIds, amountCents: basketTotal },
+      payment: {
+        clientSecret: payment.clientSecret,
+        orderIds: allOrderIds,
+        amountCents: basketTotal,
+        breakdown: await admittedBreakdown(admin, result, skipped),
+      },
     };
   } else if (payment.status === "processing") {
     return { ...empty, orderIds: allOrderIds, skipped, error: "Your payment is processing. Check your order before trying again." };
@@ -478,16 +589,22 @@ export async function checkoutCart(
   // buyer-scoped digest for finding the durable purchase attempt after a
   // successful response is lost and the cart cookie has already been cleared.
   // The full payment idempotency key below still binds the address and basket.
-  const rawKey = String(formData.get("idempotency_key") ?? "");
+  //
+  // OS-W17 (N85): the page renders the key this browser's checkout reserved
+  // under (the checkout-key cookie), so a reload resumes the same attempt.
+  // When that attempt is over, or the buyer changes what they're buying or
+  // where it goes, the key is rotated below and a new attempt starts.
+  let rawKey = String(formData.get("idempotency_key") ?? "");
   if (user && (rawKey.length < 16 || rawKey.length > 200)) {
     return { error: "This checkout request expired. Reload checkout and try again." };
   }
   const browserIdentity = user ? `user:${user.id}` : null;
-  const checkoutRequestKey = browserIdentity
-    ? createHash("sha256")
-        .update(JSON.stringify(["cart-checkout:v1", browserIdentity, rawKey]))
-        .digest("hex")
-    : null;
+  let checkoutRequestKey = user ? cartCheckoutRequestKey(user.id, rawKey) : null;
+  const startNewAttempt = () => {
+    rawKey = randomUUID();
+    checkoutRequestKey = user ? cartCheckoutRequestKey(user.id, rawKey) : null;
+  };
+  let cartIds: string[] | undefined;
 
   let replay:
     | {
@@ -566,30 +683,6 @@ export async function checkoutCart(
         return { error: "We found this checkout but couldn't safely resume it. Open your orders before trying again." };
       }
 
-      const storedQuoteIds = context.quoteIds as Record<string, Json | undefined>;
-      const quoteSelectionChanged = Object.entries(storedQuoteIds).some(
-        ([listingId, quoteId]) =>
-          typeof quoteId !== "string" || formData.get(`quote_${listingId}`) !== quoteId
-      );
-      if (quoteSelectionChanged) {
-        return { error: "The shipping service changed after this order started. Open your orders to review the existing checkout before trying again." };
-      }
-
-      const expectedIdempotencyKey = createHash("sha256")
-        .update(JSON.stringify([browserIdentity, rawKey, shipping, [...listingIds].sort()]))
-        .digest("hex");
-      if (expectedIdempotencyKey !== attempt.idempotency_key) {
-        return { error: "These checkout details changed after the order started. Open your orders to review the existing checkout before trying again." };
-      }
-
-      replay = {
-        listingIds,
-        idempotencyKey: attempt.idempotency_key,
-        overrides,
-        result: purchaseResult,
-        context,
-      };
-
       const orderIds = purchaseResult.orders.map((order) => order.order_id);
       if (!orderIds.length) {
         return { error: "This checkout did not reserve an order. Reload your cart to try again." };
@@ -608,11 +701,68 @@ export async function checkoutCart(
         return { error: "We found this checkout but couldn't verify every order. Open your orders before trying again." };
       }
 
-      if (orders.every((order) => PAYMENT_SETTLED_ORDER_STATUSES.has(order.status))) {
+      const placedPath = () => {
         const params = new URLSearchParams({ placed: "1" });
-        redirect(orderIds.length === 1
+        return orderIds.length === 1
           ? `/orders/${orderIds[0]}?${params.toString()}`
-          : `/orders?${params.toString()}`);
+          : `/orders?${params.toString()}`;
+      };
+      if (orders.every((order) => PAYMENT_SETTLED_ORDER_STATUSES.has(order.status))) {
+        await forgetCheckoutKey();
+        redirect(placedPath());
+      }
+
+      if (!orders.some((order) => LIVE_ORDER_STATUSES.includes(order.status))) {
+        // The attempt behind this key is over — lapsed, failed or released —
+        // so its parts are back on sale. Replaying it would answer with the
+        // dead orders; a new attempt reserves the cart afresh.
+        startNewAttempt();
+      } else {
+        const storedQuoteIds = context.quoteIds as Record<string, Json | undefined>;
+        const quoteSelectionChanged = Object.entries(storedQuoteIds).some(
+          ([listingId, quoteId]) =>
+            typeof quoteId !== "string" || formData.get(`quote_${listingId}`) !== quoteId
+        );
+        const expectedIdempotencyKey = createHash("sha256")
+          .update(JSON.stringify([browserIdentity, rawKey, shipping, [...listingIds].sort()]))
+          .digest("hex");
+        const detailsChanged = expectedIdempotencyKey !== attempt.idempotency_key;
+        cartIds = await getCartIds();
+        const requested = new Set(listingIds);
+        const cartChanged =
+          cartIds.length > 0 &&
+          (cartIds.length !== requested.size || cartIds.some((id) => !requested.has(id)));
+
+        if (quoteSelectionChanged || detailsChanged || cartChanged) {
+          // "Edit address", another service or a changed cart: a changed
+          // checkout can never be attached to the existing payment, so the
+          // buyer's own hold is released (payment cancelled first) and the
+          // checkout restarts with what they asked for now.
+          const release = await releaseCartCheckout(admin, {
+            buyerId: user.id,
+            idempotencyKey: attempt.idempotency_key,
+            orderIds,
+          });
+          if (release.outcome === "settled") {
+            await forgetCheckoutKey();
+            redirect(placedPath());
+          }
+          if (release.outcome === "unresolved") return { error: RELEASE_UNRESOLVED_MESSAGE };
+          // The released parts are on sale again, and this page's basket is
+          // the live cart once more (a DRVN-shipped line needs fresh rates).
+          revalidatePath("/marketplace");
+          revalidatePath("/checkout");
+          for (const id of listingIds) revalidatePath(`/listings/${id}`);
+          startNewAttempt();
+        } else {
+          replay = {
+            listingIds,
+            idempotencyKey: attempt.idempotency_key,
+            overrides,
+            result: purchaseResult,
+            context,
+          };
+        }
       }
     }
   }
@@ -620,8 +770,15 @@ export async function checkoutCart(
   const requestHeaders = await headers();
   const subject = abuseIdentity(requestHeaders, user?.id);
   if (!(await allowAction(RATE_LIMITS.checkout, subject))) return { error: rateLimitMessage(RATE_LIMITS.checkout) };
-  const ids = replay?.listingIds ?? await getCartIds();
-  if (!ids.length) return { error: "Your cart is empty." };
+  const ids = replay?.listingIds ?? cartIds ?? await getCartIds();
+  if (!ids.length) {
+    // "Finish checkout" from an order on another device lands on an empty
+    // cart: say what is actually holding the parts.
+    if (user && (await ownHeldListingIds(createAdminClient(), user.id)).size) {
+      return { error: OWN_HOLD_MESSAGE };
+    }
+    return { error: "Your cart is empty." };
+  }
 
   // Guest checkout: the email is the only extra thing asked for, and it's the
   // address the receipt and dispatch notices have to go to anyway. It resolves
@@ -707,10 +864,20 @@ export async function checkoutCart(
   // Carried on the form so a double-submitted checkout replays the first
   // result instead of creating a second set of orders.
   const effectiveBrowserIdentity = browserIdentity ?? await guestCheckoutIdentity();
-  const effectiveRawKey = rawKey || randomUUID();
-  const idempotencyKey = replay?.idempotencyKey ?? createHash("sha256")
-    .update(JSON.stringify([effectiveBrowserIdentity, effectiveRawKey, shipping, [...ids].sort()]))
+  let effectiveRawKey = rawKey || randomUUID();
+  const guestKeyFor = (key: string) => createHash("sha256")
+    .update(JSON.stringify([effectiveBrowserIdentity, key, shipping, [...ids].sort()]))
     .digest("hex");
+  let idempotencyKey = replay?.idempotencyKey ?? guestKeyFor(effectiveRawKey);
+  if (!user && !replay) {
+    // OS-W17 (N85): a guest's key now survives a reload too. If the attempt
+    // it names is over (lapsed or failed), replaying it would answer with
+    // dead orders, so a new attempt starts instead.
+    if (await attemptIsOver(idempotencyKey)) {
+      effectiveRawKey = randomUUID();
+      idempotencyKey = guestKeyFor(effectiveRawKey);
+    }
+  }
 
   const outcome = await purchaseListings(buyerId, ids, {
     useSavedCustomer: Boolean(user),
@@ -739,12 +906,20 @@ export async function checkoutCart(
   // Payment Element confirmation step. The cart stays intact until the money
   // is actually confirmed (the return route clears it).
   if (outcome.payment) {
+    // OS-W17 (N85): the basket is reserved under this key; a reload renders
+    // it back and resumes this payment instead of starting a second one.
+    await rememberCheckoutKey(effectiveRawKey);
     return { payment: outcome.payment };
   }
 
   if (!outcome.purchased.length) {
+    // Orders that exist without a settled outcome (processing, or a payment
+    // still being reconciled) are retried under the same key. A key whose
+    // attempt has ended is rotated on the next submit, so it can stay.
+    if (outcome.orderIds.length) await rememberCheckoutKey(effectiveRawKey);
     return { error: outcome.error ?? "Nothing could be purchased." };
   }
+  await forgetCheckoutKey();
 
   const params = new URLSearchParams({ placed: "1" });
   if (outcome.skipped.length) {

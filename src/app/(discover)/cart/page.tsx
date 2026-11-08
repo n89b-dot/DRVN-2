@@ -12,6 +12,7 @@ import {
   PaymentModeNotice,
 } from "@/components/ui";
 import { getCartIds } from "@/lib/cart";
+import { loadOwnCheckoutHolds } from "@/lib/checkout-data";
 import { formatPrice, platformFeeCents } from "@/lib/payments/fee";
 import { paymentsAreLive } from "@/lib/payments/provider";
 import { createClient } from "@/lib/supabase/server";
@@ -19,6 +20,8 @@ import { createClient } from "@/lib/supabase/server";
 import { CartRemoveButton } from "@/features/commerce/cart-remove-button";
 import { reportError } from "@/lib/monitoring";
 import { getBetaAccess } from "@/lib/beta-access";
+
+import { cartErrorMessage } from "./cart-errors";
 
 export const metadata = { title: "Cart - DRVN" };
 
@@ -36,14 +39,26 @@ type InvalidLine = {
   id: string;
   title: string;
   reason: string;
+  /** OS-W17: the buyer's own unfinished checkout holds it — where to finish. */
+  finishHref?: string;
 };
 
-export default async function CartPage() {
+export default async function CartPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string | string[] }>;
+}) {
+  const { error: errorCode } = await searchParams;
+  // OS-W17 (N482): a checkout that sends the buyer back here says why.
+  const checkoutError = cartErrorMessage(errorCode);
   const ids = await getCartIds();
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  // OS-W17 (N85): parts the buyer's own checkout is holding are theirs to
+  // finish paying for, not "someone else's reservation".
+  const ownHolds = ids.length ? await loadOwnCheckoutHolds(user?.id ?? null) : new Map<string, string>();
   const betaAccess = await getBetaAccess(user?.id, "buyer");
   const checkoutHref = betaAccess.enforced && !user
     ? "/login?next=%2Fcheckout"
@@ -80,6 +95,18 @@ export default async function CartPage() {
 
   for (const id of ids) {
     const listing = byId.get(id);
+    const heldFor = ownHolds.get(id);
+    // Checked first: a guest can't read a reserved listing at all, so their
+    // own held part would otherwise read as deleted.
+    if (heldFor && (!listing || listing.status === "reserved")) {
+      invalid.push({
+        id,
+        title: listing?.title ?? "A part in your checkout",
+        reason: "Your checkout is holding this — finish paying to keep it",
+        finishHref: heldFor,
+      });
+      continue;
+    }
     if (!listing) {
       invalid.push({ id, title: "A listing that's since been deleted", reason: "Deleted" });
       continue;
@@ -147,6 +174,14 @@ export default async function CartPage() {
         <h1>{ids.length === 0 ? "Your cart is empty." : "Check it over before you pay."}</h1>
       </Rv>
 
+      {checkoutError && (
+        <Rv className="mb-4">
+          <Alert ico="!" role="alert" title={checkoutError.title}>
+            {checkoutError.body}
+          </Alert>
+        </Rv>
+      )}
+
       {ids.length === 0 ? (
         <Rv>
           <EmptyState
@@ -178,7 +213,13 @@ export default async function CartPage() {
                     key={line.id}
                     state="invalid"
                     actions={
-                      <CartRemoveButton listingId={line.id} />
+                      line.finishHref ? (
+                        <ButtonLink href={line.finishHref} variant="ghost">
+                          Finish checkout
+                        </ButtonLink>
+                      ) : (
+                        <CartRemoveButton listingId={line.id} />
+                      )
                     }
                   >
                     <span className="min-w-0">
@@ -204,7 +245,7 @@ export default async function CartPage() {
           {/* Left hand-rolled: EmptyState always renders the dashed
               `.undrawn__mark` badge, and this plate deliberately has none —
               converting would add a visible mark. */}
-          {active.length === 0 && invalid.length > 0 && (
+          {active.length === 0 && invalid.length > 0 && !invalid.some((line) => line.finishHref) && (
             <Rv className="undrawn">
               <h3>Nothing left to buy</h3>
               <p>Remove the lines above, or add something else from the marketplace.</p>
@@ -304,6 +345,10 @@ export default async function CartPage() {
             ) : active.length > 0 ? (
               <ButtonLink href={checkoutHref} variant="live" className="mt-4 w-full">
                 {checkoutLabel}
+              </ButtonLink>
+            ) : invalid.some((line) => line.finishHref === "/checkout") ? (
+              <ButtonLink href="/checkout" variant="live" className="mt-4 w-full">
+                Finish checkout
               </ButtonLink>
             ) : (
               <p className="field__hint mt-4">Remove the unavailable lines above to check out.</p>
