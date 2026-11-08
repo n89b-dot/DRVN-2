@@ -7717,6 +7717,10 @@ export type Database = {
         Returns: boolean
       }
       mod_sheet_revision: { Args: { p_car: string }; Returns: string }
+      mod_sheet_revision_if_matches: {
+        Args: { p_car: string; p_items: Json }
+        Returns: string
+      }
       my_car_vin: { Args: { p_car: string }; Returns: string }
       my_default_offer_floor: { Args: never; Returns: number }
       my_listing_offer_floor: { Args: { p_listing: string }; Returns: number }
