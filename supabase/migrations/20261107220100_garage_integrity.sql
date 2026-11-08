@@ -13,8 +13,8 @@
 --   N248  "Gallery edits are locked and capped" held only for
 --         edit_car_gallery; an owner's token could insert car_images and
 --         car_hotspots directly, past the caps and without the car lock.
---         Insert triggers now take the car lock and enforce both caps on
---         every path.
+--         Insert triggers now take the car lock and enforce both caps for
+--         every write made with a member's token.
 --
 -- save_mod_items(uuid, jsonb) is replaced by save_mod_items(uuid, jsonb,
 -- text); this migration is that function's owner from here on. Every other
@@ -387,8 +387,11 @@ grant execute on function public.replace_car_showcase(uuid, text, jsonb) to auth
 -- ------------------------------------------------------------
 -- N248: the gallery and showcase caps hold on every write path
 -- ------------------------------------------------------------
--- Definer only so the lock is taken whoever writes: an owner's direct insert
--- queues behind edit_car_gallery, and the count it then sees is final.
+-- Definer so the lock is taken whatever the member's own grants: an owner's
+-- direct insert queues behind edit_car_gallery, and the count it then sees
+-- is final. Only a member's own token is capped here (auth.uid() is set) —
+-- the gallery function caps itself, and trusted server paths (seeds, the
+-- service role, fixtures) are not members, as with the write quotas.
 create or replace function private.car_media_cap()
 returns trigger
 language plpgsql
@@ -398,6 +401,9 @@ as $$
 declare
   v_cap integer := tg_argv[0]::integer;
 begin
+  if (select auth.uid()) is null then
+    return new;
+  end if;
   perform 1 from public.cars c where c.id = new.car_id for update;
   if tg_table_name = 'car_images'
      and (select count(*) from public.car_images i where i.car_id = new.car_id) >= v_cap then

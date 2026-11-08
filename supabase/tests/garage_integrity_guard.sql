@@ -187,6 +187,15 @@ begin
   end;
   if not refused then raise exception 'FAIL 17: a ninth pin went straight into the showcase'; end if;
 
+  -- Trusted server paths (service role, seeds, fixtures) carry no member
+  -- token and aren't capped here; the gallery function caps itself.
+  perform set_config('role', 'none', true);
+  perform set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
+  insert into public.car_images(car_id, url, position)
+    values (car, 'https://media.drvn.test/storage/v1/object/public/car-images/' || owner_id || '/server.jpg', 99);
+  delete from public.car_images where car_id = car and position = 99;
+  perform set_config('role', 'authenticated', true);
+
   -- Direct access: a stranger can't add to someone else's gallery or showcase.
   perform set_config('request.jwt.claims', json_build_object('sub', stranger, 'role', 'authenticated')::text, true);
   refused := false;
