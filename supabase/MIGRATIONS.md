@@ -27,19 +27,21 @@ Apply after every earlier migration, then deploy the app from the same PR: the n
 
 Checked on a fresh `supabase/postgres:17.6.1.165` with the CI shim: every migration applies and every SQL guard passes.
 
-## November 7 — 18+ confirmation, copyright takedown, policy announcements: R69-age, R69-dmca, N629 (not applied anywhere)
+## November 7 — 18+ confirmation, copyright takedown, policy announcements: R69-age, R69-dmca, N629
 
 | File | Applied to |
 |---|---|
-| `20261107231001_age_confirmation.sql` | not applied |
-| `20261107231002_copyright_takedown.sql` | not applied |
-| `20261107231003_policy_announcements.sql` | not applied |
+| `20261107231001_age_confirmation.sql` | shared dev project (2026-11-08) |
+| `20261107231002_copyright_takedown.sql` | shared dev project (2026-11-08) |
+| `20261107231003_policy_announcements.sql` | shared dev project (2026-11-08) |
 
 From #117. Apply in order, after every earlier migration, **before the app from #117 serves traffic**: without `231001` every new account is stuck at onboarding (its age record can't be saved, so onboarding answers "We couldn't save that") and guest checkout refuses; without `231002` `/copyright` and Admin → Copyright fail.
 
 - **`231001`** — `public.age_confirmations (user_id, age_confirmed_at, source)`: when and where an account confirmed it is 18 or over, never a date of birth. Service role writes only; a member reads their own row; rows are never rewritten. The `profiles_require_age_confirmation` trigger refuses a member's first `username` (finishing onboarding) without a row; server writers are exempt. Existing members aren't backfilled.
 - **`231002`** — the `copyright` report reason (`reports_reason_check` restated); `public.copyright_notices` (filed from `/copyright`, admins read); `public.copyright_blocked_media` (objects a takedown removed; the proxy answers 451 for their `/_next/image` copies); `media_cleanup_queue_reason_check` gains `copyright_takedown`; `admin_audit_log_subject_type_check` gains `copyright_notice` (rebuilt from the constraint as it stands). New `copyright_takedown(notice, listing_ids, media_urls, note)` and `reject_copyright_notice(notice, note)`: an admin with a fresh step-up only, one transaction each, audited. A takedown removes the listings and purges the photos from every gallery, avatar, cover, hotspot and buyers' order snapshots (`order_item_snapshot_images`, otherwise immutable since 0049).
 - **`231003`** — `public.policy_announcements` and `announce_policy_update(key, title, body, href)` (service role only, idempotent per key). **Applying it notifies every member with a username** (`policy_updated`: "We updated our Terms and Privacy Policy", linking to `/terms#changes`).
+
+**Shared dev, 2026-11-08**: reported applied by the owner (not probed from the cloud session that recorded it, which can't reach the database). Applying `231003` sent that project's members the policy notification. Not applied to staging or production.
 
 Guard: `supabase/tests/launch_legal_guard.sql` (fails before these migrations). Checked on a fresh `supabase/postgres:17.6.1.165` with the CI shim: every migration applies and every SQL guard passes.
 
