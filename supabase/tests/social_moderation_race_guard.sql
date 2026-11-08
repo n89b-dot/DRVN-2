@@ -48,6 +48,40 @@ end $$;
 
 select pg_temp.w21r_cleanup();
 
+-- Hosted Supabase grants members storage.objects; the CI image's storage
+-- stand-in doesn't, and the other session only sees a committed grant. Grant
+-- what is missing for the checks, and take back exactly that at the end, so
+-- RLS is what's under test and later guards see the image as it was.
+create table pg_temp.w21r_grants (privilege text primary key);
+insert into pg_temp.w21r_grants
+  select p from unnest(array['select', 'insert']) p
+   where not has_table_privilege('authenticated', 'storage.objects', p);
+do $$
+declare
+  p text;
+begin
+  for p in select privilege from pg_temp.w21r_grants loop
+    execute format('grant %s on storage.objects to authenticated', p);
+  end loop;
+  if not has_schema_privilege('authenticated', 'storage', 'usage') then
+    insert into pg_temp.w21r_grants values ('usage');
+    grant usage on schema storage to authenticated;
+  end if;
+end $$;
+
+create function pg_temp.w21r_restore_grants() returns void language plpgsql as $$
+declare
+  p text;
+begin
+  for p in select privilege from pg_temp.w21r_grants where privilege <> 'usage' loop
+    execute format('revoke %s on storage.objects from authenticated', p);
+  end loop;
+  if exists (select 1 from pg_temp.w21r_grants where privilege = 'usage') then
+    revoke usage on schema storage from authenticated;
+  end if;
+  delete from pg_temp.w21r_grants;
+end $$;
+
 -- Fixtures, committed.
 create table pg_temp.w21r_fx (k text primary key, id uuid not null);
 do $$
@@ -272,12 +306,14 @@ begin
   if not had_dblink then drop extension dblink; end if;
   if v_fail is not null then
     perform pg_temp.w21r_cleanup();
+    perform pg_temp.w21r_restore_grants();
     commit;
     raise exception '%', v_fail;
   end if;
   raise notice 'PASS: % two-session checks (controls; a hold waits for a publish in progress; a publish waits for a hold in progress; a concurrent upload past the cap is refused)', checks;
 end $$;
 
--- Remove everything the checks committed.
+-- Remove everything the checks committed, and the grants they needed.
 select pg_temp.w21r_cleanup();
+select pg_temp.w21r_restore_grants();
 do $$ begin raise notice 'all social moderation race checks passed'; end $$;

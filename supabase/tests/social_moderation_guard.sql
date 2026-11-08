@@ -264,12 +264,12 @@ begin
   insert into public.activity_comments(post_id, author_id, body)
     select big_post, member, 'big reply ' || g from generate_series(1, 1001) g;
   insert into public.reports(reporter_id, subject_type, subject_id, reason)
-    select reporter, 'comment', c.id, 'spam' from public.activity_comments c where c.post_id = big_post;
+    select reporter, 'comment', c.id, 'offensive_content' from public.activity_comments c where c.post_id = big_post;
   insert into public.reports(reporter_id, subject_type, subject_id, reason)
-    values (reporter, 'post', big_post, 'spam') returning id into post_report;
+    values (reporter, 'post', big_post, 'offensive_content') returning id into post_report;
   -- A report on a reply elsewhere must stay open.
   insert into public.reports(reporter_id, subject_type, subject_id, reason)
-    select reporter, 'comment', c.id, 'spam' from public.activity_comments c where c.post_id = post limit 1
+    select reporter, 'comment', c.id, 'offensive_content' from public.activity_comments c where c.post_id = post limit 1
     returning id into stray_report;
 
   perform set_config('role', 'authenticated', true);
