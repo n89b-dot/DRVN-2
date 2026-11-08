@@ -38,7 +38,7 @@ import {
   type StripeSnapshot,
 } from "./ledger-reconciliation";
 
-const ORDER = "order-1";
+const ORDER = "00000000-0000-4000-8000-000000000001";
 const NOW = Date.parse("2026-11-07T06:00:00Z");
 
 const intent = (overrides: Record<string, unknown> = {}) =>
@@ -186,7 +186,7 @@ describe("the window", () => {
 // The run
 // ---------------------------------------------------------------------------
 
-type Answer = { data: unknown; error: unknown };
+type Answer = { data: unknown; error: unknown } | ((written: unknown) => { data: unknown; error: unknown });
 
 function runAdmin(answers: Record<string, Answer[]>) {
   const writes: { table: string; op: string; value: unknown; options?: unknown }[] = [];
@@ -198,7 +198,8 @@ function runAdmin(answers: Record<string, Answer[]>) {
     const answer = () => {
       if (op !== "select") writes.push({ table, op, value, options });
       const queue = answers[`${table}:${op}`] ?? [];
-      return queue.length > 1 ? queue.shift()! : queue[0] ?? { data: op === "select" ? [] : null, error: null };
+      const next = queue.length > 1 ? queue.shift()! : queue[0] ?? { data: op === "select" ? [] : null, error: null };
+      return typeof next === "function" ? next(value) : next;
     };
     for (const method of ["select", "eq", "in", "is", "not", "gt", "gte", "lte", "order", "limit"]) builder[method] = vi.fn(() => builder);
     for (const write of ["insert", "update", "upsert"]) {
@@ -235,6 +236,7 @@ const baseAnswers = (): Record<string, Answer[]> => ({
   "ledger_reconciliation_runs:insert": [{ data: { id: "run-1" }, error: null }],
   "payments:select": [{ data: ledger().payments, error: null }],
   "transfer_intents:select": [{ data: ledger().transfers, error: null }],
+  "orders:select": [{ data: [{ id: ORDER }], error: null }],
 });
 
 describe("the restore pass (N232)", () => {
@@ -268,6 +270,48 @@ describe("the restore pass (N232)", () => {
     await expect(reconcileLedger(admin, { now: new Date(NOW), since: "not a time" })).rejects.toBeInstanceOf(RangeError);
     expect(from).not.toHaveBeenCalled();
     expect(mocks.paymentIntentsList).not.toHaveBeenCalled();
+  });
+});
+
+describe("a case for an order the database doesn't have (N232)", () => {
+  // payment_recoveries.order_id references orders: like Postgres, refuse a
+  // case naming an order that isn't there.
+  const foreignKeyEnforced = (existing: string[]) => (written: unknown) => {
+    const orderId = (written as { order_id: string | null }).order_id;
+    return orderId != null && !existing.includes(orderId)
+      ? { data: null, error: { code: "23503", message: "violates foreign key constraint payment_recoveries_order_id_fkey" } }
+      : { data: [{ id: "case-1" }], error: null };
+  };
+
+  it("opens the case without an order link, naming the order in its detail", async () => {
+    const lost = "00000000-0000-4000-8000-0000000000aa";
+    mocks.paymentIntentsList.mockResolvedValue(page([intent(), intent({ id: "pi_lost", amount_received: 4_000, metadata: { order_id: lost } })]));
+    const answers = baseAnswers();
+    answers["payment_recoveries:upsert"] = [foreignKeyEnforced([ORDER])];
+    const { admin, writes } = runAdmin(answers);
+    await expect(reconcileLedger(admin, { now: new Date(NOW) })).resolves.toMatchObject({ discrepancies: 1, newCases: 1, complete: true });
+    const upsert = writes.find((w) => w.table === "payment_recoveries")!;
+    expect(upsert.value).toMatchObject({ recovery_key: "ledger:payment:pi_lost:missing", order_id: null, amount_cents: 4_000 });
+    expect((upsert.value as { detail: string }).detail).toContain(`Order ${lost} isn't in this database`);
+  });
+
+  it("keeps the order link when the order exists", async () => {
+    mocks.refundsList.mockResolvedValue(page([refund()]));
+    const answers = baseAnswers();
+    answers["payment_recoveries:upsert"] = [foreignKeyEnforced([ORDER])];
+    const { admin, writes } = runAdmin(answers);
+    await expect(reconcileLedger(admin, { now: new Date(NOW) })).resolves.toMatchObject({ newCases: 1 });
+    expect(writes.find((w) => w.table === "payment_recoveries")!.value).toMatchObject({ order_id: ORDER });
+  });
+
+  it("opens the case unlinked when the order lookup fails, rather than not at all", async () => {
+    mocks.refundsList.mockResolvedValue(page([refund()]));
+    const answers = baseAnswers();
+    answers["orders:select"] = [{ data: null, error: { message: "timeout" } }];
+    answers["payment_recoveries:upsert"] = [foreignKeyEnforced([])];
+    const { admin, writes } = runAdmin(answers);
+    await expect(reconcileLedger(admin, { now: new Date(NOW) })).resolves.toMatchObject({ newCases: 1 });
+    expect(writes.find((w) => w.table === "payment_recoveries")!.value).toMatchObject({ order_id: null });
   });
 });
 

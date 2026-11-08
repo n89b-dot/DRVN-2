@@ -2,7 +2,11 @@
 -- photos one at a time under the media cleanup's per-object lock. A rewrite
 -- lease and a deletion claim exclude each other; only the lease's token
 -- finishes it; finished objects drop out of the candidates until Storage holds
--- a newer version; dispute evidence is never a candidate. Service role only.
+-- a newer version; dispute evidence is never a candidate. The write is fenced
+-- on the object's identity: Storage's write always upserts, so a write after a
+-- deletion makes a new row, and finish says 'recreated' (also to the next
+-- claim, if the run died). The chat sweep skips a photo mid-rewrite. Service
+-- role only.
 begin;
 
 do $$
@@ -14,6 +18,8 @@ declare
   photo_c text;
   answer jsonb;
   token uuid;
+  object_id uuid;
+  chat text;
   names text[];
   rejected boolean := false;
 begin
@@ -57,6 +63,10 @@ begin
   answer := public.claim_photo_rewrite('message-photos', photo_a);
   if answer->>'status' <> 'claimed' then raise exception 'FAIL 6: the rewrite was not claimed: %', answer; end if;
   token := (answer->>'token')::uuid;
+  object_id := (answer->>'object_id')::uuid;
+  if object_id is distinct from (select id from storage.objects where bucket_id = 'message-photos' and name = photo_a) then
+    raise exception 'FAIL 6a: the lease did not record the object''s identity';
+  end if;
   if public.claim_photo_rewrite('message-photos', photo_a)->>'status' <> 'busy' then
     raise exception 'FAIL 7: two rewrites held one object';
   end if;
@@ -65,10 +75,18 @@ begin
   end if;
 
   -- 4. Only the lease's token finishes it.
-  if public.finish_photo_rewrite('message-photos', photo_a, gen_random_uuid(), 'scrubbed') then
+  if public.check_photo_rewrite('message-photos', photo_a, token, object_id) <> 'current' then
+    raise exception 'FAIL 8a: the holder''s pre-write check failed';
+  end if;
+  if public.check_photo_rewrite('message-photos', photo_a, gen_random_uuid(), object_id) <> 'lost' then
+    raise exception 'FAIL 8b: another token passed the pre-write check';
+  end if;
+  if public.finish_photo_rewrite('message-photos', photo_a, gen_random_uuid(), object_id, 'scrubbed') <> 'lease_lost' then
     raise exception 'FAIL 9: another token finished the rewrite';
   end if;
-  if not public.finish_photo_rewrite('message-photos', photo_a, token, 'scrubbed', 'exif') then
+  -- Written over in place (Storage merges into the row): same identity.
+  update storage.objects set updated_at = now() - interval '1 day' where bucket_id = 'message-photos' and name = photo_a;
+  if public.finish_photo_rewrite('message-photos', photo_a, token, object_id, 'scrubbed', 'exif') <> 'recorded' then
     raise exception 'FAIL 10: the holder could not finish its rewrite';
   end if;
   if exists (select 1 from private.media_rewrite_claims where bucket = 'message-photos' and path = photo_a) then
@@ -88,8 +106,8 @@ begin
   end if;
 
   -- 6. A failed outcome is retried by the next run.
-  token := (public.claim_photo_rewrite('message-photos', photo_c)->>'token')::uuid;
-  perform public.finish_photo_rewrite('message-photos', photo_c, token, 'failed', 'download failed');
+  answer := public.claim_photo_rewrite('message-photos', photo_c);
+  perform public.finish_photo_rewrite('message-photos', photo_c, (answer->>'token')::uuid, (answer->>'object_id')::uuid, 'failed', 'download failed');
   if not exists (select 1 from public.photo_metadata_candidates('message-photos', null, 500) where path = photo_c) then
     raise exception 'FAIL 15: a failed photo is not retried';
   end if;
@@ -113,16 +131,68 @@ begin
     raise exception 'FAIL 20: a missing object was claimed for a rewrite';
   end if;
 
-  -- 9. A lease that ran out (a job that died) no longer holds off cleanup.
+  -- 9. The write fence. A chat photo deleted (the member cleared the chat)
+  --    before the write landed: Storage's upsert made a new row.
+  chat := sender || '/' || gen_random_uuid() || '.webp';
+  insert into storage.objects(bucket_id, name, owner, created_at) values ('agent-chat-photos', chat, sender, now() - interval '60 days');
+  answer := public.claim_photo_rewrite('agent-chat-photos', chat);
+  token := (answer->>'token')::uuid; object_id := (answer->>'object_id')::uuid;
+  -- Mid-rewrite, the 48-hour sweep leaves it for its next pass.
+  if exists (select 1 from public.agent_chat_photos_expired() where name = chat) then
+    raise exception 'FAIL 20a: the chat sweep picked a photo mid-rewrite';
+  end if;
+  delete from storage.objects where bucket_id = 'agent-chat-photos' and name = chat;
+  if public.check_photo_rewrite('agent-chat-photos', chat, token, object_id) <> 'gone' then
+    raise exception 'FAIL 20b: the pre-write check missed a deletion';
+  end if;
+  insert into storage.objects(bucket_id, name, owner) values ('agent-chat-photos', chat, sender);
+  if public.finish_photo_rewrite('agent-chat-photos', chat, token, object_id, 'scrubbed') <> 'recreated' then
+    raise exception 'FAIL 20c: a write that recreated a deleted photo was recorded as a rewrite';
+  end if;
+  if not exists (select 1 from private.media_rewrite_claims where bucket = 'agent-chat-photos' and path = chat) then
+    raise exception 'FAIL 20d: the lease was released over a recreated photo';
+  end if;
+  if public.claim_media_deletion('agent-chat-photos', chat)->>'status' <> 'busy' then
+    raise exception 'FAIL 20e: the recreated photo was left unguarded';
+  end if;
+  -- The job deletes it again; then the lease goes.
+  delete from storage.objects where bucket_id = 'agent-chat-photos' and name = chat;
+  if public.finish_photo_rewrite('agent-chat-photos', chat, token, object_id, 'failed') <> 'gone' then
+    raise exception 'FAIL 20f: a deleted photo was not reported gone';
+  end if;
+  if exists (select 1 from private.media_rewrite_claims where bucket = 'agent-chat-photos' and path = chat)
+     or exists (select 1 from private.photo_metadata_scrubs where bucket = 'agent-chat-photos' and path = chat) then
+    raise exception 'FAIL 20g: a gone photo kept its lease or got an outcome';
+  end if;
+
+  -- 10. A run that died after recreating one: the next claim, once the lease
+  --     lapses, says so.
+  insert into storage.objects(bucket_id, name, owner, created_at) values ('agent-chat-photos', chat, sender, now() - interval '60 days');
+  answer := public.claim_photo_rewrite('agent-chat-photos', chat);
+  object_id := (answer->>'object_id')::uuid;
+  delete from storage.objects where bucket_id = 'agent-chat-photos' and name = chat;
+  insert into storage.objects(bucket_id, name, owner) values ('agent-chat-photos', chat, sender);
+  update private.media_rewrite_claims set claimed_at = now() - interval '11 minutes' where bucket = 'agent-chat-photos' and path = chat;
+  answer := public.claim_photo_rewrite('agent-chat-photos', chat);
+  if answer->>'status' <> 'recreated' or (answer->>'object_id')::uuid <> object_id then
+    raise exception 'FAIL 20h: the next claim did not find the recreated photo: %', answer;
+  end if;
+  delete from storage.objects where bucket_id = 'agent-chat-photos' and name = chat;
+  if public.finish_photo_rewrite('agent-chat-photos', chat, (answer->>'token')::uuid, object_id, 'failed') <> 'gone' then
+    raise exception 'FAIL 20i: the recreated photo''s lease was not closed';
+  end if;
+
+  -- 11. A lease that ran out (a job that died) no longer holds off cleanup.
   token := (public.claim_photo_rewrite('message-photos', photo_a)->>'token')::uuid;
   update private.media_rewrite_claims set claimed_at = now() - interval '11 minutes' where bucket = 'message-photos' and path = photo_a;
   if public.claim_media_deletion('message-photos', photo_a)->>'status' <> 'claimed' then
     raise exception 'FAIL 21: a lapsed rewrite lease still blocked cleanup';
   end if;
 
-  -- 10. Members can't call any of it.
+  -- 12. Members can't call any of it.
   if has_function_privilege('authenticated', 'public.claim_photo_rewrite(text,text)', 'execute')
-     or has_function_privilege('authenticated', 'public.finish_photo_rewrite(text,text,uuid,text,text)', 'execute')
+     or has_function_privilege('authenticated', 'public.finish_photo_rewrite(text,text,uuid,uuid,text,text)', 'execute')
+     or has_function_privilege('authenticated', 'public.check_photo_rewrite(text,text,uuid,uuid)', 'execute')
      or has_function_privilege('authenticated', 'public.photo_metadata_candidates(text,text,integer,timestamp with time zone)', 'execute')
      or has_function_privilege('anon', 'public.photo_metadata_scrub_summary()', 'execute') then
     raise exception 'FAIL 22: a member credential can drive the metadata job';

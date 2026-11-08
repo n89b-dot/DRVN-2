@@ -387,7 +387,12 @@ DRVN_MEDIA_PROJECT_URL=$NEXT_PUBLIC_SUPABASE_URL node scripts/owner/scrub-photo-
 It checks `message-photos` and `agent-chat-photos`, re-encodes any photo with
 EXIF/XMP/IPTC in place (same path and format, orientation applied) under the
 media cleanup's per-object lock (20261108120010), and records each outcome,
-so a rerun continues where the last stopped. Repeat `--apply` until it
+so a rerun continues where the last stopped. Storage's write always upserts,
+so a write that lands after a deletion (clearing a chat, account deletion,
+which never wait for this job) would bring the photo back: the write is fenced
+on the object's identity, and a photo it recreated is deleted again at once,
+or by the next run if this one died ("recreated … and deleted again" in the
+summary). Repeat `--apply` until it
 reports nothing left, then once more to confirm. `skipped` objects (a format
 it won't re-encode) are listed for a person to look at. Dispute evidence is
 never touched (kept as uploaded); public buckets use
@@ -491,9 +496,16 @@ Record the sync's last completion time; it is the object recovery point.
 
    It prints references whose object has no row (`storage_reference_report`,
    20261108120020), member-media objects nothing names, and, with
-   `--verify-bytes`, every object row whose bytes Storage can't find (a HEAD
-   per object). It exits 1 when a reference or bytes are missing or a check
-   went unanswered. `--json` keeps the full result for the restore record.
+   `--verify-bytes`, every object row whose bytes Storage can't find (a
+   one-byte ranged GET per object: a HEAD answers from the row alone and
+   would call a restored row with deleted bytes present). It exits 1 when a
+   reference or bytes are missing or a check went unanswered. `--json` keeps
+   the full result for the restore record.
+
+   References whose object is gone **on purpose** are listed apart as "gone
+   on purpose, not to restore" and don't fail the check: chat photos past the
+   48 hours the privacy page promises (the message keeps naming them), and
+   anything the media cleanup deleted and tombstoned. Never restore those.
 4. For each missing object: restore it from an older object version if one
    exists; otherwise record it as lost in the restore record. Don't edit the
    referencing rows to hide it: a missing listing photo shows as missing,
@@ -553,7 +565,9 @@ money rules (who is paid, when, refunds, holds, fees) don't change.
 4. **Resolve every case before restarting.** What the common restore cases
    mean:
    - `payment:…:missing` — Stripe captured a payment for an order the
-     restored database doesn't have (created after T). The buyer was charged:
+     restored database doesn't have (created after T). The case opens with
+     no order link (the order isn't there to link to) and names the order id
+     from Stripe's metadata in its detail. The buyer was charged:
      refund it in the Stripe Dashboard, or rebuild the order from the
      buyer's receipt; record which in the case.
    - `transfer:…:missing` on an order — the seller was already paid. Before

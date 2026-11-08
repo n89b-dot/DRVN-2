@@ -394,6 +394,25 @@ export type LedgerReconciliationSummary = {
 /** How far back an operator's restore pass may reach (N232). */
 export const MAX_RESTORE_LOOKBACK_MS = 35 * 24 * 60 * 60 * 1000;
 
+/** Which of these order ids are in the orders table, read in short chunks.
+ *  A failed read counts the chunk as absent: the case then opens without an
+ *  order link (its detail still names the order) rather than not at all. */
+async function existingOrderIds(admin: Admin, ids: (string | null)[]): Promise<Set<string>> {
+  const wanted = [...new Set(ids.filter((id): id is string => typeof id === "string" && UUID_RE.test(id)))];
+  const found = new Set<string>();
+  for (let i = 0; i < wanted.length; i += IN_CHUNK) {
+    const { data, error } = await admin.from("orders").select("id").in("id", wanted.slice(i, i + IN_CHUNK));
+    if (error) {
+      reportError("[ledger] order lookup for discrepancy cases failed", { error });
+      continue;
+    }
+    for (const row of (data ?? []) as { id: string }[]) found.add(row.id);
+  }
+  return found;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** The window: from the last complete run's end (at least two days back,
  *  at most seven) to two hours ago. Pure, for tests.
  *
@@ -554,8 +573,17 @@ export async function reconcileLedger(
     );
 
     const fresh = ownershipKnown ? discrepancies.filter((d) => !d.ownedBy) : [];
+    // A case names its order only when the order is in this database
+    // (payment_recoveries.order_id references orders). After a restore (N232)
+    // Stripe can name an order created after the recovery point: the case is
+    // still opened, with the order id kept in its detail, never refused.
+    const knownOrders = await existingOrderIds(admin, fresh.map((d) => d.orderId));
     let newCases = 0;
     for (const discrepancy of fresh) {
+      const orderKnown = discrepancy.orderId != null && knownOrders.has(discrepancy.orderId);
+      const detail = discrepancy.orderId && !orderKnown
+        ? `${discrepancy.detail} Order ${discrepancy.orderId} isn't in this database (created after a restore's recovery point, or never recorded).`
+        : discrepancy.detail;
       // Insert-only: an open case stays as it is, and one an operator
       // closed is not reopened by tomorrow's run.
       const { data: inserted, error } = await admin
@@ -564,9 +592,9 @@ export async function reconcileLedger(
           {
             kind: "ledger_discrepancy",
             recovery_key: `ledger:${discrepancy.key}`,
-            order_id: discrepancy.orderId,
+            order_id: orderKnown ? discrepancy.orderId : null,
             amount_cents: discrepancy.amountCents,
-            detail: `Daily ledger reconciliation: ${discrepancy.detail}`.slice(0, 1000),
+            detail: `Daily ledger reconciliation: ${detail}`.slice(0, 1000),
           },
           { onConflict: "recovery_key", ignoreDuplicates: true }
         )

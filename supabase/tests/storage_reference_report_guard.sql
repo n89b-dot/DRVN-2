@@ -2,7 +2,9 @@
 -- reference whose object Storage has no row for, and a member-media object
 -- nothing names, but not an upload still staged; references are matched by
 -- canonical identity, from every source the media cleanup knows plus agent
--- chat photos. Read-only, and service role only.
+-- chat photos. A reference whose object is gone on purpose (a chat photo past
+-- its 48 hours, or one the media cleanup deleted and tombstoned) is counted
+-- apart, not as missing. Read-only, and service role only.
 begin;
 
 do $$
@@ -11,13 +13,17 @@ declare
   b uuid := gen_random_uuid();
   origin text := 'https://reportguard.supabase.co';
   chat_photo text := gen_random_uuid()::text || '.webp';
+  expired_photo text := gen_random_uuid()::text || '.webp';
+  live_gone_photo text := gen_random_uuid()::text || '.webp';
+  c uuid := gen_random_uuid();
   before jsonb;
   after jsonb;
   names text[];
 begin
   insert into auth.users(id, email) values
     (a, 'storage-report-a@example.test'),
-    (b, 'storage-report-b@example.test');
+    (b, 'storage-report-b@example.test'),
+    (c, 'storage-report-c@example.test');
   insert into storage.buckets(id, name, public) values
     ('avatars', 'avatars', true), ('agent-chat-photos', 'agent-chat-photos', false)
   on conflict (id) do nothing;
@@ -41,13 +47,27 @@ begin
   perform public.agent_chat_append(a, 'member', 'Is this the right turbo?', '[]'::jsonb,
     array[origin || '/storage/v1/object/authenticated/agent-chat-photos/' || a || '/' || chat_photo]);
 
-  after := public.storage_reference_report(0);
+  -- Gone on purpose: c's avatar was deleted by the media cleanup (a
+  -- tombstone), and a chat photo past its 48 hours was swept while its
+  -- three-day-old message still names it.
+  update public.profiles set avatar_url = origin || '/storage/v1/object/public/avatars/' || c || '/deleted.webp' where id = c;
+  insert into private.media_deletion_claims(bucket, path, token, state, completed_at)
+  values ('avatars', c || '/deleted.webp', gen_random_uuid(), 'done', now());
+  perform public.agent_chat_append(a, 'member', 'Old photo', '[]'::jsonb,
+    array[origin || '/storage/v1/object/authenticated/agent-chat-photos/' || a || '/' || expired_photo]);
+  update public.agent_messages set created_at = now() - interval '3 days' where owner_id = a and body = 'Old photo';
+  -- Not on purpose: a fresh chat message whose photo is gone.
+  perform public.agent_chat_append(a, 'member', 'New photo', '[]'::jsonb,
+    array[origin || '/storage/v1/object/authenticated/agent-chat-photos/' || a || '/' || live_gone_photo]);
+
+  after := public.storage_reference_report(500);
 
   -- 1. Counts move by exactly the fixtures.
-  if (after->>'references')::int - (before->>'references')::int <> 3 then
-    raise exception 'FAIL 1: % references added, expected 3', (after->>'references')::int - (before->>'references')::int;
+  if (after->>'references')::int - (before->>'references')::int <> 6 then
+    raise exception 'FAIL 1: % references added, expected 6', (after->>'references')::int - (before->>'references')::int;
   end if;
-  if (after->>'missingObjects')::int - (before->>'missingObjects')::int <> 1 then
+  -- b's avatar and the fresh chat photo: missing. The other two: expected.
+  if (after->>'missingObjects')::int - (before->>'missingObjects')::int <> 2 then
     raise exception 'FAIL 2: the missing object was not counted once: % → %', before->'missingObjects', after->'missingObjects';
   end if;
   if (after->>'unreferencedObjects')::int - (before->>'unreferencedObjects')::int <> 1 then
@@ -56,6 +76,19 @@ begin
   end if;
   if coalesce((after->'missingByBucket'->>'avatars')::int, 0) - coalesce((before->'missingByBucket'->>'avatars')::int, 0) <> 1 then
     raise exception 'FAIL 4: the missing object was not counted under its bucket';
+  end if;
+  if (after->>'expectedMissing')::int - (before->>'expectedMissing')::int <> 2
+     or coalesce((after->'expectedMissingByReason'->>'deleted')::int, 0) - coalesce((before->'expectedMissingByReason'->>'deleted')::int, 0) <> 1
+     or coalesce((after->'expectedMissingByReason'->>'retention')::int, 0) - coalesce((before->'expectedMissingByReason'->>'retention')::int, 0) <> 1 then
+    raise exception 'FAIL 4a: deletions on purpose were not told apart: %', after->'expectedMissingByReason';
+  end if;
+  if not (after->'expectedMissingSample') @> jsonb_build_array(jsonb_build_object('bucket', 'agent-chat-photos', 'path', a || '/' || expired_photo, 'reason', 'retention'))
+     or not (after->'expectedMissingSample') @> jsonb_build_array(jsonb_build_object('bucket', 'avatars', 'path', c || '/deleted.webp', 'reason', 'deleted')) then
+    raise exception 'FAIL 4b: the expected deletions are not the ones listed: %', after->'expectedMissingSample';
+  end if;
+  if (after->'missingSample') @> jsonb_build_array(jsonb_build_object('path', a || '/' || expired_photo))
+     or not (after->'missingSample') @> jsonb_build_array(jsonb_build_object('bucket', 'agent-chat-photos', 'path', a || '/' || live_gone_photo)) then
+    raise exception 'FAIL 4c: a fresh chat photo''s loss was excused, or an expired one reported: %', after->'missingSample';
   end if;
 
   -- 2. Each reference names its source; the escaped spelling decodes.

@@ -16,7 +16,9 @@
  *   1. storage_reference_report (20261108120020): references with no object
  *      row, and member-media objects nothing names, with samples.
  *   2. With --verify-bytes: every object row in the member media buckets is
- *      checked through the Storage API (HEAD), so a row whose bytes are gone
+ *      read through the Storage API with a one-byte ranged GET, so a row
+ *      whose bytes are gone is found. (A HEAD answers from the database row
+ *      alone and would call such an object present.)
  *      is found.
  *
  * Usage (from the repo root, against an explicitly named project):
@@ -94,7 +96,7 @@ export async function verifyBytes(deps, options) {
       const page = data ?? [];
       for (const row of page) {
         result.checked += 1;
-        const state = await deps.exists(bucket, row.path);
+        const state = await deps.probe(bucket, row.path);
         if (state === "missing") {
           result.missing += 1;
           if (result.missingSample.length < options.sample) result.missingSample.push({ bucket, path: row.path });
@@ -111,15 +113,48 @@ export async function verifyBytes(deps, options) {
   return result;
 }
 
+/**
+ * Reads the first byte of one object (`Range: bytes=0-0`). Storage has to
+ * fetch the bytes to answer, unlike a HEAD, which it answers from
+ * storage.objects. 200/206: the bytes are there; 416: an empty object, still
+ * there; 404/400: Storage can't find them; anything else, or no answer,
+ * proves nothing either way.
+ */
+export async function probeBytes(fetchImpl, projectUrl, key, bucket, path) {
+  const encoded = path.split("/").map(encodeURIComponent).join("/");
+  let response;
+  try {
+    response = await fetchImpl(`${projectUrl.replace(/\/$/, "")}/storage/v1/object/authenticated/${bucket}/${encoded}`, {
+      method: "GET",
+      headers: { authorization: `Bearer ${key}`, apikey: key, range: "bytes=0-0" },
+    });
+  } catch {
+    return "unknown";
+  }
+  try {
+    await response.body?.cancel?.();
+  } catch {
+    // Nothing to release.
+  }
+  if (response.status === 200 || response.status === 206 || response.status === 416) return "present";
+  if (response.status === 404 || response.status === 400) return "missing";
+  return "unknown";
+}
+
 export function describe(report, bytes) {
   const lines = [
-    `${report.references} referenced objects; ${report.missingObjects} with no object row in Storage; ` +
+    `${report.references} referenced objects; ${report.missingObjects} with no object row in Storage and no reason to be gone; ` +
       `${report.unreferencedObjects} member-media objects nothing names (uploads still staged not counted).`,
   ];
   const byBucket = (counts) => Object.entries(counts ?? {}).map(([bucket, n]) => `${bucket} ${n}`).join(", ");
   if (report.missingObjects) {
     lines.push(`  Missing, by bucket: ${byBucket(report.missingByBucket)}`);
     for (const m of report.missingSample ?? []) lines.push(`    ${m.bucket}/${m.path}  (named by ${m.sources.join(", ")})`);
+  }
+  if (report.expectedMissing) {
+    // Gone on purpose; restoring these would undo a promised deletion.
+    lines.push(`  Gone on purpose, not to restore: ${report.expectedMissing} (${byBucket(report.expectedMissingByReason)})`);
+    for (const e of report.expectedMissingSample ?? []) lines.push(`    ${e.bucket}/${e.path}  (${e.reason})`);
   }
   if (report.unreferencedObjects) {
     lines.push(`  Unreferenced, by bucket: ${byBucket(report.unreferencedByBucket)}`);
@@ -164,16 +199,7 @@ async function main() {
     ? await verifyBytes(
         {
           rpc: (name, args) => admin.rpc(name, args),
-          // Storage answers false only on its own 400/404; anything else
-          // (a timeout, a 5xx) throws and proves nothing.
-          exists: async (bucket, path) => {
-            try {
-              const { data } = await admin.storage.from(bucket).exists(path);
-              return data === true ? "present" : data === false ? "missing" : "unknown";
-            } catch {
-              return "unknown";
-            }
-          },
+          probe: (bucket, path) => probeBytes(fetch, url, key, bucket, path),
         },
         options
       )

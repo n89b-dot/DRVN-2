@@ -18,10 +18,13 @@
  *
  * Safe to stop and rerun (20261108120010):
  *   - Each object is claimed with claim_photo_rewrite under the media
- *     cleanup's per-object lock. Cleanup can't delete it meanwhile, and an
- *     object cleanup has claimed or deleted is skipped.
- *   - The new bytes go up with Storage's update, which fails on a missing
- *     object, so a photo deleted in between is never brought back.
+ *     cleanup's per-object lock. Cleanup and the chat sweep leave it alone
+ *     meanwhile, and an object cleanup has claimed or deleted is skipped.
+ *   - Storage's write always upserts, so a write after a deletion (clearing a
+ *     chat, account deletion, which never wait) would bring the photo back.
+ *     The write is fenced on the object's identity: if it recreated the
+ *     photo, finish_photo_rewrite says so and the photo is deleted again,
+ *     here or, if this run dies first, by the next run.
  *   - finish_photo_rewrite records each outcome with the object's version;
  *     the next run's candidates leave out everything already settled.
  *
@@ -112,55 +115,103 @@ export async function inspectAndReencode(sharp, bytes) {
 }
 
 function emptyCounts() {
-  return { checked: 0, clean: 0, withMetadata: 0, scrubbed: 0, skipped: 0, failed: 0, busy: 0, gone: 0, leaseLost: 0 };
+  return { checked: 0, clean: 0, withMetadata: 0, scrubbed: 0, skipped: 0, failed: 0, busy: 0, gone: 0, leaseLost: 0, recreatedRemoved: 0 };
 }
 
 /**
  * One object. Dry run: download and check, nothing claimed or written. Apply:
- * claim, download, check, update in place if it carries metadata, record.
+ * claim, download, check, write in place if it carries metadata, record.
+ *
+ * Storage's write always upserts, so a write that lands after a remover
+ * deleted the photo would create it again. The claim records the object's
+ * identity; finish_photo_rewrite answers 'recreated' when the object now
+ * has another one, and this deletes it at once. A run that dies in between
+ * leaves its lease, and the next run's claim of that path answers
+ * 'recreated' too.
  */
 export async function scrubObject(deps, bucket, path, { apply }) {
   const counts = emptyCounts();
   let token = null;
+  let objectId = null;
+  const finish = async (outcome, detail) => {
+    const { data, error } = await deps.rpc("finish_photo_rewrite", {
+      p_bucket: bucket, p_path: path, p_token: token, p_object: objectId, p_outcome: outcome, p_detail: detail ?? null,
+    });
+    if (error) throw new Error(`recording ${outcome} failed: ${error.message}`);
+    return data;
+  };
+  // Deletes a photo a write brought back, and proves it's gone.
+  const removeRecreated = async () => {
+    await deps.remove(bucket, path);
+    const state = await finish("failed", "recreated by a rewrite after it was deleted; deleted again");
+    if (state !== "gone") throw new Error(`a recreated photo is still there after deleting it (${state})`);
+    counts.recreatedRemoved += 1;
+    deps.log?.(`  deleted ${bucket}/${path} again: a rewrite had recreated it after it was deleted`);
+  };
+  // What finish said, for an object this run didn't write over (clean, skipped).
+  const settle = async (state, done) => {
+    if (state === "recorded") counts[done] = 1;
+    else if (state === "gone") counts.gone = 1;
+    else if (state === "recreated") await removeRecreated();
+    else counts.leaseLost = 1;
+  };
+
   if (apply) {
     const { data, error } = await deps.rpc("claim_photo_rewrite", { p_bucket: bucket, p_path: path });
     if (error || !data) throw new Error(`claim failed: ${error?.message ?? "no answer"}`);
     if (data.status === "busy") return { ...counts, busy: 1 };
     if (data.status === "gone" || data.status === "invalid") return { ...counts, gone: 1 };
     token = data.token;
+    objectId = data.object_id;
+    if (data.status === "recreated") {
+      try {
+        await removeRecreated();
+      } catch (error) {
+        counts.failed = 1;
+        deps.log?.(`  failed to delete recreated ${bucket}/${path}: ${String(error?.message ?? error).slice(0, 300)}`);
+      }
+      return counts;
+    }
   }
   const claimedAt = deps.now();
-  const finish = async (outcome, detail) => {
-    if (!apply) return true;
-    const { data, error } = await deps.rpc("finish_photo_rewrite", { p_bucket: bucket, p_path: path, p_token: token, p_outcome: outcome, p_detail: detail ?? null });
-    if (error) throw new Error(`recording ${outcome} failed: ${error.message}`);
-    return data === true;
-  };
   counts.checked = 1;
   try {
     const bytes = await deps.download(bucket, path);
     if (bytes.length > MAX_BYTES) throw new Error("larger than 25 MB; check it by hand");
     const result = await inspectAndReencode(deps.sharp, bytes);
     if (result.state === "clean") {
-      counts.clean = 1;
-      if (!(await finish("clean"))) counts.leaseLost = 1;
+      if (!apply) counts.clean = 1;
+      else await settle(await finish("clean"), "clean");
       return counts;
     }
     counts.withMetadata = 1;
     if (result.state === "skipped") {
-      counts.skipped = 1;
-      if (!(await finish("skipped", `${result.detail}; carries ${result.kinds.join(", ")}`))) counts.leaseLost = 1;
+      if (!apply) counts.skipped = 1;
+      else await settle(await finish("skipped", `${result.detail}; carries ${result.kinds.join(", ")}`), "skipped");
       return counts;
     }
     if (!apply) return counts;
     if (deps.now() - claimedAt > LEASE_BUDGET_MS) throw new Error("ran past the rewrite lease budget; left for the next run");
-    const updated = await deps.update(bucket, path, result.bytes, result.contentType);
-    if (updated === "missing") {
-      // Deleted after the claim (a chat photo's 48-hour sweep): nothing to keep.
-      await finish("failed", "object deleted during rewrite");
-      return { ...counts, withMetadata: 1, gone: 1 };
+    // Still ours, and still the object that was read? Otherwise don't write.
+    const { data: check, error: checkError } = await deps.rpc("check_photo_rewrite", { p_bucket: bucket, p_path: path, p_token: token, p_object: objectId });
+    if (checkError) throw new Error(`lease check failed: ${checkError.message}`);
+    if (check === "gone") {
+      await finish("failed", "deleted before the rewrite");
+      counts.gone = 1;
+      return counts;
     }
-    if (await finish("scrubbed", `removed ${result.kinds.join(", ")}`)) counts.scrubbed = 1;
+    if (check !== "current") {
+      counts.leaseLost = 1;
+      return counts;
+    }
+    await deps.write(bucket, path, result.bytes, result.contentType);
+    const state = await finish("scrubbed", `removed ${result.kinds.join(", ")}`);
+    if (state === "recorded") counts.scrubbed = 1;
+    // Deleted after the write: nothing to keep, nothing to undo.
+    else if (state === "gone") counts.gone = 1;
+    // Deleted before the write landed, and the write brought it back.
+    else if (state === "recreated") await removeRecreated();
+    // Written over the claimed object, but another run holds the lease now.
     else counts.leaseLost = 1;
     return counts;
   } catch (error) {
@@ -168,9 +219,11 @@ export async function scrubObject(deps, bucket, path, { apply }) {
     const detail = String(error?.message ?? error).slice(0, 300);
     if (apply) {
       try {
-        await finish("failed", detail);
+        const state = await finish("failed", detail);
+        if (state === "recreated") await removeRecreated();
       } catch {
-        // The lease lapses in 10 minutes; the next run retries.
+        // The lease stays with the object's identity: the next run's claim
+        // finds anything this run recreated.
       }
     }
     deps.log?.(`  failed ${bucket}/${path}: ${detail}`);
@@ -224,7 +277,8 @@ export function describe({ totals, more }, { apply }) {
       `  ${bucket}: ${c.checked} checked, ${c.clean} clean, ${c.withMetadata} with metadata` +
         (apply ? `, ${c.scrubbed} re-encoded` : `, ${c.withMetadata - c.skipped} would be re-encoded`) +
         `, ${c.skipped} skipped (format), ${c.failed} failed, ${c.busy} busy, ${c.gone} gone` +
-        (c.leaseLost ? `, ${c.leaseLost} lease lost` : "")
+        (c.leaseLost ? `, ${c.leaseLost} lease lost` : "") +
+        (c.recreatedRemoved ? `, ${c.recreatedRemoved} recreated by a write after deletion and deleted again` : "")
     );
   }
   if (more) lines.push("More objects remain past --limit: run again to continue.");
@@ -256,12 +310,15 @@ async function main() {
       if (error) throw new Error(`download failed: ${error.message}`);
       return Buffer.from(await data.arrayBuffer());
     },
-    update: async (bucket, path, bytes, contentType) => {
-      const { error } = await admin.storage.from(bucket).update(path, bytes, { contentType, upsert: false });
-      if (!error) return "updated";
-      const status = Number(error.statusCode ?? error.status);
-      if (status === 404 || /not found/i.test(error.message ?? "")) return "missing";
-      throw new Error(`update failed: ${error.message}`);
+    // Always an upsert at Storage, whatever the options say: fenced by
+    // finish_photo_rewrite's identity check, not by this call.
+    write: async (bucket, path, bytes, contentType) => {
+      const { error } = await admin.storage.from(bucket).update(path, bytes, { contentType });
+      if (error) throw new Error(`write failed: ${error.message}`);
+    },
+    remove: async (bucket, path) => {
+      const { error } = await admin.storage.from(bucket).remove([path]);
+      if (error) throw new Error(`delete failed: ${error.message}`);
     },
   };
   console.log(`${options.apply ? "Applying to" : "Dry run against"} ${url}`);

@@ -13,8 +13,12 @@
 --     script can confirm each one's bytes through the Storage API.
 --   * storage_reference_report counts references with no object, and objects
 --     in member media buckets that nothing names (other than an upload still
---     staged), with samples. local-recovery-rehearsal.sh compares it before
---     and after the drill's restore.
+--     staged), with samples. A reference whose object is gone on purpose (a
+--     chat photo past the sweep's 48 hours, anything the media cleanup
+--     deleted and tombstoned) is counted apart as expectedMissing, so a
+--     healthy database passes and a restore never brings those back.
+--     local-recovery-rehearsal.sh compares it before and after the drill's
+--     restore.
 --
 -- Same identity as the media cleanup (20261107203000): '<bucket>/<decoded
 -- path>' via private.media_object_key, so a reference is matched however its
@@ -23,41 +27,45 @@
 
 begin;
 
--- Every (source, bucket, path) a row names.
+-- Every (source, bucket, path) a row names. retention_expired: a chat
+-- message's photo past the 48 hours the agent sweep keeps them
+-- (20261107220300); the message keeps naming it by design. 47 hours here,
+-- because the sweep ages the object, uploaded a little before its message.
 create or replace function private.storage_reference_rows()
-returns table(source text, bucket text, path text)
+returns table(source text, bucket text, path text, retention_expired boolean)
 language sql
 stable
 security definer
 set search_path = public, pg_temp
 as $$
-  with refs(source, k) as (
-    select 'car_images', private.media_object_key(url) from public.car_images
-    union all select 'listing_images', private.media_object_key(url) from public.listing_images
-    union all select 'activity_images', private.media_object_key(url) from public.activity_images
-    union all select 'order_item_snapshot_images', private.media_object_key(url) from public.order_item_snapshot_images
-    union all select 'profiles.avatar_url', private.media_object_key(avatar_url) from public.profiles
-    union all select 'cars.cover_image_url', private.media_object_key(cover_image_url) from public.cars
-    union all select 'mod_items.image_url', private.media_object_key(image_url) from public.mod_items
-    union all select 'car_hotspots.image_url', private.media_object_key(image_url) from public.car_hotspots
+  with refs(source, k, expired) as (
+    select 'car_images', private.media_object_key(url), false from public.car_images
+    union all select 'listing_images', private.media_object_key(url), false from public.listing_images
+    union all select 'activity_images', private.media_object_key(url), false from public.activity_images
+    union all select 'order_item_snapshot_images', private.media_object_key(url), false from public.order_item_snapshot_images
+    union all select 'profiles.avatar_url', private.media_object_key(avatar_url), false from public.profiles
+    union all select 'cars.cover_image_url', private.media_object_key(cover_image_url), false from public.cars
+    union all select 'mod_items.image_url', private.media_object_key(image_url), false from public.mod_items
+    union all select 'car_hotspots.image_url', private.media_object_key(image_url), false from public.car_hotspots
     -- Evidence by bare path (0027), legacy rows by URL or by bare path in url.
-    union all select 'dispute_evidence', 'dispute-evidence/' || storage_path from public.dispute_evidence
+    union all select 'dispute_evidence', 'dispute-evidence/' || storage_path, false from public.dispute_evidence
       where private.media_path_ok(storage_path)
     union all select 'dispute_evidence',
-      coalesce(private.media_object_key(url), case when private.media_path_ok(url) then 'dispute-evidence/' || url end)
+      coalesce(private.media_object_key(url), case when private.media_path_ok(url) then 'dispute-evidence/' || url end), false
       from public.dispute_evidence
-    union all select 'messages.attachments', 'message-photos/' || a
+    union all select 'messages.attachments', 'message-photos/' || a, false
       from public.messages m cross join lateral unnest(m.attachments) a where private.media_path_ok(a)
-    union all select 'agent_messages.images', private.media_object_key(i)
+    union all select 'agent_messages.images', private.media_object_key(i), am.created_at < now() - interval '47 hours'
       from public.agent_messages am cross join lateral unnest(am.images) i
-    union all select 'order_items.commercial_snapshot', unnest(private.json_media_keys(commercial_snapshot))
+    union all select 'order_items.commercial_snapshot', unnest(private.json_media_keys(commercial_snapshot)), false
       from public.order_items where strpos(commercial_snapshot::text, '/storage/v1/') > 0
-    union all select 'activity_posts.body', unnest(private.json_media_keys(body))
+    union all select 'activity_posts.body', unnest(private.json_media_keys(body)), false
       from public.activity_posts where strpos(body::text, '/storage/v1/') > 0
   )
-  select distinct r.source, split_part(r.k, '/', 1), substr(r.k, length(split_part(r.k, '/', 1)) + 2)
+  select r.source, split_part(r.k, '/', 1), substr(r.k, length(split_part(r.k, '/', 1)) + 2), bool_and(r.expired)
     from refs r
-   where r.k is not null;
+   where r.k is not null
+   group by 1, 2, 3;
 $$;
 revoke all on function private.storage_reference_rows() from public, anon, authenticated;
 
@@ -89,7 +97,10 @@ revoke all on function public.storage_object_rows(text, text, integer) from publ
 grant execute on function public.storage_object_rows(text, text, integer) to service_role;
 
 -- The summary: references with no object, and member-media objects nothing
--- names. Samples are ordered, so two runs on equal data give equal reports.
+-- names. A reference whose object is gone on purpose (a chat photo past its
+-- retention, or one the media cleanup deleted and tombstoned) is counted
+-- apart as expectedMissing: it is not a restore failure, and restoring it
+-- would bring back a photo DRVN promised to delete. Samples are ordered, so two runs on equal data give equal reports.
 create or replace function public.storage_reference_report(p_sample integer default 20)
 returns jsonb
 language sql
@@ -101,12 +112,25 @@ as $$
     select * from private.storage_reference_rows()
   ),
   keys as (
-    select bucket, path, array_agg(distinct source order by source) as sources
+    select bucket, path, array_agg(distinct source order by source) as sources,
+           bool_and(retention_expired) as retention_expired
       from refs group by bucket, path
   ),
-  missing as (
-    select k.* from keys k
+  absent as (
+    select k.*,
+           -- The media cleanup deleted it (a tombstone) or is deleting it.
+           exists (select 1 from private.media_deletion_claims c where c.bucket = k.bucket and c.path = k.path) as deleted
+      from keys k
      where not exists (select 1 from storage.objects o where o.bucket_id = k.bucket and o.name = k.path)
+  ),
+  -- Gone on purpose: retention or a recorded deletion. Not restored.
+  expected as (
+    select a.*, case when a.deleted then 'deleted' else 'retention' end as reason
+      from absent a where a.deleted or a.retention_expired
+  ),
+  -- Gone and nothing says it should be: what a restore must fix.
+  missing as (
+    select a.* from absent a where not a.deleted and not a.retention_expired
   ),
   unreferenced as (
     select o.bucket_id as bucket, o.name::text as path
@@ -125,6 +149,10 @@ as $$
     'missingByBucket', coalesce((select jsonb_object_agg(bucket, n) from (select bucket, count(*) n from missing group by bucket) x), '{}'::jsonb),
     'missingSample', coalesce((select jsonb_agg(jsonb_build_object('bucket', bucket, 'path', path, 'sources', sources) order by bucket, path)
                                  from (select * from missing order by bucket, path limit least(greatest(coalesce(p_sample, 20), 0), 500)) s), '[]'::jsonb),
+    'expectedMissing', (select count(*) from expected),
+    'expectedMissingByReason', coalesce((select jsonb_object_agg(reason, n) from (select reason, count(*) n from expected group by reason) x), '{}'::jsonb),
+    'expectedMissingSample', coalesce((select jsonb_agg(jsonb_build_object('bucket', bucket, 'path', path, 'reason', reason) order by bucket, path)
+                                         from (select * from expected order by bucket, path limit least(greatest(coalesce(p_sample, 20), 0), 500)) s), '[]'::jsonb),
     'unreferencedObjects', (select count(*) from unreferenced),
     'unreferencedByBucket', coalesce((select jsonb_object_agg(bucket, n) from (select bucket, count(*) n from unreferenced group by bucket) x), '{}'::jsonb),
     'unreferencedSample', coalesce((select jsonb_agg(jsonb_build_object('bucket', bucket, 'path', path) order by bucket, path)

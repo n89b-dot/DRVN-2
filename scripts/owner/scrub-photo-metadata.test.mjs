@@ -24,14 +24,22 @@ const pngWithXmp = () =>
     .toBuffer();
 const cleanWebp = () => sharp({ create: { width: 16, height: 16, channels: 3, background: "green" } }).webp().toBuffer();
 
-/** A fake project: objects in memory, the four RPCs as the migration defines them. */
+/**
+ * A fake project. Objects carry a row identity as storage.objects does; the
+ * RPCs follow 20261108120010; and the write is Storage's real one: it always
+ * upserts, so writing to a deleted path creates a new object (new identity).
+ */
 function project(objects) {
-  const store = new Map(Object.entries(objects));
-  const claims = new Map();
+  let ids = 0;
+  const newId = () => `object-${(ids += 1)}`;
+  const store = new Map(Object.entries(objects).map(([key, bytes]) => [key, { id: newId(), bytes }]));
+  const leases = new Map();
   const recorded = [];
   const calls = [];
   const busy = new Set();
   let clock = 0;
+  let tokens = 0;
+  const live = (lease) => lease && clock - lease.claimedAt < 10 * 60 * 1000;
   const deps = {
     sharp,
     now: () => clock,
@@ -40,11 +48,14 @@ function project(objects) {
     },
     log: () => {},
     store,
+    leases,
     recorded,
     calls,
     busy,
+    bytesOf: (key) => store.get(key)?.bytes,
     rpc: async (name, args) => {
       calls.push(name);
+      const key = `${args.p_bucket}:${args.p_path}`;
       if (name === "photo_metadata_candidates") {
         const settled = new Set(recorded.filter((r) => r.p_outcome !== "failed").map((r) => r.p_path));
         const paths = [...store.keys()].filter((p) => p.startsWith(`${args.p_bucket}:`)).map((p) => p.slice(args.p_bucket.length + 1))
@@ -52,34 +63,62 @@ function project(objects) {
         return { data: paths.map((path) => ({ path })), error: null };
       }
       if (name === "claim_photo_rewrite") {
-        const key = `${args.p_bucket}:${args.p_path}`;
+        const lease = leases.get(key);
+        if (live(lease)) return { data: { status: "busy" }, error: null };
+        const object = store.get(key);
+        const token = `token-${(tokens += 1)}`;
+        if (lease && object && object.id !== lease.objectId) {
+          leases.set(key, { ...lease, token, claimedAt: clock });
+          return { data: { status: "recreated", token, object_id: lease.objectId }, error: null };
+        }
+        if (!object) {
+          leases.delete(key);
+          return { data: { status: "gone" }, error: null };
+        }
         if (busy.has(key)) return { data: { status: "busy" }, error: null };
-        if (!store.has(key)) return { data: { status: "gone" }, error: null };
-        const token = `token-${claims.size + 1}`;
-        claims.set(key, token);
-        return { data: { status: "claimed", token }, error: null };
+        leases.set(key, { token, objectId: object.id, claimedAt: clock });
+        return { data: { status: "claimed", token, object_id: object.id }, error: null };
+      }
+      if (name === "check_photo_rewrite") {
+        const object = store.get(key);
+        if (!object || busy.has(key)) return { data: "gone", error: null };
+        const lease = leases.get(key);
+        return { data: object.id === args.p_object && lease?.token === args.p_token && live(lease) ? "current" : "lost", error: null };
       }
       if (name === "finish_photo_rewrite") {
-        const key = `${args.p_bucket}:${args.p_path}`;
-        if (claims.get(key) !== args.p_token) return { data: false, error: null };
-        claims.delete(key);
+        const object = store.get(key);
+        const lease = leases.get(key);
+        if (!object) {
+          if (lease?.token === args.p_token) leases.delete(key);
+          return { data: "gone", error: null };
+        }
+        if (object.id !== args.p_object) {
+          if (lease?.token === args.p_token) lease.claimedAt = clock;
+          return { data: "recreated", error: null };
+        }
+        if (lease?.token !== args.p_token) return { data: "lease_lost", error: null };
+        leases.delete(key);
         recorded.push(args);
-        return { data: true, error: null };
+        return { data: "recorded", error: null };
       }
       return { data: null, error: { message: `unexpected ${name}` } };
     },
     download: async (bucket, path) => {
-      const bytes = store.get(`${bucket}:${path}`);
-      if (!bytes) throw new Error("download failed: not found");
-      return bytes;
+      const object = store.get(`${bucket}:${path}`);
+      if (!object) throw new Error("download failed: not found");
+      return object.bytes;
     },
     updates: [],
-    update: async (bucket, path, bytes, contentType) => {
+    // Storage's PUT: an upsert. Over a live object it keeps the row; over a
+    // deleted path it creates a new one.
+    write: async (bucket, path, bytes, contentType) => {
       deps.updates.push({ bucket, path, contentType });
       const key = `${bucket}:${path}`;
-      if (!store.has(key)) return "missing";
-      store.set(key, bytes);
-      return "updated";
+      const object = store.get(key);
+      store.set(key, { id: object?.id ?? newId(), bytes });
+    },
+    remove: async (bucket, path) => {
+      store.delete(`${bucket}:${path}`);
     },
   };
   return deps;
@@ -138,7 +177,7 @@ test("apply re-encodes in place, records every outcome, and a rerun has nothing 
   const first = await run(deps, parseArgs(["--apply"]));
   assert.equal(first.totals["message-photos"].scrubbed, 1);
   assert.deepEqual(deps.updates, [{ bucket: "message-photos", path: "s/r/1.jpg", contentType: "image/jpeg" }]);
-  assert.equal((await sharp(deps.store.get("message-photos:s/r/1.jpg")).metadata()).exif, undefined);
+  assert.equal((await sharp(deps.bytesOf("message-photos:s/r/1.jpg")).metadata()).exif, undefined);
   assert.deepEqual(deps.recorded.map((r) => [r.p_path, r.p_outcome]).sort(), [["o/3.webp", "clean"], ["s/r/1.jpg", "scrubbed"], ["s/r/2.webp", "clean"]]);
 
   const again = await run(deps, parseArgs(["--apply"]));
@@ -146,23 +185,79 @@ test("apply re-encodes in place, records every outcome, and a rerun has nothing 
   assert.equal(deps.updates.length, 1);
 });
 
-test("an object cleanup holds is skipped as busy, and one deleted mid-rewrite is never brought back", async () => {
+test("an object cleanup holds is skipped as busy", async () => {
   const deps = project({ "message-photos:s/r/1.jpg": await jpegWithGps() });
   deps.busy.add("message-photos:s/r/1.jpg");
   assert.equal((await scrubObject(deps, "message-photos", "s/r/1.jpg", { apply: true })).busy, 1);
   assert.equal(deps.updates.length, 0);
+});
 
-  deps.busy.clear();
+test("a photo deleted before the write lands is deleted again, though Storage's write recreated it", async () => {
+  const deps = project({ "agent-chat-photos:o/1.jpg": await jpegWithGps() });
+  // The member clears the chat after the check and before the write lands.
+  const write = deps.write;
+  deps.write = async (bucket, path, bytes, contentType) => {
+    deps.store.delete(`${bucket}:${path}`);
+    await write(bucket, path, bytes, contentType);
+    assert.equal(deps.store.has(`${bucket}:${path}`), true, "the fake upserts like Storage");
+  };
+  const counts = await scrubObject(deps, "agent-chat-photos", "o/1.jpg", { apply: true });
+  assert.equal(counts.recreatedRemoved, 1);
+  assert.equal(counts.scrubbed, 0);
+  assert.equal(deps.store.has("agent-chat-photos:o/1.jpg"), false);
+  assert.equal(deps.leases.size, 0);
+  assert.equal(deps.recorded.length, 0);
+});
+
+test("a photo deleted after the download isn't written at all", async () => {
+  const deps = project({ "message-photos:s/r/1.jpg": await jpegWithGps() });
   const download = deps.download;
   deps.download = async (bucket, path) => {
     const bytes = await download(bucket, path);
-    deps.store.delete(`${bucket}:${path}`); // the cleanup ran between download and update
+    deps.store.delete(`${bucket}:${path}`);
     return bytes;
   };
   const counts = await scrubObject(deps, "message-photos", "s/r/1.jpg", { apply: true });
   assert.equal(counts.gone, 1);
-  assert.equal(counts.scrubbed, 0);
+  assert.equal(deps.updates.length, 0);
   assert.equal(deps.store.has("message-photos:s/r/1.jpg"), false);
+});
+
+test("a photo deleted after the write stays deleted", async () => {
+  const deps = project({ "message-photos:s/r/1.jpg": await jpegWithGps() });
+  const write = deps.write;
+  deps.write = async (bucket, path, bytes, contentType) => {
+    await write(bucket, path, bytes, contentType);
+    deps.store.delete(`${bucket}:${path}`);
+  };
+  const counts = await scrubObject(deps, "message-photos", "s/r/1.jpg", { apply: true });
+  assert.equal(counts.gone, 1);
+  assert.equal(deps.store.has("message-photos:s/r/1.jpg"), false);
+});
+
+test("a run that dies after recreating a photo leaves it for the next run to delete", async () => {
+  const deps = project({ "agent-chat-photos:o/1.jpg": await jpegWithGps() });
+  const write = deps.write;
+  const rpc = deps.rpc;
+  deps.write = async (bucket, path, bytes, contentType) => {
+    deps.store.delete(`${bucket}:${path}`);
+    await write(bucket, path, bytes, contentType);
+  };
+  // The process dies before it can finish (every later call fails).
+  deps.rpc = async (name, args) => (name === "finish_photo_rewrite" ? { data: null, error: { message: "connection lost" } } : rpc(name, args));
+  assert.equal((await scrubObject(deps, "agent-chat-photos", "o/1.jpg", { apply: true })).failed, 1);
+  assert.equal(deps.store.has("agent-chat-photos:o/1.jpg"), true);
+
+  deps.rpc = rpc;
+  deps.write = write;
+  // While the lease lasts, nothing else touches it; once it lapses, the next
+  // run's claim knows the object isn't the one it read.
+  assert.equal((await scrubObject(deps, "agent-chat-photos", "o/1.jpg", { apply: true })).busy, 1);
+  deps.advance(11 * 60 * 1000);
+  const next = await run(deps, parseArgs(["--apply", "--bucket", "agent-chat-photos"]));
+  assert.equal(next.totals["agent-chat-photos"].recreatedRemoved, 1);
+  assert.equal(deps.store.has("agent-chat-photos:o/1.jpg"), false);
+  assert.match(describe(next, { apply: true }), /1 recreated by a write after deletion and deleted again/);
 });
 
 test("a run that outlasts its lease uploads nothing and leaves the photo for the next run", async () => {

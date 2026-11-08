@@ -16,9 +16,15 @@
 --     Storage no longer holds.
 --   * claim_media_deletion (restated) answers 'busy' while a rewrite lease
 --     is live, so cleanup never deletes an object mid-rewrite, and a rewrite
---     never starts on one being deleted. The rewrite itself replaces the
---     object with Storage's update, which fails on a missing object, so it can
---     never bring a deleted photo back.
+--     never starts on one being deleted. The chat sweep
+--     (agent_chat_photos_expired, restated) skips a photo mid-rewrite too.
+--   * The write is fenced on the object's identity (storage.objects.id).
+--     Storage's write always upserts, so a write after a deletion would
+--     recreate the photo; clearing a chat and account deletion delete at
+--     once and never wait for this job. A recreated object has a new id:
+--     finish_photo_rewrite answers 'recreated' and the job deletes it, and
+--     the lease keeps the old id so a run that died first is caught by the
+--     next claim of that path.
 --   * finish_photo_rewrite releases the lease (only with its token) and
 --     records the outcome in private.photo_metadata_scrubs, with the object's
 --     version at that moment. photo_metadata_candidates skips an object whose
@@ -30,7 +36,9 @@
 -- buckets have their own backfill (scripts/public-media-backfill.mjs).
 --
 -- Owns: claim_media_deletion (restated from 20261107203000, its only
--- definition, with the rewrite-lease check added), and the new objects below.
+-- definition, with the rewrite-lease check added), agent_chat_photos_expired
+-- (restated from 20261107220300, its only definition, same addition), and the
+-- new objects below.
 
 begin;
 
@@ -39,6 +47,8 @@ create table if not exists private.media_rewrite_claims (
   bucket     text not null,
   path       text not null,
   token      uuid not null,
+  -- storage.objects.id when claimed: the write fence (section 3).
+  object_id  uuid not null,
   claimed_at timestamptz not null default now(),
   primary key (bucket, path)
 );
@@ -110,10 +120,24 @@ $$;
 revoke all on function public.photo_metadata_candidates(text, text, integer, timestamptz) from public, anon, authenticated;
 grant execute on function public.photo_metadata_candidates(text, text, integer, timestamptz) to service_role;
 
--- ---------- 3. The rewrite lease ----------
--- {"status": "claimed", "token": <uuid>} — download, re-encode, update, then
--- finish; "busy" — a remover or another rewrite holds it; "gone" — deleted
--- or being deleted for good; "invalid" — not an object this job rewrites.
+-- ---------- 3. The rewrite lease, and the write fence ----------
+-- Storage's write (PUT, and upload with upsert) always upserts: if a remover
+-- deletes the object after the job read it, the job's write would create it
+-- again. Some removers (the chat sweep, clearing a chat, account deletion)
+-- delete straight through Storage, and must never wait on this job. So the
+-- write is fenced on the object's identity instead: the lease records
+-- storage.objects.id. Writing over a live object keeps its row (Storage
+-- merges into it on conflict) and so its id; a write that recreated a
+-- deleted object makes a new row with a new id. finish_photo_rewrite
+-- compares them and answers 'recreated', and the job deletes what it
+-- recreated. If the job dies first, the lease outlives it with the old id,
+-- and the next claim of that path answers 'recreated' too.
+--
+-- claim_photo_rewrite: {"status": "claimed", "token", "object_id"} —
+-- download, re-encode, check_photo_rewrite, write, finish; "recreated"
+-- (with a token) — delete the object, then finish; "busy" — a remover or
+-- another rewrite holds it; "gone" — deleted, being deleted, or not in
+-- Storage; "invalid" — not an object this job rewrites.
 create or replace function public.claim_photo_rewrite(p_bucket text, p_path text)
 returns jsonb
 language plpgsql
@@ -123,69 +147,134 @@ set search_path = public, pg_temp
 as $$
 declare
   v_deletion private.media_deletion_claims%rowtype;
+  v_lease private.media_rewrite_claims%rowtype;
+  v_object uuid;
   v_token uuid := gen_random_uuid();
 begin
   if not coalesce(private.photo_scrub_bucket(p_bucket), false) or not coalesce(private.media_path_ok(p_path), false) then
     return jsonb_build_object('status', 'invalid');
   end if;
   perform pg_advisory_xact_lock(hashtextextended('drvn-media:' || p_bucket || '/' || p_path, 0));
+  select * into v_lease from private.media_rewrite_claims where bucket = p_bucket and path = p_path;
+  if found and v_lease.claimed_at > now() - interval '10 minutes' then
+    return jsonb_build_object('status', 'busy');
+  end if;
+  select o.id into v_object from storage.objects o where o.bucket_id = p_bucket and o.name = p_path;
+  -- A lapsed lease whose object has another identity: an earlier run's write
+  -- recreated a deleted photo and stopped before deleting it again.
+  if v_lease.path is not null and v_object is not null and v_object <> v_lease.object_id then
+    update private.media_rewrite_claims set token = v_token, claimed_at = now()
+     where bucket = p_bucket and path = p_path;
+    return jsonb_build_object('status', 'recreated', 'token', v_token, 'object_id', v_lease.object_id);
+  end if;
+  if v_object is null then
+    delete from private.media_rewrite_claims where bucket = p_bucket and path = p_path;
+    return jsonb_build_object('status', 'gone');
+  end if;
   select * into v_deletion from private.media_deletion_claims where bucket = p_bucket and path = p_path;
   if found then
     return jsonb_build_object('status', case when v_deletion.state = 'done' then 'gone' else 'busy' end);
   end if;
-  if not exists (select 1 from storage.objects o where o.bucket_id = p_bucket and o.name = p_path) then
-    return jsonb_build_object('status', 'gone');
-  end if;
-  if exists (select 1 from private.media_rewrite_claims r
-              where r.bucket = p_bucket and r.path = p_path and r.claimed_at > now() - interval '10 minutes') then
-    return jsonb_build_object('status', 'busy');
-  end if;
-  insert into private.media_rewrite_claims (bucket, path, token, claimed_at)
-  values (p_bucket, p_path, v_token, now())
-  on conflict (bucket, path) do update set token = excluded.token, claimed_at = excluded.claimed_at;
-  return jsonb_build_object('status', 'claimed', 'token', v_token);
+  insert into private.media_rewrite_claims (bucket, path, token, object_id, claimed_at)
+  values (p_bucket, p_path, v_token, v_object, now())
+  on conflict (bucket, path) do update
+    set token = excluded.token, object_id = excluded.object_id, claimed_at = excluded.claimed_at;
+  return jsonb_build_object('status', 'claimed', 'token', v_token, 'object_id', v_object);
 end;
 $$;
 revoke all on function public.claim_photo_rewrite(text, text) from public, anon, authenticated;
 grant execute on function public.claim_photo_rewrite(text, text) to service_role;
 
--- Releases the lease (the holder's token only) and records the outcome.
--- False: the lease was lost (taken over after 10 minutes) and nothing was
--- recorded; the next run checks the object again.
-create or replace function public.finish_photo_rewrite(
-  p_bucket text,
-  p_path text,
-  p_token uuid,
-  p_outcome text,
-  p_detail text default null
-)
-returns boolean
+-- Just before the write: is the lease still this job's, and the object the
+-- one it read? 'current' — write; 'gone' — deleted meanwhile, don't write;
+-- 'lost' — the lease lapsed or the object changed, don't write.
+create or replace function public.check_photo_rewrite(p_bucket text, p_path text, p_token uuid, p_object uuid)
+returns text
 language plpgsql
 volatile
 security definer
 set search_path = public, pg_temp
 as $$
+declare
+  v_object uuid;
+begin
+  perform pg_advisory_xact_lock(hashtextextended('drvn-media:' || p_bucket || '/' || p_path, 0));
+  select o.id into v_object from storage.objects o where o.bucket_id = p_bucket and o.name = p_path;
+  if v_object is null
+     or exists (select 1 from private.media_deletion_claims c where c.bucket = p_bucket and c.path = p_path) then
+    return 'gone';
+  end if;
+  if v_object <> p_object or not exists (
+    select 1 from private.media_rewrite_claims r
+     where r.bucket = p_bucket and r.path = p_path and r.token = p_token
+       and r.claimed_at > now() - interval '10 minutes') then
+    return 'lost';
+  end if;
+  return 'current';
+end;
+$$;
+revoke all on function public.check_photo_rewrite(text, text, uuid, uuid) from public, anon, authenticated;
+grant execute on function public.check_photo_rewrite(text, text, uuid, uuid) to service_role;
+
+-- After the write (or instead of one). p_object is the identity the claim
+-- returned. Answers:
+--   'recorded'  — the object is the one claimed: outcome recorded, lease released;
+--   'gone'      — no object any more (deleted after the write, or the job
+--                 deleted what it recreated): lease released, nothing recorded;
+--   'recreated' — the object has a new identity: the write recreated a
+--                 deleted photo. The lease is kept (and renewed); the job
+--                 deletes the object and calls this again;
+--   'lease_lost'— the object is the one claimed but the lease isn't this
+--                 job's any more; nothing recorded, the next run checks again.
+create or replace function public.finish_photo_rewrite(
+  p_bucket text,
+  p_path text,
+  p_token uuid,
+  p_object uuid,
+  p_outcome text,
+  p_detail text default null
+)
+returns text
+language plpgsql
+volatile
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_object uuid;
+  v_updated timestamptz;
 begin
   if p_outcome is null or p_outcome not in ('clean', 'scrubbed', 'skipped', 'failed') then
     raise exception 'Unknown rewrite outcome %', p_outcome using errcode = '22023';
   end if;
   perform pg_advisory_xact_lock(hashtextextended('drvn-media:' || p_bucket || '/' || p_path, 0));
-  delete from private.media_rewrite_claims
-   where bucket = p_bucket and path = p_path and token = p_token;
+  select o.id, o.updated_at into v_object, v_updated from storage.objects o where o.bucket_id = p_bucket and o.name = p_path;
+  if v_object is null then
+    delete from private.media_rewrite_claims where bucket = p_bucket and path = p_path and token = p_token;
+    return 'gone';
+  end if;
+  if v_object <> p_object then
+    -- Whoever holds the lease now, this object exists only because a write
+    -- recreated it. Keep the lease (with the original identity) so the
+    -- media cleanup leaves it alone and a later claim knows what it is.
+    update private.media_rewrite_claims set claimed_at = now()
+     where bucket = p_bucket and path = p_path and token = p_token;
+    return 'recreated';
+  end if;
+  delete from private.media_rewrite_claims where bucket = p_bucket and path = p_path and token = p_token;
   if not found then
-    return false;
+    return 'lease_lost';
   end if;
   insert into private.photo_metadata_scrubs (bucket, path, outcome, detail, object_updated_at, checked_at)
-  values (p_bucket, p_path, p_outcome, left(p_detail, 500),
-          (select o.updated_at from storage.objects o where o.bucket_id = p_bucket and o.name = p_path), now())
+  values (p_bucket, p_path, p_outcome, left(p_detail, 500), v_updated, now())
   on conflict (bucket, path) do update
     set outcome = excluded.outcome, detail = excluded.detail,
         object_updated_at = excluded.object_updated_at, checked_at = excluded.checked_at;
-  return true;
+  return 'recorded';
 end;
 $$;
-revoke all on function public.finish_photo_rewrite(text, text, uuid, text, text) from public, anon, authenticated;
-grant execute on function public.finish_photo_rewrite(text, text, uuid, text, text) to service_role;
+revoke all on function public.finish_photo_rewrite(text, text, uuid, uuid, text, text) from public, anon, authenticated;
+grant execute on function public.finish_photo_rewrite(text, text, uuid, uuid, text, text) to service_role;
 
 -- What the job has recorded so far, per bucket and outcome, for its report.
 create or replace function public.photo_metadata_scrub_summary()
@@ -251,6 +340,32 @@ end;
 $$;
 revoke all on function public.claim_media_deletion(text, text) from public, anon, authenticated;
 grant execute on function public.claim_media_deletion(text, text) to service_role;
+
+-- ---------- 5. The chat sweep skips a photo mid-rewrite ----------
+-- Restated from 20261107220300 (its only definition) with one condition: a
+-- photo under a live rewrite lease waits for the next sweep (every few
+-- minutes), so the sweep and the rewrite don't meet. Clearing a chat and
+-- account deletion delete at once and never wait; the write fence covers them.
+create or replace function public.agent_chat_photos_expired(p_older_than interval default interval '48 hours', p_limit integer default 500)
+returns table (name text)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select o.name
+    from storage.objects o
+   where o.bucket_id = 'agent-chat-photos'
+     and o.created_at < now() - greatest(coalesce(p_older_than, interval '48 hours'), interval '1 hour')
+     and not exists (select 1 from private.media_rewrite_claims r
+                      where r.bucket = 'agent-chat-photos' and r.path = o.name
+                        and r.claimed_at > now() - interval '10 minutes')
+   order by o.created_at
+   limit greatest(1, least(coalesce(p_limit, 500), 1000));
+$$;
+
+revoke all on function public.agent_chat_photos_expired(interval, integer) from public, anon, authenticated;
+grant execute on function public.agent_chat_photos_expired(interval, integer) to service_role;
 
 notify pgrst, 'reload schema';
 

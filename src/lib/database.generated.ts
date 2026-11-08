@@ -7185,6 +7185,15 @@ export type Database = {
         }[]
       }
       charge_cents_in_bounds: { Args: { p_cents: number }; Returns: boolean }
+      check_photo_rewrite: {
+        Args: {
+          p_bucket: string
+          p_object: string
+          p_path: string
+          p_token: string
+        }
+        Returns: string
+      }
       claim_listing_creation: {
         Args: { p_payload_hash: string; p_request: string }
         Returns: Json
@@ -7617,11 +7626,12 @@ export type Database = {
         Args: {
           p_bucket: string
           p_detail?: string
+          p_object: string
           p_outcome: string
           p_path: string
           p_token: string
         }
-        Returns: boolean
+        Returns: string
       }
       finish_remediation_job: {
         Args: { p_error?: string; p_id: string; p_lease: string }

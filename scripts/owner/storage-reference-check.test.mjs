@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { describe, exitCode, parseArgs, verifyBytes } from "./storage-reference-check.mjs";
+import { describe, exitCode, parseArgs, probeBytes, verifyBytes } from "./storage-reference-check.mjs";
 
 const report = (overrides = {}) => ({
   references: 120,
@@ -26,7 +26,7 @@ function storage(rows, answers) {
       const paths = (rows[args.p_bucket] ?? []).filter((p) => !args.p_after || p > args.p_after).sort().slice(0, args.p_limit);
       return { data: paths.map((path) => ({ path })), error: null };
     },
-    exists: async (bucket, path) => answers[`${bucket}/${path}`] ?? "present",
+    probe: async (bucket, path) => answers[`${bucket}/${path}`] ?? "present",
   };
 }
 
@@ -35,7 +35,7 @@ test("a restore whose references and bytes agree passes", async () => {
   const bytes = await verifyBytes(deps, parseArgs(["--verify-bytes"]));
   assert.deepEqual({ checked: bytes.checked, missing: bytes.missing, unknown: bytes.unknown, complete: bytes.complete }, { checked: 3, missing: 0, unknown: 0, complete: true });
   assert.equal(exitCode(report(), bytes), 0);
-  assert.match(describe(report(), bytes), /120 referenced objects; 0 with no object row.*\nBytes: 3 object rows checked, 0 with no bytes, 0 unanswered\./);
+  assert.match(describe(report(), bytes), /120 referenced objects; 0 with no object row in Storage and no reason to be gone.*\nBytes: 3 object rows checked, 0 with no bytes, 0 unanswered\./);
 });
 
 test("a restored row whose bytes were deleted after the recovery point fails the check", async () => {
@@ -87,4 +87,65 @@ test("takes no credentials or unknown buckets on the command line, and never wri
   assert.throws(() => parseArgs(["--bucket", "account-exports"]), /--bucket must be one of/);
   const source = readFileSync("scripts/owner/storage-reference-check.mjs", "utf8");
   assert.doesNotMatch(source, /\.(upload|update|remove|move|copy)\(/);
+});
+
+/**
+ * Storage as it behaves after a database restore: a HEAD answers from the
+ * storage.objects row; only a GET reads the bytes. A row restored for a photo
+ * whose bytes were deleted after the recovery point says "present" to HEAD.
+ */
+function restoredStorage({ rows, bytes }) {
+  const requests = [];
+  const fetchImpl = async (url, init) => {
+    requests.push({ url, method: init.method, range: init.headers.range, auth: init.headers.authorization });
+    const path = decodeURIComponent(new URL(url).pathname.replace("/storage/v1/object/authenticated/", ""));
+    if (!rows.has(path)) return new Response(JSON.stringify({ statusCode: "404", error: "not_found" }), { status: 400 });
+    if (init.method === "HEAD") return new Response(null, { status: 200 });
+    const body = bytes.get(path);
+    if (body === undefined) return new Response(JSON.stringify({ statusCode: "404", error: "NoSuchKey" }), { status: 404 });
+    if (body.length === 0) return new Response(null, { status: 416 });
+    return new Response(body.subarray(0, 1), { status: 206 });
+  };
+  return { fetchImpl, requests };
+}
+
+test("a restored row whose bytes are gone is missing, though a HEAD would say present", async () => {
+  const s = restoredStorage({
+    rows: new Set(["message-photos/s/r/kept.jpg", "message-photos/s/r/bytes gone.jpg", "message-photos/s/r/empty.txt"]),
+    bytes: new Map([["message-photos/s/r/kept.jpg", Buffer.from("jpeg")], ["message-photos/s/r/empty.txt", Buffer.alloc(0)]]),
+  });
+  const headSays = await s.fetchImpl("https://p.test/storage/v1/object/authenticated/message-photos/s/r/bytes%20gone.jpg", { method: "HEAD", headers: {} });
+  assert.equal(headSays.status, 200);
+
+  assert.equal(await probeBytes(s.fetchImpl, "https://p.test/", "fixture", "message-photos", "s/r/bytes gone.jpg"), "missing");
+  assert.equal(await probeBytes(s.fetchImpl, "https://p.test", "fixture", "message-photos", "s/r/kept.jpg"), "present");
+  assert.equal(await probeBytes(s.fetchImpl, "https://p.test", "fixture", "message-photos", "s/r/empty.txt"), "present");
+  assert.equal(await probeBytes(s.fetchImpl, "https://p.test", "fixture", "message-photos", "s/r/no row.jpg"), "missing");
+  // Every probe is a one-byte GET of the encoded path, with the service key.
+  for (const r of s.requests.slice(1)) {
+    assert.equal(r.method, "GET");
+    assert.equal(r.range, "bytes=0-0");
+    assert.equal(r.auth, "Bearer fixture");
+  }
+  assert.equal(s.requests[1].url, "https://p.test/storage/v1/object/authenticated/message-photos/s/r/bytes%20gone.jpg");
+
+  const deps = { ...storage({ "message-photos": ["s/r/bytes gone.jpg", "s/r/kept.jpg"] }, {}), probe: (b, p) => probeBytes(s.fetchImpl, "https://p.test", "fixture", b, p) };
+  const result = await verifyBytes(deps, parseArgs(["--verify-bytes", "--bucket", "message-photos"]));
+  assert.equal(result.missing, 1);
+  assert.equal(exitCode(report(), result), 1);
+});
+
+test("a 5xx or a network failure proves nothing", async () => {
+  assert.equal(await probeBytes(async () => new Response(null, { status: 503 }), "https://p.test", "fixture", "avatars", "a/1.webp"), "unknown");
+  assert.equal(await probeBytes(async () => { throw new Error("reset"); }, "https://p.test", "fixture", "avatars", "a/1.webp"), "unknown");
+});
+
+test("photos gone on purpose are listed apart and don't fail the check", () => {
+  const r = report({
+    expectedMissing: 2,
+    expectedMissingByReason: { retention: 1, deleted: 1 },
+    expectedMissingSample: [{ bucket: "agent-chat-photos", path: "o/1.webp", reason: "retention" }, { bucket: "message-photos", path: "s/r/x.jpg", reason: "deleted" }],
+  });
+  assert.equal(exitCode(r, null), 0);
+  assert.match(describe(r, null), /Gone on purpose, not to restore: 2 \(retention 1, deleted 1\)\n {4}agent-chat-photos\/o\/1\.webp {2}\(retention\)/);
 });
