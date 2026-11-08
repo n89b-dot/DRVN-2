@@ -980,6 +980,8 @@ export type AccountDeletionCase = {
   requestedAt: string;
   /** When an operator said they would look again, if they set one. */
   reviewAt: string | null;
+  /** N16: transaction keys are kept until then (6 years on the scrub's clock). */
+  retainUntil: string | null;
 };
 
 /**
@@ -991,7 +993,7 @@ export async function getAccountDeletionCases(limit = 50): Promise<{ rows: Accou
   const a = await admin();
   const { data, error, count } = await a
     .from("account_deletion_requests")
-    .select("user_id, outcome, next_action, responsible_owner, policy_decisions_pending, updated_at, requested_at, review_at", { count: "exact" })
+    .select("user_id, outcome, next_action, responsible_owner, policy_decisions_pending, updated_at, requested_at, review_at, retain_until", { count: "exact" })
     .neq("outcome", "completed")
     .order("requested_at", { ascending: true })
     .limit(limit);
@@ -1010,6 +1012,7 @@ export async function getAccountDeletionCases(limit = 50): Promise<{ rows: Accou
       updatedAt: r.updated_at,
       requestedAt: r.requested_at,
       reviewAt: r.review_at,
+      retainUntil: r.retain_until,
     })),
   };
 }

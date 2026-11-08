@@ -6,9 +6,12 @@ import { removeMediaObject } from "@/lib/media-lifecycle";
 import { reportError } from "@/lib/monitoring";
 import { purgeAccountExportsForUser } from "@/lib/account-export-worker";
 import { deletionOutcome } from "@/lib/account-deletion-policy";
+import { accountEmailDigest } from "@/lib/email-digest";
 
 type Job = { id: string; lease_id: string; payload: { user_id: string; stripe_customer_id?: string | null } };
-const buckets = ["avatars", "car-images", "activity-images", "listing-images"];
+// message-photos: the sender's own folder; the scrub clears the attachments
+// first, so only photos nothing else references (dispute evidence) go.
+const buckets = ["avatars", "car-images", "activity-images", "listing-images", "message-photos"];
 
 /** Inventory pages commit before any deletions, so object removal cannot shift offsets. */
 async function drainStorage(admin: ReturnType<typeof createAdminClient>, job: Job, heartbeat: () => Promise<void>) {
@@ -54,7 +57,7 @@ export async function processAccountDeletions() {
     try {
       const uid = job.payload.user_id;
       const heartbeat = jobHeartbeat(admin, job);
-      const deletionRequest = await admin.from("account_deletion_requests").select("id").eq("user_id", uid).maybeSingle();
+      const deletionRequest = await admin.from("account_deletion_requests").select("id, email_digest").eq("user_id", uid).maybeSingle();
       if (deletionRequest.error || !deletionRequest.data) throw new Error("Deletion request record is missing");
       const deletionRequestId = deletionRequest.data.id;
       await heartbeat();
@@ -76,10 +79,21 @@ export async function processAccountDeletions() {
         const ban = await admin.auth.admin.updateUserById(uid, { ban_duration: "876000h" });
         if (ban.error) throw new Error("Could not revoke account access");
       }
-        // Rows are removed before media checks. Frozen order/evidence references
-        // remain authoritative and prevent deletion of retained transaction media.
-        const scrub = await admin.from("profiles").update({ avatar_url: null, display_name: "Deleted member", username: null, bio: null, headline: null, location: null, country: null, region: null, store_note: null, main_car_id: null, default_offer_floor_pct: null, links: [] }).eq("id", uid);
-        if (scrub.error) throw new Error("Profile cleanup failed");
+        // N16: the email is replaced by a keyed digest, taken once: a resumed
+        // run finds the digest already recorded (the email is gone by then).
+        const email = account.user?.email;
+        const digest = !deletionRequest.data.email_digest && email ? accountEmailDigest(email) : null;
+        // One transaction, the same however often it runs (20261107220510):
+        // Auth email and metadata, addresses, order party labels, message,
+        // question and comment bodies, the profile, and the retained-key
+        // clock. Rows are removed before media checks; frozen order and
+        // evidence references still protect retained transaction media.
+        const scrub = await admin.rpc("scrub_deleted_account", {
+          p_user: uid,
+          p_email_digest: digest?.digest ?? null,
+          p_digest_key: digest?.key ?? null,
+        });
+        if (scrub.error) throw new Error("Personal data scrub failed");
         for (const operation of [
           admin.from("activity_posts").delete().eq("author_id", uid),
           // Listings kept for completed orders keep their private terms row;
@@ -109,11 +123,13 @@ export async function processAccountDeletions() {
         const retained = await admin.from("account_deletion_requests").update({
           outcome: "operator_attention",
           blocker_code: "immutable_retained_identity",
-          affected_data_classes: ["orders", "financial records", "audit or reporting references"],
-          next_action: "An operator must apply the approved retained-identity anonymization and retention policy.",
+          // N16: personal data is scrubbed; only transaction keys remain,
+          // until account_deletion_requests.retain_until (6 years).
+          affected_data_classes: ["order and payment keys", "audit or reporting references"],
+          next_action: "Personal data is removed. Order and payment keys are kept until the retention date; the final step after it is not yet ruled.",
           responsible_owner: "operations and policy owner",
           review_at: null,
-          policy_decisions_pending: ["financial record retention duration", "audit/log retention", "eventual identity anonymization", "backup expiry"],
+          policy_decisions_pending: ["audit/log retention", "backup expiry", "what happens when the 6-year retention ends"],
           updated_at: new Date().toISOString(),
         }).eq("user_id", uid);
         if (retained.error) throw new Error("Could not record retained identity outcome");

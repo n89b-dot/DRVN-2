@@ -97,6 +97,7 @@ export default async function AdminUsersPage({
                       {d.owner ? `On: ${d.owner}` : ""}
                       {d.pendingDecisions.length ? ` · waiting on ${d.pendingDecisions.join(", ")}` : ""}
                       {d.reviewAt ? ` · review by ${new Date(d.reviewAt).toLocaleDateString()}` : ""}
+                      {d.retainUntil ? ` · keys kept until ${new Date(d.retainUntil).toLocaleDateString()}` : ""}
                     </span>
                   </td>
                   <td data-label="Asked">

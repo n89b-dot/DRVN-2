@@ -1289,6 +1289,7 @@ type RefinedRow<K extends keyof GeneratedTables> = {
  * These explicit domain exceptions match the verified SQL contracts. */
 type NullableArgs = {
   begin_admin_external_operation: "p_order";
+  scrub_deleted_account: "p_email_digest" | "p_digest_key";
   begin_refund_operation: "p_amount_cents" | "p_payment_reference" | "p_refund_reference";
   begin_request_refund_operation: "p_amount_cents";
   complete_transfer_intent: "p_operation_key";
