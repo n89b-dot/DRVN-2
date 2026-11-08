@@ -16,6 +16,15 @@ DRVN's UI is a governed component platform (Livesheet). Before writing **any** J
 4. **Feature logic stays in the route/feature.** Data fetching, server actions, state machines never move into `src/components`. Extract the visual contract, keep the orchestration local.
 5. **The tests enforce all of this** (`npm test`): registry↔export sync, registry↔docs sync, route-boundary imports (no importing another route's components — share via `src/components`), and a **recipe ratchet** (`src/components/recipe-ratchet.test.ts`): raw recipe markup in feature code may only decrease. If the ratchet fails, you should be composing from the component — only a reviewed, deliberate exception may edit `recipe-baseline.json` upward.
 
+## Naming work for the Intelligence OS
+
+The Intelligence OS closes launch items only on evidence it can read from this repo, so name work in its ids (`docs/ids.md` has the families and exact forms):
+
+- **PR title** starts with the batch ids it works under (`OS-W12 OS-R-cron: …`).
+- **`Resolves:`** one line in the PR description listing every id the PR closes (`Resolves: N420 OS-W12`), or `Resolves: none`. `tests/ci/pr-resolves.test.ts` fails a PR that names an id in its title without one.
+- **Test name** carries the canonical id it proves (`describe("… (N421)")`, a guard's `raise exception '… (N416)'`).
+- **Migration** gets a `supabase/MIGRATIONS.md` row whose "Applied to" cell is `not applied`, `shared-dev <date>`, `staging <date>` or `production <date>`.
+
 ## Skills
 
 Committed in `.claude/skills/` — available in local and cloud sessions.

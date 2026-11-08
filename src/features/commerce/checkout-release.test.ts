@@ -8,7 +8,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/job-lease", () => ({ jobHeartbeat: vi.fn() }));
 vi.mock("@/lib/supabase/clear-public-data", () => ({ clearPublicData: vi.fn() }));
 
-import { releaseCartCheckout, type CheckoutReleaseDeps } from "./checkout-release";
+import { releaseCartCheckout, releaseCheckoutHolding, type CheckoutReleaseDeps } from "./checkout-release";
 
 /**
  * OS-W17 (N86): restarting a checkout releases the buyer's own hold only
@@ -115,4 +115,88 @@ it("releases a basket with no intent yet only through the database's own unmappe
 it("reports unresolved when the database refuses the release", async () => {
   rpc.mockResolvedValue({ data: null, error: { code: "55000", message: "Payment outcome unresolved" } });
   await expect(run()).resolves.toEqual({ outcome: "unresolved" });
+});
+
+// OS-W17 ("Edit cart"): Remove on a held part releases the checkout holding it.
+const heldOrders = vi.fn();
+const heldAttempt = vi.fn();
+const orderFilters: unknown[][] = [];
+const attemptFilters: unknown[][] = [];
+function heldAdmin() {
+  const orders: Record<string, unknown> = {};
+  for (const method of ["select", "is", "in", "eq"]) {
+    orders[method] = (...args: unknown[]) => {
+      orderFilters.push([method, ...args]);
+      return orders;
+    };
+  }
+  orders.then = (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
+    Promise.resolve(heldOrders()).then(resolve, reject);
+  const attempts: Record<string, unknown> = {};
+  for (const method of ["select", "eq", "contains"]) {
+    attempts[method] = (...args: unknown[]) => {
+      attemptFilters.push([method, ...args]);
+      return attempts;
+    };
+  }
+  attempts.maybeSingle = heldAttempt;
+  return {
+    from: (table: string) =>
+      table === "orders" ? orders : table === "purchase_attempts" ? attempts : { select: () => ({ in: payments }) },
+    rpc,
+  } as unknown as Parameters<typeof releaseCheckoutHolding>[0];
+}
+
+function holdingSetup() {
+  orderFilters.length = 0;
+  attemptFilters.length = 0;
+  heldOrders.mockReturnValue({
+    data: [
+      { id: "order-1", buyer_id: "buyer-1", order_items: [{ listing_id: "listing-1" }] },
+      { id: "order-2", buyer_id: "buyer-1", order_items: [{ listing_id: "listing-2" }] },
+    ],
+    error: null,
+  });
+  heldAttempt.mockResolvedValue({
+    data: { idempotency_key: "attempt-key", result: { orders: [{ order_id: "order-1" }, { order_id: "order-2" }], skipped: [] } },
+    error: null,
+  });
+}
+
+it("Edit cart: removing a held part releases the whole basket its checkout reserved, payment first", async () => {
+  holdingSetup();
+  await expect(
+    releaseCheckoutHolding(heldAdmin(), { listingId: "listing-2", buyerId: "buyer-1" }, deps as unknown as CheckoutReleaseDeps)
+  ).resolves.toEqual({ outcome: "released" });
+  expect(orderFilters).toContainEqual(["eq", "buyer_id", "buyer-1"]);
+  expect(orderFilters).toContainEqual(["is", "origin_offer_id", null]);
+  expect(attemptFilters).toContainEqual(["eq", "buyer_id", "buyer-1"]);
+  expect(attemptFilters).toContainEqual(["contains", "result", { orders: [{ order_id: "order-2" }] }]);
+  expect(deps.cancel).toHaveBeenCalledWith("pi_1");
+  expect(rpc).toHaveBeenCalledWith("release_cart_checkout", {
+    p_buyer: "buyer-1",
+    p_idempotency_key: "attempt-key",
+    p_reference: "pi_1",
+  });
+});
+
+it("Edit cart: a guest's release is scoped to the orders in this browser's receipt", async () => {
+  holdingSetup();
+  await releaseCheckoutHolding(heldAdmin(), { listingId: "listing-1", guestOrderIds: ["order-1", "order-2"] }, deps as unknown as CheckoutReleaseDeps);
+  expect(orderFilters).toContainEqual(["in", "id", ["order-1", "order-2"]]);
+  expect(orderFilters.some(([method, column]) => method === "eq" && column === "buyer_id")).toBe(false);
+  expect(attemptFilters).toContainEqual(["eq", "buyer_id", "buyer-1"]);
+  expect(rpc).toHaveBeenCalledWith("release_cart_checkout", expect.objectContaining({ p_buyer: "buyer-1" }));
+});
+
+it("Edit cart: changes nothing when no live checkout of the buyer's holds the part", async () => {
+  holdingSetup();
+  await expect(
+    releaseCheckoutHolding(heldAdmin(), { listingId: "listing-9", buyerId: "buyer-1" }, deps as unknown as CheckoutReleaseDeps)
+  ).resolves.toEqual({ outcome: "none" });
+  await expect(
+    releaseCheckoutHolding(heldAdmin(), { listingId: "listing-1", guestOrderIds: [] }, deps as unknown as CheckoutReleaseDeps)
+  ).resolves.toEqual({ outcome: "none" });
+  expect(deps.cancel).not.toHaveBeenCalled();
+  expect(rpc).not.toHaveBeenCalled();
 });

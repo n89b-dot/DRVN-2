@@ -116,12 +116,11 @@
     "20261107220700_withdraw_listing.sql",
     "20261107220800_open_beta_and_guest_holds.sql",
     "20261107230000_blocks_system_moves_and_enquiry_filters.sql",
-    "20261107231001_age_confirmation.sql",
-    "20261107231002_copyright_takedown.sql",
-    "20261107231003_policy_announcements.sql",
     "20261107232000_cart_checkout_release.sql",
     "20261108110000_payout_deadline_fences.sql",
-    "20261108110100_withdraw_listing_followup.sql"
+    "20261108110100_withdraw_listing_followup.sql",
+    "20261108110200_mod_sheet_lock_everywhere.sql",
+    "20261108110300_guest_cart_checkout_release.sql"
   ],
   "cells": {
     "0057_explore_search.sql": [
@@ -549,6 +548,15 @@
     ],
     "20261107210100_settlement_reconciliation.sql": [
       "shared dev project (present by probe, 7 Nov 2026; apply date not recorded)"
+    ],
+    "20261107231001_age_confirmation.sql": [
+      "shared dev project (2026-11-08)"
+    ],
+    "20261107231002_copyright_takedown.sql": [
+      "shared dev project (2026-11-08)"
+    ],
+    "20261107231003_policy_announcements.sql": [
+      "shared dev project (2026-11-08)"
     ],
     "20261108100000_payout_setup_started.sql": [
       "—"

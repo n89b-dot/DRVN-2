@@ -17,9 +17,13 @@ import {
 } from "@/lib/mods/parse";
 import { modTypeByKey, modTypeFor, PICK_LIST, stockLineLabel, type ModType } from "@/lib/mods/stock-parts";
 
-import { unlinkModListing } from "@/app/(product)/sell/actions";
-
-import { confirmLostModSave, modSheetRevision, readPartLink, saveModItems, type ModItemInput } from "../../actions";
+import {
+  confirmLostModSave,
+  readPartLink,
+  saveModItems,
+  unlinkModListing,
+  type ModItemInput,
+} from "../../actions";
 import { useUnsavedGuard } from "./use-unsaved";
 import { draftRow, listRow, type BuildDraft, type BuildList } from "@/features/agent/build-change";
 
@@ -440,25 +444,34 @@ export function ModsEditor({
 
   function unlink(row: Row) {
     if (!row.id) return;
+    const lineId = row.id;
     setUnlinkingKey(row.key);
-    const formData = new FormData();
-    formData.set("mod_item_id", row.id);
-    formData.set("car_id", carId);
     startTransition(async () => {
-      // Unlinking changes this line on the server. If nothing else changed
-      // first, this editor is still current afterwards; otherwise its next
-      // save is refused as stale, which is right (N65).
-      const before = await modSheetRevision(carId);
-      const result = await unlinkModListing(formData);
-      if (!result?.error && before === revision.current) {
-        const after = await modSheetRevision(carId);
-        if (after) revision.current = after;
+      // One call, over the revision this editor holds: the database refuses
+      // it if anything else changed the sheet first, and otherwise hands back
+      // the revision the unlink itself produced. Reading the revision around
+      // a separate unlink request let a line another tab added in between be
+      // adopted unseen, and this editor's next save deleted it.
+      let result: Awaited<ReturnType<typeof unlinkModListing>>;
+      try {
+        if (unconfirmed.current) {
+          // A save whose response was lost: adopt its revision only if the
+          // sheet is exactly what it sent (the same rule a save follows).
+          const landed = await confirmLostModSave(carId, unconfirmed.current);
+          if (landed) revision.current = landed;
+          unconfirmed.current = null;
+        }
+        result = await unlinkModListing(carId, lineId, revision.current);
+      } catch (error) {
+        unstable_rethrow(error);
+        result = { error: "Couldn't confirm the link was removed. Reload to see the latest." };
       }
-      if (result?.error) {
+      if (result.error) {
         // Surface the refusal in the editor's existing status line instead of
         // clearing the link locally while the server kept it.
         setStatus({ kind: "error", message: result.error });
       } else {
+        if (result.revision) revision.current = result.revision;
         updateRow(row.key, { linked_listing_id: null, linked_status: null });
       }
       setUnlinkingKey(null);

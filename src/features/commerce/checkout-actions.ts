@@ -7,7 +7,7 @@ import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { abuseIdentity } from "@/lib/abuse-identity";
-import { getCartIds, removeCartIds } from "@/lib/cart";
+import { getCartIds, removeCartIds, setCartIds } from "@/lib/cart";
 import { guestCheckoutIdentity, isPlausibleEmail, setGuestOrders } from "@/lib/guest-checkout";
 import { resolveGuestBuyer, sendOrderAccessLink } from "./guest-buyer";
 import { AGE_CONFIRMATION_REQUIRED, ageConfirmedIn } from "@/lib/age-confirmation";
@@ -22,9 +22,10 @@ import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { capture } from "@/lib/analytics";
 import { createClient } from "@/lib/supabase/server";
-import type { Json, OrderStatus, PurchaseBeginResult } from "@/lib/database.types";
+import type { Json, OrderStatus, PurchaseBeginResult, ShippingRateQuote } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
 import { cartCheckoutRequestKey, forgetCheckoutKey, rememberCheckoutKey } from "@/lib/checkout-key";
+import { CART_ATTEMPT_COLUMNS, findOwnCartAttemptForOrder, isOrderId } from "@/lib/checkout-data";
 import type { CheckoutBreakdown, CommerceState, CheckoutOutcome, ShippingDetails } from "./action-types";
 import { releaseCartCheckout } from "./checkout-release";
 
@@ -74,33 +75,125 @@ async function ownHeldListingIds(
   return held;
 }
 
-/** True when a saved attempt exists under this payment key and none of its
- *  orders is still waiting for payment. Unknown (a failed read) is "not
- *  over": replaying is always the safe default, never a second reservation. */
-async function attemptIsOver(idempotencyKey: string): Promise<boolean> {
-  const admin = createAdminClient();
+/** The order ids a saved attempt reserved. */
+function attemptOrderIds(result: Json | null): string[] {
+  return result && typeof result === "object" && !Array.isArray(result) && Array.isArray(result.orders)
+    ? result.orders.flatMap((order) =>
+        order && typeof order === "object" && !Array.isArray(order) && typeof order.order_id === "string"
+          ? [order.order_id]
+          : []
+      )
+    : [];
+}
+
+/** What purchase_begin fingerprinted an attempt with: its basket and the
+ *  shipping overrides it reserved at. Null when malformed. */
+function attemptFingerprint(
+  fingerprint: Json | null
+): { listingIds: string[]; overrides: Record<string, number> } | null {
+  if (!fingerprint || typeof fingerprint !== "object" || Array.isArray(fingerprint)) return null;
+  const ids = fingerprint.ids;
+  const listingIds =
+    Array.isArray(ids) && ids.every((id): id is string => typeof id === "string") ? ids : null;
+  const rawOverrides =
+    fingerprint.shipping && typeof fingerprint.shipping === "object" && !Array.isArray(fingerprint.shipping)
+      ? fingerprint.shipping
+      : null;
+  if (!listingIds?.length || !rawOverrides) return null;
+  const overrides = Object.fromEntries(
+    Object.entries(rawOverrides).filter(
+      (entry): entry is [string, number] =>
+        typeof entry[1] === "number" && Number.isInteger(entry[1]) && entry[1] >= 0
+    )
+  );
+  return { listingIds, overrides };
+}
+
+const GUEST_ATTEMPT_UNREADABLE =
+  "We couldn't check the checkout you started. Nothing new was charged. Try again.";
+const GUEST_DELIVERY_UNRECOVERABLE =
+  "Your checkout is holding these parts, but we couldn't recover its delivery plan. Nothing was charged. The hold lapses within 15 minutes; check out again then.";
+
+type GuestAttempt =
+  /** No attempt under this key: plan and reserve afresh. */
+  | { state: "none" }
+  /** Its orders are over (lapsed, failed, released), it reserved nothing, or
+   *  it belongs to another buyer: start a new attempt under a new key. */
+  | { state: "over" }
+  /** Resume it with exactly what it reserved at. */
+  | { state: "resume"; plan: FulfillmentPlan }
+  | { state: "error"; error: string };
+
+/**
+ * OS-W17 follow-up: a guest's checkout, resumed after a reload with the same
+ * details, replays the attempt under the same key. Fulfilment must not be
+ * re-planned for it: its parts are reserved now (by this guest), so planning
+ * sees no active line and produces empty shipping overrides, which
+ * purchase_begin refuses against the attempt's fingerprint. The attempt's
+ * own frozen fulfilment is recovered instead: the overrides it reserved at,
+ * and for DRVN-shipped lines the quotes its orders consumed (so a freeze that
+ * was interrupted can finish). Guest quotes carry no buyer, so a quote is
+ * only reused when one of this attempt's own orders consumed it, at the
+ * amount the attempt reserved.
+ */
+async function recoverGuestAttempt(
+  admin: ReturnType<typeof createAdminClient>,
+  input: { idempotencyKey: string; buyerId: string; isCollection: boolean }
+): Promise<GuestAttempt> {
   const { data: attempt, error } = await admin
     .from("purchase_attempts")
-    .select("result")
-    .eq("idempotency_key", idempotencyKey)
+    .select("buyer_id, request_fingerprint, result")
+    .eq("idempotency_key", input.idempotencyKey)
     .maybeSingle();
-  if (error || !attempt) return false;
-  const result = attempt.result;
-  const orderIds =
-    result && typeof result === "object" && !Array.isArray(result) && Array.isArray(result.orders)
-      ? result.orders.flatMap((order) =>
-          order && typeof order === "object" && !Array.isArray(order) && typeof order.order_id === "string"
-            ? [order.order_id]
-            : []
-        )
-      : [];
-  if (!orderIds.length) return false;
+  if (error) {
+    reportError("[checkout] guest attempt lookup failed", { error });
+    return { state: "error", error: GUEST_ATTEMPT_UNREADABLE };
+  }
+  if (!attempt) return { state: "none" };
+  if (attempt.buyer_id !== input.buyerId) return { state: "over" };
+  const orderIds = attemptOrderIds(attempt.result);
+  if (!orderIds.length) return { state: "over" };
+
   const { data: orders, error: ordersError } = await admin
     .from("orders")
     .select("id, status")
     .in("id", orderIds);
-  if (ordersError || orders?.length !== orderIds.length) return false;
-  return orders.every((order) => TERMINAL_ORDER_STATUSES.has(order.status));
+  if (ordersError || orders?.length !== orderIds.length) {
+    reportError("[checkout] guest attempt orders could not be verified", { ordersError });
+    return { state: "error", error: GUEST_ATTEMPT_UNREADABLE };
+  }
+  if (orders.every((order) => TERMINAL_ORDER_STATUSES.has(order.status))) return { state: "over" };
+
+  const fingerprint = attemptFingerprint(attempt.request_fingerprint);
+  if (!fingerprint) {
+    reportError("[checkout] guest attempt fingerprint was malformed", { orderIds });
+    return { state: "error", error: GUEST_ATTEMPT_UNREADABLE };
+  }
+  const quotes = new Map<string, ShippingRateQuote>();
+  // Collected baskets override every line to zero and freeze no quote.
+  const quoted = input.isCollection ? [] : Object.keys(fingerprint.overrides);
+  if (quoted.length) {
+    const { data: consumed, error: quotesError } = await admin
+      .from("shipping_rate_quotes")
+      .select("*")
+      .in("consumed_order_id", orderIds);
+    if (quotesError || !Array.isArray(consumed)) {
+      reportError("[checkout] guest attempt quotes could not be read", { quotesError });
+      return { state: "error", error: GUEST_ATTEMPT_UNREADABLE };
+    }
+    for (const listingId of quoted) {
+      const quote = consumed.find(
+        (candidate) =>
+          candidate.listing_id === listingId && candidate.amount_cents === fingerprint.overrides[listingId]
+      );
+      if (!quote) {
+        reportError("[checkout] guest attempt quote could not be recovered", { listingId });
+        return { state: "error", error: GUEST_DELIVERY_UNRECOVERABLE };
+      }
+      quotes.set(listingId, quote);
+    }
+  }
+  return { state: "resume", plan: { overrides: fingerprint.overrides, quotes } };
 }
 
 /** OS-W17 (N485): the payment step's breakdown, from what was reserved. */
@@ -573,6 +666,17 @@ function readShipping(formData: FormData): { shipping?: ShippingDetails; error?:
   };
 }
 
+const SHIPPING_FIELDS = [
+  "name", "line1", "line2", "city", "postcode", "country", "state", "phone", "isCollection",
+] as const satisfies readonly (keyof ShippingDetails)[];
+
+/** The submitted delivery details are the ones an attempt was started with
+ *  (its journalled context; jsonb doesn't keep key order, so field by field). */
+function sameShipping(submitted: ShippingDetails | undefined, saved: Json | undefined): boolean {
+  if (!submitted || !saved || typeof saved !== "object" || Array.isArray(saved)) return false;
+  return SHIPPING_FIELDS.every((field) => (saved[field] ?? null) === (submitted[field] ?? null));
+}
+
 export async function checkoutCart(
   _prev: CommerceState,
   formData: FormData
@@ -597,9 +701,14 @@ export async function checkoutCart(
   }
   const browserIdentity = user ? `user:${user.id}` : null;
   let checkoutRequestKey = user ? cartCheckoutRequestKey(user.id, rawKey) : null;
+  // OS-W17: "Finish checkout" on an order resumes by that order, because
+  // another device has neither this checkout's key cookie nor its cart.
+  const resumeOrderId = user && isOrderId(formData.get("order_id")) ? String(formData.get("order_id")) : null;
+  let resumingByOrder = false;
   const startNewAttempt = () => {
     rawKey = randomUUID();
     checkoutRequestKey = user ? cartCheckoutRequestKey(user.id, rawKey) : null;
+    resumingByOrder = false;
   };
   let cartIds: string[] | undefined;
 
@@ -615,12 +724,20 @@ export async function checkoutCart(
 
   if (user && checkoutRequestKey) {
     const admin = createAdminClient();
-    const { data: attempt, error: attemptError } = await admin
-      .from("purchase_attempts")
-      .select("idempotency_key, request_fingerprint, result, checkout_context")
-      .eq("checkout_request_key", checkoutRequestKey)
-      .eq("buyer_id", user.id)
-      .maybeSingle();
+    const { data: attempt, error: attemptError } = resumeOrderId
+      ? await findOwnCartAttemptForOrder(admin, user.id, resumeOrderId)
+      : await admin
+          .from("purchase_attempts")
+          .select(CART_ATTEMPT_COLUMNS)
+          .eq("checkout_request_key", checkoutRequestKey)
+          .eq("buyer_id", user.id)
+          .maybeSingle();
+    if (attempt && resumeOrderId) {
+      // The attempt was found by its order and its buyer (ownership); it is
+      // bound to its own request key, which purchase_begin checks again.
+      resumingByOrder = true;
+      if (attempt.checkout_request_key) checkoutRequestKey = attempt.checkout_request_key;
+    }
 
     if (attemptError) {
       reportError("[checkout] durable request lookup failed", {
@@ -720,13 +837,19 @@ export async function checkoutCart(
           ([listingId, quoteId]) =>
             typeof quoteId !== "string" || formData.get(`quote_${listingId}`) !== quoteId
         );
-        const expectedIdempotencyKey = createHash("sha256")
-          .update(JSON.stringify([browserIdentity, rawKey, shipping, [...listingIds].sort()]))
-          .digest("hex");
-        const detailsChanged = expectedIdempotencyKey !== attempt.idempotency_key;
+        // Resumed by order (another device): this page never held the
+        // attempt's key, so the details are compared with what the attempt
+        // was started with, and its basket is the attempt's, not this
+        // device's cart.
+        const detailsChanged = resumingByOrder
+          ? !sameShipping(shipping, context.shipping)
+          : createHash("sha256")
+              .update(JSON.stringify([browserIdentity, rawKey, shipping, [...listingIds].sort()]))
+              .digest("hex") !== attempt.idempotency_key;
         cartIds = await getCartIds();
         const requested = new Set(listingIds);
         const cartChanged =
+          !resumingByOrder &&
           cartIds.length > 0 &&
           (cartIds.length !== requested.size || cartIds.some((id) => !requested.has(id)));
 
@@ -750,6 +873,12 @@ export async function checkoutCart(
           revalidatePath("/marketplace");
           revalidatePath("/checkout");
           for (const id of listingIds) revalidatePath(`/listings/${id}`);
+          if (resumingByOrder) {
+            // Restarting from another device: the basket is the released
+            // attempt's, so it becomes this device's cart to check out again.
+            cartIds = [...new Set([...listingIds, ...cartIds])];
+            await setCartIds(cartIds);
+          }
           startNewAttempt();
         } else {
           replay = {
@@ -818,6 +947,33 @@ export async function checkoutCart(
     }
   }
 
+  // Carried on the form so a double-submitted checkout replays the first
+  // result instead of creating a second set of orders.
+  const effectiveBrowserIdentity = browserIdentity ?? await guestCheckoutIdentity();
+  let effectiveRawKey = rawKey || randomUUID();
+  const guestKeyFor = (key: string) => createHash("sha256")
+    .update(JSON.stringify([effectiveBrowserIdentity, key, shipping, [...ids].sort()]))
+    .digest("hex");
+  let idempotencyKey = replay?.idempotencyKey ?? guestKeyFor(effectiveRawKey);
+  let guestResume: FulfillmentPlan | undefined;
+  if (!user && !replay && buyerId) {
+    // OS-W17 (N85): a guest's key now survives a reload too. An attempt that
+    // is over (lapsed or failed) would answer with dead orders, so a new
+    // attempt starts instead; a live one resumes with the fulfilment it
+    // froze, never a re-plan of its now-reserved lines.
+    const guestAttempt = await recoverGuestAttempt(createAdminClient(), {
+      idempotencyKey,
+      buyerId,
+      isCollection: shipping?.isCollection ?? false,
+    });
+    if (guestAttempt.state === "error") return { error: guestAttempt.error };
+    if (guestAttempt.state === "over") {
+      effectiveRawKey = randomUUID();
+      idempotencyKey = guestKeyFor(effectiveRawKey);
+    }
+    if (guestAttempt.state === "resume") guestResume = guestAttempt.plan;
+  }
+
   // Fulfillment plan (0053, §14/§15): pickup eligibility and DRVN-Shipping
   // amounts are validated server-side — the checkbox and the rate picker are
   // requests, not facts.
@@ -829,6 +985,10 @@ export async function checkoutCart(
     // or rewrite the already-frozen order details during recovery.
     plan = { overrides: replay.overrides, quotes: new Map() };
     checkoutContext = replay.context;
+  } else if (guestResume) {
+    // The same for a guest: the attempt's own overrides, and the quotes its
+    // orders consumed (the guest freeze replays exactly, never re-rates).
+    plan = guestResume;
   } else {
     const quoteIds: Record<string, string> = {};
     for (const id of ids) {
@@ -861,24 +1021,6 @@ export async function checkoutCart(
           [...planned.quotes.entries()].map(([listingId, quote]) => [listingId, quote.id])
         ),
       };
-    }
-  }
-
-  // Carried on the form so a double-submitted checkout replays the first
-  // result instead of creating a second set of orders.
-  const effectiveBrowserIdentity = browserIdentity ?? await guestCheckoutIdentity();
-  let effectiveRawKey = rawKey || randomUUID();
-  const guestKeyFor = (key: string) => createHash("sha256")
-    .update(JSON.stringify([effectiveBrowserIdentity, key, shipping, [...ids].sort()]))
-    .digest("hex");
-  let idempotencyKey = replay?.idempotencyKey ?? guestKeyFor(effectiveRawKey);
-  if (!user && !replay) {
-    // OS-W17 (N85): a guest's key now survives a reload too. If the attempt
-    // it names is over (lapsed or failed), replaying it would answer with
-    // dead orders, so a new attempt starts instead.
-    if (await attemptIsOver(idempotencyKey)) {
-      effectiveRawKey = randomUUID();
-      idempotencyKey = guestKeyFor(effectiveRawKey);
     }
   }
 
@@ -928,7 +1070,9 @@ export async function checkoutCart(
   if (outcome.payment) {
     // OS-W17 (N85): the basket is reserved under this key; a reload renders
     // it back and resumes this payment instead of starting a second one.
-    await rememberCheckoutKey(effectiveRawKey);
+    // A checkout resumed by its order has no key on this device (the page
+    // keeps resuming it by order), so nothing is remembered for it.
+    if (!resumingByOrder) await rememberCheckoutKey(effectiveRawKey);
     return { payment: outcome.payment };
   }
 
@@ -936,7 +1080,7 @@ export async function checkoutCart(
     // Orders that exist without a settled outcome (processing, or a payment
     // still being reconciled) are retried under the same key. A key whose
     // attempt has ended is rotated on the next submit, so it can stay.
-    if (outcome.orderIds.length) await rememberCheckoutKey(effectiveRawKey);
+    if (outcome.orderIds.length && !resumingByOrder) await rememberCheckoutKey(effectiveRawKey);
     return { error: outcome.error ?? "Nothing could be purchased." };
   }
   await forgetCheckoutKey();

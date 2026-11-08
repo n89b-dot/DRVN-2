@@ -5,7 +5,12 @@ import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
 import { Foot, ObjectRow, PaymentModeNotice } from "@/components/ui";
-import { loadCartSummary, loadCheckoutResume, loadInFlightCheckout } from "@/lib/checkout-data";
+import {
+  loadCartSummary,
+  loadCheckoutResume,
+  loadCheckoutResumeForOrder,
+  loadInFlightCheckout,
+} from "@/lib/checkout-data";
 import { readCheckoutKey } from "@/lib/checkout-key";
 import { listSavedCards } from "@/lib/payments/customers";
 import { formatPrice } from "@/lib/payments/fee";
@@ -22,21 +27,33 @@ export const metadata = { title: "Checkout - DRVN" };
  * steps. Right: the persistent order summary rail. Reference pass: lululemon
  * (stepper, collapsing steps) + Etsy (secure chrome, review-at-right).
  */
-export default async function CheckoutPage() {
+export default async function CheckoutPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ order?: string | string[] }>;
+}) {
+  const { order } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // OS-W17: "Finish checkout" on an order carries the order, so a signed-in
+  // buyer can finish on a device that has neither this checkout's key nor
+  // its cart. The order must be theirs and its cart checkout still live;
+  // anything else falls back to this device's own checkout.
+  const byOrder = await loadCheckoutResumeForOrder(user?.id ?? null, typeof order === "string" ? order : null);
 
   // Submitting the shipping step reserves every listing in the basket, and a
   // server action re-renders the route it ran on — so by the time this runs
   // again mid-payment the cart legitimately holds nothing `active`. Falling
   // back to the in-flight orders keeps the buyer on the Payment Element
   // instead of bouncing them to /cart with the charge already started.
-  const cart =
-    (await loadCartSummary().then((summary) =>
-      summary.lines.length ? summary : null
-    )) ?? (await loadInFlightCheckout(user?.id ?? null));
+  const cart = byOrder
+    ? await loadInFlightCheckout(user?.id ?? null, byOrder.orderIds)
+    : ((await loadCartSummary().then((summary) =>
+        summary.lines.length ? summary : null
+      )) ?? (await loadInFlightCheckout(user?.id ?? null)));
   if (!cart?.lines.length) redirect("/cart");
 
   // Guest checkout remains available outside the controlled-beta rollout.
@@ -49,7 +66,7 @@ export default async function CheckoutPage() {
   // the details it was started with, so resuming is one press.
   const rememberedKey = await readCheckoutKey();
   const idempotencyKey = rememberedKey ?? randomUUID();
-  const resume = await loadCheckoutResume(user?.id ?? null, rememberedKey);
+  const resume = byOrder?.resume ?? (await loadCheckoutResume(user?.id ?? null, rememberedKey));
 
   return (
     <div className="wrap wrap--wide pb-10">
@@ -113,6 +130,7 @@ export default async function CheckoutPage() {
           <CheckoutSteps
             idempotencyKey={idempotencyKey}
             resume={resume}
+            orderId={byOrder && typeof order === "string" ? order : undefined}
             needsEmail={!user}
             allowsCollection={cart.allowsCollection || Boolean(resume?.shipping.isCollection)}
             mixedFulfilment={cart.mixedFulfilment}
