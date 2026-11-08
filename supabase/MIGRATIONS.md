@@ -52,6 +52,14 @@ TLS. Details: "Recording without running" below.
 
 Apply after every earlier migration, together with the app from #157: the new worker calls `account_deletion_hold_gate` and `account_deletion_finalise`, which the old database doesn't have, and the old worker still runs against the new database (its RPCs are unchanged or restated). New `account_deletion_requests.hold_order_id` (FK to orders, `on delete set null`, partial index), `private.account_deletion_lock_key`, `private.account_deletion_hold_order`, `private.account_deletion_lease_held`, `private.requeue_account_deletion_for_hold`, `private.account_deletion_hold_appeared` and the deferred constraint trigger `account_deletion_hold_watch` on `orders`, `returns`, `refund_operations`, `payment_recoveries`, `transfer_intents` and `payment_requests`. Restated: `pause_account_deletion_hold` (from `20260905185725`; records and names the order to settle) and `block_deleted_account_writes` (from `20260905130250`; a member whose deletion is paused on a hold may write). What holds a deletion (`account_deletion_blockers`) is unchanged. Guards: `deletion_hold_before_ban_guard.sql`, `deletion_hold_race_guard.sql` (two sessions over dblink).
 
+## November 8 — an open bank chargeback holds account deletion (ruled by Neil, 8 Nov 2026)
+
+| File | Applied to |
+|---|---|
+| `20261108140000_chargeback_holds_deletion.sql` | not applied |
+
+Apply after `20261108130400`. `account_deletion_blockers` (from `20260905185725`) gains one hold: an unresolved chargeback in `stripe_dispute_journal` on any order the member bought or sold, whatever the order's status (unresolved means not `won`, `warning_closed` or `lost`, as for the payout freeze in `20261107130000`). Restated from `20261108130400` with only the chargeback added: `private.account_deletion_hold_order`, `private.requeue_account_deletion_for_hold`, `pause_account_deletion_hold` and `private.account_deletion_hold_appeared`. New: `private.account_deletion_hold_note`, `private.account_deletion_hold_code` (blocker code `open_chargeback` when the named order waits on the bank) and the deferred constraint trigger `account_deletion_hold_watch` on `stripe_dispute_journal`. The app reads `blocker_code` on the signed-out status page; the old app ignores it. Guard: `deletion_chargeback_hold_guard.sql`.
+
 ## November 8 — files merged with no entry here (record gaps after #143)
 
 These four merged on 8 Nov 2026 after `tests/ci/migrations-md.test.ts` (#143) and before anyone added their rows, which left `main` red. `node scripts/apply-migration.mjs --target shared-dev --status` (read-only, 8 Nov) lists each of them, and the three `120000`–`120020` files above, as applied on the shared dev project. They are not on staging or production.

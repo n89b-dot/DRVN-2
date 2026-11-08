@@ -12,7 +12,7 @@ export function deletionStatusNotice(status: DeletionStatus): { title: string; b
     case "temporary_financial_hold":
       return {
         title: "Your deletion request is on hold",
-        body: `${status.next_action ?? "Finish your open orders, returns, refunds and payouts, then ask again."} Nothing has been deleted yet, and you can keep using your account to finish them.`,
+        body: `${status.next_action ?? "Finish your open orders, returns, refunds and payouts, then ask again. An open bank chargeback also holds it until the bank decides."} Nothing has been deleted yet, and you can keep using your account to finish them.`,
       };
     case "operator_attention":
       return {
@@ -42,7 +42,11 @@ export const DELETION_REFERENCE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
  * ban (or lifts it), so a held member is told they can sign in to settle the
  * order; nothing else here assumes the account can still be used.
  */
-export function deletionReferenceNotice(outcome: string, holdOrderId: string | null = null): { title: string; body: string } | null {
+export function deletionReferenceNotice(
+  outcome: string,
+  holdOrderId: string | null = null,
+  blockerCode: string | null = null,
+): { title: string; body: string } | null {
   switch (outcome) {
     case "cleanup_pending":
       return {
@@ -52,9 +56,17 @@ export function deletionReferenceNotice(outcome: string, holdOrderId: string | n
     // OS-W11: a held deletion is paused before anything is deleted, and the
     // member keeps sign-in to settle what holds it.
     case "temporary_financial_hold":
+      // Ruled 8 Nov 2026: an open bank chargeback holds deletion even on a
+      // completed order. It is the bank's to decide, not the member's to settle.
+      if (holdOrderId && blockerCode === "open_chargeback") {
+        return {
+          title: `Paused: order ${orderReference(holdOrderId)} has an open bank chargeback`,
+          body: "The bank is still deciding it. Deletion carries on by itself once it has, with nothing more needed from you. You can still sign in to see the order.",
+        };
+      }
       return {
         title: holdOrderId ? `Paused: settle order ${orderReference(holdOrderId)}` : "Your deletion is paused on an open transaction",
-        body: `${holdOrderId ? "That order" : "An order, return, refund or payout on your account"} is still in progress. You can still sign in to settle it. Deletion carries on by itself once it has, with nothing more needed from you.`,
+        body: `${holdOrderId ? "That order" : "An order, return, refund, payout or bank chargeback on your account"} is still in progress. You can still sign in to settle it. Deletion carries on by itself once it has, with nothing more needed from you.`,
       };
     case "operator_attention":
       return {

@@ -42,3 +42,17 @@ describe("OS-W11 follow-up: a held deletion names the order to settle", () => {
     expect(notice?.body).toContain("still sign in");
   });
 });
+
+describe("an open bank chargeback holds deletion (ruled 8 Nov 2026)", () => {
+  it("names the order and says the bank decides it", () => {
+    const notice = deletionReferenceNotice("temporary_financial_hold", "a1b2c3d4-0000-4000-8000-000000000001", "open_chargeback");
+    expect(notice?.title).toBe("Paused: order A1B2C3D4 has an open bank chargeback");
+    expect(notice?.body).toContain("bank is still deciding");
+    expect(notice?.body).not.toMatch(/settle/i);
+  });
+
+  it("keeps the settle wording for every other hold", () => {
+    const notice = deletionReferenceNotice("temporary_financial_hold", "a1b2c3d4-0000-4000-8000-000000000001", "active_financial_obligations");
+    expect(notice?.title).toBe("Paused: settle order A1B2C3D4");
+  });
+});

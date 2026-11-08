@@ -30,6 +30,7 @@ export default async function AccountDeletionStatusPage({ params }: { params: Pr
   let outcome: string | null = null;
   let updatedAt: string | null = null;
   let holdOrderId: string | null = null;
+  let blockerCode: string | null = null;
   let failed = false;
   if (DELETION_REFERENCE.test(reference)) {
     // account_deletion_requests is the owner's own row under RLS, and the
@@ -37,7 +38,7 @@ export default async function AccountDeletionStatusPage({ params }: { params: Pr
     // reference alone.
     const { data, error } = await createAdminClient()
       .from("account_deletion_requests")
-      .select("outcome, updated_at, hold_order_id")
+      .select("outcome, updated_at, hold_order_id, blocker_code")
       .eq("job_id", reference)
       .order("updated_at", { ascending: false })
       .limit(1);
@@ -48,9 +49,10 @@ export default async function AccountDeletionStatusPage({ params }: { params: Pr
       outcome = data[0].outcome;
       updatedAt = data[0].updated_at;
       holdOrderId = data[0].outcome === "temporary_financial_hold" ? data[0].hold_order_id : null;
+      blockerCode = data[0].outcome === "temporary_financial_hold" ? data[0].blocker_code : null;
     }
   }
-  const notice = outcome ? deletionReferenceNotice(outcome, holdOrderId) : null;
+  const notice = outcome ? deletionReferenceNotice(outcome, holdOrderId, blockerCode) : null;
 
   return (
     <div className="sheet-card">
@@ -68,7 +70,7 @@ export default async function AccountDeletionStatusPage({ params }: { params: Pr
               that holds it is one sign-in away. */}
           {holdOrderId && (
             <div className="mt-5">
-              <ButtonLink href={`/login?next=${encodeURIComponent(`/orders/${holdOrderId}`)}`}>Sign in to settle it</ButtonLink>
+              <ButtonLink href={`/login?next=${encodeURIComponent(`/orders/${holdOrderId}`)}`}>{blockerCode === "open_chargeback" ? "Sign in to see the order" : "Sign in to settle it"}</ButtonLink>
             </div>
           )}
           {updatedAt && (
