@@ -44,6 +44,10 @@ begin
   insert into auth.mfa_factors(id, user_id, friendly_name, factor_type, status, created_at, updated_at)
   values (gen_random_uuid(), admin_actor, 'guard', 'totp', 'verified', now(), now());
   insert into public.admin_users(user_id, mfa_factor_id) select admin_actor, id from auth.mfa_factors where user_id = admin_actor;
+  -- ...and only in a session that factor raised to AAL2 (#110): the session
+  -- row, whose id the step-up claims carry as session_id.
+  insert into auth.sessions(id, user_id, factor_id, aal, created_at, updated_at)
+  select f.user_id, f.user_id, f.id, 'aal2', now(), now() from auth.mfa_factors f where f.user_id = admin_actor;
   insert into public.listings(seller_id, title, category, price_cents, shipping_cents, currency, status)
   values (seller, 'Dispute recourse fixture', 'engine', 10000, 0, 'USD', 'sold') returning id into listing;
 
@@ -358,7 +362,7 @@ begin
   -- The audited reopen: admins with step-up only.
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims', json_build_object('sub', admin_actor, 'role', 'authenticated',
-    'aal', 'aal2', 'amr', json_build_array(json_build_object('method', 'totp',
+    'aal', 'aal2', 'session_id', admin_actor, 'amr', json_build_array(json_build_object('method', 'totp',
     'timestamp', extract(epoch from now())::bigint)))::text, true);
   r := public.execute_admin_command('dispute.reopen', o2, 'New photos from the buyer', jsonb_build_object('orderId', o2));
   perform set_config('role', 'none', true);
