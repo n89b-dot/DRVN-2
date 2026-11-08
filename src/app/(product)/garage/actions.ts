@@ -366,15 +366,6 @@ export type ModItemInput = {
   origin?: "aftermarket" | "stock";
 };
 
-/**
- * Saves the mod sheet.
- *
- * One database function applies the whole desired sheet transactionally.
- * Existing ids update in place so listing links survive; stable new ids make a
- * repeated request converge after a committed response is lost.
- */
-/** The build sheet's current revision (N65), for a caller that changed one
- *  line elsewhere (unlinking a listing) and must move its own token on. */
 /** The sheet exactly as save_mod_items receives it, so a lost save can be
  *  compared with what the database holds (mod_sheet_revision_if_matches). */
 function modSheetPayload(items: ModItemInput[], userId: string) {
@@ -423,11 +414,48 @@ function modSheetPayload(items: ModItemInput[], userId: string) {
   });
 }
 
-export async function modSheetRevision(carId: string): Promise<string | null> {
+/** Every write to a build line takes the sheet's lock (20261108110200); a
+ *  write made elsewhere at the same instant can make the database roll one of
+ *  them back whole. Nothing was written, so trying again is safe. */
+const SHEET_WRITE_COLLIDED = "Another change to this build was saving at the same moment. Nothing was saved — try again.";
+
+/**
+ * Undoes the "release a part" link between a build line and the listing it
+ * spawned (a listing pulled down or repurposed left "For sale" on the line).
+ *
+ * One database call (OS-W23 follow-up): unlink_mod_listing checks the sheet is
+ * still the revision this editor loaded, unlinks under the sheet's lock and
+ * hands back the revision that write produced. Reading the revision before
+ * and after in separate requests let a line another tab added in between be
+ * folded into the revision the editor adopted, and its next save deleted it.
+ */
+export async function unlinkModListing(
+  carId: string,
+  modItemId: string,
+  expectedRevision: string
+): Promise<ActionState & { revision?: string; stale?: boolean }> {
   const { supabase } = await requireUser();
-  if (!carId) return null;
-  const { data, error } = await supabase.rpc("mod_sheet_revision", { p_car: carId });
-  return error ? null : (data ?? null);
+  if (!carId || !modItemId) return { error: "Missing build line." };
+  if (!expectedRevision) return { error: "Reload the build before changing it." };
+
+  const { data, error } = await supabase.rpc("unlink_mod_listing", {
+    p_car: carId,
+    p_mod_item: modItemId,
+    p_expected_revision: expectedRevision,
+  });
+  if (error?.code === "40001" && error.hint === "stale_mod_sheet") return { error: STALE_MOD_SHEET, stale: true };
+  if (error?.code === "40P01") return { error: SHEET_WRITE_COLLIDED };
+  if (error?.code === "42501") return { error: "That car isn't in your garage." };
+  if (error?.code === "P0002") return { error: "That line isn't on this build any more. Reload to see the latest." };
+  if (error) return { error: "Couldn't remove the link. Nothing changed — try again." };
+  const done = data as unknown as { revision?: string; listing_id?: string | null } | null;
+  if (!done?.revision) return { error: "Couldn't remove the link. Nothing changed — try again." };
+
+  const { data: car } = await supabase.from("cars").select("slug").eq("id", carId).maybeSingle();
+  revalidatePath(`/garage/${carId}/edit`);
+  if (car?.slug) revalidatePath(`/cars/${car.slug}`);
+  if (done.listing_id) revalidatePath(`/listings/${done.listing_id}`);
+  return { ok: "Link removed.", revision: done.revision };
 }
 
 /**
@@ -446,6 +474,13 @@ export async function confirmLostModSave(carId: string, items: ModItemInput[]): 
   return error ? null : (data ?? null);
 }
 
+/**
+ * Saves the mod sheet.
+ *
+ * One database function applies the whole desired sheet transactionally.
+ * Existing ids update in place so listing links survive; stable new ids make a
+ * repeated request converge after a committed response is lost.
+ */
 export async function saveModItems(
   carId: string,
   items: ModItemInput[],
@@ -475,6 +510,7 @@ export async function saveModItems(
     p_expected_revision: expectedRevision,
   });
   if (error?.code === "40001" && error.hint === "stale_mod_sheet") return { error: STALE_MOD_SHEET, stale: true };
+  if (error?.code === "40P01") return { error: SHEET_WRITE_COLLIDED };
   if (error) return { error: error.message };
   const saved = data as unknown as { outcome?: string; revision?: string } | null;
   if (saved?.outcome !== "saved") {

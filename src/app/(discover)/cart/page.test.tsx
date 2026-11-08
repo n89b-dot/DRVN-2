@@ -89,6 +89,18 @@ it("N85: the buyer's own held part says their checkout holds it, with the way to
   expect(html).toContain("Finish checkout");
 });
 
+it("Edit cart: a held part keeps Remove beside Finish checkout, so the basket can change", async () => {
+  mocks.listings.mockReturnValue({ data: [listing("reserved")], error: null });
+  mocks.holds.mockResolvedValue(new Map([["listing-1", "/checkout?order=11111111-1111-4111-8111-111111111111"]]));
+
+  const html = await render();
+
+  expect(html).toContain("Finish checkout");
+  expect(html).toContain("<button>Remove</button>");
+  // The summary's Finish checkout resumes the same held checkout by order.
+  expect(html.match(/href="\/checkout\?order=11111111-1111-4111-8111-111111111111"/g)?.length).toBe(2);
+});
+
 it("a part reserved by another buyer still says so", async () => {
   mocks.listings.mockReturnValue({ data: [listing("reserved")], error: null });
 
