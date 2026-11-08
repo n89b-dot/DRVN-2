@@ -11,7 +11,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
-import { directClientConfig, loadSupabaseRootCa, loadTargets, readDbEnv, resolveTarget } from "./supabase-db.mjs";
+import { splitStatements, isTransactionControl, dynamicExecutes } from "./sql-statements.mjs";
+import { directClientConfig, loadDynamicSqlAllowed, loadSupabaseRootCa, loadTargets, readDbEnv, resolveTarget } from "./supabase-db.mjs";
 
 const FILE_NAME = /^(\d{4}|\d{14})_([a-z0-9_]+)\.sql$/;
 // One constant key: two runners against the same database queue, not interleave.
@@ -23,17 +24,17 @@ const HISTORY_DDL = [
   "create table if not exists supabase_migrations.schema_migrations (version text not null primary key, statements text[], name text)",
 ];
 
-/** SQL with `--` and block comments removed (for inspection only, never run). */
-export function stripSqlComments(sql) {
-  return sql.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/--[^\n]*/g, "");
-}
-
-const codeLine = (line) => line.trim() !== "" && !line.trim().startsWith("--");
+/** Blanks `text[start, end)` but keeps its newlines, so error line numbers still match the file. */
+const blank = (text, start, end) => text.slice(0, start) + text.slice(start, end).replace(/[^\n]/g, " ") + text.slice(end);
 
 /**
  * Reads a migration file into what the runner needs: its version and name,
  * a checksum, the body to execute inside the runner's own transaction, and
- * anything that makes it unsafe to run that way or destructive.
+ * anything that makes it unsafe to run that way, a destructive baseline, or
+ * risky on a database that holds data. Statements are found with a
+ * PostgreSQL-aware lexer (strings, quoted identifiers, comments and dollar
+ * quotes), so nothing inside a literal or a function body is mistaken for a
+ * top-level statement, and nothing at top level hides behind one.
  */
 export function parseMigrationFile(file, text, { migrationsDir = path.resolve("supabase/migrations") } = {}) {
   const resolved = path.resolve(file);
@@ -46,41 +47,82 @@ export function parseMigrationFile(file, text, { migrationsDir = path.resolve("s
   if (!match) problems.push("file name is not <version>_<name>.sql");
   const sha256 = createHash("sha256").update(text).digest("hex");
 
+  let statements = splitStatements(text);
+  if (statements.some((statement) => statement.unterminated)) {
+    problems.push("ends inside a string, quoted identifier, comment or dollar quote");
+  }
+
   // Most files wrap themselves in `begin; … commit;`. The runner owns the
   // transaction (so the history row commits with the file), so that one
-  // outer pair is removed; line numbers are kept for error messages.
-  const lines = text.split("\n");
-  const code = lines.map((line, index) => [line, index]).filter(([line]) => codeLine(line));
+  // outer pair is removed.
+  let body = text;
   let wrapped = false;
+  const first = statements[0];
+  const last = statements.at(-1);
   if (
-    code.length >= 2 &&
-    /^begin\s*;\s*(--.*)?$/i.test(code[0][0].trim()) &&
-    /^commit\s*;\s*(--.*)?$/i.test(code[code.length - 1][0].trim())
+    statements.length >= 2 &&
+    /^(begin|start\s+transaction)(\s+(work|transaction))?$/i.test(first.code) &&
+    /^(commit|end)(\s+(work|transaction))?$/i.test(last.code)
   ) {
     wrapped = true;
-    lines[code[0][1]] = "";
-    lines[code[code.length - 1][1]] = "";
+    body = blank(blank(body, last.start, last.end), first.start, first.end);
+    statements = statements.slice(1, -1);
   }
-  const body = lines.join("\n");
-  const inspect = stripSqlComments(body);
 
-  // Anything else that ends or opens a transaction would commit the file
-  // separately from its history row (or leave half of it applied).
-  if (/^\s*(commit|rollback|abort|end\s+(transaction|work)|start\s+transaction|begin(\s+(work|transaction))?)\s*;/im.test(inspect)) {
-    problems.push("controls its own transaction beyond one outer begin/commit");
+  // Any other transaction control would commit part of the file apart from
+  // its history row, release the run lock, or leave the rest outside the
+  // runner's transaction.
+  for (const statement of statements) {
+    if (isTransactionControl(statement)) {
+      problems.push(`has a top-level "${statement.code.split(/\s+/).slice(0, 2).join(" ")}": only one outer begin/commit is allowed`);
+    }
   }
-  if (/\bconcurrently\b/i.test(inspect)) problems.push("uses CONCURRENTLY, which cannot run inside a transaction");
-  if (/^\s*vacuum\b/im.test(inspect)) problems.push("runs VACUUM, which cannot run inside a transaction");
-  if (/\b(create|drop)\s+database\b|\balter\s+system\b/i.test(inspect)) {
+  const codes = statements.map((statement) => statement.code.replace(/\s+/g, " "));
+  if (codes.some((code) => /\bbegin atomic\b/i.test(code))) {
+    problems.push("uses BEGIN ATOMIC; give the function a dollar-quoted body");
+  }
+  if (codes.some((code) => /\bconcurrently\b/i.test(code))) problems.push("uses CONCURRENTLY, which cannot run inside a transaction");
+  if (codes.some((code) => /^vacuum\b/i.test(code))) problems.push("runs VACUUM, which cannot run inside a transaction");
+  if (codes.some((code) => /^((create|drop) database|alter system)\b/i.test(code))) {
     problems.push("changes databases or server settings, which a migration must not do");
   }
 
+  // A baseline: never on a database with tables, and no allow-list overrides it.
   const destructive = [];
   if (/^\s*--\s*DESTRUCTIVE\b/m.test(text)) destructive.push("marked DESTRUCTIVE");
-  if (/\bdrop\s+(schema|owned)\b/i.test(inspect)) destructive.push("drops a schema or everything a role owns");
-  if (/\bexecute\b[^;]*'\s*(drop\s+(table|schema|view|materialized\s+view)|truncate)\b/i.test(inspect)) {
-    destructive.push("drops or truncates tables found at run time");
+  if (codes.some((code) => /^drop (schema|owned)\b/i.test(code))) destructive.push("drops a schema or everything a role owns");
+
+  // Risky on a populated database unless supabase/migration-targets.json
+  // allows this exact file: it empties or drops tables, or runs SQL built at
+  // run time that the text doesn't show to be safe.
+  const risky = [];
+  if (codes.some((code) => /^(truncate|drop (table|materialized view))\b/i.test(code))) {
+    risky.push("truncates or drops a table");
   }
+  const dynamic = (bodies) => bodies.flatMap((inner) => dynamicExecutes(inner)).filter((e) => e.kind !== "safe");
+  for (const statement of statements) {
+    if (/^do\b/i.test(statement.code)) {
+      for (const e of dynamic(statement.bodies)) risky.push(`a DO block runs ${e.kind} dynamic SQL (${e.text.replace(/\s+/g, " ").slice(0, 60)})`);
+    }
+  }
+  // A function this file creates and also calls runs its dynamic SQL now.
+  const created = statements
+    .map((statement) => [statement, statement.code.match(/^create\s+(?:or\s+replace\s+)?(?:function|procedure)\s+(?:[\w"]+\.)?"?(\w+)"?\s*\(/i)])
+    .filter(([, m]) => m);
+  for (const [statement, m] of created) {
+    const unsafe = dynamic(statement.bodies);
+    if (!unsafe.length) continue;
+    const call = new RegExp(`\\b${m[1]}\\s*\\(`, "i");
+    const called = statements.some(
+      // Only statements that run something: not the function's own grants, comments or drops.
+      (other) =>
+        /^(select|with|insert|update|delete|call|values)\b/i.test(other.code)
+          ? call.test(other.code)
+          : /^do\b/i.test(other.code) && other.bodies.some((inner) => call.test(inner)),
+    );
+    if (called) risky.push(`calls ${m[1]}(), which runs ${unsafe[0].kind} dynamic SQL`);
+  }
+  if (destructive.length) destructive.push(...risky.splice(0));
 
   return {
     file,
@@ -93,6 +135,7 @@ export function parseMigrationFile(file, text, { migrationsDir = path.resolve("s
     wrapped,
     problems,
     destructive,
+    risky,
   };
 }
 
@@ -111,7 +154,7 @@ export function confirmationCode(ref, migrations) {
  * What would happen to each file against this database state. Any refusal
  * refuses the whole run before anything is applied.
  */
-export function planMigrations(state, migrations) {
+export function planMigrations(state, migrations, allowed = {}) {
   const seen = new Set();
   return migrations.map((m) => {
     if (m.problems.length) return { migration: m, action: "refuse", reason: m.problems.join("; ") };
@@ -120,15 +163,33 @@ export function planMigrations(state, migrations) {
     if (state.recorded.has(m.version)) {
       return { migration: m, action: "skip", reason: "already recorded in supabase_migrations.schema_migrations" };
     }
-    if (m.destructive.length && state.publicTables > 0) {
+    const populated = state.publicTables > 0;
+    if (m.destructive.length && populated) {
       return {
         migration: m,
         action: "refuse",
         reason: `destructive (${m.destructive.join("; ")}) and the database is populated (${state.publicTables} tables in public); a baseline only runs on an empty project`,
       };
     }
-    return { migration: m, action: "apply", reason: m.destructive.length ? `destructive, allowed: public is empty` : "" };
+    const allowance = allowedFor(allowed, m);
+    if (m.risky.length && populated && !allowance) {
+      return {
+        migration: m,
+        action: "refuse",
+        reason: `risky on a populated database (${m.risky.join("; ")}); allow this exact file in supabase/migration-targets.json "dynamicSqlAllowed" with its sha256 and a reason`,
+      };
+    }
+    let reason = "";
+    if (m.destructive.length) reason = "destructive, allowed: public is empty";
+    else if (m.risky.length) reason = populated ? `risky, allowed: ${allowance.reason}` : "risky, allowed: public is empty";
+    return { migration: m, action: "apply", reason };
   });
+}
+
+/** The allow-list entry for exactly this file's bytes, if any. */
+export function allowedFor(allowed, m) {
+  const entry = Object.hasOwn(allowed, m.base) ? allowed[m.base] : undefined;
+  return entry && entry.sha256 === m.sha256 && entry.reason ? entry : null;
 }
 
 const PUBLIC_TABLES = `select count(*)::int as n from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -167,11 +228,11 @@ export async function inspectTarget(client) {
 /**
  * Applies one file and records it in the same transaction. Re-checks, under
  * the run lock, that the file isn't recorded (another run may have applied
- * it since the dry run) and that a destructive file still meets an empty
- * database. Returns "applied" or "skipped"; throws (after rolling back) on
- * any refusal or SQL error.
+ * it since the dry run) and that a destructive file, or a risky one that
+ * isn't allowed, still meets an empty database. Returns "applied" or
+ * "skipped"; throws (after rolling back) on any refusal or SQL error.
  */
-export async function applyMigration(client, m) {
+export async function applyMigration(client, m, allowance = null) {
   await client.query("begin");
   try {
     await client.query("select pg_advisory_xact_lock($1)", [RUN_LOCK_KEY]);
@@ -181,10 +242,10 @@ export async function applyMigration(client, m) {
       await client.query("rollback");
       return "skipped";
     }
-    if (m.destructive.length) {
+    if (m.destructive.length || (m.risky.length && !allowance)) {
       const tables = await client.query(PUBLIC_TABLES);
       const n = Number(tables.rows[0]?.n ?? 0);
-      if (n > 0) throw new Error(`${m.base} is destructive and public now has ${n} tables: refused`);
+      if (n > 0) throw new Error(`${m.base} is ${m.destructive.length ? "destructive" : "risky"} and public now has ${n} tables: refused`);
     }
     await client.query(m.body);
     await client.query(
@@ -257,6 +318,7 @@ export async function run(argv, deps = {}) {
   let password;
   let ca;
   let migrations;
+  let allowed;
   try {
     const env = readDbEnv(readFile(values["env-file"]));
     password = env.password;
@@ -264,6 +326,7 @@ export async function run(argv, deps = {}) {
     target = resolveTarget({ targets, name: values.target, envRef: env.ref });
     if (!password) throw new Error(`${values["env-file"]} has no SUPABASE_DB_PASSWORD`);
     ca = deps.ca ?? loadSupabaseRootCa();
+    allowed = deps.allowed ?? loadDynamicSqlAllowed();
     migrations = [...positionals]
       .sort((a, b) => path.basename(a).localeCompare(path.basename(b)))
       .map((file) => parseMigrationFile(file, readFile(file), { migrationsDir }));
@@ -298,7 +361,7 @@ export async function run(argv, deps = {}) {
         state.historyPresent ? `has ${state.recorded.size} rows` : "table absent (the first apply creates it)"
       }`,
     );
-    const plan = planMigrations(state, migrations);
+    const plan = planMigrations(state, migrations, allowed);
     for (const step of plan) {
       const m = step.migration;
       log(
@@ -323,18 +386,23 @@ export async function run(argv, deps = {}) {
       return 0;
     }
 
+    // PostgREST caches the schema; without a reload, new columns/tables 404
+    // from the API (PGRST204) until the project restarts. It is sent after
+    // every committed file, so a later file failing can't leave an applied
+    // one unannounced, and once more on a run that applies nothing, so a
+    // rerun after a lost connection still announces what an earlier run did.
+    const reload = () => client.query("notify pgrst, 'reload schema'");
     let applied = 0;
     for (const step of toApply) {
-      const outcome = await applyMigration(client, step.migration);
-      log(`${outcome}: ${step.migration.base}`);
-      if (outcome === "applied") applied += 1;
+      const outcome = await applyMigration(client, step.migration, allowedFor(allowed, step.migration));
+      if (outcome === "applied") {
+        applied += 1;
+        await reload();
+      }
+      log(`${outcome}: ${step.migration.base}${outcome === "applied" ? " (PostgREST schema reload notified)" : ""}`);
     }
-    if (applied) {
-      // PostgREST caches the schema; without this, new columns/tables 404 from
-      // the API (PGRST204) until the project restarts.
-      await client.query("notify pgrst, 'reload schema'");
-      log(`applied ${applied} file(s), each recorded in supabase_migrations.schema_migrations (PostgREST schema reload notified)`);
-    }
+    if (!applied) await reload();
+    log(`applied ${applied} file(s), each recorded in supabase_migrations.schema_migrations`);
     return 0;
   } catch (error) {
     fail(`failed: ${error.message}`);

@@ -18,7 +18,9 @@ import tls from "node:tls";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { dynamicExecutes, splitStatements } from "../../scripts/lib/sql-statements.mjs";
 import {
+  allowedFor,
   confirmationCode,
   parseMigrationFile,
   planMigrations,
@@ -27,6 +29,7 @@ import {
 import {
   SUPABASE_ROOT_CA_PATH,
   directClientConfig,
+  loadDynamicSqlAllowed,
   loadSupabaseRootCa,
   loadTargets,
   readDbEnv,
@@ -127,6 +130,7 @@ async function runner(argv: string[], client: ReturnType<typeof fakeClient> | nu
     error: (line: string) => err.push(line),
     targets,
     ca: "fixture-ca",
+    allowed: {},
     migrationsDir,
     createClient: (config: unknown) => {
       configs.push(config);
@@ -141,17 +145,27 @@ async function runner(argv: string[], client: ReturnType<typeof fakeClient> | nu
 const confirmFrom = (out: string) => out.match(/--confirm ([0-9a-f]{12})/)?.[1];
 
 describe("parsing a migration file", () => {
-  it("flags the real 0001 as a destructive baseline and nothing else in the tree", () => {
+  const tree = () => {
     const dirPath = path.join(repo, "supabase/migrations");
-    const flagged = fs
+    return fs
       .readdirSync(dirPath)
       .filter((name) => name.endsWith(".sql"))
-      .map((name) => parseMigrationFile(path.join(dirPath, name), fs.readFileSync(path.join(dirPath, name), "utf8"), { migrationsDir: dirPath }))
-      .filter((m) => m.problems.length || m.destructive.length)
-      .map((m) => [m.base, m.problems, m.destructive]);
-    expect(flagged).toEqual([
-      ["0001_v3_schema.sql", [], ["marked DESTRUCTIVE", "drops or truncates tables found at run time"]],
+      .map((name) => parseMigrationFile(path.join(dirPath, name), fs.readFileSync(path.join(dirPath, name), "utf8"), { migrationsDir: dirPath }));
+  };
+
+  it("flags the real 0001 as a destructive baseline, and no file in the tree as unrunnable", () => {
+    const all = tree();
+    expect(all.filter((m) => m.problems.length).map((m) => [m.base, m.problems])).toEqual([]);
+    expect(all.filter((m) => m.destructive.length).map((m) => [m.base, m.destructive])).toEqual([
+      ["0001_v3_schema.sql", ["marked DESTRUCTIVE", "a DO block runs destructive dynamic SQL (execute 'drop table if exists public.%I cascade')"]],
     ]);
+  });
+
+  it("has an allow-list entry, for its exact bytes, for every risky file in the tree and no other", () => {
+    const allowed = loadDynamicSqlAllowed();
+    const risky = tree().filter((m) => m.risky.length);
+    expect(risky.map((m) => m.base).sort()).toEqual(Object.keys(allowed).sort());
+    for (const m of risky) expect(allowedFor(allowed, m), m.base).not.toBeNull();
   });
 
   it("removes the one outer begin/commit so the runner owns the transaction", () => {
@@ -166,12 +180,121 @@ describe("parsing a migration file", () => {
   it("refuses files that would commit apart from their history row, or can't run in a transaction", () => {
     const at = (name: string, text: string) => parseMigrationFile(path.join(migrationsDir, name), text, { migrationsDir }).problems;
     expect(at("20990101000001_x.sql", "begin;\nselect 1;\ncommit;\nbegin;\nselect 2;\ncommit;\n")).toEqual([
-      "controls its own transaction beyond one outer begin/commit",
+      'has a top-level "commit": only one outer begin/commit is allowed',
+      'has a top-level "begin": only one outer begin/commit is allowed',
     ]);
     expect(at("20990101000002_x.sql", "create index concurrently i on public.t (a);\n")[0]).toMatch(/CONCURRENTLY/);
     expect(at("20990101000003_x.sql", "-- mentions CONCURRENTLY only in a comment\nselect 1;\n")).toEqual([]);
     expect(at("bad-name.sql", "select 1;")).toEqual(["file name is not <version>_<name>.sql"]);
     expect(parseMigrationFile("/tmp/20990101000004_x.sql", "select 1;", { migrationsDir }).problems[0]).toMatch(/^not a file in /);
+  });
+});
+
+describe("the SQL lexer", () => {
+  const codes = (sql: string) => splitStatements(sql).map((st) => st.code);
+
+  it("splits only on a top-level semicolon", () => {
+    expect(codes("select ';'; select 2 -- ; not here\n; /* ; /* nested ; */ still ; */ select 3;")).toEqual([
+      "select ''",
+      "select 2",
+      "select 3",
+    ]);
+    expect(codes(`do $body$ begin execute $sql$select 1; select 2$sql$; end $body$; select "a;b" from t;`)).toEqual([
+      "do $$",
+      'select "a;b" from t',
+    ]);
+    expect(codes("select E'it\\'s; fine', 'it''s; fine'; select $1;")).toEqual(["select E'', ''", "select $1"]);
+    expect(splitStatements("select 'open")[0].unterminated).toBe(true);
+  });
+
+  it("keeps each literal and dollar-quoted body", () => {
+    const [st] = splitStatements(`do $body$ begin execute $sql$TRUNCATE public.t$sql$; end $body$;`);
+    expect(st.bodies).toEqual([" begin execute $sql$TRUNCATE public.t$sql$; end "]);
+  });
+
+  it("classifies dynamic SQL from its leading literal, and a variable as unknown", () => {
+    expect(dynamicExecutes("begin execute $sql$TRUNCATE public.accounts CASCADE$sql$; end").map((e) => e.kind)).toEqual(["destructive"]);
+    expect(dynamicExecutes("begin execute format('drop table %I', t); end").map((e) => e.kind)).toEqual(["destructive"]);
+    expect(dynamicExecutes("begin execute format('grant select on %I to anon', t); end").map((e) => e.kind)).toEqual(["safe"]);
+    expect(dynamicExecutes("begin execute 'alter table ' || t || ' drop column x'; end").map((e) => e.kind)).toEqual(["safe"]);
+    expect(dynamicExecutes("begin execute 'alter table t drop column x'; end").map((e) => e.kind)).toEqual(["destructive"]);
+    expect(dynamicExecutes("declare v text := 'select 1'; begin execute v; end").map((e) => e.kind)).toEqual(["unknown"]);
+    expect(dynamicExecutes("begin grant execute on function f() to anon; end")).toEqual([]);
+  });
+});
+
+describe("transaction control in a file", () => {
+  const problems = (text: string) => parseMigrationFile(path.join(migrationsDir, "20990101000500_x.sql"), text, { migrationsDir }).problems;
+
+  it("refuses an early COMMIT, with or without the outer wrapper", () => {
+    expect(problems("create table public.partial(id int); COMMIT;\nselect 1/0;\n")).toEqual([
+      'has a top-level "COMMIT": only one outer begin/commit is allowed',
+    ]);
+    expect(problems("begin;\ncreate table public.partial(id int);\ncommit;\nselect 1/0;\ncommit;\n")).toEqual([
+      'has a top-level "commit": only one outer begin/commit is allowed',
+    ]);
+  });
+
+  it("refuses every other top-level transaction statement", () => {
+    for (const statement of [
+      "END;",
+      "end transaction;",
+      "rollback;",
+      "abort;",
+      "begin;",
+      "begin isolation level serializable;",
+      "start transaction;",
+      "savepoint a;",
+      "release savepoint a;",
+      "rollback to savepoint a;",
+      "prepare transaction 'fixture';",
+      "commit prepared 'fixture';",
+      "rollback prepared 'fixture';",
+    ]) {
+      expect(problems(`select 1;\n${statement}\nselect 2;\n`), statement).toHaveLength(1);
+    }
+  });
+
+  it("accepts PL/pgSQL begin/end and the words in strings or comments", () => {
+    expect(problems(`begin;\ndo $$ begin perform 1; end $$;\nselect 'commit;';\n-- commit;\n/* end; */\ncommit;\n`)).toEqual([]);
+    expect(problems("begin;\nselect 1;\nend;\n")).toEqual([]);
+  });
+});
+
+describe("dynamic and table-emptying SQL on a populated database", () => {
+  const parsed = (name: string, text: string) => parseMigrationFile(path.join(migrationsDir, name), text, { migrationsDir });
+  const TRUNCATE_DO = "DO $body$ BEGIN EXECUTE $sql$TRUNCATE public.accounts CASCADE$sql$; END $body$;\n";
+  const populated = { publicTables: 118, recorded: new Set<string>() };
+
+  it("refuses a DO block that truncates through EXECUTE", () => {
+    const m = parsed("20990101000600_fixture_dynamic.sql", TRUNCATE_DO);
+    expect(m.risky).toEqual(["a DO block runs destructive dynamic SQL (execute 'TRUNCATE public.accounts CASCADE')"]);
+    expect(planMigrations(populated, [m])[0]).toMatchObject({ action: "refuse" });
+    expect(planMigrations({ publicTables: 0, recorded: new Set() }, [m])[0]).toMatchObject({ action: "apply" });
+  });
+
+  it("refuses dynamic SQL it can't classify, a static truncate, and a created function the file calls", () => {
+    const unknown = parsed("20990101000601_x.sql", "do $$ declare v text := current_setting('x'); begin execute v; end $$;\n");
+    const truncate = parsed("20990101000602_x.sql", "truncate public.accounts;\n");
+    const fn = "create function public.fixture_wipe() returns void language plpgsql as $$ begin execute 'truncate public.accounts'; end $$;\n";
+    const called = parsed("20990101000603_x.sql", `${fn}select public.fixture_wipe();\n`);
+    const defined = parsed("20990101000604_x.sql", `${fn}grant execute on function public.fixture_wipe() to service_role;\n`);
+    for (const m of [unknown, truncate, called]) expect(planMigrations(populated, [m])[0].action, m.base).toBe("refuse");
+    expect(defined.risky).toEqual([]);
+    expect(planMigrations(populated, [defined])[0].action).toBe("apply");
+  });
+
+  it("applies a risky file only when the allow-list names its exact bytes and a reason", () => {
+    const m = parsed("20990101000600_fixture_dynamic.sql", TRUNCATE_DO);
+    const ok = { [m.base]: { sha256: m.sha256, reason: "fixture table, rebuilt below" } };
+    expect(planMigrations(populated, [m], ok)[0]).toMatchObject({ action: "apply", reason: "risky, allowed: fixture table, rebuilt below" });
+    expect(planMigrations(populated, [m], { [m.base]: { sha256: "0".repeat(64), reason: "stale" } })[0].action).toBe("refuse");
+    expect(planMigrations(populated, [m], { [m.base]: { sha256: m.sha256, reason: "" } })[0].action).toBe("refuse");
+  });
+
+  it("never lets the allow-list run a baseline on a populated database", () => {
+    const m = parsed("0001_fixture_baseline.sql", BASELINE);
+    expect(planMigrations(populated, [m], { [m.base]: { sha256: m.sha256, reason: "no" } })[0].action).toBe("refuse");
   });
 });
 
@@ -328,6 +451,29 @@ describe("running", () => {
     expect(client.recorded.size).toBe(0);
     expect(client.queries.some((q) => q.text.startsWith("insert into supabase_migrations"))).toBe(false);
     expect(client.queries.at(-1)?.text).toBe("rollback");
+  });
+
+  it("reloads PostgREST after each committed file, even when a later one fails", async () => {
+    const add = file("20990101000000_fixture_add.sql", ADD);
+    const bad = file("20990101000700_fixture_bad.sql", "begin;\ncreate table public.fixture_bad (id int);\ncommit;\n");
+    const { out } = await runner(["--target", "fixture-dev", add, bad], fakeClient({}));
+    const client = fakeClient({ failOn: /create table public\.fixture_bad/ });
+    const result = await runner(["--target", "fixture-dev", "--apply", "--confirm", confirmFrom(out)!, add, bad], client);
+    expect(result.code).toBe(1);
+    const texts = client.queries.map((q) => q.text);
+    const firstCommit = texts.indexOf("commit");
+    expect(texts[firstCommit + 1]).toBe("notify pgrst, 'reload schema'");
+    expect(texts.filter((t) => t.startsWith("notify pgrst"))).toHaveLength(1);
+    expect([...client.recorded]).toEqual(["20990101000000"]);
+  });
+
+  it("reloads PostgREST on an apply run that finds everything already recorded", async () => {
+    const add = file("20990101000000_fixture_add.sql", ADD);
+    const code = confirmationCode(REF, [parseMigrationFile(add, ADD, { migrationsDir })]);
+    const client = fakeClient({ recorded: ["20990101000000"] });
+    const result = await runner(["--target", "fixture-dev", "--apply", "--confirm", code, add], client);
+    expect(result.code).toBe(0);
+    expect(client.queries.at(-1)?.text).toBe("notify pgrst, 'reload schema'");
   });
 
   it("never replays a recorded file", async () => {
@@ -503,6 +649,27 @@ describe.skipIf(!realUrl)("against a real, empty local Postgres", () => {
     const result = await twoStep([broken]);
     expect(result.code).toBe(1);
     expect(await tables()).toEqual(["fixture_base"]);
+    expect(await history()).toEqual(["0001"]);
+  });
+
+  it("refuses an early COMMIT before running any of it", async () => {
+    const early = file("20990101000400_fixture_early_commit.sql", "create table public.fixture_partial (id int); COMMIT;\nselect 1/0;\n");
+    const ended = file("20990101000401_fixture_early_end.sql", "begin;\ncreate table public.fixture_partial (id int);\nend;\nselect 1/0;\ncommit;\n");
+    for (const f of [early, ended]) {
+      const result = await twoStep([f]);
+      expect(result.code, f).toBe(1);
+      expect(result.out).toMatch(/only one outer begin\/commit is allowed/);
+    }
+    expect(await tables()).toEqual(["fixture_base"]);
+    expect(await history()).toEqual(["0001"]);
+  });
+
+  it("refuses a DO block that truncates through EXECUTE once the database has data", async () => {
+    await db.query("insert into public.fixture_base values (1), (2)");
+    const wipe = file("20990101000500_fixture_dynamic.sql", "DO $body$ BEGIN EXECUTE $sql$TRUNCATE public.fixture_base CASCADE$sql$; END $body$;\n");
+    const result = await twoStep([wipe]);
+    expect(result.code).toBe(1);
+    expect((await db.query("select count(*)::int as n from public.fixture_base")).rows[0].n).toBe(2);
     expect(await history()).toEqual(["0001"]);
   });
 
