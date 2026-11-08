@@ -12,6 +12,8 @@ const state = vi.hoisted(() => ({
   user: null as { id: string } | null,
   role: null as string | null,
   enrolment: null as string | null,
+  /** is_admin(): this session was raised to AAL2 with the confirmed factor. */
+  bound: true,
   aal: "aal2" as string,
   totpAt: 0,
   path: "/admin/orders" as string | null,
@@ -41,7 +43,8 @@ vi.mock("@/lib/supabase/server", () => ({
     },
     rpc: async (name: string) => {
       state.rpcs.push(name);
-      return { data: name === "admin_role" ? state.role : name === "admin_enrolment_state" ? state.enrolment : null, error: null };
+      const answers: Record<string, unknown> = { admin_role: state.role, admin_enrolment_state: state.enrolment, is_admin: state.bound };
+      return { data: answers[name] ?? null, error: null };
     },
   }),
 }));
@@ -68,6 +71,7 @@ beforeEach(() => {
     user: { id: "admin-1" },
     role: "admin",
     enrolment: "confirmed",
+    bound: true,
     aal: "aal2",
     totpAt: now() - 60,
     path: "/admin/orders",
@@ -114,6 +118,21 @@ describe("the console read gate (N11)", () => {
     state.aal = "aal1";
     await expect(outcome(() => adminReadClient())).resolves.toMatch(/^redirect \/admin-verify/);
     expect(state.serviceClients).toBe(0);
+  });
+});
+
+describe("the confirmed authenticator, not just any (OS-W14 follow-up)", () => {
+  it("sends a fresh AAL2 session raised with another verified factor to verify, with no client", async () => {
+    // Factors A (confirmed) and B on the account; this session used B.
+    state.bound = false;
+    await expect(outcome(() => adminReadClient())).resolves.toMatch(/^redirect \/admin-verify/);
+    expect(state.serviceClients).toBe(0);
+    expect(state.rpcs).toContain("is_admin");
+  });
+
+  it("lets the session raised with the confirmed factor through", async () => {
+    await expect(outcome(() => adminReadClient())).resolves.toBe("allowed");
+    expect(state.rpcs).toContain("is_admin");
   });
 });
 

@@ -163,6 +163,8 @@ function moveErrorMessage(code: string | undefined): string | null {
     case "OF005": return "That offer has already been settled.";
     case "OF007": return "That part is no longer available.";
     case "OF009": return "Too many offer moves in a short time. Try again in a few minutes.";
+    // N54: a block between the two, in either direction.
+    case "BL403": return "You can't make offers to this seller.";
     case "P0002": return "That offer no longer exists.";
     case CHARGE_OUT_OF_BOUNDS_CODE: return OFFER_OUT_OF_BOUNDS_MESSAGE;
     // Accepting reserves the part, which the database refuses while the

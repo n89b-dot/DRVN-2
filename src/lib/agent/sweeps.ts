@@ -3,6 +3,7 @@ import "server-only";
 import { captureMessage, reportError } from "@/lib/monitoring";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
+import { removeExpiredChatPhotos } from "./chat-photos";
 import { alertsToRaise, type AgentHealth } from "./monitor";
 import { runAgentPass, type PassResult } from "./worker";
 import { agentWorkerDb } from "./worker-db";
@@ -23,6 +24,12 @@ export async function runAgentSweeps(admin: Admin) {
   if (retention.error) throw new Error(`Agent retention sweep failed: ${retention.error.message}`);
   const usageRetention = await admin.rpc("agent_usage_retention_sweep");
   if (usageRetention.error) reportError("[agent] usage retention failed", usageRetention.error);
+  // R81: chat photos past the privacy page's 48 hours (used ones live on as
+  // their listing's or update's own copy). Never worth failing the pass.
+  const chatPhotos = await removeExpiredChatPhotos(admin).catch((error) => {
+    reportError("[agent] chat photo sweep failed", error);
+    return null;
+  });
 
   let pass: PassResult | null = null;
   const db = await agentWorkerDb().catch((error) => {
@@ -46,5 +53,5 @@ export async function runAgentSweeps(admin: Admin) {
     if (computed.error) reportError("[agent] measures failed", { day, code: computed.error.code });
     measures[day] = computed.error ? null : (computed.data as number);
   }
-  return { reconciled: reconciled.data, retention: retention.data, pass, health: health.data, alerts, measures };
+  return { reconciled: reconciled.data, retention: retention.data, chatPhotos, pass, health: health.data, alerts, measures };
 }

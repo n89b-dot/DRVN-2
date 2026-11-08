@@ -21,6 +21,7 @@ declare
     'mod_purchase_sources(uuid[])',       -- source car of purchased build lines, by unguessable item id
     'profile_follow_counts(uuid)',        -- public follower counts
     'profile_is_visible(uuid)',           -- used by public read policies
+    'profile_shares_deal_with_me(uuid)',  -- used by the suspended-profile read policy: whether the caller shares a conversation or order with that member; boolean, and false for a visitor (N59, 20261107220600)
     'profile_sales_count(uuid)',          -- public sales count for visible profiles
     'search_car_ids(text)',               -- ids of public builds of visible owners; definer so text indexes apply (20261010100100)
     'search_listing_ids(text)',           -- ids of parts a signed-out visitor may see; same reason
@@ -36,6 +37,7 @@ declare
     'admin_set_agent_beta_step(text,boolean,text)', -- refuses anyone but an admin with step-up (20261024100000)
     'admin_set_agent_spend_limits(numeric,numeric,text)', -- refuses anyone but an admin with step-up (20261024100000)
     'admin_open_agent_chat(uuid,text,uuid,text)', -- admins with step-up only, a named case, audited (20261024100000)
+    'admin_confirmed_factor()',                        -- the caller's own confirmed authenticator id, null for anyone else (20261107200550)
     'admin_enrolment_state()',                         -- the caller's own console membership: pending or confirmed, null otherwise (20261107200500)
     'agent_approval_decide(uuid,text)',                -- the caller's own agent's confirm card (20261021100100)
     'agent_clear_conversation()',                      -- the caller's own agent chat
@@ -51,6 +53,7 @@ declare
     'execute_admin_command(text,uuid,text,jsonb)',     -- refuses anyone but an admin
     'listing_edit_status(uuid,uuid)',                  -- the caller's own edit request on their own listing
     'listing_question_parent_matches(uuid,uuid)',      -- boolean: a reply's parent is on a listing the caller can see
+    'listing_enquiry_reply_allowed(uuid,uuid)',        -- boolean, true only for the listing's own seller answering a buyer who asked about it (R-directcontact, 20261107220600)
     'my_car_vin(uuid)',                                -- the caller's own car's VIN (20261004160000)
     'my_default_offer_floor()',                        -- the caller's own default minimum
     'my_listing_offer_floor(uuid)',                    -- the caller's own listing's minimum (20261017120000)
@@ -59,6 +62,7 @@ declare
     'order_buyer_reviewable(uuid)',                    -- boolean, only for the order's buyer or seller
     'price_comparables(text,text,text,uuid)',          -- aggregates of completed sales and live listings of one product, only from 3 up; no rows or ids (20261020140000)
     'reconcile_admin_external_operation(uuid,bigint,text,text)', -- refuses anyone but an admin with step-up
+    'record_listing_view(uuid,text)',                  -- counts the caller's own view (bump_listing_view's rules) and its arrival surface; no viewer ids stored (OS-R-arrival, 20261107220200)
     'record_listing_edit(uuid,text,uuid,timestamp with time zone,jsonb)', -- the caller's own edit request
     'replay_listing_edit(uuid,text,uuid,timestamp with time zone)',      -- same request, replayed for its owner
     'resolve_product_identity_review(uuid,text,text)', -- refuses anyone but an admin with step-up (20261020120000)

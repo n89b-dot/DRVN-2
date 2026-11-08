@@ -3,6 +3,8 @@ export type CommerceState = {
   ok?: string;
   /** Client-generated identity for retryable form submissions such as Q&A. */
   operationId?: string;
+  /** Where to go next, e.g. the conversation a "Message seller" landed in. */
+  href?: string;
   /** Set when the processor needs the buyer to confirm in the browser
    *  (Stripe Payment Element). The form swaps to the confirmation step. */
   payment?: CheckoutPayment;

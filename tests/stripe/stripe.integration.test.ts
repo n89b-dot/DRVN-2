@@ -56,8 +56,9 @@ suite("Stripe test-mode integration", () => {
   let refundFn: typeof import("@/lib/payments/stripe").StripePaymentProvider.prototype.refund;
 
   beforeAll(async () => {
-    stripe = new Stripe(key);
+    const { STRIPE_API_VERSION } = await import("@/lib/payments/stripe-api-version");
     const mod = await import("@/lib/payments/stripe");
+    stripe = new Stripe(key, { apiVersion: STRIPE_API_VERSION });
     provider = new mod.StripePaymentProvider();
     refundFn = provider.refund.bind(provider);
   });

@@ -20,7 +20,7 @@ export const SITE_DESCRIPTION =
 
 /** Landing page: the parts marketplace, tied to the visitor's own car (F-1). */
 export const LANDING_DESCRIPTION =
-  "Buy and sell parts off modified cars. Sell what comes off yours, and shop parts off cars like it — with the car each part came off, when the seller links one.";
+  "The parts marketplace for modified cars. Sell what comes off yours, and shop parts off cars like it — with the car each part came off, when the seller links one.";
 
 /** Landing share text and the line under its headline. */
 export const LANDING_SUB =
