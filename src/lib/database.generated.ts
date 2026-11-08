@@ -9029,6 +9029,10 @@ export type Database = {
           updates: number
         }[]
       }
+      unlink_mod_listing: {
+        Args: { p_car: string; p_expected_revision: string; p_mod_item: string }
+        Returns: Json
+      }
       update_listing_atomic: {
         Args: {
           p_alt_numbers: Json

@@ -27,6 +27,17 @@ describe("blocked media", () => {
     expect(imageRequestObjectKey(new URL("https://drvn.app/_next/image"))).toBeNull();
   });
 
+  it("R69-dmca: a slow read doesn't stretch the 15-second window", async () => {
+    let resolveRead: (value: unknown) => void = () => {};
+    mocks.select.mockReturnValueOnce(new Promise((resolve) => { resolveRead = resolve; }));
+    const pending = blockedMediaKeys(1_000);
+    await new Promise((r) => setTimeout(r, 25));
+    resolveRead({ data: [], error: null });
+    await pending;
+    mocks.select.mockResolvedValueOnce({ data: [{ object_key: "listing-images/a/b.webp" }], error: null });
+    expect((await blockedMediaKeys(1_000 + BLOCKED_MEDIA_TTL_MS)).has("listing-images/a/b.webp")).toBe(true);
+  });
+
   it("shares one read between requests, and sees a new takedown within 15 seconds", async () => {
     mocks.select.mockResolvedValueOnce({ data: [], error: null });
     const start = Date.now();

@@ -17,6 +17,11 @@ recorded file is skipped, and a destructive baseline (0001) is refused on a
 database with any table in `public`. Details: "Applying without Docker or
 psql" below.
 
+**Recording files that already ran** (OS-R-migrations): `--record-only` writes
+history rows without running the files, only for files whose every object it
+verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
+TLS. Details: "Recording without running" below.
+
 ## November 7 — Cloud A blocker batches: OS-W21 OS-W23 OS-R-arrival OS-W08 OS-W11 OS-W32 OS-W33 OS-W31 OS-W34
 
 | File | Applied to |
@@ -31,6 +36,7 @@ psql" below.
 | `20261107220400_account_privacy_lifecycle.sql` | not applied |
 | `20261107220500_username_rules.sql` | not applied |
 | `20261107220510_account_deletion_scrub.sql` | not applied |
+| `20261107220520_deletion_storage_message_photos.sql` | not applied |
 | `20261107220600_blocks_and_message_seller.sql` | not applied |
 | `20261107220700_withdraw_listing.sql` | not applied |
 | `20261107220800_open_beta_and_guest_holds.sql` | not applied |
@@ -44,6 +50,7 @@ psql" below.
 - **`220400` (OS-W11):** suspended members keep export and deletion; `my_account_deletion_status()`. Keeps #112's fresh sign-in check in `request_account_deletion`.
 - **`220500` (OS-W34, N38):** audits and fixes existing usernames **on the data** (lowercases the unambiguous, clears the rest back to onboarding; every change in `private.username_audit`), then adds `profiles_username_format`, reserved names and tombstones. Read `private.username_audit` after applying: a cleared member chooses a new handle at onboarding.
 - **`220510` (OS-W34, N16):** `scrub_deleted_account` and the retention columns. It writes `auth.users` and `auth.identities` as a definer function: confirm on the hosted project that the migration role may update them (if not, deletions fail loudly and retry). Redefines `guard_accepted_checkout_shipping`.
+- **`220520` (OS-W34, N16):** lets the deletion worker checkpoint the member's own `message-photos` folder (`deletion_storage_tasks_bucket_check` widened). Apply with `220510`, before the app from #149: the new worker drains that bucket.
 - **`220600` (OS-W32):** `member_blocks` and the block triggers (BL403), suspended-member visibility, Message seller and the first-contact limit (RL429 with no detail).
 - **`220700` (OS-W33):** `withdraw_listing(uuid)`; deleting a listing with offers is refused (LW409).
 - **`220800` (OS-W31):** removes the invite-only beta (drops `beta_access_config` and `private.beta_signup_claims`: allow-listed for the runner in `migration-targets.json`) and caps guest holds. Ship the app from #126 with it: the old app reads the dropped beta functions.
@@ -1804,6 +1811,52 @@ the same target check and TLS.
 
 The SQL Editor in the dashboard is the alternative for a one-off, but it records
 no history.
+
+### Recording without running (`--record-only`)
+
+Shared dev's history table only has 0001–0011 (and five 13 September versions
+no file has) plus what was applied after the runner existed; about 230 files
+that did run there show as pending, so a whole-tree apply would replay them.
+`--record-only` closes that gap without running anything:
+
+```bash
+node scripts/apply-migration.mjs --target shared-dev --record-only supabase/migrations/*.sql
+node scripts/apply-migration.mjs --target shared-dev --record-only --apply --confirm <code> supabase/migrations/*.sql
+```
+
+- **What it verifies.** `scripts/lib/migration-objects.mjs` reads each file
+  with the same lexer for the objects it creates: functions (schema, name and
+  identity argument types), tables, columns, views, sequences, indexes,
+  triggers, policies, named constraints, types and enum values, schemas,
+  extensions and roles, at top level or as static DDL in a `DO` block
+  (including a `format()` whose object names are static). It walks the whole
+  tree in name order, so it knows the last thing any file does to each
+  object. Each object must be in the target's catalog (read in a read-only
+  transaction); an object a later file drops isn't expected. For a function
+  the file is the tree's **latest** definition of, `pg_proc.prosrc` (the body
+  `pg_get_functiondef` prints) must equal the file's body byte for byte (CRLF
+  aside); an earlier definition, replaced later, only has to exist.
+- **What it refuses.** A file with any object missing, a latest function body
+  that differs, or something it can't check (dynamic DDL that names objects
+  at run time, a kind of object it doesn't read, a `%TYPE` argument) is not
+  recorded and is listed with every reason. So is a file with nothing to
+  check: data changes, grants, comments and `ALTER … SET` aren't objects, and
+  a file of only those (or whose objects were all dropped later) can't be
+  verified this way. Refused files stay pending; record them by hand only
+  after reading them.
+- **Limits.** It proves the objects are there, not who made them: a file is
+  verified if a later file created the same objects. Data changes, grants and
+  comments in a verified file are not checked. Most files here wrap
+  themselves in one `begin; … commit;`, so for those, objects present means
+  the whole file committed, unless a later file made the same objects.
+- **Two steps, one transaction.** The dry run prints `record`, `skip` or
+  `refuse` for each file and a code bound to the target and the exact files
+  it would record (its own code, so an apply's code never confirms it, nor
+  the reverse). `--apply --confirm <code>` takes the run lock, verifies again
+  inside one transaction, refuses everything if the set that verifies isn't
+  the one the code was printed for, and inserts the rows. Each row's
+  `statements` is the file's text after a comment line saying it was recorded
+  by `--record-only` and not run.
 
 **Do not use `supabase db push`.** 0001–0005 were applied by hand, so the CLI has
 no complete `supabase_migrations.schema_migrations` history and would try to run

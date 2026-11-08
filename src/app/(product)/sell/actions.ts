@@ -821,48 +821,6 @@ export async function withdrawListing(
   };
 }
 
-/**
- * Undoes the "release a part" link between a build line and the listing it
- * spawned. The car sheet was showing "For sale" against a line forever, with
- * no way back — a listing pulled down or repurposed left a stale link behind.
- * Ownership is enforced by RLS (the car update below only affects rows this
- * user owns), and checked here too for a clean error rather than a silent
- * no-op.
- */
-export async function unlinkModListing(formData: FormData): Promise<ListingActionState> {
-  const { supabase, user } = await requireUser();
-
-  const modItemId = String(formData.get("mod_item_id") ?? "");
-  const carId = String(formData.get("car_id") ?? "");
-  if (!modItemId || !carId) return { error: "Missing build line." };
-
-  const { data: car } = await supabase
-    .from("cars")
-    .select("id, slug, owner_id")
-    .eq("id", carId)
-    .maybeSingle();
-  if (!car || car.owner_id !== user.id) return { error: "That car isn't in your garage." };
-
-  const { data: mod } = await supabase
-    .from("mod_items")
-    .select("linked_listing_id")
-    .eq("id", modItemId)
-    .eq("car_id", carId)
-    .maybeSingle();
-
-  const { error } = await supabase
-    .from("mod_items")
-    .update({ linked_listing_id: null })
-    .eq("id", modItemId)
-    .eq("car_id", carId);
-  if (error) return { error: error.message };
-
-  revalidatePath(`/garage/${carId}/edit`);
-  revalidatePath(`/cars/${car.slug}`);
-  if (mod?.linked_listing_id) revalidatePath(`/listings/${mod.linked_listing_id}`);
-  return { ok: "Link removed." };
-}
-
 type FitmentInput = { make: string; model: string; year_start: number | null; year_end: number | null };
 
 /**

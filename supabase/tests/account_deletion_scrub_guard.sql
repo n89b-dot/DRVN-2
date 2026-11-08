@@ -257,6 +257,18 @@ begin
     raise exception 'FAIL S11b: an accepted-offer delivery address became editable (N16)';
   end if;
 
+  -- S11c: the worker can checkpoint every bucket it drains, the member's
+  -- own message photos included (20261107220520).
+  insert into public.deletion_storage_tasks (job_id, bucket, path, folder)
+  select j.id, b, m::text, true
+    from public.remediation_jobs j,
+         unnest(array['avatars', 'car-images', 'activity-images', 'listing-images', 'message-photos']) b
+   where j.dedup_key = 'delete:' || m;
+  if (select count(*) from public.deletion_storage_tasks t join public.remediation_jobs j on j.id = t.job_id
+       where j.dedup_key = 'delete:' || m) <> 5 then
+    raise exception 'FAIL S11c: the deletion worker can''t checkpoint every bucket it drains (N16)';
+  end if;
+
   -- S12: members can't call the scrub.
   if has_function_privilege('authenticated', 'public.scrub_deleted_account(uuid,text,text)', 'execute')
      or has_function_privilege('anon', 'public.scrub_deleted_account(uuid,text,text)', 'execute') then
