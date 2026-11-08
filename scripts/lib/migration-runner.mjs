@@ -6,7 +6,9 @@
 // and each file is applied in one transaction together with its row in
 // supabase_migrations.schema_migrations, so the history can never say a file
 // ran when it didn't (or the reverse), and a recorded file is never replayed.
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import os from "node:os";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -232,7 +234,7 @@ export async function inspectTarget(client) {
  * isn't allowed, still meets an empty database. Returns "applied" or
  * "skipped"; throws (after rolling back) on any refusal or SQL error.
  */
-export async function applyMigration(client, m, allowance = null) {
+export async function applyMigration(client, m, allowance = null, provenance = null) {
   await client.query("begin");
   try {
     await client.query("select pg_advisory_xact_lock($1)", [RUN_LOCK_KEY]);
@@ -250,7 +252,10 @@ export async function applyMigration(client, m, allowance = null) {
     await client.query(m.body);
     await client.query(
       "insert into supabase_migrations.schema_migrations (version, name, statements) values ($1, $2, $3)",
-      [m.version, m.name, [m.text]],
+      // statements[0] is the file as applied, led by who applied it and from
+      // which commit and PR (provenanceLine), so the Supabase-owned table
+      // needs no new column.
+      [m.version, m.name, [provenance ? `${provenance}\n${m.text}` : m.text]],
     );
     await client.query("commit");
     return "applied";
@@ -260,11 +265,65 @@ export async function applyMigration(client, m, allowance = null) {
   }
 }
 
+const PROVENANCE_VALUE = /[^A-Za-z0-9._@+-]/g;
+
+/**
+ * The comment line that leads each recorded file's statements[0]:
+ * `-- applied_by=<user> source_sha=<sha> pr=<n>`. Values are single tokens
+ * (anything else becomes "_"), so the line splits on spaces.
+ */
+export function provenanceLine({ appliedBy, sourceSha, pr }) {
+  const value = (v, fallback) => String(v ?? "").trim().replace(PROVENANCE_VALUE, "_").slice(0, 80) || fallback;
+  return `-- applied_by=${value(appliedBy, "unknown")} source_sha=${value(sourceSha, "unknown")} pr=${value(pr, "none")}`;
+}
+
+/** Reads a provenance line back, or null when statements[0] has none. */
+export function parseProvenance(statement) {
+  const m = String(statement ?? "").match(/^-- applied_by=(\S+) source_sha=(\S+) pr=(\S+)$/m);
+  return m ? { appliedBy: m[1], sourceSha: m[2], pr: m[3] } : null;
+}
+
+/**
+ * Who is applying, from which commit: --applied-by, else git's user.name,
+ * else the OS user; HEAD's sha, marked "+uncommitted" when a file being
+ * applied differs from HEAD; --pr, else "none". `git(args)` returns stdout.
+ *
+ * @param {{ appliedBy?: string, pr?: string, files: string[] }} options
+ * @param {(args: string[]) => string} [git]
+ */
+export function readProvenance({ appliedBy, pr, files }, git = defaultGit) {
+  const tryGit = (args) => {
+    try {
+      return git(args).trim();
+    } catch {
+      return "";
+    }
+  };
+  const user = appliedBy || tryGit(["config", "user.name"]) || safeUsername();
+  let sha = tryGit(["rev-parse", "HEAD"]);
+  if (sha && files.length && tryGit(["status", "--porcelain", "--", ...files])) sha = `${sha}+uncommitted`;
+  return provenanceLine({ appliedBy: user, sourceSha: sha, pr: pr ?? "none" });
+}
+
+function defaultGit(args) {
+  return execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+}
+
+function safeUsername() {
+  try {
+    return os.userInfo().username;
+  } catch {
+    return "";
+  }
+}
+
 export const USAGE = `usage:
   node scripts/apply-migration.mjs --target <name> <migration.sql>...                       dry run (default)
   node scripts/apply-migration.mjs --target <name> --apply --confirm <code> <migration.sql>...
 
   --target <name>     a project in supabase/migration-targets.json; must be the one the env file points at
+  --pr <n>            the merged PR these files came from, recorded with each row (default "none")
+  --applied-by <who>  recorded with each row (default: git user.name, else the OS user)
   --env-file <path>   read SUPABASE_DB_PASSWORD and NEXT_PUBLIC_SUPABASE_URL from here (default .env.local)
   --apply             apply for real; needs --confirm with the code the dry run printed for these files`;
 
@@ -285,6 +344,8 @@ export async function run(argv, deps = {}) {
       allowPositionals: true,
       options: {
         target: { type: "string" },
+        pr: { type: "string" },
+        "applied-by": { type: "string" },
         apply: { type: "boolean", default: false },
         "dry-run": { type: "boolean", default: false },
         confirm: { type: "string" },
@@ -335,6 +396,11 @@ export async function run(argv, deps = {}) {
     return 1;
   }
 
+  if (values.pr !== undefined && !/^(\d+|none)$/.test(values.pr)) {
+    fail(`--pr takes a PR number or "none", not "${values.pr}"`);
+    return 1;
+  }
+  const provenance = readProvenance({ appliedBy: values["applied-by"], pr: values.pr, files: positionals }, deps.git);
   const code = confirmationCode(target.ref, migrations);
   if (values.apply && values.confirm !== code) {
     fail(
@@ -362,6 +428,7 @@ export async function run(argv, deps = {}) {
       }`,
     );
     const plan = planMigrations(state, migrations, allowed);
+    log(`each recorded row will start with: ${provenance}`);
     for (const step of plan) {
       const m = step.migration;
       log(
@@ -382,7 +449,7 @@ export async function run(argv, deps = {}) {
         return 0;
       }
       log(`dry run: ${toApply.length} file(s) would be applied, each in one transaction with its history row. Nothing was changed.`);
-      log(`to apply exactly this:\n  node scripts/apply-migration.mjs --target ${target.name} --apply --confirm ${code} ${positionals.join(" ")}`);
+      log(`to apply exactly this:\n  node scripts/apply-migration.mjs --target ${target.name} --apply --confirm ${code}${values.pr ? ` --pr ${values.pr}` : ""} ${positionals.join(" ")}`);
       return 0;
     }
 
@@ -394,7 +461,7 @@ export async function run(argv, deps = {}) {
     const reload = () => client.query("notify pgrst, 'reload schema'");
     let applied = 0;
     for (const step of toApply) {
-      const outcome = await applyMigration(client, step.migration, allowedFor(allowed, step.migration));
+      const outcome = await applyMigration(client, step.migration, allowedFor(allowed, step.migration), provenance);
       if (outcome === "applied") {
         applied += 1;
         await reload();
