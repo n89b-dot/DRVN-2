@@ -161,7 +161,7 @@ Notes:
 
 ## Admin, ops and CI
 
-Proof PR: opened from `cloud/os-proof-sweep-ops`.
+Proof PR: #103, from `cloud/os-proof-sweep-ops`.
 
 | Item | Title | Status | Plan id / batch | PR / commit | Proving test (file › test name) |
 |---|---|---|---|---|---|
