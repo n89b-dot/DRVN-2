@@ -53,7 +53,14 @@ function adminWithRpc(rpcResults: QueryResult[], ...results: QueryResult[]) {
   const admin = adminWith(...results);
   return {
     ...admin,
-    rpc: vi.fn(async () => {
+    rpc: vi.fn(async (name: string) => {
+      if (name === "refund_gap_snapshot") {
+        // The booked total and in-flight operations from one snapshot: the
+        // next queued result stands for the payment rows at that instant.
+        const rows = (await (admin.from() as unknown as PromiseLike<QueryResult>)).data as Array<{ refunded_cents: number | null }> | null;
+        const booked = (rows ?? []).reduce((sum, row) => sum + (row.refunded_cents ?? 0), 0);
+        return { data: { payments: rows?.length ?? 0, booked_cents: booked, in_flight_cents: 0 }, error: null };
+      }
       const next = rpcResults.shift();
       if (!next) throw new Error("Unexpected RPC call");
       return next;
@@ -67,7 +74,8 @@ function refundedCharge(overrides: Partial<Stripe.Charge> = {}): Stripe.Charge {
     payment_intent: "pi_1",
     amount_refunded: 500,
     refunded: false,
-    refunds: { data: [] },
+    // Current API shape (2026-07-29.dahlia): a Charge has no `refunds` list;
+    // refunds come from stripeMocks.listRefunds.
     ...overrides,
   } as unknown as Stripe.Charge;
 }
@@ -100,21 +108,15 @@ describe("webhook persistence failures", () => {
     const admin = adminWithRpc(
       [{ data: { action: "settle", operation_id: "op_1" }, error: null }],
       { data: [row], error: null },
+      // The gap snapshot: nothing booked, nothing still booking.
       { data: [row], error: null },
       { data: { id: "recovery_1" }, error: null }
     );
-    const charge = refundedCharge({
-      refunds: {
-        data: [
-          {
-            id: "re_1",
-            amount: 500,
-            status: "succeeded",
-            metadata: { order_id: "order_1" },
-          } as unknown as Stripe.Refund,
-        ],
-      } as Stripe.ApiList<Stripe.Refund>,
+    stripeMocks.listRefunds.mockResolvedValue({
+      data: [{ id: "re_1", amount: 500, status: "succeeded", metadata: { order_id: "order_1" } }],
+      has_more: false,
     });
+    const charge = refundedCharge();
 
     await expect(applyChargeRefund(admin as never, charge)).resolves.toBe("recovery_recorded");
   });
@@ -140,7 +142,7 @@ describe("webhook persistence failures", () => {
     expect(firstUpsert.mock.calls[0][1]).toEqual({ onConflict: "recovery_key" });
   });
 
-  it("fetches and books the complete refund collection when Stripe truncates the charge", async () => {
+  it("fetches and books the refund collection from the list, never the charge", async () => {
     const row = {
       id: "pay_1",
       order_id: "order_1",
@@ -166,9 +168,7 @@ describe("webhook persistence failures", () => {
       ],
       has_more: false,
     });
-    const charge = refundedCharge({
-      refunds: { data: [], has_more: true } as unknown as Stripe.ApiList<Stripe.Refund>,
-    });
+    const charge = refundedCharge();
 
     await expect(applyChargeRefund(admin as never, charge)).resolves.toBe("committed");
     expect(stripeMocks.listRefunds).toHaveBeenCalledWith({ charge: "ch_1", limit: 100 });
@@ -181,9 +181,7 @@ describe("webhook persistence failures", () => {
 
   it("retries instead of acknowledging when full refund pagination is unavailable", async () => {
     stripeMocks.listRefunds.mockRejectedValue(new Error("network timeout"));
-    const charge = refundedCharge({
-      refunds: { data: [], has_more: true } as unknown as Stripe.ApiList<Stripe.Refund>,
-    });
+    const charge = refundedCharge();
     await expect(applyChargeRefund(adminWith() as never, charge)).resolves.toBe("retry");
   });
 
@@ -204,30 +202,17 @@ describe("webhook persistence failures", () => {
       { data: [before], error: null },
       { data: [fullyApplied], error: null }
     );
-    const charge = refundedCharge({
-      amount_refunded: 500,
-      refunds: {
-        data: [
-          {
-            id: "re_operation",
-            amount: 300,
-            currency: "usd",
-            status: "succeeded",
-            metadata: { operation_id: "op_1" },
-          },
-          {
-            id: "re_external",
-            amount: 200,
-            currency: "usd",
-            status: "succeeded",
-            metadata: { order_id: "order_1" },
-          },
-        ],
-      } as unknown as Stripe.ApiList<Stripe.Refund>,
+    stripeMocks.listRefunds.mockResolvedValue({
+      data: [
+        { id: "re_operation", amount: 300, currency: "usd", status: "succeeded", metadata: { operation_id: "op_1" } },
+        { id: "re_external", amount: 200, currency: "usd", status: "succeeded", metadata: { order_id: "order_1" } },
+      ],
+      has_more: false,
     });
+    const charge = refundedCharge({ amount_refunded: 500 });
 
     await expect(applyChargeRefund(admin as never, charge)).resolves.toBe("committed");
-    expect(admin.rpc).toHaveBeenCalledTimes(2);
+    expect(admin.rpc.mock.calls.filter(([name]) => name === "record_refund_provider_event")).toHaveLength(2);
     expect(paymentMocks.runRefundOperation).toHaveBeenCalledTimes(2);
     expect(paymentMocks.recordExternalRefund).not.toHaveBeenCalled();
   });
@@ -245,23 +230,17 @@ describe("webhook persistence failures", () => {
       { data: [payment], error: null },
       { data: [payment], error: null }
     );
-    const charge = refundedCharge({
-      refunds: {
-        data: [
-          {
-            id: "re_1",
-            amount: 300,
-            currency: "usd",
-            status: "succeeded",
-            metadata: { operation_id: "op_other" },
-          },
-        ],
-      } as unknown as Stripe.ApiList<Stripe.Refund>,
+    stripeMocks.listRefunds.mockResolvedValue({
+      data: [{ id: "re_1", amount: 300, currency: "usd", status: "succeeded", metadata: { operation_id: "op_other" } }],
+      has_more: false,
     });
+    const charge = refundedCharge();
 
     await expect(applyChargeRefund(admin as never, charge)).resolves.toBe("recovery_recorded");
     expect(paymentMocks.runRefundOperation).not.toHaveBeenCalled();
-    expect(admin.from).toHaveBeenCalledTimes(2);
+    // The payment lookup only: a refund already in recovery skips the gap check.
+    expect(admin.from).toHaveBeenCalledTimes(1);
+    expect(admin.rpc).not.toHaveBeenCalledWith("refund_gap_snapshot", expect.anything());
   });
 
   it("handles charge.refunded before the matching refund event without double settlement", async () => {
@@ -277,20 +256,15 @@ describe("webhook persistence failures", () => {
       { data: [payment], error: null },
       { data: [{ ...payment, refunded_cents: 300 }], error: null }
     );
-    const charge = refundedCharge({
-      amount_refunded: 300,
-      refunds: {
-        data: [
-          {
-            id: "re_1",
-            amount: 300,
-            currency: "usd",
-            status: "succeeded",
-            metadata: { operation_id: "op_1" },
-          },
-        ],
-      } as unknown as Stripe.ApiList<Stripe.Refund>,
-    });
+    const listedRefund = {
+      id: "re_1",
+      amount: 300,
+      currency: "usd",
+      status: "succeeded",
+      metadata: { operation_id: "op_1" },
+    } as unknown as Stripe.Refund;
+    stripeMocks.listRefunds.mockResolvedValue({ data: [listedRefund], has_more: false });
+    const charge = refundedCharge({ amount_refunded: 300 });
 
     await expect(applyChargeRefund(chargeAdmin as never, charge)).resolves.toBe("committed");
     expect(paymentMocks.runRefundOperation).toHaveBeenCalledTimes(1);
@@ -300,7 +274,7 @@ describe("webhook persistence failures", () => {
       id: "evt_refund_after_charge",
       created: 1_800_000_100,
       type: "refund.updated",
-      data: { object: charge.refunds!.data[0] },
+      data: { object: listedRefund },
     } as unknown as Stripe.Event;
     const replayAdmin = adminWithRpc([
       { data: { action: "committed", operation_id: "op_1", replayed: true }, error: null },
@@ -353,10 +327,8 @@ describe("webhook persistence failures", () => {
       { data: [{ order_id: "order_1" }], error: null },
       { data: [payment], error: null }
     );
-    const charge = refundedCharge({
-      amount_refunded: 300,
-      refunds: { data: [refund], has_more: false } as Stripe.ApiList<Stripe.Refund>,
-    });
+    stripeMocks.listRefunds.mockResolvedValue({ data: [refund], has_more: false });
+    const charge = refundedCharge({ amount_refunded: 300 });
     await expect(applyChargeRefund(chargeAdmin as never, charge)).resolves.toBe("committed");
     expect(paymentMocks.runRefundOperation).not.toHaveBeenCalled();
   });
@@ -501,6 +473,30 @@ describe("webhook persistence failures", () => {
         { id: "acct_1", payouts_enabled: true } as Stripe.Account
       )
     ).rejects.toThrow("payable seller transfer unblock failed; retry required");
+  });
+
+  it("stores setup started (details submitted) with payouts still off (N244, 20261108100000)", async () => {
+    const admin = adminWith({ data: [{ id: "seller_1" }], error: null });
+    await expect(
+      applyAccountUpdate(
+        admin as never,
+        { id: "acct_1", payouts_enabled: false, details_submitted: true } as Stripe.Account
+      )
+    ).resolves.toBe("committed");
+    const sync = admin.from.mock.results[0].value as Record<string, ReturnType<typeof vi.fn>>;
+    expect(sync.update).toHaveBeenCalledWith({ payouts_enabled: false, payout_details_submitted: true });
+    // Nothing to release: the money still waits for payouts enabled.
+    expect(admin.from).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases a payable seller's parked payouts at once, restricted-account backoff included (N8)", async () => {
+    const admin = adminWith({ data: [{ id: "seller_1" }], error: null }, { data: [], error: null });
+    await expect(
+      applyAccountUpdate(admin as never, { id: "acct_1", payouts_enabled: true } as Stripe.Account)
+    ).resolves.toBe("committed");
+    const unblock = admin.from.mock.results[1].value as Record<string, ReturnType<typeof vi.fn>>;
+    expect(unblock.update).toHaveBeenCalledWith({ status: "ready", last_error: null, next_attempt_at: null });
+    expect(unblock.eq).toHaveBeenCalledWith("status", "blocked_unpayable");
   });
 });
 

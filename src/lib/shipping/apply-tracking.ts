@@ -6,6 +6,7 @@ import { reportError } from "@/lib/monitoring";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import type { Shipment, ShipmentStatus } from "@/lib/database.types";
 import type { TrackingState, TrackingSummary } from "./types";
+import { deliveryEvidence, evaluateDeliveryProof } from "./delivery-proof";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -192,6 +193,8 @@ export async function applyTrackingSummary(
         patch.shipped_at = summary.events[0]?.occurredAt ?? new Date().toISOString();
       }
       if (target === "delivered") {
+        // The shipment row keeps its existing fallback; delivery PROOF (N95)
+        // reads only the carrier's own date, never this one.
         patch.delivered_at = summary.deliveredAt ?? new Date().toISOString();
       }
       const { data: updated, error } = await admin
@@ -270,10 +273,68 @@ export async function applyTrackingSummary(
         : shipped
           ? "shipped"
           : "none";
+      // N95: every delivered outbound shipment gets its proof record, from
+      // a payload that itself reports the delivery (an older in-transit
+      // replay carries no delivery evidence; the database also refuses
+      // evidence older than what it holds). A failure throws like any other
+      // persistence failure, so the provider's retry records it; dispatch
+      // never waits on it.
+      if (summary.state === "delivered") await recordDeliveryProof(admin, currentShipment, summary);
     }
   }
 
   return { shipmentId: shipment.id, eventsInserted, statusChanged, orderEffect };
+}
+
+/**
+ * Writes the delivery proof for a delivered outbound shipment (N95): the
+ * carrier's evidence, judged against the order's frozen facts. The database
+ * copies those facts itself and stores 'review' if they don't support a
+ * 'verified' judgement.
+ */
+export async function recordDeliveryProof(
+  admin: Admin,
+  shipment: Shipment,
+  summary: TrackingSummary
+): Promise<"verified" | "review"> {
+  const { data: order, error } = await admin
+    .from("orders")
+    .select("ship_postcode, ship_city, ship_country, deliver_by, created_at, total_cents")
+    .eq("id", shipment.order_id)
+    .maybeSingle();
+  if (error || !order) {
+    persistenceFailure("delivery proof order lookup failed", { orderId: shipment.order_id, error });
+  }
+  const evidence = deliveryEvidence(summary);
+  const result = evaluateDeliveryProof(evidence, {
+    shipPostcode: order.ship_postcode,
+    shipCity: order.ship_city,
+    shipCountry: order.ship_country,
+    deliverBy: order.deliver_by,
+    createdAt: order.created_at,
+    totalCents: order.total_cents,
+  });
+  const { data, error: recordError } = await admin.rpc("record_delivery_proof", {
+    p_shipment: shipment.id,
+    p_carrier_delivered_at: evidence.carrierDeliveredAt ?? undefined,
+    p_destination_postcode: evidence.destinationPostcode ?? undefined,
+    p_destination_city: evidence.destinationCity ?? undefined,
+    p_first_scan_at: evidence.firstScanAt ?? undefined,
+    p_signed_by: evidence.signedBy ?? undefined,
+    p_evidence_at: evidence.evidenceAt ?? undefined,
+    p_destination_match: result.destinationMatch,
+    p_verdict: result.verdict,
+    p_reasons: result.reasons,
+  });
+  const recorded = data as { ok?: boolean; verdict?: "verified" | "review"; reason?: string } | null;
+  if (recordError || !recorded?.ok || !recorded.verdict) {
+    persistenceFailure("delivery proof could not be recorded", {
+      shipmentId: shipment.id,
+      recordError,
+      reason: recorded?.reason,
+    });
+  }
+  return recorded.verdict;
 }
 
 async function readReturnStatus(admin: Admin, returnId: string): Promise<string> {
@@ -360,6 +421,24 @@ async function markOrderShipped(admin: Admin, shipment: Shipment): Promise<boole
     .maybeSingle();
   if (error) persistenceFailure("order shipped update failed", { orderId: shipment.order_id, error });
   if (data) return true;
+  // An open not-received case on an undispatched order (N6): dispatch and
+  // tracking stay possible. The case stays open; resolving it lands on
+  // 'shipped'.
+  const { data: inCase, error: caseError } = await admin
+    .from("orders")
+    .update({
+      pre_dispute_status: "shipped",
+      shipped_at: shipment.shipped_at ?? new Date().toISOString(),
+      carrier: shipment.carrier,
+      tracking_number: shipment.tracking_code,
+    })
+    .eq("id", shipment.order_id)
+    .eq("status", "disputed")
+    .eq("pre_dispute_status", "paid")
+    .select("id")
+    .maybeSingle();
+  if (caseError) persistenceFailure("disputed order shipped update failed", { orderId: shipment.order_id, caseError });
+  if (inCase) return true;
   const { data: existing, error: lookupError } = await admin
     .from("orders")
     .select("status")
@@ -408,6 +487,19 @@ export async function maybeMarkOrderDelivered(admin: Admin, orderId: string): Pr
     .maybeSingle();
   if (updateError) persistenceFailure("order delivered update failed", { orderId, updateError });
   if (data) return true;
+  // Delivered while a case is open: the case stays open, and resolving it
+  // lands on 'delivered' with this delivery's date, as it would have without
+  // the case.
+  const { data: inCase, error: caseError } = await admin
+    .from("orders")
+    .update({ pre_dispute_status: "delivered", delivered_at: new Date().toISOString() })
+    .eq("id", orderId)
+    .eq("status", "disputed")
+    .eq("pre_dispute_status", "shipped")
+    .select("id")
+    .maybeSingle();
+  if (caseError) persistenceFailure("disputed order delivered update failed", { orderId, caseError });
+  if (inCase) return true;
   const { data: existing, error: lookupError } = await admin
     .from("orders")
     .select("status")

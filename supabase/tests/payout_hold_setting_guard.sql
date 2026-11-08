@@ -21,14 +21,18 @@ declare
   result jsonb;
 begin
   -- 1. The deployed decision (20261009100000: a fixed 2-day hold),
-  --    readable by anyone, writable by no client. The
+  --    readable by anyone through settlement_hold_policy() (the row
+  --    itself is service-role only since 20261107210000: it also holds
+  --    the fraud thresholds), writable by no client. The
   --    checks below pin the rule they test inside this rolled-back
   --    transaction, so they test the mechanism whatever is deployed.
   if (select (payout_hold_days, payout_hold_mode) from public.settlement_settings where id)
      is distinct from (2, 'fixed'::text) then
     raise exception 'FAIL 1: the deployed hold is not a fixed 2 days';
   end if;
-  if not has_table_privilege('anon', 'public.settlement_settings', 'select')
+  if not has_function_privilege('anon', 'public.settlement_hold_policy()', 'execute')
+     or has_table_privilege('anon', 'public.settlement_settings', 'select')
+     or has_table_privilege('authenticated', 'public.settlement_settings', 'select')
      or has_table_privilege('authenticated', 'public.settlement_settings', 'update')
      or has_table_privilege('anon', 'public.settlement_settings', 'insert')
      or has_table_privilege('authenticated', 'public.settlement_settings', 'delete') then
@@ -134,12 +138,17 @@ begin
   end loop;
   raise notice 'PASS 6: out-of-range values and a second row are refused';
 
-  -- 7. A missing row falls back to 7 days rather than stranding a payout.
+  -- 7. A missing row falls back to the owner's 2 days rather than stranding
+  --    a payout (R-hold, 20261107220900), and so does a new row.
   delete from public.settlement_settings;
-  if public.payout_available_at(plain, stamp) is distinct from stamp + interval '7 days' then
-    raise exception 'FAIL 7: a missing settings row did not fall back to 7 days';
+  if public.payout_available_at(plain, stamp) is distinct from stamp + interval '2 days' then
+    raise exception 'FAIL 7: a missing settings row did not fall back to 2 days';
   end if;
-  raise notice 'PASS 7: missing settings fall back to the 7-day default';
+  insert into public.settlement_settings default values;
+  if (select payout_hold_days from public.settlement_settings where id) is distinct from 2 then
+    raise exception 'FAIL 7: a new settings row does not default to 2 days';
+  end if;
+  raise notice 'PASS 7: missing settings and a new row fall back to the 2-day default';
 
   raise notice 'all payout hold setting checks passed';
 end $$;

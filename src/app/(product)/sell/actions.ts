@@ -27,7 +27,9 @@ import {
   MIN_CHARGE_CENTS,
   chargeWithinBounds,
 } from "@/lib/payments/charge-bounds";
-import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
+import { PAYOUTS_NOT_READY_CODE } from "@/lib/payments/payout-readiness";
+
+import { MAX_SHIPPING_CENTS, PAYOUTS_REQUIRED, PHOTO_REQUIRED, listingWriteRefusal } from "./listing-refusal";
 import { saveListingAgent } from "@/features/agent/actions";
 
 export type SellState = {
@@ -104,12 +106,19 @@ async function readListingFields(formData: FormData, userId: string) {
   // draft — and by the database for every write).
   if (price > MAX_CHARGE_CENTS) return { error: LISTING_PRICE_OUT_OF_BOUNDS_MESSAGE };
   if (!Number.isFinite(shipping) || shipping < 0) return { error: "Enter a valid shipping cost." };
+  // The database's own bounds (listings_shipping_bounds, listings_text_bounds),
+  // checked here so a save is never refused by the database for something the
+  // form can say first (N72).
+  if (shipping > MAX_SHIPPING_CENTS) return { error: "Shipping can't be more than $100,000." };
   if (floor !== null && (!Number.isFinite(floor) || floor <= 0 || floor > price)) {
     return { error: "The offer floor must be above zero and no more than your asking price." };
   }
 
   const description = String(formData.get("description") ?? "").trim();
   if (description.length > 8000) return { error: "Keep the description under 8000 characters." };
+
+  const location = String(formData.get("location") ?? "").trim();
+  if (location.length > 120) return { error: "Keep the location under 120 characters." };
 
   const compatibility = String(formData.get("compatibility_notes") ?? "").trim();
   if (compatibility.length > 2000) {
@@ -252,7 +261,7 @@ async function readListingFields(formData: FormData, userId: string) {
       // Showing it is the seller's choice, and only means something with a minimum (O-3).
       show_offer_floor: floor !== null && formData.get("show_offer_floor") === "on",
       allows_collection: shippingMode === "pickup_only" ? true : allowsCollection,
-      location: String(formData.get("location") ?? "").trim() || null,
+      location: location || null,
       compatibility_notes: compatibility || null,
       part_number: partNumber || null,
       brand: brand || null,
@@ -263,14 +272,8 @@ async function readListingFields(formData: FormData, userId: string) {
   };
 }
 
-const PHOTO_REQUIRED =
-  "Add at least one photo before publishing — a listing goes public with its picture. Drafts can save without one.";
-
 export async function createListing(_prev: SellState, formData: FormData): Promise<SellState> {
   const { supabase, user } = await requireUser();
-
-  const betaAccess = await getBetaAccess(user.id, "seller");
-  if (!betaAccess.eligible) return { error: betaCommerceError("seller") };
 
   const parsed = await readListingFields(formData, user.id);
   if ("error" in parsed) return { error: parsed.error };
@@ -295,6 +298,7 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
     return { error: PHOTO_REQUIRED };
   }
   const modItemId = String(formData.get("mod_item_id") ?? "");
+  if (modItemId && !uuid.test(modItemId)) return { error: "The source build line is invalid." };
   const importId = String(formData.get("import_id") ?? "");
   const payloadHash = createHash("sha256")
     .update(JSON.stringify({
@@ -313,8 +317,11 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
   });
   if (claimed.error) {
     return {
+      // 22023 now means only that this form's request already made a
+      // listing with other details: a refused or abandoned attempt is taken
+      // over by the next one (N72, claim_listing_creation 20261107210000).
       error: claimed.error.code === "22023"
-        ? "This save request no longer matches the listing form. Reload and try again."
+        ? "This form already saved a listing. Find it in your listings, or reload the page to start a new one."
         : "Couldn't prepare this listing. Try again.",
     };
   }
@@ -330,27 +337,18 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
   // unfinished attempt is admitted again; a denial releases an unused claim
   // so a second click cannot masquerade as a free recovery.
   if (!claim.completed && !(await allowAction(RATE_LIMITS.createListing, user.id))) {
-    const discarded = await supabase.rpc(
-      "discard_listing_creation",
-      { p_request: requestId, p_payload_hash: payloadHash }
-    );
-    if (discarded.error || discarded.data !== true) {
-      reportError("[sell] rate-limited listing claim wasn't discarded", {
-        requestId,
-        error: discarded.error,
-      });
-    }
+    await releaseCreationClaim(supabase, requestId, payloadHash);
     return { error: rateLimitMessage(RATE_LIMITS.createListing) };
   }
 
+  // Checked after the claim so a completed request still recovers its
+  // listing. A refusal releases the unused claim; the database would also let
+  // the changed "save as draft" take it over (N72, 20261107210000).
   if (!claim.completed && !asDraft && !(await sellerCanPublish(user.id))) {
-    return {
-      error:
-        "Publishing needs payouts set up first (Selling → Payouts), so a sale has somewhere to send your money. You can still save this as a draft.",
-    };
+    await releaseCreationClaim(supabase, requestId, payloadHash);
+    return { error: PAYOUTS_REQUIRED };
   }
 
-  if (modItemId && !uuid.test(modItemId)) return { error: "The source build line is invalid." };
   const saved = await supabase.rpc(
     "save_listing_creation",
     {
@@ -364,13 +362,12 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
     }
   );
   if (saved.error) {
-    reportError("[sell] atomic listing creation failed", { requestId, error: saved.error });
+    const refusal = listingWriteRefusal(saved.error.code);
+    if (!refusal) reportError("[sell] atomic listing creation failed", { requestId, error: saved.error });
     return {
       error: saved.error.code === "40001"
         ? "This listing changed while the save was being recovered. Refresh before continuing."
-        : saved.error.code === CHARGE_OUT_OF_BOUNDS_CODE
-          ? LISTING_PRICE_OUT_OF_BOUNDS_MESSAGE
-          : "Couldn't save the complete listing. Your form is still here — try again.",
+        : refusal ?? "Couldn't save the complete listing. Your form is still here — try again.",
     };
   }
   const saveResult = saved.data as unknown as {
@@ -428,6 +425,21 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
   if (agentError) redirect(`/listings/${listingId}/edit?agent=failed`);
   if (asDraft) redirect(`/listings/${listingId}/edit?saved=draft`);
   redirect(`/listings/${listingId}`);
+}
+
+/** Gives back an unused creation claim, so a refused attempt costs nothing. */
+async function releaseCreationClaim(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  requestId: string,
+  payloadHash: string
+) {
+  const discarded = await supabase.rpc("discard_listing_creation", {
+    p_request: requestId,
+    p_payload_hash: payloadHash,
+  });
+  if (discarded.error || discarded.data !== true) {
+    reportError("[sell] refused listing claim wasn't discarded", { requestId, error: discarded.error });
+  }
 }
 
 /**
@@ -632,21 +644,24 @@ export type ListingActionState = {
   ok?: string;
   /** The refusal is the payout-onboarding gate — link the seller there. */
   needsOnboarding?: boolean;
+  /** N77: the listing has offers, so it is withdrawn rather than deleted. */
+  withdrawInstead?: boolean;
 } | null;
 
 export async function setListingStatus(
   _prev: ListingActionState,
   formData: FormData
 ): Promise<ListingActionState> {
-  const { supabase, user } = await requireUser();
-
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "") as ListingStatus;
   if (!id || !SETTABLE_STATUSES.includes(status)) return { error: "Missing listing or status." };
-  if (status === "active") {
-    const betaAccess = await getBetaAccess(user.id, "seller");
-    if (!betaAccess.eligible) return { error: betaCommerceError("seller") };
-  }
+  // Archiving is withdrawing (OS-W33 follow-up, 20261108110100): the one
+  // database step that also ends any live offers and tells their buyers. A
+  // bare status change left those offers live on a listing the buyers could
+  // no longer open, and the database now refuses it (LW409).
+  if (status === "archived") return withdrawListing(_prev, formData);
+
+  const { supabase, user } = await requireUser();
 
   const { data: existing } = await supabase
     .from("listings")
@@ -703,7 +718,19 @@ export async function setListingStatus(
     .update({ status })
     .eq("id", id)
     .eq("seller_id", user.id);
-  if (error) return { error: error.message };
+  if (error) {
+    // The database holds the same rules (20261107210000): payouts and a
+    // photo to go live, whatever this action checked a moment ago.
+    if (error.code === PAYOUTS_NOT_READY_CODE) {
+      return {
+        error: "Publishing needs payouts set up first, so a sale has somewhere to send your money.",
+        needsOnboarding: true,
+      };
+    }
+    const refusal = listingWriteRefusal(error.code);
+    if (!refusal) reportError("[sell] listing status change failed", { id, status, error });
+    return { error: refusal ?? "Couldn't change the listing. Try again." };
+  }
 
 
   revalidatePath("/sell");
@@ -735,6 +762,11 @@ export async function deleteListing(
   // a title snapshot, so removing a sold listing no longer breaks receipts.
   const { error } = await supabase.from("listings").delete().eq("id", id).eq("seller_id", user.id);
   if (error) {
+    // N77 (20261107220700): a listing with offers is withdrawn, not deleted,
+    // so the buyers keep their history and are told.
+    if (error.code === "LW409") {
+      return { error: "This listing has offers, so it's withdrawn instead of deleted — the buyers keep their history.", withdrawInstead: true };
+    }
     // The 0012 delete guard refuses reserved/sold rows with a 42501.
     return {
       error: error.code === "42501"
@@ -755,45 +787,38 @@ export async function deleteListing(
 }
 
 /**
- * Undoes the "release a part" link between a build line and the listing it
- * spawned. The car sheet was showing "For sale" against a line forever, with
- * no way back — a listing pulled down or repurposed left a stale link behind.
- * Ownership is enforced by RLS (the car update below only affects rows this
- * user owns), and checked here too for a clean error rather than a silent
- * no-op.
+ * Withdraws a listing (N77, Neil's ruling: withdraw, don't delete). One
+ * database step (withdraw_listing, 20261107220700) takes the listing lock
+ * first — as offer moves and checkout do — ends every live offer with a
+ * listing-withdrawal reason, tells each buyer, and archives the listing.
+ * Nothing is deleted. A reserved or sold listing belongs to its order.
  */
-export async function unlinkModListing(formData: FormData): Promise<ListingActionState> {
-  const { supabase, user } = await requireUser();
-
-  const modItemId = String(formData.get("mod_item_id") ?? "");
-  const carId = String(formData.get("car_id") ?? "");
-  if (!modItemId || !carId) return { error: "Missing build line." };
-
-  const { data: car } = await supabase
-    .from("cars")
-    .select("id, slug, owner_id")
-    .eq("id", carId)
-    .maybeSingle();
-  if (!car || car.owner_id !== user.id) return { error: "That car isn't in your garage." };
-
-  const { data: mod } = await supabase
-    .from("mod_items")
-    .select("linked_listing_id")
-    .eq("id", modItemId)
-    .eq("car_id", carId)
-    .maybeSingle();
-
-  const { error } = await supabase
-    .from("mod_items")
-    .update({ linked_listing_id: null })
-    .eq("id", modItemId)
-    .eq("car_id", carId);
-  if (error) return { error: error.message };
-
-  revalidatePath(`/garage/${carId}/edit`);
-  revalidatePath(`/cars/${car.slug}`);
-  if (mod?.linked_listing_id) revalidatePath(`/listings/${mod.linked_listing_id}`);
-  return { ok: "Link removed." };
+export async function withdrawListing(
+  _prev: ListingActionState,
+  formData: FormData
+): Promise<ListingActionState> {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return { error: "Missing listing." };
+  const { data, error } = await supabase.rpc("withdraw_listing", { p_listing: id });
+  if (error) {
+    if (error.code === "LW423") return { error: "This listing is mid-checkout or sold — the order decides it now." };
+    if (error.code === "LW403") return { error: "This listing was removed by moderation — check your notifications." };
+    if (error.code === "P0002") return { error: "That listing isn't yours or no longer exists." };
+    return { error: "Couldn't withdraw it. Nothing changed — try again." };
+  }
+  const ended = Number((data as { offers_ended?: number } | null)?.offers_ended ?? 0);
+  revalidatePath("/sell");
+  revalidatePath("/listings");
+  revalidatePath(`/listings/${id}`);
+  revalidatePath(`/listings/${id}/edit`);
+  revalidatePath("/offers");
+  revalidatePath("/marketplace");
+  return {
+    ok: ended
+      ? `Withdrawn. ${ended} open offer${ended === 1 ? "" : "s"} ended, and ${ended === 1 ? "the buyer was" : "the buyers were"} told.`
+      : "Withdrawn. It's archived, with its history kept.",
+  };
 }
 
 type FitmentInput = { make: string; model: string; year_start: number | null; year_end: number | null };

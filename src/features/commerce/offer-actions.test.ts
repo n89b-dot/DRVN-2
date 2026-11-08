@@ -20,7 +20,6 @@ vi.mock("@/lib/rate-limit", () => ({ RATE_LIMITS: {}, allowAction: vi.fn(), rate
 vi.mock("@/lib/analytics", () => ({ capture: vi.fn() }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 vi.mock("@/lib/suspension", () => ({ SUSPENDED_MESSAGE: "suspended", isSuspended: vi.fn().mockResolvedValue(false) }));
-vi.mock("@/lib/beta-access", () => ({ getBetaAccess: vi.fn().mockResolvedValue({ eligible: true }), betaCommerceError: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getUser: mocks.auth }, rpc: mocks.rpc }),
 }));

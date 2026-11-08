@@ -17,9 +17,13 @@ import {
 } from "@/lib/mods/parse";
 import { modTypeByKey, modTypeFor, PICK_LIST, stockLineLabel, type ModType } from "@/lib/mods/stock-parts";
 
-import { unlinkModListing } from "@/app/(product)/sell/actions";
-
-import { readPartLink, saveModItems, type ModItemInput } from "../../actions";
+import {
+  confirmLostModSave,
+  readPartLink,
+  saveModItems,
+  unlinkModListing,
+  type ModItemInput,
+} from "../../actions";
 import { useUnsavedGuard } from "./use-unsaved";
 import { draftRow, listRow, type BuildDraft, type BuildList } from "@/features/agent/build-change";
 
@@ -230,9 +234,12 @@ export function ModsEditor({
   carId,
   carMake,
   initialMods,
+  initialRevision,
   draft = null,
 }: {
   carId: string;
+  /** The sheet revision these lines were read at (N65); every save sends it. */
+  initialRevision: string;
   /** The brand a stock part is listed under. */
   carMake: string | null;
   /** `linked_listing` is the linked listing's status, embedded by the caller. */
@@ -281,6 +288,11 @@ export function ModsEditor({
   const [unlinkPending, startTransition] = useTransition();
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  // N65: the revision every save is made over, moved on by each save.
+  const revision = useRef(initialRevision);
+  // A save whose response was lost: what it sent, until the next save asks
+  // whether it committed (N65 follow-up).
+  const unconfirmed = useRef<ModItemInput[] | null>(null);
   // Saves call the action in their own transition, so a redirect it already
   // followed — the sign-in redirect when the session has ended, for one —
   // lands in Next's redirect boundary instead of being followed a second time.
@@ -432,17 +444,34 @@ export function ModsEditor({
 
   function unlink(row: Row) {
     if (!row.id) return;
+    const lineId = row.id;
     setUnlinkingKey(row.key);
-    const formData = new FormData();
-    formData.set("mod_item_id", row.id);
-    formData.set("car_id", carId);
     startTransition(async () => {
-      const result = await unlinkModListing(formData);
-      if (result?.error) {
+      // One call, over the revision this editor holds: the database refuses
+      // it if anything else changed the sheet first, and otherwise hands back
+      // the revision the unlink itself produced. Reading the revision around
+      // a separate unlink request let a line another tab added in between be
+      // adopted unseen, and this editor's next save deleted it.
+      let result: Awaited<ReturnType<typeof unlinkModListing>>;
+      try {
+        if (unconfirmed.current) {
+          // A save whose response was lost: adopt its revision only if the
+          // sheet is exactly what it sent (the same rule a save follows).
+          const landed = await confirmLostModSave(carId, unconfirmed.current);
+          if (landed) revision.current = landed;
+          unconfirmed.current = null;
+        }
+        result = await unlinkModListing(carId, lineId, revision.current);
+      } catch (error) {
+        unstable_rethrow(error);
+        result = { error: "Couldn't confirm the link was removed. Reload to see the latest." };
+      }
+      if (result.error) {
         // Surface the refusal in the editor's existing status line instead of
         // clearing the link locally while the server kept it.
         setStatus({ kind: "error", message: result.error });
       } else {
+        if (result.revision) revision.current = result.revision;
         updateRow(row.key, { linked_listing_id: null, linked_status: null });
       }
       setUnlinkingKey(null);
@@ -527,10 +556,20 @@ export function ModsEditor({
     const commit = async (): Promise<boolean> => {
       try {
         let result: Awaited<ReturnType<typeof saveModItems>>;
+        let sent = false;
         try {
-          result = await saveModItems(carId, items);
+          if (unconfirmed.current) {
+            // If the lost save committed, the sheet is exactly what it sent:
+            // save over that revision. Anything else, keep the loaded one.
+            const landed = await confirmLostModSave(carId, unconfirmed.current);
+            if (landed) revision.current = landed;
+            unconfirmed.current = null;
+          }
+          sent = true;
+          result = await saveModItems(carId, items, revision.current);
         } catch (error) {
           unstable_rethrow(error);
+          if (sent) unconfirmed.current = items;
           // The request may have committed before its response disappeared. Keep
           // every draft value and the client UUIDs so retrying converges on the
           // same rows instead of forcing a reload or creating duplicates.
@@ -546,6 +585,8 @@ export function ModsEditor({
             : { kind: "ok", message: "Saved ✓" }
         );
         if (!result.error) {
+          // The sheet moved on: the next save is over this revision (N65).
+          if (result.revision) revision.current = result.revision;
           // New rows use their client UUID as the durable database id. Promote
           // that id locally so an ordinary second save and a response-loss retry
           // update the same row instead of inserting a duplicate.

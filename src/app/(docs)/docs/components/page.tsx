@@ -1286,6 +1286,7 @@ export default function ComponentsPage() {
               meta="Add to your Mk8 Golf R; mark APR Roll-Control mount removed"
               image={{ alt: "KW V3 coilovers" }}
               href="#annotation"
+              details={<DataRow label="Link goes to" value="www.kwsuspensions.com" note={<span className="break-all">https://www.kwsuspensions.com/en/products/v3-coilovers</span>} />}
               action={
                 <div className="flex gap-2">
                   <Button variant="live">Confirm</Button>

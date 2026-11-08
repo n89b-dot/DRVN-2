@@ -27,7 +27,6 @@ declare
   v_fn text;
   v_count int;
 begin
-  update public.beta_access_config set enforced = false where singleton;
 
   insert into auth.users(id, email) values
     (v_seller, 'scale-seller@drvn.test'), (v_suspended, 'scale-suspended@drvn.test');

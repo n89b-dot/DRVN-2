@@ -166,6 +166,89 @@ describe("what reaches the provider (readiness 63)", () => {
   });
 });
 
+describe("the privacy page's model promise, at the provider boundary (N422)", () => {
+  // What the privacy page says: "Card numbers, VINs, email addresses and
+  // phone numbers are removed from what you type before it's sent, and your
+  // agent's limits are never sent." Checked here on the HTTP bodies that
+  // would leave for the provider, not on the page's wording.
+  const CARD = "4242 4242 4242 4242";
+  const EMAIL = "kaito@drvn.test";
+  const PHONE = "415-555-0132";
+  // The member's agent limits on this listing: distinctive, so any spelling of them would show.
+  const FLOOR = 77731;
+  const TARGET = 88842;
+  const CEILING = 99953;
+  const LIMIT_TABLES = ["agent_mandates", "agent_mandate_versions", "listing_private_terms", "offer_round_terms"];
+
+  it("redacts the message, the history and every tool result, and never sends the agent's floor or ceiling", async () => {
+    const reads: string[] = [];
+    const db = memberDb({
+      // The row as the database holds it, private terms alongside: a tool that sent the row whole would leak them.
+      listings: [{ ...LISTING_ROW, description: `Off my car, VIN ${VIN}. Questions to ${EMAIL} or ${PHONE}; deposit by card ${CARD.replaceAll(" ", "-")}.`, offer_floor_cents: FLOOR, minimum_cents: FLOOR, target_cents: TARGET }],
+      messages: [{ listing_id: LISTING, recipient_id: OWNER, order_id: null, kind: "message", body: `Is the oil feed line included? Card ${CARD} ready, text me on ${PHONE}`, created_at: "2026-11-01T10:00:00Z" }],
+      agent_mandates: [{ owner_id: OWNER, listing_id: LISTING, scope: "seller", minimum_cents: FLOOR, target_cents: TARGET, ceiling_cents: CEILING }],
+      agent_mandate_versions: [{ owner_id: OWNER, minimum_cents: FLOOR, target_cents: TARGET, ceiling_cents: CEILING }],
+      listing_private_terms: [{ listing_id: LISTING, seller_id: OWNER, offer_floor_cents: FLOOR }],
+      offer_round_terms: [{ effective_floor_cents: FLOOR, buyer_ceiling_cents: CEILING }],
+    });
+    const watched = { ...db, from: (table: string) => (reads.push(table), db.from(table as never)) } as unknown as MemberClient;
+    const bothTools: Reply = {
+      content: [
+        { type: "tool_use", id: "toolu_listing", name: "read_listing", input: { listingId: LISTING } },
+        { type: "tool_use", id: "toolu_messages", name: "read_listing_messages", input: { listingId: LISTING } },
+      ],
+      stop_reason: "tool_use",
+    };
+    const { fetch, bodies } = provider([bothTools, text("One buyer asked about the oil line.")]);
+    const history = [
+      { role: "user" as const, content: `Last week: my card is ${CARD}, VIN ${VIN}` },
+      { role: "assistant" as const, content: `Noted. I'll write to ${EMAIL} or ring ${PHONE}.` },
+    ];
+    const { spend } = ledger();
+    const result = await runAgentTurn({
+      context: modelContext(OWNER, "seller"),
+      supabase: watched,
+      message: `What are buyers asking? Reach me at ${EMAIL}, ${PHONE}, card ${CARD}, VIN ${VIN}.`,
+      history,
+      client: await anthropicClient({ fetch }),
+      config,
+      spend,
+      halted: notHalted,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.toolCalls.map((call) => call.name).sort()).toEqual(["read_listing", "read_listing_messages"]);
+    expect(bodies).toHaveLength(2);
+    for (const body of bodies) {
+      const sent = JSON.stringify(body);
+      for (const secret of [CARD, CARD.replaceAll(" ", ""), CARD.replaceAll(" ", "-"), VIN, EMAIL, PHONE]) expect(sent).not.toContain(secret);
+      // The member's own words still go, with their identifiers marked as removed.
+      expect(sent).toContain("What are buyers asking?");
+      expect(sent).toContain("[card number removed]");
+      expect(sent).toContain("[VIN removed]");
+      expect(sent).toContain("[email]");
+      expect(sent).toContain("[phone]");
+    }
+    // The second round carries both tool results: redacted, and without the listing's private terms.
+    const results = JSON.stringify((bodies[1].messages as { content: unknown }[]).at(-1));
+    expect(results).toContain("toolu_listing");
+    expect(results).toContain("toolu_messages");
+    expect(results).toContain("oil feed line");
+    expect(results).toContain("Off my car");
+    expect(results).not.toMatch(/floor|minimum_cents|target_cents|ceiling/i);
+    // The limits reach no request in any spelling: cents, or the amount as a price.
+    for (const body of bodies) {
+      const sent = JSON.stringify(body);
+      for (const amount of [FLOOR, TARGET, CEILING]) {
+        expect(sent).not.toContain(String(amount));
+        expect(sent).not.toContain((amount / 100).toFixed(2));
+      }
+    }
+    // No tool even read where the limits are kept.
+    for (const table of LIMIT_TABLES) expect(reads).not.toContain(table);
+  });
+});
+
 describe("the kill switch and suspension (readiness 66, N127)", () => {
   it("a switch that is on makes no provider request at all", async () => {
     const { fetch } = provider([text("never")]);

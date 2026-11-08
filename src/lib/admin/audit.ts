@@ -76,7 +76,7 @@ export async function auditedAction<T>(
     reportError("[admin] actor assertion refused", { action: entry.action, actorError });
     throw new Error("This account is not authorized to act — mutation refused.");
   }
-  const transactional = new Set(["listing.remove", "listing.restore", "user.suspend", "user.unsuspend", "report.actioned", "report.dismissed", "recovery.recovered", "recovery.written_off", "note.internal", "dispute.resolve_for_seller", "order.message_parties", "case.claim", "case.release", "case.update"]);
+  const transactional = new Set(["listing.remove", "listing.restore", "user.suspend", "user.unsuspend", "report.actioned", "report.dismissed", "recovery.recovered", "recovery.written_off", "note.internal", "dispute.resolve_for_seller", "dispute.reopen", "order.message_parties", "case.claim", "case.release", "case.update"]);
   if (transactional.has(entry.action)) {
     const session = await createClient();
     const { data, error } = await session.rpc("execute_admin_command", {

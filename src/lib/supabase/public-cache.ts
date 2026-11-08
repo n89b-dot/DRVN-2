@@ -108,6 +108,7 @@ export const PUBLIC_READ_FUNCTIONS: ReadonlySet<string> = new Set([
   "search_listing_ids",
   "seller_active_counts",
   "seller_review_summaries",
+  "settlement_hold_policy",
   "suggested_builders",
   "trending_models",
 ]);

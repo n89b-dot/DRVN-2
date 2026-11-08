@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   role: null as string | null,
   enrolment: null as string | null,
+  confirmed: null as string | null,
   factors: [] as { id: string; status: string; created_at: string }[],
 }));
 
@@ -21,9 +22,25 @@ vi.mock("@/lib/supabase/server", () => ({
       getUser: async () => ({ data: { user: { id: "member-1" } } }),
       mfa: { listFactors: async () => ({ data: { totp: state.factors, all: state.factors }, error: null }) },
     },
-    rpc: async (name: string) => ({ data: name === "admin_role" ? state.role : name === "admin_enrolment_state" ? state.enrolment : null, error: null }),
+    rpc: async (name: string) => {
+      const answers: Record<string, unknown> = { admin_role: state.role, admin_enrolment_state: state.enrolment, admin_confirmed_factor: state.confirmed };
+      return { data: answers[name] ?? null, error: null };
+    },
   }),
 }));
+
+// The real form, with the factor it will challenge written beside it.
+vi.mock("./verify-form", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./verify-form")>();
+  return {
+    AdminVerifyForm: (props: Parameters<typeof real.AdminVerifyForm>[0]) => (
+      <>
+        <i data-challenge={props.factorId ?? "none"} />
+        <real.AdminVerifyForm {...props} />
+      </>
+    ),
+  };
+});
 
 const { default: AdminVerifyPage } = await import("./page");
 
@@ -32,6 +49,7 @@ const render = async () => renderToStaticMarkup(await AdminVerifyPage({ searchPa
 beforeEach(() => {
   state.role = null;
   state.enrolment = null;
+  state.confirmed = null;
   state.factors = [];
 });
 
@@ -58,8 +76,21 @@ describe("/admin-verify (N136)", () => {
     expect(html).not.toContain("Set up authenticator");
   });
 
+  it("challenges the confirmed factor, not another verified one on the account", async () => {
+    state.role = "admin";
+    state.confirmed = "factor-a";
+    state.factors = [
+      { id: "factor-b", status: "verified", created_at: "2026-11-07T09:00:00Z" },
+      { id: "factor-a", status: "verified", created_at: "2026-11-07T10:00:00Z" },
+    ];
+    const html = await render();
+    expect(html).toContain('data-challenge="factor-a"');
+    expect(html).not.toContain('data-challenge="factor-b"');
+  });
+
   it("asks a confirmed member for their code", async () => {
     state.role = "admin";
+    state.confirmed = "f-1";
     state.factors = [{ id: "f-1", status: "verified", created_at: "2026-11-07T10:00:00Z" }];
     const html = await render();
     expect(html).toContain("Authenticator code");

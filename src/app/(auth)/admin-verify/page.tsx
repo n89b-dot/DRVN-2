@@ -25,7 +25,12 @@ export default async function AdminVerifyPage({ searchParams }: { searchParams: 
   if (!member && !pending) notFound();
   const { data, error } = await client.auth.mfa.listFactors();
   if (error) throw new Error("Could not load authentication factors");
-  const verified = data.totp.find((factor) => factor.status === "verified");
+  // A confirmed member steps up with the factor the operator confirmed, never
+  // another one on the account (20261107200550).
+  const confirmedId = member ? (await client.rpc("admin_confirmed_factor")).data : null;
+  const verified = member
+    ? data.totp.find((factor) => factor.id === confirmedId && factor.status === "verified")
+    : data.totp.find((factor) => factor.status === "verified");
   return <div className="mx-auto max-w-md p-6"><h1 className="mb-4 text-xl">Verify admin access</h1>
     {pending
       ? <p className="mb-4">Set up your authenticator app. The console opens once the operator who added you has confirmed this authenticator with you.</p>

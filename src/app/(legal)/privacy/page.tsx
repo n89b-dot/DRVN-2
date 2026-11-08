@@ -8,7 +8,7 @@ export const metadata = {
   alternates: { canonical: "/privacy" },
 };
 
-const UPDATED = "18 October 2026";
+const UPDATED = "7 November 2026";
 
 /**
  * NOT LEGAL ADVICE — an honest working draft describing what the app actually
@@ -47,7 +47,8 @@ export default function PrivacyPage() {
           <li>
             <strong>Account</strong> — your email address, username and display name, and how you
             sign in (a password, or Google — if you use Google we receive your name and email
-            address from it).
+            address from it). When you confirm you&apos;re 18 or over, we keep when and where you
+            confirmed it — never your date of birth.
           </li>
           <li>
             <strong>Profile</strong> — anything you choose to add: headline, bio, a free-text
@@ -81,6 +82,11 @@ export default function PrivacyPage() {
             your chat with it, with any photos you add. Card numbers are removed from chat messages
             before they&apos;re stored. Photos have their location data removed when you upload
             them.
+          </li>
+          <li>
+            <strong>Copyright notices</strong> — if you send one, your name, contact details,
+            the work and the links you name. We may share the notice with the member whose
+            content it concerns, so they can respond.
           </li>
           <li>
             <strong>Listing imports</strong> — if you import a listing from another site, the link
@@ -166,10 +172,13 @@ export default function PrivacyPage() {
             imported is sent to Anthropic&apos;s AI service to draft the listing. When you chat
             with your agent, your message and recent chat, and what the agent looks up on DRVN to
             answer you (listings, your own cars and build, and the questions you received about
-            your own listings, but not your order conversations), are sent to the same service.
+            your own listings, but not your order conversations), are sent to the same service. If
+            you paste a link to a product page, DRVN fetches that page and sends the product
+            details it reads there (title, brand, part number, category).
             Card numbers, VINs, email addresses and phone numbers are removed from what you type
             before it&apos;s sent, and your agent&apos;s limits are never sent. Photos you add to
-            a message to your agent are sent with that message. Your account details are not
+            a message to your agent are sent with it only when you ask it to list a part or post an
+            update from them; an ordinary chat message sends no photos. Your account details are not
             sent.
           </li>
           <li>
@@ -207,8 +216,8 @@ export default function PrivacyPage() {
           <li>
             <strong>DRVN staff</strong> — can see orders, conversations and dispute evidence when
             handling a report, an order or a dispute. Messages are not end-to-end encrypted. Your
-            chat with your agent is opened only for a report about you or a dispute you&apos;re
-            part of, and each opening is recorded.
+            chat with your agent is opened only for a dispute you&apos;re part of, or a report
+            you made or that is about you or one of your listings, and each opening is recorded.
           </li>
         </ul>
         <p>We do not sell your data and we do not run advertising trackers.</p>
@@ -274,9 +283,11 @@ export default function PrivacyPage() {
             an update.
           </li>
           <li>
-            Everything else: for as long as your account exists. How long order, payment, message,
-            dispute and log records are kept after an account is deleted is still being set; this
-            page will state those periods once they are decided.
+            Everything else: for as long as your account exists. After you delete your account,
+            the order and payment records it was part of are kept for 6 years from the later of the
+            deletion and your last order, with your name, address and messages removed. How long
+            dispute and log records are kept is still being set; this page will state it once it
+            is decided.
           </li>
         </ul>
 
@@ -287,10 +298,13 @@ export default function PrivacyPage() {
           everywhere straight away. If an order, payment, refund or payout is still in progress,
           deletion waits until it&apos;s finished. Then your profile is cleared and shown as
           &ldquo;Deleted member&rdquo;, your cars, build posts and listings and their photos are
-          removed, any saved cards are deleted at Stripe, and your sign-in is deleted. Orders and
-          payment records stay on the other party&apos;s record with your name removed; where a
-          record must be kept, a minimal disabled identity is kept with it. How long backup
-          copies are kept is still being set.
+          removed, any saved cards are deleted at Stripe, and your sign-in is deleted. Your
+          handle is retired, so nobody can take it later. Your email, sign-in details,
+          delivery and ship-from addresses, and what you wrote in messages, questions and comments
+          are removed; we keep only a one-way fingerprint of your email. Orders and payment records
+          stay on the other party&apos;s record with your name removed; where a record must be
+          kept, a minimal disabled identity is kept with it. How long backup copies are kept is
+          still being set.
         </p>
 
         <h2>Your rights</h2>
@@ -315,10 +329,14 @@ export default function PrivacyPage() {
         <h2>Children</h2>
         <p>DRVN is not for under-18s and we don&apos;t knowingly collect their data.</p>
 
-        <h2>Changes</h2>
+        <h2 id="changes">Changes</h2>
         <p>
           We&apos;ll update the date at the top when this changes, and announce anything material in
-          the app.
+          the app: every member gets a notification linking to what changed.
+        </p>
+        <p>
+          <strong>7 November 2026:</strong> we now keep when you confirmed you&apos;re 18 or over,
+          and the details in any copyright notice you send.
         </p>
       </div>
     </>

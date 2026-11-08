@@ -21,6 +21,7 @@ const SUBJECT_TYPES: AdminAuditSubjectType[] = [
   "report",
   "payment",
   "product_review",
+  "export",
 ];
 
 /** Fixed-width local timestamp ("2026-08-02 14:03") so the gutter never drifts. */
@@ -30,6 +31,28 @@ function auditStamp(iso: string): string {
     hour: "2-digit",
     minute: "2-digit",
   })}`;
+}
+
+/**
+ * N531: an export row's own line: the view, the filters it used, and how it
+ * ended (rows sent, or why it failed). `export.started` with no finishing row
+ * means the export never finished.
+ */
+function exportLine(metadata: unknown): string {
+  const m = metadata && typeof metadata === "object" && !Array.isArray(metadata) ? (metadata as Record<string, unknown>) : {};
+  const view = typeof m.view === "string" ? m.view.replaceAll("_", " ") : "export";
+  const filters =
+    m.filters && typeof m.filters === "object" && !Array.isArray(m.filters)
+      ? Object.entries(m.filters as Record<string, unknown>).map(([k, v]) => `${k}=${String(v)}`)
+      : [];
+  const outcome =
+    m.phase === "completed"
+      ? `${typeof m.rows === "number" ? m.rows.toLocaleString("en-US") : "?"} rows sent`
+      : m.phase === "failed"
+        ? `failed${typeof m.detail === "string" ? ` (${m.detail})` : ""}`
+        : "started";
+  const role = m.role === "viewer" ? " · viewer" : "";
+  return [view, filters.length ? filters.join(" ") : "no filters", outcome].join(" · ") + role;
 }
 
 /**
@@ -90,8 +113,8 @@ export default async function AdminAuditPage({
       <Rv as="header" className="pagehead">
         <h1>Audit log</h1>
         <p className="pagehead__sub">
-          Every admin action: who, what, which order, why, when. Append-only at the database
-          level — nothing here can be edited or removed, by anyone.
+          Every admin action and every CSV export: who, what, which order, why, when. Append-only
+          at the database level — nothing here can be edited or removed, by anyone.
         </p>
       </Rv>
 
@@ -251,7 +274,11 @@ export default async function AdminAuditPage({
                   </p>
                   <p className="mt-1 text-body">“{r.reason}”</p>
                   <p className="order__meta mt-0.5">
-                    {r.order_id === r.subject_id ? (
+                    {r.subject_type === "export" ? (
+                      <>
+                        {exportLine(r.metadata)} · export {r.subject_id.slice(0, 8)}
+                      </>
+                    ) : r.order_id === r.subject_id ? (
                       <Link href={`/admin/orders/${r.order_id}`} className="jumplink">
                         order {r.order_id.slice(0, 8)} →
                       </Link>

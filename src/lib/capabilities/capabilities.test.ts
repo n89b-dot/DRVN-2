@@ -4,7 +4,7 @@ import { memberContext, modelContext } from "@/lib/agent/context";
 
 import { offerMoveKey } from "./negotiation";
 import { fitmentEvidence, priceComparables, readProduct, searchParts } from "./reads";
-import { CAPABILITIES, MODEL_TOOLS, modelToolsFor } from "./registry";
+import { CAPABILITIES, JOB_TOOLS, MODEL_TOOLS, UNADVERTISED_TOOLS, modelToolNames, modelToolsFor } from "./registry";
 import { CapabilityError, invokeCapability, type MemberClient } from "./types";
 
 const noClient = {} as MemberClient;
@@ -27,7 +27,7 @@ describe("capabilities", () => {
     await expect(invokeCapability(searchParts, { context: memberContext(member, "buyer"), supabase: noClient }, { query: "" })).rejects.toMatchObject({ code: "invalid_input" });
   });
 
-  it("the graph-backed reads say there isn't enough evidence until B1", async () => {
+  it("the graph-backed reads still say there isn't enough evidence", async () => {
     const run = { context: memberContext(member, "buyer"), supabase: noClient };
     await expect(invokeCapability(readProduct, run, { partNumber: "06K145722T" })).resolves.toMatchObject({ status: "not_enough_evidence" });
     await expect(invokeCapability(fitmentEvidence, run, {})).resolves.toMatchObject({ status: "not_enough_evidence", evidence: [] });
@@ -36,6 +36,27 @@ describe("capabilities", () => {
 
   it("the model's tools are the allow-list, filtered to R1", () => {
     expect(modelToolsFor("buyer").map((tool) => tool.name)).toEqual(MODEL_TOOLS.buyer);
+  });
+
+  // OS-R73 (Neil, 7 Nov: stop advertising): the three graph stubs answer
+  // "not enough evidence" whatever is asked, so no scope hands them to the model.
+  it("never hands the model a graph stub, in any scope, with or without the jobs step", () => {
+    expect([...UNADVERTISED_TOOLS].sort()).toEqual(["fitment_evidence", "price_comparables", "read_product"]);
+    for (const scope of ["seller", "buyer", "garage"] as const) {
+      const names = modelToolsFor(scope).map((tool) => tool.name);
+      for (const stub of UNADVERTISED_TOOLS) {
+        expect(MODEL_TOOLS[scope], `${scope} allow-lists ${stub}`).not.toContain(stub);
+        expect(names, `${scope} hands the model ${stub}`).not.toContain(stub);
+        expect(modelToolNames(scope, true)).not.toContain(stub);
+      }
+    }
+    // The working marketplace search and filter tools stay.
+    for (const kept of ["search_parts", "browse_marketplace", "read_listing"]) expect(modelToolsFor("buyer").map((tool) => tool.name)).toContain(kept);
+  });
+
+  it("names the tools by the jobs step the way the runner filters them", () => {
+    expect(modelToolNames("buyer", false).some((name) => JOB_TOOLS.has(name))).toBe(false);
+    expect(modelToolNames("buyer", true)).toEqual(MODEL_TOOLS.buyer);
   });
 
   it("the agent and the member build the same move key", () => {

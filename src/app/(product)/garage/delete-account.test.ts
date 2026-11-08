@@ -70,6 +70,18 @@ describe("account deletion", () => {
     expect(mocks.confirmIdentity).not.toHaveBeenCalled();
   });
 
+  // OS-W12 follow-up: the database refuses a token with no recent sign-in
+  // (20261107200450); the member is asked to confirm again, in our words.
+  it("asks again when the database says the sign-in isn't recent", async () => {
+    mocks.rpc.mockResolvedValue({ data: null, error: { code: "42501", message: "Recent sign-in required" } });
+    await expect(deleteAccount({}, form({ confirm: "DELETE" }))).resolves.toEqual({
+      error: "Enter your password to confirm it's you.",
+      reauth: "password",
+    });
+    expect(mocks.signOut).not.toHaveBeenCalled();
+    expect(mocks.reportError).not.toHaveBeenCalled();
+  });
+
   // N49: the database's wording stays in telemetry.
   it("never shows the database's error text", async () => {
     mocks.rpc.mockResolvedValue({ data: null, error: { code: "XX000", message: "could not serialize access due to concurrent update" } });
@@ -79,7 +91,8 @@ describe("account deletion", () => {
 
     mocks.rpc.mockResolvedValue({ data: null, error: { code: "42501", message: "Account access is suspended" } });
     const suspended = await deleteAccount({}, form({ confirm: "DELETE", current_password: "typed-now" }));
-    expect(suspended.error).toMatch(/suspended/);
+    // N39: a suspension doesn't stop a request; only a deletion underway does.
+    expect(suspended.error).toBe("Your account's deletion is already underway.");
     expect(suspended.error).not.toContain("Account access is suspended");
   });
 });

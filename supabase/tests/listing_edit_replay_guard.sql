@@ -40,7 +40,6 @@ declare
   );
   rejected boolean := false;
 begin
-  update public.beta_access_config set enforced = false where singleton = true;
   insert into auth.users(id, email, raw_user_meta_data) values
     (seller, 'listing-replay-seller@drvn.test', '{}'),
     (stranger, 'listing-replay-stranger@drvn.test', '{}');

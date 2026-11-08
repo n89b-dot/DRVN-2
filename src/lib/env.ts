@@ -200,6 +200,7 @@ export function validatePaymentsEnv(env: EnvLike = process.env): {
     const invalid: string[] = [];
     if (!env.CRON_SECRET || env.CRON_SECRET.length < 32) invalid.push("CRON_SECRET (at least 32 characters)");
     if (!env.GUEST_RECEIPT_SECRET || env.GUEST_RECEIPT_SECRET.length < 32) invalid.push("GUEST_RECEIPT_SECRET (at least 32 characters)");
+    if (env.ACCOUNT_EMAIL_DIGEST_KEY && env.ACCOUNT_EMAIL_DIGEST_KEY.length < 32) invalid.push("ACCOUNT_EMAIL_DIGEST_KEY (at least 32 characters when set)");
     for (const name of ["NEXT_PUBLIC_SITE_URL", "ADMIN_ALERT_WEBHOOK_URL", "SENTRY_DSN"]) {
       try {
         const value = new URL(env[name] || "");

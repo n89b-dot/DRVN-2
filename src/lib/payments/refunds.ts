@@ -48,6 +48,9 @@ export type RefundInitiator =
   | { kind: "seller_cancel"; sellerId: string }
   | { kind: "card_dispute_lost" }
   | { kind: "dispute_sla" }
+  /** Payouts still off 14 days after the sale; the order wasn't dispatched
+   *  (20261108100000, ./payout-deadline.ts). */
+  | { kind: "payout_deadline" }
   /** A completed RMA (0055) executing its agreed refund. The requested_by
    *  label ("return:<id>") is how the return row finds its operation. */
   | { kind: "return_completed"; returnId: string };
@@ -64,6 +67,17 @@ export type RefundOrderInput = {
    *  `offer:<order>:<offered_at>`). With one, a retry adopts that request's
    *  live operation instead of starting another refund. */
   requestKey?: string;
+  /** A not-received case's full refund (N6): reserved by
+   *  begin_not_received_refund, which re-checks this case (its disputed_at)
+   *  and its eligibility under the order lock in the same transaction, and
+   *  keys the refund to the case. Ignores requestKey and amountCents. */
+  notReceivedCase?: { disputedAt: string };
+  /** The payout deadline's full refund (20261108110000): reserved by
+   *  begin_payout_deadline_refund under the order lock, which adopts the
+   *  deadline's own refund in flight, waits while any other refund of the
+   *  order is in flight, and otherwise reserves the whole remainder (topping
+   *  up one that completed short). Ignores requestKey and amountCents. */
+  payoutDeadline?: true;
 };
 
 export type RefundOrderOutcome =
@@ -93,6 +107,12 @@ export type RefundOrderOutcome =
        *  it). Lets a caller's request fence close without a reconciliation
        *  (N134). Never set when the outcome is unknown. */
       refused?: true;
+      /** The guarded reservation found the case no longer qualifies (it was
+       *  resolved, or tracking arrived): nothing was reserved. */
+      ineligible?: true;
+      /** Nothing was reserved because another refund of the order is still
+       *  in flight (payoutDeadline): ask again once it has finished. */
+      waiting?: true;
     };
 
 function initiatorLabel(initiator: RefundInitiator): string {
@@ -107,6 +127,8 @@ function initiatorLabel(initiator: RefundInitiator): string {
       return "stripe:dispute_lost";
     case "dispute_sla":
       return "scheduler:dispute_sla";
+    case "payout_deadline":
+      return "scheduler:payout_deadline";
     case "return_completed":
       return `return:${initiator.returnId}`;
   }
@@ -369,7 +391,26 @@ export async function refundOrder(
   // oversubscribe and the ledger column is never used as a mutex.
   // With a request key, a retry of the same return or offer adopts its live
   // operation rather than reserving a second refund (20261004110000).
-  const { data: begun, error: beginError } = input.requestKey
+  const { data: begun, error: beginError } = input.notReceivedCase
+    ? await admin.rpc("begin_not_received_refund", {
+        p_order: orderId,
+        p_disputed_at: input.notReceivedCase.disputedAt,
+        p_reason: reason,
+        p_requested_by: initiatorLabel(initiator),
+        p_actor_role: actorRole(initiator),
+        p_dispute_outcome: disputeOutcome,
+        p_payment_reference: payment.provider_reference,
+      })
+    : input.payoutDeadline
+    ? await admin.rpc("begin_payout_deadline_refund", {
+        p_order: orderId,
+        p_reason: reason,
+        p_requested_by: initiatorLabel(initiator),
+        p_actor_role: actorRole(initiator),
+        p_dispute_outcome: disputeOutcome,
+        p_payment_reference: payment.provider_reference,
+      })
+    : input.requestKey
     ? await admin.rpc("begin_request_refund_operation", {
         p_request_key: input.requestKey,
         p_order_id: orderId,
@@ -397,10 +438,26 @@ export async function refundOrder(
     reportError("[refunds] begin_refund_operation failed", { orderId, beginError });
     return { ok: false, error: "The refund could not be started — try again." };
   }
-  const begin = begun as { ok: boolean; error?: string; operation_id?: string };
+  const begin = begun as {
+    ok: boolean;
+    error?: string;
+    operation_id?: string;
+    ineligible?: boolean;
+    waiting?: boolean;
+  };
+  if (!begin.ok && begin.waiting) {
+    // Reserved nothing, on purpose: another refund is still in flight.
+    return { ok: false, waiting: true, error: begin.error ?? "Another refund on this order is still being made." };
+  }
   if (!begin.ok || !begin.operation_id) {
-    // The database answered and reserved nothing ("nothing left to refund").
-    return { ok: false, refused: true, error: begin.error ?? "The refund could not be started." };
+    // The database answered and reserved nothing ("nothing left to refund",
+    // or a not-received case that no longer qualifies).
+    return {
+      ok: false,
+      refused: true,
+      error: begin.error ?? "The refund could not be started.",
+      ...(begin.ineligible ? { ineligible: true as const } : {}),
+    };
   }
 
   return runRefundOperation(admin, begin.operation_id);

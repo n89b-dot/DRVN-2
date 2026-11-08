@@ -22,9 +22,12 @@ payments or public launch; none of them has been decided in code.
 
 ## Who may use DRVN
 
-- [ ] **Age limit.** Both pages say 18+. Nothing in signup checks age (no
-      date of birth, no checkbox). Decide whether a declaration at signup is
-      required.
+- [ ] **Age limit.** Both pages say 18+. Since 7 November 2026 (R69-age)
+      email sign-up, onboarding after a first Google sign-in and guest
+      checkout ask for an "I'm 18 or over" declaration and record when and
+      where it was given (`age_confirmations`, 20261107231001); no date of
+      birth is collected. Members who joined earlier have no record. Confirm
+      a declaration is enough, and whether existing members must be asked.
 - [ ] **Invited beta.** Terms describe the invitation gate generically.
       Decide whether beta-specific terms (no guarantees, feature changes,
       data from the beta) are needed.
@@ -52,10 +55,13 @@ payments or public launch; none of them has been decided in code.
       shortfall from their payout bank account (`debit_negative_balances`).
       Confirm this is adequately disclosed alongside Stripe's Connected
       Account Agreement.
-- [ ] **Card verification threshold.** Terms §1 says card payments of $500
-      or more ask the buyer to verify with their bank; it reads the live
-      setting. Confirm wording. (The $1,000 tracking rule in §7 was removed
-      on 7 November 2026, N110: dispatch has no amount limit, eBay-style.)
+- [ ] **Card verification threshold.** Terms §1 says larger card payments
+      ask the buyer to verify with their bank. The sentence shows only while
+      the control is on, and doesn't name the amount: it is a fraud control,
+      kept private since 20261107210000 (N26), so nobody can price just under
+      it. Confirm the wording without a number is enough. (The $1,000
+      tracking rule in §7 was removed on 7 November 2026, N110: dispatch has
+      no amount limit, eBay-style.)
 - [ ] **Tax.** No sales tax / VAT is calculated or collected anywhere
       (no Stripe Tax). Listing copy says tax is "confirmed at checkout".
       Decide the tax position and who is responsible.
@@ -85,7 +91,12 @@ payments or public launch; none of them has been decided in code.
       none exist yet.
 - [ ] **Content licence scope** (section 9) and DMCA/notice-and-takedown
       procedure for third-party IP, including listings imported from other
-      sites.
+      sites. Since 7 November 2026 (R69-dmca) `/copyright` takes notices and
+      Admin → Copyright acts on them, and Terms §9 describes the process and
+      repeat infringers. Still open: **register a DMCA designated agent** with
+      the US Copyright Office and put its name, postal address and email in
+      `src/lib/legal/copyright-agent.ts` (placeholders today, shown as such),
+      and review the counter-notice wording.
 
 ## Privacy
 

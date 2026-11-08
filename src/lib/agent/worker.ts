@@ -87,7 +87,8 @@ export function handBack(code: string | undefined): { outcome: "retry" | "failed
       return { outcome: "retry", endTask: false };
     case "AG003": case "OF003": case "OF002":
       return { outcome: "cancelled", endTask: false };
-    case "OF005": case "OF007": case "OF001":
+    // BL403: a block between the two (N54) — no new offer, counter or accept can go through (ending moves still can).
+    case "OF005": case "OF007": case "OF001": case "BL403":
       return { outcome: "failed", endTask: true };
     case "AG002": case "AG005": case "AG006": case "AG007": case "AG008": case "OF004": case "42501": case "22023":
       return { outcome: "failed", endTask: false };

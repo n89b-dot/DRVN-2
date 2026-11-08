@@ -18,9 +18,10 @@ import { sendAdminAlert } from "@/lib/admin/alerts";
  * `payment_intent.succeeded` each order gets a transfer_intents row — the
  * money does NOT move yet. It moves when delivery plus the clearing window
  * have passed, via pg_cron + the transfer worker (0020,
- * lib/payments/transfer-worker.ts). That makes the seven-day hold the ledger
- * displays real, and it means most refunds happen before any transfer exists
- * to reverse.
+ * lib/payments/transfer-worker.ts). That makes the clearing hold the ledger
+ * displays real (2 days after delivery by default, an owner setting:
+ * lib/payments/payout-hold.ts), and it means refunds before then happen
+ * before any transfer exists to reverse.
  *
  * Refund and dispute events resolve to orders via our refund metadata first
  * (refunds.ts stamps order_id), payments.provider_reference second. External
@@ -169,14 +170,24 @@ export async function applyRefundLifecycleEvent(
   return outcome.ok ? "committed" : "retry";
 }
 
-async function completeChargeRefundCollection(charge: Stripe.Charge): Promise<Stripe.Refund[]> {
-  if (!charge.refunds?.has_more) return charge.refunds?.data ?? [];
+const CHARGE_REFUND_PAGE_SIZE = 100;
+const MAX_CHARGE_REFUND_PAGES = 10;
+
+/**
+ * Every refund on a charge, from the supported interface (N105). On the
+ * pinned API version (stripe-api-version.ts) a Charge carries no `refunds`
+ * list at all, so reading `charge.refunds` gave an empty list and skipped
+ * the per-refund journal. The list is also current, where the event's charge
+ * is a snapshot that may be older than events already applied. Bounded:
+ * a charge with more than 1,000 refunds is retried, never half-read.
+ */
+export async function listChargeRefunds(chargeId: string): Promise<Stripe.Refund[]> {
   const refunds: Stripe.Refund[] = [];
   let startingAfter: string | undefined;
-  for (let page = 0; page < 10; page += 1) {
+  for (let page = 0; page < MAX_CHARGE_REFUND_PAGES; page += 1) {
     const listed = await stripeClient().refunds.list({
-      charge: charge.id,
-      limit: 100,
+      charge: chargeId,
+      limit: CHARGE_REFUND_PAGE_SIZE,
       ...(startingAfter ? { starting_after: startingAfter } : {}),
     });
     refunds.push(...listed.data);
@@ -186,6 +197,31 @@ async function completeChargeRefundCollection(charge: Stripe.Charge): Promise<St
     startingAfter = last.id;
   }
   throw new Error("Stripe refund collection exceeded the safe reconciliation bound");
+}
+
+/**
+ * The booked refund total of this payment and the cents of its listed
+ * refunds whose local operation is still booking them, read in ONE database
+ * statement (refund_gap_snapshot, 20261107210150). Two separate reads could
+ * straddle a refund settling between them and count it in neither, which
+ * opened a false "unattributed" case. A refund's operation is the durable
+ * owner of in-flight money (resumeIncompleteRefunds drives it, the refunds
+ * health queue pages if it sticks).
+ */
+async function refundGapSnapshot(
+  admin: Admin,
+  intentId: string,
+  succeededRefundIds: string[]
+): Promise<{ bookedCents: number; inFlightCents: number }> {
+  const { data, error } = await admin.rpc("refund_gap_snapshot", {
+    p_payment_reference: intentId,
+    p_refund_references: succeededRefundIds,
+  });
+  const snapshot = data as { booked_cents?: unknown; in_flight_cents?: unknown } | null;
+  if (error || !snapshot || typeof snapshot.booked_cents !== "number" || typeof snapshot.in_flight_cents !== "number") {
+    persistenceFailure("refund gap snapshot failed", { intentId, error });
+  }
+  return { bookedCents: snapshot.booked_cents as number, inFlightCents: snapshot.in_flight_cents as number };
 }
 
 /**
@@ -294,7 +330,7 @@ export async function applyChargeRefund(
 ): Promise<"committed" | "recovery_recorded" | "retry"> {
   let refunds: Stripe.Refund[];
   try {
-    refunds = await completeChargeRefundCollection(charge);
+    refunds = await listChargeRefunds(charge.id);
   } catch (error) {
     reportError("[stripe:webhook] complete refund collection lookup failed", {
       charge: charge.id,
@@ -353,27 +389,28 @@ export async function applyChargeRefund(
   // Every refund object now has its own journal/operation identity. Verify the
   // cumulative successful provider amount is present locally before acking the
   // charge event; never derive missing lifecycle state from the charge counter.
-  const { data: fresh, error: freshError } = await admin
-    .from("payments")
-    .select("id, order_id, amount_cents, refunded_cents, status")
-    .eq("provider_reference", intentId);
-  if (freshError) {
-    persistenceFailure("refund attribution lookup failed", { intentId, charge: charge.id, freshError });
-  }
-  const alreadyRecorded = (fresh ?? []).reduce((sum, p) => sum + (p.refunded_cents ?? 0), 0);
-  const successfulTotal = refunds
-    .filter((refund) => refund.status === "succeeded")
-    .reduce((sum, refund) => sum + refund.amount, 0);
-  const expectedAtStripe = Math.max(charge.amount_refunded, successfulTotal);
-  const outstanding = expectedAtStripe - alreadyRecorded;
-  if (outstanding > 0 && !sawRecovery) {
-    await recordUnattributedRefundRecovery(
-      admin,
-      charge,
-      outstanding,
-      `Charge ${charge.id} (intent ${intentId}) has ${outstanding} successful provider refund cents absent from the local ledger.`
-    );
-    return "recovery_recorded";
+  //
+  // What Stripe says has succeeded, from the current list. Not the event's
+  // charge.amount_refunded: that counter includes refunds still pending and,
+  // on a delivery that arrives out of order, describes an older charge (one
+  // whose later refund has since failed, say). Comparing it opened false
+  // "unattributed refund" cases for normal refunds (N105).
+  const succeeded = refunds.filter((refund) => refund.status === "succeeded");
+  const successfulTotal = succeeded.reduce((sum, refund) => sum + refund.amount, 0);
+  if (successfulTotal > 0 && !sawRecovery) {
+    // Booked and still-booking cents from one snapshot; only what neither
+    // accounts for is a case.
+    const { bookedCents, inFlightCents } = await refundGapSnapshot(admin, intentId, succeeded.map((refund) => refund.id));
+    const unowned = successfulTotal - bookedCents - inFlightCents;
+    if (unowned > 0) {
+      await recordUnattributedRefundRecovery(
+        admin,
+        charge,
+        unowned,
+        `Charge ${charge.id} (intent ${intentId}) has ${unowned} successful provider refund cents absent from the local ledger.`
+      );
+      return "recovery_recorded";
+    }
   }
   return sawRecovery ? "recovery_recorded" : "committed";
 }
@@ -573,9 +610,11 @@ export async function applyAccountUpdate(
   account: Stripe.Account
 ): Promise<"committed" | "retry" | "irrelevant"> {
   const payable = account.payouts_enabled === true;
+  // Setup started (details sent to Stripe) is what lets a seller list and
+  // sell (20261108100000); payouts enabled is what releases the money.
   const { data: sellers, error } = await admin
     .from("profiles")
-    .update({ payouts_enabled: payable })
+    .update({ payouts_enabled: payable, payout_details_submitted: account.details_submitted === true })
     .eq("stripe_account_id", account.id)
     .select("id");
   if (error) {
@@ -589,10 +628,12 @@ export async function applyAccountUpdate(
 
   // A seller who just became payable unblocks their stuck funds eagerly —
   // the worker's next run pays them out instead of waiting on a retry cycle.
+  // That includes a payout Stripe refused for a restricted account (N8),
+  // which otherwise waits a day before its next try (transfer-worker.ts).
   if (payable && sellers?.length) {
     const { error: unblockError } = await admin
       .from("transfer_intents")
-      .update({ status: "ready", last_error: null })
+      .update({ status: "ready", last_error: null, next_attempt_at: null })
       .in("seller_id", sellers.map((s) => s.id))
       .eq("status", "blocked_unpayable");
     if (unblockError) {
