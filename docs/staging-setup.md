@@ -160,7 +160,9 @@ Emails:
 1. Create the Vercel project from the GitHub repo [OWNER — needs the paid
    tier the owner chooses]; production branch = the release-candidate
    branch or `main`. Node 22 (CI uses 22.22.0). Build command `npm run
-   build`, install `npm ci`.
+   build`, install `npm ci`. Turn the project's automatic Git deploys off:
+   `.github/workflows/deploy.yml` deploys instead, only after `release-gate`
+   passes (§11.4).
 2. Attach the staging domain; confirm HTTPS.
 3. Set the environment variables below for the deployment environment that
    serves the staging domain.
@@ -301,9 +303,25 @@ on a separate host (`docs/remediation-release-and-monitoring.md`).
    **`release-gate` the only required status check**, force pushes blocked.
    `scripts/owner/branch-protection.sh` does it and verifies it
    (`docs/owner/branch-protection.md`).
-4. If the host deploys straight from `main`, also require that check before
-   promotion (a protected branch doesn't stop a deploy of an unchecked
-   commit).
+4. Deploys go through `.github/workflows/deploy.yml` (N634, N528), not the
+   host's own Git integration: turn the host's automatic deploys **off**, so
+   nothing reaches staging without a passed `release-gate`. The workflow
+   deploys each `main` commit to staging once its `release-gate` has passed
+   and staging has every migration, then waits for `/api/version` to report
+   that commit. Production deploys only by hand, for an annotated
+   `rc-YYYYMMDD` tag on `main`, through the `production` environment.
+   - Repository secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`,
+     `VERCEL_STAGING_PROJECT_ID`, `VERCEL_PRODUCTION_PROJECT_ID`,
+     `STAGING_SUPABASE_DB_PASSWORD`, `PRODUCTION_SUPABASE_DB_PASSWORD`,
+     `ADMIN_ALERT_WEBHOOK_URL`.
+   - Repository variables: `DRVN_STAGING_ORIGIN`, `DRVN_PRODUCTION_ORIGIN`,
+     `DRVN_STAGING_SUPABASE_URL`, `DRVN_PRODUCTION_SUPABASE_URL`, and
+     `DRVN_DEPLOY_STAGING = true` to switch the staging job on.
+   - Environments (Settings → Environments): `staging`, and `production`
+     with **required reviewers** (the owner), so a production deploy waits for
+     a person's approval as well as the tag.
+   - The pipeline never applies a migration. If staging or production lacks
+     one, the deploy stops and names it; apply it with the runner (§2).
 
 ## 12. First admin [ENGINEER]
 
