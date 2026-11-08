@@ -148,8 +148,9 @@ until Stripe enables payouts and is released then. If payouts still aren't
 enabled 14 days after a sale, an order that hasn't been dispatched is
 cancelled and the buyer refunded in full, and the seller's listings come off
 sale until payouts are enabled. An order already dispatched by then isn't
-refunded; its payout keeps waiting. Whether that is right is **not yet
-ruled**. Terms §3 says the rest. Where: migration `20261108100000`,
+refunded; its payout keeps waiting. The owner set that case aside (8
+November: no orders exist yet, so it can't arise); revisit it once live
+orders make it real. Terms §3 says the rest. Where: migration `20261108100000`,
 `docs/decisions/seller-payout-setup.md`.
 
 Where: `public.settlement_settings` and `src/lib/payments/payout-hold.ts`
