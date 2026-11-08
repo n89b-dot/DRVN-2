@@ -458,7 +458,10 @@ digest still unsent at the end of its day is carried: its window goes back
 into the next day's digest, but never further back than midnight (London)
 seven days before the current day. So the first email after a long outage,
 or after a provider is first configured, covers at most the last 7 days of
-still-active matches; older matches drop silently. Records are kept 90 days. Sending goes
+still-active matches; older matches drop silently. Nothing published before
+the alert was (last) turned on is mailed either, even when a long-open
+transaction pins the window's start id below it (`activated_at`). Records
+are kept 90 days. Sending goes
 through `src/lib/email/send.ts`, selected by `EMAIL_PROVIDER` and sent from
 `EMAIL_FROM`. No provider is chosen yet (R-email): until one is, digests are
 recorded and nothing is sent, and the route logs and returns `provider: null`.

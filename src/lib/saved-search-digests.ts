@@ -81,8 +81,10 @@ type DueSearch = {
   checked_xact: number | null;
   window_end: string;
   window_xact: number;
-  /** Midnight (London) seven days before today: nothing older is mailed,
-   *  however far back a carried window reaches. */
+  /** The later of midnight (London) seven days before today and when the
+   *  alert was last turned on: nothing published before it is mailed,
+   *  however far back a carried window, or a window start pinned by a long
+   *  transaction, reaches. */
   window_floor: string;
 };
 

@@ -5023,18 +5023,21 @@ export type Database = {
       }
       saved_search_email_cursors: {
         Row: {
+          activated_at: string
           checked_through: string
           checked_xact: number
           saved_search_id: string
           updated_at: string
         }
         Insert: {
+          activated_at: string
           checked_through: string
           checked_xact: number
           saved_search_id: string
           updated_at?: string
         }
         Update: {
+          activated_at?: string
           checked_through?: string
           checked_xact?: number
           saved_search_id?: string

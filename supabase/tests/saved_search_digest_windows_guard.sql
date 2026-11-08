@@ -17,6 +17,9 @@
 --   F. A carried window reaches back at most 7 days: the floor is London
 --      midnight seven days before today, the due list hands it to the worker,
 --      and a ten-day carry rewinds to it, not past it.
+--   G. Activation: a pinned xmin can start a window below a part published
+--      while the alert was off, so the window floor is never before the alert
+--      was (last) turned on, and an admission doesn't move that.
 begin;
 
 do $$
@@ -26,7 +29,7 @@ declare
   v_car uuid := gen_random_uuid();
   v_make bigint; v_model bigint;
   v_live uuid; v_draft uuid;
-  v_search uuid; v_restart uuid; v_far uuid;
+  v_search uuid; v_restart uuid; v_far uuid; v_pinned uuid;
   v_floor timestamptz;
   v_today date := private.saved_search_digest_day(now());
   v_items jsonb := jsonb_build_array(jsonb_build_object('id', gen_random_uuid(), 'title', 'Zzwindow part', 'price_cents', 1000));
@@ -177,7 +180,9 @@ begin
   end if;
   insert into public.saved_searches(user_id, name, params, alert) values (v_user, 'Zz far', '{"_version":"2","q":"zzfar"}', true)
     returning id into v_far;
-  if exists (select 1 from public.saved_search_digests_due(500) d where d.window_floor <> v_floor) then
+  if exists (select 1 from public.saved_search_digests_due(500) d
+             join public.saved_search_email_cursors c on c.saved_search_id = d.saved_search_id
+             where d.window_floor <> greatest(v_floor, c.activated_at)) then
     raise exception 'FAIL F2: the due list does not carry the floor';
   end if;
   -- Ten days of carried windows: the digest from yesterday started ten days ago.
@@ -197,6 +202,36 @@ begin
     raise exception 'FAIL F4: the carried digest does not start at the floor (got %)', v_out;
   end if;
   raise notice 'PASS F: a carried window reaches back at most 7 days';
+
+  -- G. Activation.
+  insert into public.saved_searches(user_id, name, params, alert) values (v_user, 'Zz pinned', '{"_version":"2","q":"zzpinned"}', false)
+    returning id into v_pinned;
+  update public.saved_searches set alert = true where id = v_pinned;
+  if (select activated_at from public.saved_search_email_cursors where saved_search_id = v_pinned) is distinct from now() then
+    raise exception 'FAIL G1: turning the alert on did not record when';
+  end if;
+  update public.saved_search_email_cursors set activated_at = now() - interval '1 hour' where saved_search_id = v_pinned;
+  update public.saved_searches set alert = false where id = v_pinned;
+  update public.saved_searches set alert = true where id = v_pinned;
+  if (select activated_at from public.saved_search_email_cursors where saved_search_id = v_pinned) is distinct from now() then
+    raise exception 'FAIL G2: turning the alert back on did not move its activation';
+  end if;
+  -- A window start pinned far below (checked_xact 1, as a long transaction
+  -- leaves it) and an activation after the 7-day floor: the floor the worker
+  -- filters published_at on is the activation, so a part published while the
+  -- alert was off stays out however low the id window starts.
+  update public.saved_search_email_cursors
+     set checked_through = now() - interval '2 days', checked_xact = 1, activated_at = now() - interval '3 days'
+   where saved_search_id = v_pinned;
+  select d.window_floor into v_floor from public.saved_search_digests_due(500) d where d.saved_search_id = v_pinned;
+  if v_floor is not null and v_floor <> now() - interval '3 days' then
+    raise exception 'FAIL G3: the window floor % is not the activation', v_floor;
+  end if;
+  v_out := public.admit_saved_search_digest(v_pinned, now(), private.snapshot_xmin(), 0, '[]'::jsonb, '/marketplace?q=zzpinned', now() - interval '2 days');
+  if v_out <> 'empty' or (select activated_at from public.saved_search_email_cursors where saved_search_id = v_pinned) <> now() - interval '3 days' then
+    raise exception 'FAIL G4: admission moved the activation (got %)', v_out;
+  end if;
+  raise notice 'PASS G: the window floor is never before the alert was turned on';
 
   raise notice 'all saved-search digest window checks passed';
 end;

@@ -16,7 +16,7 @@ type Digest = {
   href: string; match_count: number; items: unknown; status: string; attempts: number; next_attempt_at: number; skip_reason: string | null;
   window_start_xact: number; window_end_xact: number;
 };
-type Cursor = { through: string; xact: number };
+type Cursor = { through: string; xact: number; activated: string };
 
 const db = vi.hoisted(() => {
   const state = {
@@ -54,7 +54,7 @@ const db = vi.hoisted(() => {
         const cursor = state.cursors.get(d.saved_search_id);
         d.status = "skipped";
         if (cursor?.through === d.window_end) {
-          state.cursors.set(d.saved_search_id, { through: later(d.window_start, floor()), xact: d.window_start_xact });
+          state.cursors.set(d.saved_search_id, { ...cursor, through: later(d.window_start, floor()), xact: d.window_start_xact });
           d.skip_reason = "carried"; carried += 1;
         } else d.skip_reason = "expired";
       }
@@ -67,7 +67,8 @@ const db = vi.hoisted(() => {
         .map((s) => ({
           saved_search_id: s.id, user_id: s.user_id, params: s.params,
           checked_through: state.cursors.get(s.id)?.through ?? null, checked_xact: state.cursors.get(s.id)?.xact ?? null,
-          window_end: now(), window_xact: xmin(), window_floor: floor(),
+          window_end: now(), window_xact: xmin(),
+          window_floor: state.cursors.has(s.id) ? later(floor(), state.cursors.get(s.id)!.activated) : floor(),
         })),
     admit_saved_search_digest: (a) => {
       const search = state.searches.find((s) => s.id === a.p_saved_search_id);
@@ -75,7 +76,7 @@ const db = vi.hoisted(() => {
       if (!search.alert) return "alert_off";
       const cursor = state.cursors.get(search.id);
       const expected = (a.p_expected_through as string | undefined) ?? null;
-      const next = { through: a.p_window_end as string, xact: a.p_window_xact as number };
+      const next = { through: a.p_window_end as string, xact: a.p_window_xact as number, activated: cursor?.activated ?? now() };
       if (next.xact > xmin()) throw new Error("a window closed on unfinished transactions");
       if (cursor === undefined) {
         if (expected) return "stale";
@@ -127,7 +128,19 @@ const db = vi.hoisted(() => {
     if (state.failNext[name]) { state.failNext[name] -= 1; return { data: null, error: { code: "08006" } }; }
     return { data: rpcs[name](args), error: null };
   };
-  return { ...state, rpc, xmin };
+  // saved_search_email_window_start: on starts the window (and records when),
+  // off skips unsent digests.
+  const setAlert = (id: string, on: boolean) => {
+    const search = state.searches.find((s) => s.id === id)!;
+    if (on && !search.alert) state.cursors.set(id, { through: now(), xact: xmin(), activated: now() });
+    if (!on && search.alert) {
+      for (const d of state.digests) {
+        if (d.saved_search_id === id && ["pending", "sending"].includes(d.status)) { d.status = "skipped"; d.skip_reason = "alert_off"; }
+      }
+    }
+    search.alert = on;
+  };
+  return { ...state, rpc, xmin, setAlert };
 });
 
 vi.mock("@/lib/tracked-worker", () => ({ trackedWorker: (_family: string, _request: Request, run: () => Promise<Response>) => run() }));
@@ -206,7 +219,7 @@ beforeEach(() => {
     id: "search", user_id: "member", name: "E46 coilovers", params: { _version: "2", q: "coilovers" },
     alert: true, last_checked_at: "2026-11-08T05:00:00.000Z", last_matched_at: null,
   });
-  db.cursors.set("search", { through: "2026-11-07T08:41:00.000Z", xact: 50 });
+  db.cursors.set("search", { through: "2026-11-07T08:41:00.000Z", xact: 50, activated: "2026-11-01T00:00:00.000Z" });
 });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
@@ -393,7 +406,7 @@ describe("a busy day drains fully (follow-up)", () => {
       alert: true, last_checked_at: "2026-11-08T05:00:00.000Z", last_matched_at: null,
     })));
     db.cursors.clear();
-    for (let i = 0; i < n; i += 1) db.cursors.set(`search-${i}`, { through: "2026-11-07T08:41:00.000Z", xact: 50 });
+    for (let i = 0; i < n; i += 1) db.cursors.set(`search-${i}`, { through: "2026-11-07T08:41:00.000Z", xact: 50, activated: "2026-11-01T00:00:00.000Z" });
   };
 
   it("one run admits and sends every due digest, not one batch of each", async () => {
@@ -428,7 +441,7 @@ describe("a carried window reaches back at most 7 days", () => {
   it("ten days of unsent digests yield one email covering the last seven", async () => {
     db.transport = { name: "test", send: db.send };
     db.send.mockResolvedValue({ status: "retry", reason: "provider down" });
-    db.cursors.set("search", { through: "2026-10-31T08:41:00.000Z", xact: 50 });
+    db.cursors.set("search", { through: "2026-10-31T08:41:00.000Z", xact: 50, activated: "2026-10-01T00:00:00.000Z" });
     // A part a day for ten days, each day's digest never sent and carried.
     for (let d = 1; d <= 10; d += 1) {
       const date = `2026-11-${String(d).padStart(2, "0")}`;
@@ -448,6 +461,29 @@ describe("a carried window reaches back at most 7 days", () => {
     expect(titles).toContain("Part of day 11");
     expect(titles).not.toContain("Part of day 3");
     expect(db.send.mock.lastCall![0].subject).toBe("8 new parts match E46 coilovers");
+  });
+});
+
+describe("a pinned xmin can't reach before the alert was turned on", () => {
+  it("a part published while the alert was off is not mailed once the pinning transaction ends", async () => {
+    reliable();
+    at("2026-11-08T06:00:00Z");
+    db.setAlert("search", false);
+    // An unrelated transaction (id 100) opens and stays open, pinning xmin.
+    const unrelated = begin("2026-11-08T06:00:00Z", "unrelated write");
+    // Part 101 is published, and commits, while the alert is off.
+    at("2026-11-08T06:10:00Z"); publish("2026-11-08T06:10:00Z", "Before activation");
+    // The alert goes on: its window starts at the pinned xmin, 100.
+    at("2026-11-08T06:20:00Z"); db.setAlert("search", true);
+    expect(db.cursors.get("search")).toMatchObject({ xact: 100, activated: "2026-11-08T06:20:00.000Z" });
+    // Transaction 100 ends; a part is published after activation.
+    db.inflight.splice(db.inflight.indexOf(unrelated), 1);
+    at("2026-11-08T07:00:00Z"); publish("2026-11-08T07:00:00Z", "After activation");
+
+    at("2026-11-09T08:41:00Z"); await runDigests();
+    const [digest] = digestsFor("search");
+    expect(digest).toMatchObject({ match_count: 1 });
+    expect((digest.items as { title: string }[]).map((item) => item.title)).toEqual(["After activation"]);
   });
 });
 

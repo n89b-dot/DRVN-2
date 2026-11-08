@@ -45,6 +45,11 @@
 --    start no earlier than it. So the first email after a long outage, or
 --    after a provider is first configured, covers at most the last 7 days of
 --    still-active matches, and older ones drop silently.
+--    The floor is also never before the alert was turned on
+--    (saved_search_email_cursors.activated_at): an unrelated transaction
+--    that stays open pins xmin, so the window turning on can start at an id
+--    below a part published, and committed, while the alert was off. The
+--    published_at floor keeps that part out.
 -- 3. Alert restarts. Turning an alert off now skips its unsent digests in the
 --    same statement (skip_reason 'alert_off'), so off and on again before the
 --    next claim cannot send the old window.
@@ -118,6 +123,11 @@ create trigger listings_published_at
 alter table public.saved_search_email_cursors add column if not exists checked_xact bigint;
 update public.saved_search_email_cursors set checked_xact = private.snapshot_xmin() where checked_xact is null;
 alter table public.saved_search_email_cursors alter column checked_xact set not null;
+-- When the alert was last turned on. Existing windows: their start, which no
+-- part with a publishing transaction id (all published after this) precedes.
+alter table public.saved_search_email_cursors add column if not exists activated_at timestamptz;
+update public.saved_search_email_cursors set activated_at = checked_through where activated_at is null;
+alter table public.saved_search_email_cursors alter column activated_at set not null;
 
 alter table public.saved_search_email_digests
   add column if not exists window_start_xact bigint,
@@ -131,7 +141,7 @@ alter table public.saved_search_email_digests add constraint saved_search_email_
 -- ---------------------------------------------------------------------------
 -- 3. The alert's own trigger: on starts the window, off skips unsent digests
 -- ---------------------------------------------------------------------------
--- Latest: 20261107200300. Changed: checked_xact, and the 'off' branch.
+-- Latest: 20261107200300. Changed: checked_xact, activated_at, and the 'off' branch.
 create or replace function public.saved_search_email_window_start()
 returns trigger
 language plpgsql
@@ -140,10 +150,11 @@ set search_path = public, pg_temp
 as $$
 begin
   if new.alert and (tg_op = 'INSERT' or not old.alert) then
-    insert into public.saved_search_email_cursors (saved_search_id, checked_through, checked_xact)
-    values (new.id, now(), private.snapshot_xmin())
+    insert into public.saved_search_email_cursors (saved_search_id, checked_through, checked_xact, activated_at)
+    values (new.id, now(), private.snapshot_xmin(), now())
     on conflict (saved_search_id) do update
-      set checked_through = excluded.checked_through, checked_xact = excluded.checked_xact, updated_at = now();
+      set checked_through = excluded.checked_through, checked_xact = excluded.checked_xact,
+          activated_at = excluded.activated_at, updated_at = now();
   elsif tg_op = 'UPDATE' and old.alert and not new.alert then
     update public.saved_search_email_digests
        set status = 'skipped', skip_reason = 'alert_off', updated_at = now()
@@ -169,7 +180,7 @@ security definer
 set search_path = public, pg_temp
 as $$
   select s.id, s.user_id, s.params, c.checked_through, c.checked_xact, now(), private.snapshot_xmin(),
-         private.saved_search_digest_floor()
+         greatest(private.saved_search_digest_floor(), c.activated_at)
   from public.saved_searches s
   left join public.saved_search_email_cursors c on c.saved_search_id = s.id
   where s.alert
@@ -232,8 +243,8 @@ begin
   from public.saved_search_email_cursors c where c.saved_search_id = p_saved_search_id for update;
   if not found then
     if p_expected_through is not null then return 'stale'; end if;
-    insert into public.saved_search_email_cursors (saved_search_id, checked_through, checked_xact)
-    values (p_saved_search_id, p_window_end, p_window_xact);
+    insert into public.saved_search_email_cursors (saved_search_id, checked_through, checked_xact, activated_at)
+    values (p_saved_search_id, p_window_end, p_window_xact, now());
     return 'baseline';
   end if;
 
