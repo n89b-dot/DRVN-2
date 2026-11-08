@@ -1793,8 +1793,15 @@ node scripts/apply-migration.mjs --target shared-dev --record-only --apply --con
   with the same lexer for the objects it creates: functions (schema, name and
   identity argument types), tables, columns, views, sequences, indexes,
   triggers, policies, named constraints, types and enum values, schemas,
-  extensions and roles, at top level or as static DDL in a `DO` block
-  (including a `format()` whose object names are static). It walks the whole
+  extensions and roles, at top level or as static DDL in a `DO` block. An
+  `EXECUTE` in a `DO` block is read only when it is a lone literal or one
+  whole `format('…', …)` call whose created object names are all static;
+  any other expression (a literal `||` anything, a variable, a function's
+  result) is SQL built at run time and the file can't be checked. A
+  function's identity keeps each argument type's schema (`private.kind` is
+  not `public.kind`); only built-in aliases (`int` → `integer`, …) and the
+  `public.`/`pg_catalog.` qualifiers, which `format_type` omits under the
+  `search_path = public` the catalog is read with, are normalised. It walks the whole
   tree in name order, so it knows the last thing any file does to each
   object. Each object must be in the target's catalog (read in a read-only
   transaction); an object a later file drops isn't expected. For a function
@@ -1803,7 +1810,8 @@ node scripts/apply-migration.mjs --target shared-dev --record-only --apply --con
   aside); an earlier definition, replaced later, only has to exist.
 - **What it refuses.** A file with any object missing, a latest function body
   that differs, or something it can't check (dynamic DDL that names objects
-  at run time, a kind of object it doesn't read, a `%TYPE` argument) is not
+  at run time, a kind of object it doesn't read, an unnamed index or added
+  constraint, a `%TYPE` argument) is not
   recorded and is listed with every reason. So is a file with nothing to
   check: data changes, grants, comments and `ALTER … SET` aren't objects, and
   a file of only those (or whose objects were all dropped later) can't be

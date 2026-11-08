@@ -309,9 +309,13 @@ const q = (rows) => rows.rows;
 
 /**
  * The catalog objects --record-only probes, in the schemas the tree uses.
- * Reads only; the caller owns the transaction (read-only in a dry run).
+ * Reads only; the caller owns the transaction (read-only in a dry run), which
+ * also scopes its `set local search_path`.
  */
 export async function readCatalog(client, schemas) {
+  // format_type qualifies a type its search_path can't see: with only public (and the implicit
+  // pg_catalog), every other schema's type keeps its schema, as canonicalType expects.
+  await client.query("set local search_path = public");
   const s = [schemas];
   const scoped = "join pg_namespace n on n.oid = c.relnamespace where n.nspname = any($1::text[])";
   const rows = {

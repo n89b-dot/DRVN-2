@@ -34,16 +34,35 @@ describe("signatures", () => {
   });
 
   it("reads the catalog's format_type output to the same strings", () => {
-    expect(["integer", "timestamp with time zone", "character varying", "text[]", "private.job_kind", '"Mixed"'].map(canonicalType)).toEqual([
+    expect(["integer", "timestamp with time zone", "character varying", "text[]", "private.job_kind[]", '"Mixed"'].map(canonicalType)).toEqual([
       "integer",
       "timestamp with time zone",
       "character varying",
       "text[]",
-      "job_kind",
+      "private.job_kind[]",
       "Mixed",
     ]);
     expect(canonicalType("varchar(20)")).toBe("character varying");
     expect(canonicalType("int8 []")).toBe("bigint[]");
+  });
+
+  it("keeps a type's schema, so a signature over private.kind never matches one over public.kind", () => {
+    expect(signatureTypes("p private.kind, q public.kind, r pg_catalog.int4, s kind, t private.int").types).toEqual([
+      "private.kind",
+      "kind",
+      "integer",
+      "kind",
+      "private.int",
+    ]);
+    const tree = analyseTree([
+      { base: "0001_f.sql", text: "create function public.f(p private.kind) returns int language sql as $$ select 1 $$;\n" },
+    ]);
+    const body = " select 1 ";
+    // format_type under search_path = public prints public.kind as "kind" and private.kind qualified.
+    const publicOnly = catalogFromRows({ functions: [{ schema: "public", name: "f", args: ["kind"], body }] });
+    expect(verifyFile(tree, publicOnly, "0001_f.sql").reasons).toEqual(["missing: function public.f(private.kind)"]);
+    const privateToo = catalogFromRows({ functions: [{ schema: "public", name: "f", args: ["private.kind"], body }] });
+    expect(verifyFile(tree, privateToo, "0001_f.sql").ok).toBe(true);
   });
 });
 
@@ -135,6 +154,43 @@ end $$;
     expect(notes("do $$ declare v text := 'select 1'; begin execute v; end $$;")[0]).toMatch(/SQL built at run time/);
     expect(notes("create aggregate public.fixture_agg (int) (sfunc = int4pl, stype = int);")[0]).toMatch(/creates an object the check can't probe \(aggregate\)/);
     expect(notes("create function public.f(p public.t.id%type) returns int language sql as $$ select 1 $$;")[0]).toMatch(/%TYPE/);
+  });
+});
+
+describe("what can't be checked is refused, not skipped", () => {
+  const present = catalogFromRows({
+    relations: [{ schema: "public", name: "t", relkind: "r" }],
+    columns: [{ schema: "public", table: "t", name: "id" }],
+  });
+  const verdict = (text: string) => verifyFile(analyseTree([{ base: "0001_x.sql", text }]), present, "0001_x.sql");
+
+  it("refuses EXECUTE of a literal concatenated with anything, even when the literal names an existing table", () => {
+    const concat = "do $$ declare suffix text := '_missing(id int)'; begin execute 'create table public.t' || suffix; end $$;\n";
+    expect(creates(concat)).toEqual([]);
+    expect(notes(concat)[0]).toMatch(/SQL built at run time/);
+    expect(verdict(concat)).toMatchObject({ ok: false, reasons: [expect.stringMatching(/^not checkable: a DO block runs SQL built at run time/)] });
+    // format() followed by more, or a placeholder in the created name, is no better.
+    expect(notes("do $$ begin execute format('create table public.t%s', '') || '(id int)'; end $$;")[0]).toMatch(/SQL built at run time/);
+    expect(notes("do $$ begin execute format('create table public.t%s (id int)', '_x'); end $$;")[0]).toMatch(/creates objects through dynamic SQL/);
+    expect(notes("do $$ begin execute format('create table %I.t (id int)', 'public'); end $$;")[0]).toMatch(/creates objects through dynamic SQL/);
+    // A lone literal, or one whole format() whose names are static, is still read.
+    expect(verdict("do $$ begin execute 'create table public.t (id int)'; end $$;\n").ok).toBe(true);
+    expect(verdict("do $$ begin execute format('create table public.t (id int) %s', ''); end $$;\n").ok).toBe(true);
+  });
+
+  it("refuses an unnamed index or added constraint, which a present table and column can't prove", () => {
+    const unique = "create unique index on public.t (id);\n";
+    expect(verdict(unique)).toEqual({
+      ok: false,
+      checked: 0,
+      superseded: 0,
+      reasons: ["not checkable: an unnamed index on public.t, which the check can't identify"],
+    });
+    expect(verdict("create table public.t (id int);\ncreate index on public.t (id);\n").ok).toBe(false);
+    expect(verdict("alter table public.t add unique (id), add column if not exists id int;\n").reasons).toEqual([
+      "not checkable: an unnamed unique constraint added to public.t, which the check can't identify",
+    ]);
+    expect(verdict("alter table public.t add primary key (id);\n").ok).toBe(false);
   });
 });
 

@@ -919,6 +919,33 @@ commit;
     await db.query("delete from supabase_migrations.schema_migrations where version = any($1)", [versions]);
   });
 
+  it("keeps a type's schema in a function's identity on a real catalog", async () => {
+    const kinds = file(
+      "20990103000000_fixture_rec_kinds.sql",
+      `begin;
+create schema fixture_rec_priv;
+create type fixture_rec_priv.fixture_rec_kind as enum ('a');
+create type public.fixture_rec_kind as enum ('a');
+create function public.fixture_rec_kindfn(p fixture_rec_priv.fixture_rec_kind, q public.fixture_rec_kind[]) returns int language sql as $$ select 1 $$;
+commit;
+`,
+    );
+    expect((await twoStep([kinds])).code).toBe(0);
+    await db.query("delete from supabase_migrations.schema_migrations where version = '20990103000000'");
+    // Same name and body, but over public's type: a different function, which the target doesn't have.
+    const otherSchema = file(
+      "20990103000100_fixture_rec_other_schema.sql",
+      "begin;\ncreate function public.fixture_rec_kindfn(p public.fixture_rec_kind, q public.fixture_rec_kind[]) returns int language sql as $$ select 1 $$;\ncommit;\n",
+    );
+    const dry = await runner(["--target", "fixture-dev", "--record-only", kinds, otherSchema], real());
+    expect(dry.code).toBe(0);
+    expect(dry.out).toMatch(/record +20990103000000_fixture_rec_kinds\.sql/);
+    expect(dry.out).toMatch(
+      /refuse 20990103000100_fixture_rec_other_schema\.sql .*\n\s+missing: function public\.fixture_rec_kindfn\(fixture_rec_kind, fixture_rec_kind\[\]\)/,
+    );
+    await db.query("drop schema fixture_rec_priv cascade; drop type public.fixture_rec_kind cascade");
+  });
+
   it("applies a file once, then skips it", async () => {
     const add = file("20990101000000_fixture_add.sql", ADD);
     expect((await twoStep([add])).code).toBe(0);
