@@ -38,9 +38,11 @@ begin
     (spare_car, owner_id, 'w23f-spare', 'W23 follow-up second car', true);
   insert into public.listings(id, seller_id, title, category, price_cents, status) values
     (listing, owner_id, 'W23 released intake', 'performance', 10000, 'active');
-  insert into public.mod_items(id, car_id, group_label, brand, product, raw_text, position, status, linked_listing_id) values
-    (line_a, car, 'Engine', 'HKS', 'Intake', 'HKS Intake', 0, 'removed', listing),
-    (line_b, car, 'Wheels', 'Volk', 'TE37', 'Volk TE37', 1, 'installed', null);
+  -- A part that came off carries the date it came off
+  -- (mod_items_removed_at_agrees_check).
+  insert into public.mod_items(id, car_id, group_label, brand, product, raw_text, position, status, removed_at, linked_listing_id) values
+    (line_a, car, 'Engine', 'HKS', 'Intake', 'HKS Intake', 0, 'removed', now(), listing),
+    (line_b, car, 'Wheels', 'Volk', 'TE37', 'Volk TE37', 1, 'installed', null, null);
   photo := 'https://media.drvn.test/storage/v1/object/public/car-images/' || owner_id || '/one.jpg';
 
   -- ---------- 2: the lock is on every write path ----------
