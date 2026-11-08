@@ -3,6 +3,7 @@ import "server-only";
 import { after } from "next/server";
 import { cookies } from "next/headers";
 
+import type { ListingArrival } from "@/lib/marketplace/arrival";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
 
@@ -27,7 +28,9 @@ import { reportError } from "@/lib/monitoring";
  */
 
 export type AnalyticsEvent =
-  | { event: "marketplace_listing_opened"; props?: undefined }
+  /** `arrival`: the surface the view came from, from a fixed list
+   *  (OS-R-arrival, src/lib/marketplace/arrival.ts) — never the address. */
+  | { event: "marketplace_listing_opened"; props: { arrival: ListingArrival } }
   | { event: "marketplace_results_viewed"; props: { results: number; zero: boolean; has_query: boolean; filters: number; category: boolean } }
   | { event: "vehicle_added"; props: { identity_source: "picker" | "vin" | "manual" } }
   | { event: "update_started"; props?: undefined }
