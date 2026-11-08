@@ -7188,6 +7188,15 @@ export type Database = {
         }[]
       }
       charge_cents_in_bounds: { Args: { p_cents: number }; Returns: boolean }
+      check_photo_rewrite: {
+        Args: {
+          p_bucket: string
+          p_object: string
+          p_path: string
+          p_token: string
+        }
+        Returns: string
+      }
       claim_listing_creation: {
         Args: { p_payload_hash: string; p_request: string }
         Returns: Json
@@ -7202,6 +7211,10 @@ export type Database = {
       }
       claim_payout_deadline_cancellations: {
         Args: { p_limit?: number }
+        Returns: Json
+      }
+      claim_photo_rewrite: {
+        Args: { p_bucket: string; p_path: string }
         Returns: Json
       }
       claim_refund_replacement_provider: {
@@ -7611,6 +7624,17 @@ export type Database = {
       finish_capture_check: {
         Args: { p_reference: string }
         Returns: undefined
+      }
+      finish_photo_rewrite: {
+        Args: {
+          p_bucket: string
+          p_detail?: string
+          p_object: string
+          p_outcome: string
+          p_path: string
+          p_token: string
+        }
+        Returns: string
       }
       finish_remediation_job: {
         Args: { p_error?: string; p_id: string; p_lease: string }
@@ -8337,6 +8361,34 @@ export type Database = {
         Args: { p_delivered_at: string; p_now: boolean; p_order: string }
         Returns: string
       }
+      photo_metadata_candidates: {
+        Args: {
+          p_after?: string
+          p_bucket: string
+          p_limit?: number
+          p_uploaded_before?: string
+        }
+        Returns: {
+          path: string
+          size_bytes: number
+          updated_at: string
+        }[]
+      }
+      photo_metadata_scrub_summary: {
+        Args: never
+        Returns: {
+          bucket: string
+          objects: number
+          outcome: string
+        }[]
+      }
+      photo_rewrite_strays: {
+        Args: { p_bucket: string; p_limit?: number }
+        Returns: {
+          path: string
+          reason: string
+        }[]
+      }
       pickup_mint_pass: {
         Args: {
           p_buyer_id: string
@@ -8496,6 +8548,17 @@ export type Database = {
           p_seen_through: number
         }
         Returns: Json
+      }
+      record_admin_export: {
+        Args: {
+          p_detail?: string
+          p_export?: string
+          p_filters?: Json
+          p_phase: string
+          p_rows?: number
+          p_view?: string
+        }
+        Returns: string
       }
       record_capture_recovery: {
         Args: { p_amount?: number; p_detail: string; p_key: string }
@@ -8971,6 +9034,15 @@ export type Database = {
           updated_at: string
         }[]
       }
+      storage_object_rows: {
+        Args: { p_after?: string; p_bucket: string; p_limit?: number }
+        Returns: {
+          created_at: string
+          expected_reason: string
+          path: string
+        }[]
+      }
+      storage_reference_report: { Args: { p_sample?: number }; Returns: Json }
       suggested_builders: {
         Args: { p_limit?: number; p_viewer?: string }
         Returns: {

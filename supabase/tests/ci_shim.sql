@@ -29,6 +29,10 @@ create table if not exists storage.objects (
   created_at timestamptz not null default now()
 );
 alter table storage.objects enable row level security;
+-- Storage keeps each object's version and size here; the photo metadata job
+-- (20261108120010) and the storage reference report read them.
+alter table storage.objects add column if not exists updated_at timestamptz not null default now();
+alter table storage.objects add column if not exists metadata jsonb;
 
 -- storage-api's path helper: every folder segment except the file itself.
 create or replace function storage.foldername(name text)

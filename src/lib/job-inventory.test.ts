@@ -85,3 +85,17 @@ describe("the one job inventory", () => {
     }
   });
 });
+
+describe("the chat photo sweep's cadence (N232)", () => {
+  // The storage reference report counts a missing chat photo as retention
+  // only once a sweep pass can have run since it turned 48 hours old
+  // (private.agent_chat_sweep_interval). The sweep runs in every
+  // drvn-agent-worker pass, so the two intervals must agree.
+  it("matches drvn-agent-worker's schedule", () => {
+    const latest = files.filter((name) => read(name).includes("function private.agent_chat_sweep_interval()")).at(-1)!;
+    const interval = /agent_chat_sweep_interval\(\)[\s\S]*?select interval '(\d+) minutes'/.exec(read(latest))?.[1];
+    const agent = JOB_INVENTORY.find((entry) => entry.job === "drvn-agent-worker")!;
+    expect(agent.families).toContain("agent");
+    expect(agent.schedule).toBe(`*/${interval} * * * *`);
+  });
+});

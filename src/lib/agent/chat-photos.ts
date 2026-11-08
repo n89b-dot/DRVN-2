@@ -164,7 +164,9 @@ export async function removeOwnerChatPhotos(admin: Admin, ownerId: string): Prom
 
 /** The sweep's half (R81): chat photos past the privacy page's 48 hours. */
 export async function removeExpiredChatPhotos(admin: Admin): Promise<number> {
-  const { data, error } = await admin.rpc("agent_chat_photos_expired", { p_older_than: "48 hours", p_limit: 500 });
+  // The age is the database's (private.agent_chat_photo_retention, 48 hours),
+  // so the storage reference report judges retention by the same cutoff.
+  const { data, error } = await admin.rpc("agent_chat_photos_expired", { p_limit: 500 });
   if (error) throw new Error(`Agent chat photo sweep failed: ${error.message}`);
   const names = (data ?? []).map((row) => row.name);
   if (!names.length) return 0;

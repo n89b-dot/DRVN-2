@@ -28,6 +28,22 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 8 — audited exports, old photo metadata, storage reference report: N531, N627, N232 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261108120000_admin_export_audit.sql` | — |
+| `20261108120010_photo_metadata_scrub.sql` | — |
+| `20261108120020_storage_reference_report.sql` | — |
+
+Apply in order, after every earlier migration, **before the app from #148 serves the console**: the new export route records every download through `record_admin_export` and refuses to send a file it can't record, so without `120000` every CSV export answers 503.
+
+- **`120000`** — `admin_audit_log_subject_type_check` gains `export` (rebuilt from the constraint as it stands). `guard_audit_actor` restated from `0040` (its only definition): export rows (`export.started` / `export.completed` / `export.failed` on an `export` subject) may name any console member, so a viewer's export is recorded; every other row still needs a full admin. New `record_admin_export(phase, view, filters, export, rows, detail)`, called with the admin's own session (`is_admin()`), finishing only the caller's own export, once. Who may export is unchanged (N135). Guard: `admin_export_audit_guard.sql`.
+- **`120010`** — new `private.media_rewrite_claims` (lease with the object's `storage.objects.id`) and `private.photo_metadata_scrubs` (outcomes); `photo_metadata_candidates`, `claim_photo_rewrite`, `check_photo_rewrite`, `finish_photo_rewrite`, `photo_metadata_scrub_summary` (service role only) for `scripts/owner/scrub-photo-metadata.mjs`. `photo_rewrite_strays` lists unfinished leases and tombstoned paths with an object again, which every run deletes before its scan. `claim_media_deletion` restated from `20261107203000` (its only definition), adding only: a photo under a live rewrite lease is left for later. `agent_chat_photos_expired` restated from `20261107220300` (its only definition): the same lease rule, and its default age now comes from the new `private.agent_chat_photo_retention()` (still 48 hours; the app stops passing its own). Storage's write always upserts, so the rewrite is fenced on the object's identity (a recreated photo is deleted again). Guard: `photo_metadata_scrub_guard.sql`.
+- **`120020`** — read-only `private.storage_reference_rows`, `storage_object_rows`, `storage_reference_report` (service role only) for `scripts/owner/storage-reference-check.mjs` and the restore runbook (`docs/production-runbook.md` §6a). Chat photos the sweep has deleted (`private.agent_chat_photo_swept`: the sweep's own 48 hours plus one `drvn-agent-worker` interval) and tombstoned deletions count as `expectedMissing`, not missing; `storage_object_rows.expected_reason` gives the byte check the same rule. Guard: `storage_reference_report_guard.sql`.
+
+`supabase/tests/ci_shim.sql` gains `storage.objects.updated_at` and `metadata` (hosted Storage has both). The three guards were run against a throwaway Postgres with stubbed Supabase objects, not the full chain; CI's sql-guard job runs them on the full chain.
+
 ## November 8 — Payout setup: started to sell, 14 days to finish, N244 (not applied anywhere)
 
 | File | Applied to |
