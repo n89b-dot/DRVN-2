@@ -119,6 +119,10 @@ export default async function CartPage({
   }
 
   const active = (listings ?? []).filter((l) => activeIds.has(l.id));
+  // Where the summary's one "Finish checkout" goes: a held cart checkout
+  // (accepted offers finish on their own order page).
+  const finishCartHref =
+    invalid.find((line) => line.finishHref?.startsWith("/checkout"))?.finishHref ?? null;
 
   // Sellers are separate orders, so show the split *before* paying rather than
   // surprising the buyer with N orders afterwards.
@@ -205,13 +209,17 @@ export default async function CartPage({
                     key={line.id}
                     state="invalid"
                     actions={
-                      line.finishHref ? (
-                        <ButtonLink href={line.finishHref} variant="ghost">
-                          Finish checkout
-                        </ButtonLink>
-                      ) : (
+                      <>
+                        {/* OS-W17: a held part keeps Remove. Removing it
+                            releases the buyer's own checkout, so the rest of
+                            the basket checks out again without it. */}
+                        {line.finishHref && (
+                          <ButtonLink href={line.finishHref} variant="ghost">
+                            Finish checkout
+                          </ButtonLink>
+                        )}
                         <CartRemoveButton listingId={line.id} />
-                      )
+                      </>
                     }
                   >
                     <span className="min-w-0">
@@ -338,8 +346,8 @@ export default async function CartPage({
               <ButtonLink href={checkoutHref} variant="live" className="mt-4 w-full">
                 {checkoutLabel}
               </ButtonLink>
-            ) : invalid.some((line) => line.finishHref === "/checkout") ? (
-              <ButtonLink href="/checkout" variant="live" className="mt-4 w-full">
+            ) : finishCartHref ? (
+              <ButtonLink href={finishCartHref} variant="live" className="mt-4 w-full">
                 Finish checkout
               </ButtonLink>
             ) : (
