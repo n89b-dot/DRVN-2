@@ -118,9 +118,7 @@
     "20261107230000_blocks_system_moves_and_enquiry_filters.sql",
     "20261107232000_cart_checkout_release.sql",
     "20261108110000_payout_deadline_fences.sql",
-    "20261108110100_withdraw_listing_followup.sql",
-    "20261108110200_mod_sheet_lock_everywhere.sql",
-    "20261108110300_guest_cart_checkout_release.sql"
+    "20261108110100_withdraw_listing_followup.sql"
   ],
   "cells": {
     "0057_explore_search.sql": [
