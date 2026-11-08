@@ -119,12 +119,19 @@ end $$;
 -- The other session opens a transaction as the shop-return action does: the
 -- service role, then starts the buyer's return (uncommitted).
 create function pg_temp.remote_return(p_ext text, p_conn text, p_order uuid, p_buyer uuid) returns void language plpgsql as $$
+declare
+  v_reply jsonb;
 begin
   perform pg_temp.rx(p_ext, p_conn, format(
     'begin; set local lock_timeout = %L; set local role service_role; set local request.jwt.claims = %L',
     '20s', json_build_object('role', 'service_role')::text));
-  perform pg_temp.rx(p_ext, p_conn, format(
-    'select public.create_shop_policy_return(%L, %L, %L)', p_order, p_buyer, 'W11 race return'));
+  -- dblink, not dblink_exec: the function returns a row.
+  execute format('select r::jsonb from %I.dblink(%L, %L) as t(r text)', p_ext, p_conn, format(
+    'select public.create_shop_policy_return(%L, %L, %L)::text', p_order, p_buyer, 'W11 race return'))
+    into v_reply;
+  if not coalesce((v_reply->>'ok')::boolean, false) or coalesce((v_reply->>'replayed')::boolean, true) then
+    raise exception 'Fixture: the other session did not start a new return (%) (OS-W11)', v_reply;
+  end if;
 end $$;
 
 -- Starts p_sql in the other session; true once it is waiting on a lock
