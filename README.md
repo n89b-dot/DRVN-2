@@ -121,7 +121,8 @@ ones.
 2. Connect (Express) for sellers — onboarding from Selling → Payouts
    (`/payouts`; Settings → Payments links there); `payouts_enabled` syncs via
    `account.updated`.
-3. Point the scheduler at the app: the migrations create nine pg_cron jobs;
+3. Point the scheduler at the app: the migrations create twenty-one pg_cron jobs
+   (`src/lib/job-inventory.ts`);
    the HTTP ones reach `/api/jobs/*` once `job_config` holds the worker URL
    and `CRON_SECRET` (`docs/production-runbook.md` §4). Admin → Payments →
    "Run worker now" runs the money pass by hand.

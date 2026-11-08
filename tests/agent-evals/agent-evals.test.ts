@@ -374,12 +374,13 @@ describe("eval fixtures: A3d jobs", () => {
 describe("eval fixtures: photo jobs (A3d)", () => {
   const config = { ...resolveAiConfig({ NODE_ENV: "test", ANTHROPIC_API_KEY: "test" }), mode: "anthropic" as const };
   const member = "22222222-2222-4222-8222-222222222222";
-  const photo = { url: `https://x.supabase.co/storage/v1/object/public/listing-images/${member}/a.jpg`, mediaType: "image/jpeg" as const, data: "AAAA" };
+  // R81: chat photos are private, named by their Storage "authenticated" address.
+  const photo = { url: `https://x.supabase.co/storage/v1/object/authenticated/agent-chat-photos/${member}/33333333-3333-4333-8333-333333333333.webp`, mediaType: "image/webp" as const, data: "AAAA" };
 
   it("sends the member's photos with their words, numbered as the tools see them", async () => {
     const { supabase } = garageSupabase();
     const { client, seen } = scriptedClient([]);
-    await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: "what is this?", client, config, spend: openLedger, halted: notHalted, jobs: true, images: [photo] });
+    await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: "what is this?", client, config, spend: openLedger, halted: notHalted, jobs: true, photoJob: "listing", images: [photo] });
     const messages = seen.params?.messages as { content: unknown }[];
     const blocks = messages.at(-1)!.content as { type: string; text?: string }[];
     expect(blocks.map((block) => block.type)).toEqual(["text", "image", "text"]);
@@ -394,7 +395,7 @@ describe("eval fixtures: photo jobs (A3d)", () => {
       { tool: "draft_listing_from_photos", input: { title: "Garrett G25-660 turbo", brand: "Garrett", partNumber: "G25-660", category: "turbo", photos: [0] } },
       { tool: "draft_listing_from_photos", input: { title: "Someone else's photo", photos: [2] } },
     ]);
-    const result = await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: "list this", client, config, spend: openLedger, halted: notHalted, jobs: true, images: [photo] });
+    const result = await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: "list this", client, config, spend: openLedger, halted: notHalted, jobs: true, photoJob: "listing", images: [photo] });
     expect(writes).toEqual([]);
     expect(result.toolCalls).toEqual([{ name: "draft_listing_from_photos", ok: true }, { name: "draft_listing_from_photos", ok: false, code: "invalid_input" }]);
     expect(result.ok && result.cards).toEqual([
@@ -405,14 +406,14 @@ describe("eval fixtures: photo jobs (A3d)", () => {
   it("the model can't hand a draft an address of its own", async () => {
     const { supabase } = garageSupabase();
     const { client } = scriptedClient([{ tool: "draft_listing_from_photos", input: { title: "Turbo", photos: [0], images: ["https://tracker.example.com/p.gif"] } }]);
-    const result = await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: "list this", client, config, spend: openLedger, halted: notHalted, jobs: true, images: [photo] });
+    const result = await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: "list this", client, config, spend: openLedger, halted: notHalted, jobs: true, photoJob: "listing", images: [photo] });
     expect(JSON.stringify(result.ok && result.cards)).not.toContain("tracker.example.com");
   });
 
   it("an update from photos is a draft on one of the member's cars, with its parts", async () => {
     const { supabase, writes } = garageSupabase();
     const { client } = scriptedClient([{ tool: "draft_car_update", input: { carId: CAR.id, title: "Turbo day", body: "Fitted the G25 today.", photos: [0], modIds: [OLD_MOD.id] } }]);
-    const result = await runAgentTurn({ context: modelContext(member, "garage"), supabase, message: "post this", client, config, spend: openLedger, halted: notHalted, jobs: true, images: [photo] });
+    const result = await runAgentTurn({ context: modelContext(member, "garage"), supabase, message: "post this", client, config, spend: openLedger, halted: notHalted, jobs: true, photoJob: "update", images: [photo] });
     expect(writes).toEqual([]);
     expect(result.ok && result.cards[0]).toMatchObject({ kind: "update_draft", car: CAR.id, title: "Turbo day", images: [photo.url], mods: [OLD_MOD.id] });
   });
@@ -422,6 +423,23 @@ describe("eval fixtures: photo jobs (A3d)", () => {
     const { client, seen } = scriptedClient([{ tool: "draft_listing_from_photos", input: { title: "Turbo", photos: [0] } }]);
     await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: "list this", client, config, spend: openLedger, halted: notHalted, images: [photo] });
     expect(seen.unknownTools).toEqual(["draft_listing_from_photos"]);
+  });
+
+  it("R-photos: ordinary chat sends the model no image, and no photo tool, even with photos passed", async () => {
+    const { supabase } = garageSupabase();
+    const { client, seen } = scriptedClient([{ tool: "draft_listing_from_photos", input: { title: "Turbo", photos: [0] } }]);
+    await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: "what is this?", client, config, spend: openLedger, halted: notHalted, jobs: true, images: [photo] });
+    const messages = seen.params?.messages as { content: unknown }[];
+    expect(JSON.stringify(messages)).not.toContain('"image"');
+    expect(JSON.stringify(messages)).not.toContain("AAAA");
+    expect(seen.unknownTools).toEqual(["draft_listing_from_photos"]);
+  });
+
+  it("R-photos: a photo job offers only its own photo tool", async () => {
+    const { supabase } = garageSupabase();
+    const { client, seen } = scriptedClient([{ tool: "draft_car_update", input: { carId: CAR.id, title: "Turbo day", photos: [0] } }]);
+    await runAgentTurn({ context: modelContext(member, "garage"), supabase, message: "list this", client, config, spend: openLedger, halted: notHalted, jobs: true, photoJob: "listing", images: [photo] });
+    expect(seen.unknownTools).toEqual(["draft_car_update"]);
   });
 });
 

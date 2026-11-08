@@ -124,7 +124,9 @@ export function ConversationComposer({
     const data = new FormData();
     data.set("message_id", identity.current);
     data.set("body", body);
-    data.set(kind === "order" ? "order_id" : "offer_id", id);
+    data.set(kind === "order" ? "order_id" : kind === "listing" ? "listing_id" : "offer_id", id);
+    // A listing enquiry names who it's to: the seller, or — answering — the buyer.
+    if (kind === "listing") data.set("recipient_id", otherId);
     for (const photo of ready) data.append("attachment", photo.path!);
     startTransition(async () => {
       try {

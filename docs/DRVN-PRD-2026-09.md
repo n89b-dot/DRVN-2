@@ -127,6 +127,7 @@ Mock 4's layout with mock 3's card.
 | M-6 | Brand on listings: prefilled from the mod or importer, matched from titles otherwise, backfilled, editable. Saved searches and their alerts understand it | P1 | New |
 | M-7 | Optional "miles on this part" for used parts | P1 | New |
 | M-8 | Item page, cart, guest checkout, Q&A unchanged — with two named item-page exceptions: brand and miles join the record block (M-6, M-7) and "Posts about this part" (W-4). The item-page redesign is its own session. **Offers are no longer unchanged** (2026-10-17): they move to negotiation v2, §4.9 O-1…O-6 | P0 | Exists |
+| M-9 | (2026-11-07, Neil's ruling R-directcontact) **Message seller** on an item page: a signed-in buyer can ask the seller about a part for sale; it lands in their conversation, where the seller replies. New contacts are limited in the database, and a block between two members stops it (and every other contact), except messages about an order they share. Direct messages from a profile stay a non-goal, and agents never message people (AG-4) | P0 | New |
 
 ### 4.5 Profile and Store
 
@@ -255,7 +256,6 @@ Not needed: tables for shops, personas, home modules, away mode, car facts, note
 |---|---|
 | Modular / personalised Home | Real usage shows two clearly different patterns and the fixed Home fails one |
 | Onboarding by intent | Scheduled as its own session |
-| Message button / open DMs | Listing Q&A and offers demonstrably aren't enough for pre-sale contact |
 | Away mode | Sellers ask, or late-dispatch complaints appear |
 | Dispatch-time statistic | Orders record paid and shipped times reliably |
 | Buy now on cards | Cart-to-checkout drop-off suggests it |

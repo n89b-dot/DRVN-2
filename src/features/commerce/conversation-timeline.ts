@@ -128,8 +128,10 @@ export function buildTimeline({
 }
 
 /** The deal a message row is about, as a timeline/composer key. */
-export function messageDealKey(row: { order_id: string | null; offer_id: string | null }): string | null {
+export function messageDealKey(row: { order_id: string | null; offer_id: string | null; listing_id?: string | null }): string | null {
   if (row.order_id) return `order:${row.order_id}`;
   if (row.offer_id) return `offer:${row.offer_id}`;
+  // A "Message seller" enquiry is about its listing (R-directcontact).
+  if (row.listing_id) return `listing:${row.listing_id}`;
   return null;
 }

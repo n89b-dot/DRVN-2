@@ -21,7 +21,7 @@ psql" below.
 
 | File | Applied to |
 |---|---|
-| `20261107210100_settlement_reconciliation.sql` | not applied |
+| `20261107210100_settlement_reconciliation.sql` | shared dev project (present by probe, 7 Nov 2026; apply date not recorded) |
 
 Apply after every earlier migration. Restates `claim_transfer_intents` (latest 20261107130000, #72), `invoke_remediation_worker` and `private.scheduled_job_inventory()` (latest 20261107200300, #84, whose `saved-search-digests` family and `drvn-saved-search-digests` row are kept); the payment_recoveries kind check (latest 20260905174828). Admission (N114): a `blocked_unpayable` payout is admitted only when its seller has a Stripe account with payouts enabled, or its provider call may have happened (that one reconciles when its `next_attempt_at` is due); due work is served longest-due first. Readiness, payout dates, the attempt budget and the chargeback freeze are unchanged. New `admin_retry_transfer_intent(order)` (service role only, called by the console's audited "Retry payout"): resets the attempt budget of a payout that spent all eight, keeping its frozen request and provider-call flag. New `ledger_reconciliation_runs` (service role only) and the `ledger_discrepancy` recovery kind for the daily read-only reconciliation, scheduled as `drvn-ledger-reconciliation` (05:50 UTC) and added to the job inventory with the `ledgerReconciliation` family. Anything that restates the inventory or the invoker later must keep `drvn-ledger-reconciliation` and `ledger-reconciliation`. Guard: `supabase/tests/settlement_reconciliation_guard.sql`, which fails on the schema before this migration (FAIL 1).
 
@@ -31,30 +31,78 @@ Checked on a fresh database (native PostgreSQL 17 with the CI shim and stubbed r
 
 | File | Applied to |
 |---|---|
-| `20261107200100_fulfilment_integrity.sql` | not applied (PR only) |
+| `20261107200100_fulfilment_integrity.sql` | shared dev project (present by probe, 7 Nov 2026; apply date not recorded) |
 
 Apply before deploying the app from the same PR: the new app calls `pickup_mint_pass`. It sorts before `20261107203000_media_integrity.sql` (#73), which merged first; the two share no objects, so either order works. The old app keeps working against the new database (it still mints with its own upsert until it's replaced, and its pre-dispatch tracker call is simply no longer needed). `pickup_mint_pass` (new, service role only) mints and rotates a Pickup Pass under the same order-then-pass lock as `pickup_redeem` and never writes `redeemed_at`/`redeemed_by`, so a mint can't erase a handoff (N93). `mark_order_dispatched` is restated from `20261009100000` without the `tracking_required_from_cents` refusal (N110, "similar to eBay"); `settlement_settings.tracking_required_from_cents` is set to null and kept, unused. A first dispatch whose shipment has tracking but no carrier tracker queues a `tracker_registration` remediation job in the same transaction (dedup `tracker:<shipment id>`, first try in 5 minutes); `remediation_jobs_kind_check` gains that kind (restated from `20260905185725`; anything else that restates the check must keep it). `shipping_rate_quotes` gains `request_fingerprint` (a hash of every provider-shipment input: provider, both full addresses, end shipper, parcel); a stored quote is reused only on an exact match, and older rows (null) never are. Payout release rules are unchanged. Guards: `fulfilment_integrity_guard.sql` (new) and `payout_release_guard.sql` (check 1 and 6 updated for the removed rule).
 
-## November 7 — Media integrity and lifecycle, OS-W15 (not applied anywhere)
+## November 7 — Media integrity and lifecycle, OS-W15
 
 | File | Applied to |
 |---|---|
-| `20261107203000_media_integrity.sql` | not applied |
+| `20261107203000_media_integrity.sql` | shared dev project (present by probe, 7 Nov 2026; apply date not recorded); `job_config.media_storage_origin` is set there |
 
 Apply after every earlier migration (it redefines no function another migration owns). Written as `20261107150500`; renamed when rebased so it sorts after main's latest (`20261107191000`). One storage object has one identity, `(bucket, decoded path)` (`private.media_object_key`, indexed on every photo column), and `public.media_object_referenced(bucket, path)` (service role only) is the one in-use check: it now counts dispute evidence by `storage_path` and message photos by path. Members can no longer insert, delete or rewrite `staged_uploads` rows (only stamp `consumed_at`); every row must name an object in its owner's own folder, and rows that don't are dropped from the ledger (storage untouched). Members can't delete media or evidence objects from Storage at all, evidence can't be overwritten, and evidence uploads only into `<uploader>/<order>/<file>` while that order is disputed and under 8 photos. A member's photo columns (car cover and gallery, hotspots, mod thumbnail, listing gallery, post photos and body media, avatar) only take their own canonical public URLs, on `job_config.media_storage_origin`, which fails closed: **set that row when applying this migration** (docs/production-runbook.md §4); until it exists no new member photo reference is accepted (the upload route and media-gc also record it from `NEXT_PUBLIC_SUPABASE_URL`, never overwriting). Deleting a car, post or listing queues its photos in `media_cleanup_queue`; the media job (and the deleting action, straight after) removes each one only if nothing references it. Removal first claims the object (`claim_media_deletion`, under a per-object lock) and gets an exclusive token: a second remover is told `busy`, and only the holder can `complete_media_deletion` (a tombstone) or `release_media_claim`; a claim past its 10-minute lease can be taken over. Uncertainty is sticky: an unknown Storage outcome (lost response, timeout, 5xx) is recorded on the claim (`mark_media_deletion_uncertain`), and a lease takeover makes the claim uncertain too. An uncertain claim is never released, only completed once a delete is confirmed (success, or not-found); only a definitive 400/401/403/404 refusal on a claim with no uncertainty releases it. The cleanup queue retries with backoff (`next_attempt_at`, 15 minutes doubling to a day), each object at most once per run, and an exhausted row raises a `media_cleanup_stuck` admin alert. Each enqueue gets a fresh `generation`; the worker dequeues or reschedules only the generation it read, so a request queued again mid-run survives. Every reference write, including the server's evidence attach, refuses a claimed object, so nothing attached mid-removal is lost. The queue is filled only as the deleted row's real owner (folder must match) and only for URLs on the recorded storage origin.
 
 Checked on a fresh database (native PostgreSQL 17 with the CI shim): every migration applies and every SQL guard passes, including the new `media_integrity_guard.sql`, which fails on the schema before this migration.
 
-## November 7 — AG-7, the member's agent mode (NOT applied anywhere)
+## November 7 — AG-7, the member's agent mode
 
 | File | Applied to |
 |---|---|
-| `20261107170000_agent_member_mode.sql` | nowhere yet — not shared dev, not production |
-| `20261107190000_agent_mode_enforced.sql` | nowhere yet — not shared dev, not production |
+| `20261107170000_agent_member_mode.sql` | shared dev project (present by probe, 7 Nov 2026; apply date not recorded) |
+| `20261107190000_agent_mode_enforced.sql` | shared dev project (present by probe, 7 Nov 2026; apply date not recorded) |
 
 Apply after `20261107100000` (#64's agent model boundary, already on shared dev). Written as `20261026130000`; renamed when #66 was rebased onto #64 so it sorts after every migration already applied. It touches only `profiles` and redefines no function. One column, `profiles.agent_mode` (`'off' | 'suggest' | 'act'`, default `'act'`, Settings → Agent): Off disables every agent entry point, Suggest keeps the chat and price-drop suggestions but lets no mandate start, Act is today's behaviour. The owner writes it through the existing "users update own profile" policy plus a column update grant (0017's column-list model); there is no client select grant — the app reads it server-side for the signed-in member only. The worker is unchanged: it acts only on a live mandate, which the app refuses to start outside Act and ends when the member drops below it. Guard: `supabase/tests/agent_member_mode_guard.sql`.
 
 **`20261107190000` (R-agentmode)**, apply right after `20261107170000`. The mode holds in the database: `agent_mode_set(p_mode)` is the only write (the column update grant is revoked) and, below Act, revokes every live mandate with its open task and pending cards in the same transaction. `agent_mandate_set` and a resume (`agent_mandate_set_status(…, 'active')`) refuse below Act with `AG009`; `agent_claim_jobs` cancels a job whose owner is below Act and `agent_authority` (every worker write) refuses with `AG003`. `agent_chat_turn_begin`, the only path that stores a member's chat message, refuses under Off with `AG009` (restated from 20261107100000; spend reserve is left to 20261107190500, PR #79). All of them read the mode under `agent_member_lock_key(owner)`, shared, which `agent_mode_set` takes exclusively. Lock order: listing → offer → job → member → mandate → task → approval. Restated from their latest definitions: `agent_chat_turn_begin` (20261107100000), `agent_mandate_set` (20261026100000), `agent_mandate_set_status`, `agent_claim_jobs`, `agent_authority` (20261021100100). New: `agent_member_lock_key`, `agent_mode_set`. Guards: `agent_mode_enforcement_guard.sql`, `agent_member_mode_guard.sql`.
+
+## November 7 — files merged with no entry here (record gaps, OS-PR63)
+
+Checked on 7 Nov 2026 by listing every file in `supabase/migrations/` on
+`main` against this record. These merged without an entry of their own. Each
+was then probed on the shared dev project, read-only, for an object only that
+file creates; every one is **present**, so each was applied there after it
+merged, on a date this record doesn't have. None is on production (there is
+no production project yet). Staging has the 229 files on `main` at 836d636
+(`docs/staging-setup.md`): of the sixteen, all but `20261107130000`,
+`20261107190500`, `20261107200300`, `200500`, `200510`, `200520` and
+`210000` (nor `20261107200100`, `20261107203000` or `20261107210100`
+above, which also merged later).
+
+| File | Merged in | Shared dev, by probe | Probe |
+|---|---|---|---|
+| `20261026100000_agent_hosted_schedule.sql` | #64 | present | `cron.job` has `drvn-agent-worker` |
+| `20261026150000_carry_payout_admin.sql` | #69 | present | `public.admin_retry_seller_carry_payout` exists |
+| `20261107100000_agent_model_boundary.sql` | #64 | present | `public.agent_spend_holds` exists |
+| `20261107130000_chargeback_freezes_payout.sql` | #72 | present | `private.order_has_unresolved_chargeback` exists |
+| `20261107150000_sitemap_post_page.sql` | #74 | present | `public.sitemap_post_page` exists |
+| `20261107153100_foreign_key_indexes.sql` | #71 | present | index `account_deletion_requests_job_id_idx` exists |
+| `20261107153200_listing_published_at.sql` | #71 | present | `listings.published_at` exists |
+| `20261107180000_social_retrieval_at_scale.sql` | #77 | present | index `activity_posts_author_published_idx` exists |
+| `20261107180100_dangling_social_targets.sql` | #77 | present | `public.forget_deleted_social_target` exists |
+| `20261107190500_agent_spend_lock_order.sql` | #79 | present | `public.agent_chat_turn_status` exists |
+| `20261107191000_job_inventory_health.sql` | #80 | present | `cron.job` has `drvn-cron-history-prune` |
+| `20261107200300_saved_search_email_digests.sql` | #84 | present | `cron.job` has `drvn-saved-search-digests` |
+| `20261107200500_admin_mfa_enrolment.sql` | #87 | present | `admin_users.mfa_confirmed_at` exists |
+| `20261107200510_admin_refund_refusal_release.sql` | #87 | present | `public.release_refused_admin_refund` exists |
+| `20261107200520_admin_complete_reads.sql` | #87 | present | `public.admin_audit_actor_ids` exists |
+| `20261107210000_listing_write_boundary.sql` | #89 | present | `private.guard_member_listing_publish` exists |
+
+What each does is in the file's own header comment and its PR. Two of them
+change what an operator checks:
+
+- With `20261107191000`, `20261107200300` and `20261107210100`, `cron.job` holds **twenty-one**
+  rows on a complete database: `private.scheduled_job_inventory()`, mirrored
+  in `src/lib/job-inventory.ts` and listed in `docs/production-runbook.md`
+  §4. Shared dev has twenty-one.
+- `20261107203000` needs `job_config.media_storage_origin` set in the same
+  step (`docs/production-runbook.md` §4); it is set on shared dev.
+
+The four "not applied anywhere" entries above (`20261107210100`,
+`20261107200100`, `20261107203000`, `20261107170000` + `20261107190000`) were written before
+they merged; their "Applied to" cells now say what the probe found. The
+older gaps, `0057` and `20260919171500`, are in "Explore search — two files
+this record never mentioned" further down.
 
 ## October 25 — "Ask about DRVN" cards and sentence-to-filters usage, A4 (shared dev project)
 
@@ -1407,6 +1455,38 @@ The migration adds durable payment requests, atomic capture/payout/compensation,
 
 Follow [the remediation rollout](../docs/remediation-rollout.md) for coordinated application/schema deployment and required Auth, SMTP and scheduler settings. Do not apply the destructive initial schema to an existing project.
 
+## Explore search — two files this record never mentioned
+
+Found on 2026-10-24 while checking this file against `supabase/migrations/`;
+neither file was recorded anywhere here. Probed read-only on the shared dev
+project on 7 Nov 2026: both are present (apply dates not recorded).
+
+| File | Applied to |
+|---|---|
+| `0057_explore_search.sql` | shared dev project (present by probe, 7 Nov 2026: `activity_posts.search_text` exists) |
+| `20260919171500_car_search_installed_mods.sql` | shared dev project (present by probe, 7 Nov 2026: `search_car_ids` reads `mod_items` status) |
+
+- **`0057_explore_search.sql`** — Explore search for builds, posts and
+  accounts, one ranked family each, on the marketplace's doctrine (Postgres is
+  the truth, a provider only ranks ids). Adds `activity_post_search_text(jsonb)`
+  (an IMMUTABLE extractor over the post body, so `activity_posts.search_text`
+  can be a stored generated column), `search_car_ids(text)`,
+  `search_update_ids(text)` and `search_profile_ids(text)` (username, display
+  name and headline only — never location, bio or garage), plus five trigram
+  indexes (`cars_name_trgm_idx`, `activity_posts_title_trgm_idx`,
+  `activity_posts_search_text_trgm_idx`, `profiles_username_trgm_idx`,
+  `profiles_display_name_trgm_idx`). Visibility is checked inside each
+  function; an empty query returns nothing. Documented in
+  `docs/site/search.md`. Probe: `select to_regproc('public.search_update_ids')`
+  and `select indexname from pg_indexes where indexname like '%trgm_idx'`.
+- **`20260919171500_car_search_installed_mods.sql`** — restates
+  `search_car_ids` so only `mod_items` with `status = 'installed'` feed a
+  build's search text; a part that came off the car (removal became a state in
+  `20260919170000`) no longer finds it. Otherwise byte-identical to the
+  `20260905135050` body. Probe:
+  `select pg_get_functiondef('public.search_car_ids(text)'::regprocedure)`
+  and look for `m.status = 'installed'`: present means applied.
+
 
 The entries below are historical application records. Compare the destination's actual schema and migration history before applying any file. Apply only reviewed, unapplied migrations through the established SQL Editor/runner procedure. **0001 is destructive; never replay the tree against an existing project.** Some later files were tested for repeatability, but the whole tree is not a safe re-run operation.
 
@@ -1697,6 +1777,65 @@ no complete `supabase_migrations.schema_migrations` history and would try to run
 On a fresh environment, apply **0001–0028 in order**; for the production path
 (baselining, verification, Stripe live wiring, first admin) follow
 [docs/production-runbook.md](../docs/production-runbook.md).
+
+## Reading this record, and the CLI history
+
+This file is the record of what is applied where. The CLI history table,
+`supabase_migrations.schema_migrations`, is not, on the projects that exist
+today:
+
+- **Shared dev** records 16 versions: `0001`–`0011` and five from 13
+  September (`20260913014536`, `…014621`, `…134641`, `…135341`, `…144516`).
+  Those five are the versions the September 13 repair was recorded under,
+  not the filenames' (see "September 13 marketplace shopping contract").
+  Nothing after them is recorded, though every later file is applied.
+- **Staging** was seeded by hand with the 229 files applied on 7 Nov 2026.
+
+When this file is silent, find the real state by probing objects
+(`to_regproc`, `to_regclass`, `pg_get_functiondef`, `cron.job`,
+`information_schema.columns`), read-only, never from that table. Once the
+runner records history (OS-W10), files it applies are recorded as they go;
+the older gaps stay until an operator fills them from probes
+(`docs/production-runbook.md` §3).
+
+## Verifying on a throwaway database
+
+Every migration, SQL guard and the generated types are proven on a disposable
+Postgres before anything reaches the shared dev project — never on dev itself.
+The recipe matches CI's `sql-guard` job (the port is one that
+`scripts/test-sql-guards.sh` and `scripts/generate-database-types.mjs`
+accept, so nothing here can be pointed at a hosted project by mistake):
+
+```bash
+# 1. A disposable database on CI's image (supabase/postgres 17.6.1.165, the
+#    Postgres major supabase/config.toml declares), loopback only.
+docker run -d --name drvn-review-db -e POSTGRES_PASSWORD=postgres \
+  -p 127.0.0.1:55440:5432 supabase/postgres:17.6.1.165
+
+# 2. The CI shim (storage stand-ins and auth helpers the migrations expect),
+#    then every migration in order as supabase_admin, stopping on the first error.
+export PGPASSWORD=postgres PGHOST=127.0.0.1 PGPORT=55440
+psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/ci_shim.sql
+for f in supabase/migrations/*.sql; do
+  echo "== $f"
+  psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f "$f" || break
+done
+
+# 3. Every *_guard.sql in supabase/tests; each must print "all … checks passed".
+bash scripts/test-sql-guards.sh
+
+# 4. The committed types match the schema (= `npm run db:types:check`;
+#    without --check, `npm run db:types` rewrites them).
+DRVN_TYPES_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:55440/postgres \
+  node scripts/generate-database-types.mjs --check
+
+docker rm -f drvn-review-db
+```
+
+The shim is for this database only — never apply `supabase/tests/ci_shim.sql`
+to a hosted project. On an 8 GB machine without Docker, a native PostgreSQL 17
+with the shim has been used instead (the media integrity entry above); the
+image is the reference.
 
 ## Verifying the purchase guard
 
