@@ -2,7 +2,7 @@
 -- order, even when the order is completed (20261108140000; ruled by Neil,
 -- 8 Nov 2026).
 --   - a completed order alone holds nothing; an unresolved chargeback on it
---     holds the buyer and the seller
+--     holds the buyer and the seller, each with nothing else open
 --   - open, loss_pending and recovery hold; won, warning_closed and lost don't
 --   - the gate names the order; pausing records blocker_code open_chargeback
 --     and says the bank decides it; other holds keep the settle wording
@@ -42,8 +42,7 @@ begin
 
   insert into public.orders(id, buyer_id, seller_id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, currency)
   values (done_order, buyer, seller, 'completed', 5000, 0, 500, 5000, 'USD'),
-         (late_order, late_buyer, late_seller, 'completed', 5000, 0, 500, 5000, 'USD'),
-         (open_order, other_buyer, seller, 'paid', 5000, 0, 500, 5000, 'USD');
+         (late_order, late_buyer, late_seller, 'completed', 5000, 0, 500, 5000, 'USD');
 
   if has_function_privilege('authenticated', 'private.account_deletion_hold_note(uuid)', 'execute')
      or has_function_privilege('authenticated', 'private.account_deletion_hold_code(uuid)', 'execute')
@@ -53,7 +52,8 @@ begin
   end if;
 
   -- 1. A completed order alone holds nothing.
-  if (public.account_deletion_blockers(buyer)->>'financial_hold')::boolean then
+  if (public.account_deletion_blockers(buyer)->>'financial_hold')::boolean
+     or (public.account_deletion_blockers(seller)->>'financial_hold')::boolean then
     raise exception 'FAIL 2: a completed order with no chargeback held the deletion (OS-W11)';
   end if;
 
@@ -71,7 +71,8 @@ begin
   end loop;
   foreach st in array array['won', 'warning_closed', 'lost'] loop
     update public.stripe_dispute_journal set state = st where dispute_id = 'dp_cbh_done';
-    if (public.account_deletion_blockers(buyer)->>'financial_hold')::boolean then
+    if (public.account_deletion_blockers(buyer)->>'financial_hold')::boolean
+       or (public.account_deletion_blockers(seller)->>'financial_hold')::boolean then
       raise exception 'FAIL 5: a % chargeback still held the deletion (OS-W11)', st;
     end if;
   end loop;
@@ -101,8 +102,10 @@ begin
   end if;
 
   -- 4. Any other hold keeps the settle wording and the old code. The seller's
-  -- oldest hold is the open sale (created after done_order, so pin the time).
-  update public.orders set created_at = now() - interval '1 day' where id = open_order;
+  -- open sale is added only now, so checks 2-5 saw the chargeback alone; its
+  -- time is pinned so it is the seller's oldest hold.
+  insert into public.orders(id, buyer_id, seller_id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, currency, created_at)
+  values (open_order, other_buyer, seller, 'paid', 5000, 0, 500, 5000, 'USD', now() - interval '1 day');
   insert into public.remediation_jobs(kind, dedup_key, payload, status, lease_id, locked_until)
   values ('delete_account', 'delete:' || seller, jsonb_build_object('user_id', seller), 'processing', other_lease, now() + interval '5 minutes')
   returning id into other_job;
