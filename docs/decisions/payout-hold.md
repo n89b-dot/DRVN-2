@@ -44,6 +44,11 @@ confirms at once and takes the money before the chargeback arrives.
 `payout_release_at()` computes the release; `claim_window` mode still exists
 and ignores every early release, so switching back is one update.
 
+**Fallbacks (Neil, 7 November 2026, R-hold):** "You can change it to 2 days
+to align with my rule". A missing settings row, a new row, and the app's
+`DEFAULT_PAYOUT_HOLD` all mean a fixed 2 days, the same as the configured
+hold (`20261107220900`; before it they said 7).
+
 ## The risk controls that come with it
 
 All in `public.settlement_settings`; null switches a control off.

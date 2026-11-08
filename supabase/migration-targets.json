@@ -1,0 +1,13 @@
+{
+  "description": "The only Supabase projects scripts/apply-migration.mjs and scripts/import-vehiclesdb.mjs will connect to. Each run names one with --target, and it must be the project the env file points at. Add a project (production included) by a reviewed PR. Project refs are not secrets; they are in every public project URL.",
+  "targets": {
+    "shared-dev": {
+      "ref": "grunnjojhdevhuckujmc",
+      "note": "shared dev project, drvn-v3"
+    },
+    "staging": {
+      "ref": "zubstjuviwourzgrziqc",
+      "note": "drvn-staging, us-east-1"
+    }
+  }
+}

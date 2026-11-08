@@ -1,6 +1,6 @@
 import { mapBounded } from "@/lib/map-bounded";
 import type Stripe from "stripe";
-import { stripeClient, stripeSecretKey } from "./stripe";
+import { provablyNotCreated, stripeClient, stripeSecretKey } from "./stripe";
 import { orderAdjustmentCents } from "./adjustments";
 import { reversalShareCents } from "./refunds";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -43,10 +43,28 @@ import { sendAdminAlert } from "@/lib/admin/alerts";
 type Admin = ReturnType<typeof createAdminClient>;
 
 const MAX_ATTEMPTS = 8;
-const BATCH_SIZE = 8;
+/**
+ * Throughput (N114). A pass used to claim one batch of 8 every ten minutes —
+ * about 48 payouts an hour, with sellers who couldn't be paid taking places
+ * in it. It now claims batches of BATCH_SIZE, works each with CONCURRENCY in
+ * flight, and claims again until the queue is drained, MAX_ROUNDS is reached
+ * or PASS_BUDGET_MS is spent (each batch is claimed only while there is time
+ * to finish it well inside its lease). claim_transfer_intents
+ * (20261107210100) serves the longest-due work first and skips sellers who
+ * can't be paid, so a blocked prefix can't starve ready payouts. When a
+ * payout is due is unchanged: readiness still decides that.
+ */
+const BATCH_SIZE = 16;
+const CONCURRENCY = 8;
+const MAX_ROUNDS = 6;
+const PASS_BUDGET_MS = 150_000;
 const LEASE_SECONDS = 300;
 const TRANSFER_PAGE_SIZE = 100;
-const MAX_TRANSFER_PAGES = 10;
+/** One basket's transfer group holds one transfer per order. */
+const MAX_GROUP_PAGES = 10;
+/** One seller's transfers since the intent was created: 10,000 is far past
+ *  any real seller; beyond it the lookup is unsafe, never guessed. */
+const MAX_DESTINATION_PAGES = 100;
 
 /**
  * Terminal provider outcomes. Any other journal state — open, loss_pending,
@@ -56,6 +74,24 @@ const MAX_TRANSFER_PAGES = 10;
 const RESOLVED_CHARGEBACK_STATES = new Set(["won", "warning_closed", "lost"]);
 export const CHARGEBACK_HOLD_REASON =
   "Payout frozen: a bank chargeback on this order is unresolved";
+
+/**
+ * A seller Stripe won't pay (N8). Stripe refusing a transfer because the
+ * destination account is restricted is a wait on the seller, like an
+ * unfinished onboarding, not a fault to retry eight times and hand to an
+ * operator. Refusals Stripe documents for a destination that can't receive
+ * transfers; any other definitive refusal is checked against the account.
+ */
+const RESTRICTED_ACCOUNT_CODES = new Set(["insufficient_capabilities_for_transfer", "transfers_not_allowed"]);
+export const RESTRICTED_ACCOUNT_REASON = "Stripe refused the transfer: the seller's Stripe account can't receive transfers";
+/**
+ * When a restricted payout is tried again without word from Stripe. Stripe
+ * replays a refused request's answer to the same idempotency key for at least
+ * a day, so an earlier retry would only read the old refusal. A seller who
+ * fixes their account is retried at once: account.updated releases the row
+ * (settlement.ts applyAccountUpdate).
+ */
+const RESTRICTED_RECHECK_MS = 25 * 60 * 60 * 1000;
 
 const TRANSFER_ORDER_COLUMNS =
   "id, status, seller_id, total_cents, platform_fee_cents, refunded_cents, transfer_reference, delivered_at";
@@ -78,33 +114,48 @@ export async function processDueTransfers(admin: Admin): Promise<TransferWorkerS
   };
 
   const workerId = `worker:${process.pid}:${Date.now().toString(36)}`;
-  const { data: claimed, error: claimError } = await admin.rpc("claim_transfer_intents", {
-    p_worker: workerId,
-    p_batch: BATCH_SIZE,
-    p_lease_seconds: LEASE_SECONDS,
-    p_max_attempts: MAX_ATTEMPTS,
-  });
-  if (claimError) {
-    reportError("[transfers] claim failed", { claimError });
-    throw new Error("Transfer queue unavailable");
-  }
-
-  await mapBounded((claimed as unknown as IntentRow[] | null) ?? [], 4, async (intent) => {
-    try {
-      const outcome = await processOne(admin, intent, workerId);
-      summary[outcome] += 1;
-    } catch (error) {
-      reportError("[transfers] worker crashed on intent", { orderId: intent.order_id, error });
-      if (error instanceof LeaseLostError || error instanceof TransferRecoveryError) {
-        // A newer owner now decides the operation. The stale owner must not
-        // mutate its state or announce a transfer after losing the lease.
-        summary.failed += 1;
-        return;
-      }
-      await recordFailure(admin, intent, workerId, error);
+  const started = Date.now();
+  const seen = new Set<string>();
+  for (let round = 0; round < MAX_ROUNDS && Date.now() - started < PASS_BUDGET_MS; round += 1) {
+    const { data: claimed, error: claimError } = await admin.rpc("claim_transfer_intents", {
+      p_worker: workerId,
+      p_batch: BATCH_SIZE,
+      p_lease_seconds: LEASE_SECONDS,
+      p_max_attempts: MAX_ATTEMPTS,
+    });
+    if (claimError) {
+      reportError("[transfers] claim failed", { claimError });
+      // The first claim failing means the queue is unreachable; a later one
+      // ends the pass with what was already done.
+      if (round === 0) throw new Error("Transfer queue unavailable");
       summary.failed += 1;
+      break;
     }
-  });
+    const batch = (claimed as unknown as IntentRow[] | null) ?? [];
+    // A row this pass already released can't be due again so soon (every
+    // release backs off or waits for readiness); if one comes back anyway,
+    // it is worked now and the pass stops rather than spin.
+    const repeated = batch.some((intent) => seen.has(intent.order_id));
+    for (const intent of batch) seen.add(intent.order_id);
+
+    await mapBounded(batch, CONCURRENCY, async (intent) => {
+      try {
+        const outcome = await processOne(admin, intent, workerId);
+        summary[outcome] += 1;
+      } catch (error) {
+        reportError("[transfers] worker crashed on intent", { orderId: intent.order_id, error });
+        if (error instanceof LeaseLostError || error instanceof TransferRecoveryError) {
+          // A newer owner now decides the operation. The stale owner must not
+          // mutate its state or announce a transfer after losing the lease.
+          summary.failed += 1;
+          return;
+        }
+        await recordFailure(admin, intent, workerId, error);
+        summary.failed += 1;
+      }
+    });
+    if (batch.length < BATCH_SIZE || repeated) break;
+  }
   return summary;
 }
 
@@ -131,6 +182,8 @@ type IntentRow = {
   | "dispatch_source_transaction"
   | "dispatch_transfer_group"
   | "provider_call_may_have_occurred"
+  | "created_at"
+  | "last_error"
 >;
 
 class LeaseLostError extends Error {
@@ -252,39 +305,84 @@ function transferRelatesToOperation(
   );
 }
 
-/** Paginate the bounded provider history and require one exact immutable match. */
-export async function findExistingTransfer(
-  dispatch: TransferDispatch
-): Promise<TransferReconciliation> {
-  const exact: Stripe.Transfer[] = [];
-  const inconsistent: string[] = [];
-  let startingAfter: string | undefined;
+/** Where a reconciliation search starts: no transfer for an intent can be
+ *  older than the intent (prepareDispatch needs the row), less this slack for
+ *  clock difference between the database and Stripe. */
+const LOOKUP_SLACK_SECONDS = 60 * 60;
 
-  for (let pageNumber = 0; pageNumber < MAX_TRANSFER_PAGES; pageNumber += 1) {
-    // Scan the provider collection independently of any field being verified.
-    // Filtering by transfer_group would make a related wrong-group transfer
-    // invisible and could turn an identity conflict into an unsafe reissue.
+type TransferListParams = Stripe.TransferListParams;
+
+/**
+ * Every transfer one scoped list returns, paged to the end. Throws past the
+ * bound or on an empty continuation page; the caller treats that as unsafe.
+ */
+async function listAllTransfers(
+  params: TransferListParams,
+  maxPages: number
+): Promise<Stripe.Transfer[] | { unsafe: string }> {
+  const transfers: Stripe.Transfer[] = [];
+  let startingAfter: string | undefined;
+  for (let pageNumber = 0; pageNumber < maxPages; pageNumber += 1) {
     const page = await stripeClient().transfers.list({
+      ...params,
       limit: TRANSFER_PAGE_SIZE,
       ...(startingAfter ? { starting_after: startingAfter } : {}),
     });
-    for (const transfer of page.data) {
-      if (exactTransferMatch(transfer, dispatch)) exact.push(transfer);
-      else if (transferRelatesToOperation(transfer, dispatch)) inconsistent.push(transfer.id);
-    }
-
-    if (!page.has_more) break;
+    transfers.push(...page.data);
+    if (!page.has_more) return transfers;
     const last = page.data.at(-1);
-    if (!last) {
-      return { kind: "unsafe", reason: "Stripe returned an empty transfer page with has_more" };
-    }
+    if (!last) return { unsafe: "Stripe returned an empty transfer page with has_more" };
     startingAfter = last.id;
-    if (pageNumber === MAX_TRANSFER_PAGES - 1) {
-      return {
-        kind: "unsafe",
-        reason: `Transfer lookup exceeded ${MAX_TRANSFER_PAGES * TRANSFER_PAGE_SIZE} records`,
-      };
-    }
+  }
+  return { unsafe: `Transfer lookup exceeded ${maxPages * TRANSFER_PAGE_SIZE} records` };
+}
+
+/**
+ * Did an earlier owner's request already create this transfer? (N106)
+ *
+ * The search used to page the platform's whole transfer history and gave up
+ * after its newest 1,000 transfers, so at volume every crash or timeout became
+ * an operator case. It is now scoped two ways and each scope is read to its
+ * end:
+ *
+ *   - correlation: every transfer in the frozen transfer group (the basket's
+ *     PaymentIntent; a handful of orders). Any transfer this operation made
+ *     carries the frozen group, because the payload is frozen before the call
+ *     and resent unchanged.
+ *   - destination and time: every transfer to the frozen destination since
+ *     the intent existed. This catches a related transfer in a different
+ *     group — the identity conflict the old full scan was there to catch.
+ *
+ * One exact immutable match is "found"; any related mismatch, duplicate, or
+ * scope too large to read completely is "unsafe" (an operator case). Only a
+ * complete read of both scopes with nothing related in them is "absent", the
+ * one answer that lets the caller send.
+ */
+export async function findExistingTransfer(
+  dispatch: TransferDispatch,
+  options: { createdAfter?: string | null } = {}
+): Promise<TransferReconciliation> {
+  const since = options.createdAfter ? Date.parse(options.createdAfter) : NaN;
+  const createdGte = Number.isFinite(since)
+    ? Math.floor(since / 1000) - LOOKUP_SLACK_SECONDS
+    : undefined;
+
+  const byGroup = await listAllTransfers({ transfer_group: dispatch.transferGroup }, MAX_GROUP_PAGES);
+  if (!Array.isArray(byGroup)) return { kind: "unsafe", reason: byGroup.unsafe };
+  const byDestination = await listAllTransfers(
+    { destination: dispatch.destination, ...(createdGte != null ? { created: { gte: createdGte } } : {}) },
+    MAX_DESTINATION_PAGES
+  );
+  if (!Array.isArray(byDestination)) return { kind: "unsafe", reason: byDestination.unsafe };
+
+  const seen = new Set<string>();
+  const exact: Stripe.Transfer[] = [];
+  const inconsistent: string[] = [];
+  for (const transfer of [...byGroup, ...byDestination]) {
+    if (seen.has(transfer.id)) continue;
+    seen.add(transfer.id);
+    if (exactTransferMatch(transfer, dispatch)) exact.push(transfer);
+    else if (transferRelatesToOperation(transfer, dispatch)) inconsistent.push(transfer.id);
   }
 
   if (exact.length === 1 && inconsistent.length === 0) {
@@ -547,7 +645,7 @@ async function processOne(
       return "failed";
     }
 
-    const reconciliation = await findExistingTransfer(dispatch);
+    const reconciliation = await findExistingTransfer(dispatch, { createdAfter: intent.created_at });
     if (reconciliation.kind === "unsafe") {
       await recordOperatorRecovery(
         admin,
@@ -702,17 +800,7 @@ async function processOne(
     // This same-payload prepare is the final live-lease CAS after provider
     // lookup. A stale owner cannot cross the dispatch boundary.
     await prepareDispatch(admin, workerId, dispatch);
-    const transfer = await createTransfer(dispatch);
-    await recordTransfer(
-      admin,
-      intent.order_id,
-      workerId,
-      dispatch.operationKey,
-      transfer.id,
-      intent.seller_id ?? order.seller_id,
-      true
-    );
-    return "transferred";
+    return sendTransfer(admin, intent, workerId, dispatch, intent.seller_id ?? order.seller_id);
   }
 
   // A partial refund shrinks the payout by its proportional share instead of
@@ -784,17 +872,91 @@ async function processOne(
     transferGroup: payment.provider_reference,
   };
   await prepareDispatch(admin, workerId, dispatch);
-  const transfer = await createTransfer(dispatch);
-  await recordTransfer(
-    admin,
-    intent.order_id,
-    workerId,
-    dispatch.operationKey,
-    transfer.id,
-    sellerId,
-    true
-  );
+  return sendTransfer(admin, intent, workerId, dispatch, sellerId);
+}
+
+/**
+ * The provider call, after prepareDispatch froze the request. A transfer is
+ * recorded. Stripe refusing it because the seller's account can't receive
+ * transfers parks the payout as a seller-side wait (N8); every other error
+ * propagates to the normal backoff and, once attempts run out, an operator
+ * case.
+ */
+async function sendTransfer(
+  admin: Admin,
+  intent: IntentRow,
+  workerId: string,
+  dispatch: TransferDispatch,
+  sellerId: string | null
+): Promise<"transferred" | "blocked"> {
+  let transfer: Stripe.Transfer;
+  try {
+    transfer = await createTransfer(dispatch);
+  } catch (error) {
+    const restriction = await accountRestriction(error, dispatch.destination);
+    if (!restriction) throw error;
+    await deferRestrictedPayout(admin, intent, workerId, restriction, sellerId);
+    return "blocked";
+  }
+  await recordTransfer(admin, intent.order_id, workerId, dispatch.operationKey, transfer.id, sellerId, true);
   return "transferred";
+}
+
+/**
+ * Why Stripe won't pay this destination, or null when the error isn't that.
+ * Only a definitive refusal counts (a 400 that created nothing): a timeout, a
+ * 5xx or a rate limit leaves the outcome unknown and stays a failure. A
+ * refusal without a documented restriction code counts only when the account
+ * itself shows it can't take transfers; a lookup that fails proves nothing.
+ */
+export async function accountRestriction(error: unknown, destination: string): Promise<string | null> {
+  if (!provablyNotCreated(error)) return null;
+  const code = (error as { code?: string }).code ?? "";
+  if (RESTRICTED_ACCOUNT_CODES.has(code)) return code;
+  try {
+    const account = await stripeClient().accounts.retrieve(destination);
+    const transfers = account.capabilities?.transfers;
+    if (transfers && transfers !== "active") return `transfers capability ${transfers}`;
+    if (account.requirements?.disabled_reason) return `account disabled: ${account.requirements.disabled_reason}`;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Park a payout Stripe refused for the seller's account: 'blocked_unpayable'
+ * with its attempts untouched, so it never exhausts into an operator case.
+ * The frozen request and its uncertainty flag stay, so the next try looks
+ * Stripe up before sending, with the same idempotency key. It comes back when
+ * account.updated reports the seller payable, or after RESTRICTED_RECHECK_MS
+ * regardless. The seller is told once, when the payout first parks.
+ */
+async function deferRestrictedPayout(
+  admin: Admin,
+  intent: IntentRow,
+  workerId: string,
+  restriction: string,
+  sellerId: string | null
+): Promise<void> {
+  await setIntent(admin, intent.order_id, workerId, {
+    status: "blocked_unpayable",
+    next_attempt_at: new Date(Date.now() + RESTRICTED_RECHECK_MS).toISOString(),
+    last_error: `${RESTRICTED_ACCOUNT_REASON} (${restriction})`,
+  });
+  if (!sellerId || intent.last_error?.startsWith(RESTRICTED_ACCOUNT_REASON)) return;
+  const { error: notificationError } = await admin.from("notifications").insert({
+    user_id: sellerId,
+    kind: "payout_blocked",
+    section: "marketplace",
+    title: "Stripe paused payouts to your account",
+    body: "Stripe can't accept a transfer to your account right now, so this order's payout is waiting. Open your Stripe dashboard and finish what it asks for; the payout goes as soon as Stripe accepts transfers again.",
+    href: `/orders/${intent.order_id}`,
+    actor_id: null,
+  });
+  if (notificationError) {
+    reportError("[transfers] restricted-account notification failed", { orderId: intent.order_id, notificationError });
+  }
 }
 
 /**

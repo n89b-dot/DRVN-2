@@ -5,6 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import type { TurnCard } from "@/lib/ai/run";
 import { LOW_CONFIDENCE_THRESHOLD } from "@/lib/mods/parse";
+import { signChatPhotos } from "@/lib/agent/chat-photos";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /** A result card ready to draw: what the agent pointed at, read as the member. */
 export type ResolvedCard =
@@ -216,9 +218,13 @@ async function resolveJobCards(supabase: SupabaseClient<Database>, cards: TurnCa
  */
 async function resolvePhotoDrafts(supabase: SupabaseClient<Database>, cards: TurnCard[]): Promise<ResolvedCard[]> {
   const out: ResolvedCard[] = [];
+  // R81: a draft's first photo is a private chat photo, shown signed.
+  const firsts = cards.flatMap((card) => (card.kind === "listing_draft" || card.kind === "update_draft") && card.images[0] ? [card.images[0]] : []);
+  const signed = firsts.length ? await signChatPhotos(createAdminClient(), firsts) : new Map<string, string>();
+  const shown = (url: string | undefined) => (url ? (signed.get(url) ?? null) : null);
   for (const card of cards) {
     if (card.kind !== "listing_draft") continue;
-    out.push({ kind: "listing_draft", id: card.id, title: card.title, image: card.images[0] ?? null, photos: card.images.length, href: `/sell?agent=${card.id}` });
+    out.push({ kind: "listing_draft", id: card.id, title: card.title, image: shown(card.images[0]), photos: card.images.length, href: `/sell?agent=${card.id}` });
   }
   const updates = cards.filter((card): card is UpdateCard => card.kind === "update_draft");
   if (!updates.length) return out;
@@ -231,7 +237,7 @@ async function resolvePhotoDrafts(supabase: SupabaseClient<Database>, cards: Tur
   for (const card of updates) {
     const car = carOf.get(card.car);
     if (!car) continue;
-    out.push({ kind: "update_draft", id: card.id, carName: car.name, title: card.title, image: card.images[0] ?? null, href: `/garage/${car.id}/update/new?agent=${card.id}` });
+    out.push({ kind: "update_draft", id: card.id, carName: car.name, title: card.title, image: shown(card.images[0]), href: `/garage/${car.id}/update/new?agent=${card.id}` });
   }
   return out;
 }

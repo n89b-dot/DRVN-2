@@ -12,9 +12,9 @@ import {
   payoutHoldPhrase,
   readAutoConfirmDays,
   readPayoutHoldPolicy,
-  readSettlementRisk,
+  readPublicRiskControls,
 } from "@/lib/payments/payout-hold";
-import { formatPrice } from "@/lib/marketplace/taxonomy";
+import { deliveryLabel } from "@/lib/marketplace/delivery";
 import { paymentsAreLive } from "@/lib/payments/provider";
 import { createPublicClient } from "@/lib/supabase/public";
 
@@ -24,7 +24,7 @@ export const metadata = {
   alternates: { canonical: "/terms" },
 };
 
-const UPDATED = "18 October 2026";
+const UPDATED = "7 November 2026";
 
 /**
  * Plain-language terms covering what DRVN actually does today.
@@ -51,7 +51,7 @@ export default async function TermsPage() {
   const [hold, autoConfirmDays, risk] = await Promise.all([
     readPayoutHoldPolicy(settings),
     readAutoConfirmDays(settings),
-    readSettlementRisk(settings),
+    readPublicRiskControls(settings),
   ]);
   const holdText = hold ? payoutHoldPhrase(hold) : "a clearing period";
   // Off (null) says nothing; unreadable still states the rule, without a number.
@@ -61,7 +61,9 @@ export default async function TermsPage() {
   // (payout_release_at, 20261009100000).
   const releasesOnReceipt = hold?.mode === "fixed";
   const receiptDays = risk ? `${risk.receiptReleaseAfterDays} days` : "a few days";
-  const verifyFrom = risk?.cardVerificationFromCents ?? null;
+  // Whether card verification is on, never the amount it starts at: that
+  // would tell a fraudster what to price under (N26, 20261107210000).
+  const verifiesCards = risk?.cardVerificationOn === true;
 
   return (
     <>
@@ -85,11 +87,10 @@ export default async function TermsPage() {
           Payments go through DRVN&apos;s payment processor, Stripe: the buyer pays at checkout,
           and the seller&apos;s share is paid out to the seller&apos;s own Stripe account, as
           described in section 6.
-          {verifyFrom !== null && (
+          {verifiesCards && (
             <>
               {" "}
-              A card payment of {formatPrice(verifyFrom)} or more asks the buyer to verify it with
-              their card&apos;s bank.
+              Larger card payments ask the buyer to verify the payment with their card&apos;s bank.
             </>
           )}
         </p>
@@ -160,8 +161,11 @@ export default async function TermsPage() {
         <h2>5. Buying</h2>
         <p>
           Placing an order is a commitment to pay. Prices are in US dollars. The buyer pays the
-          asking price plus the seller&apos;s shipping, both shown before you pay — nothing is
-          added at checkout. Starting checkout holds the part for you for 15 minutes.
+          asking price plus shipping. When the seller sets the shipping, the listing shows it;
+          when the listing says &ldquo;{deliveryLabel({ shipping_mode: "drvn" })}&rdquo;, checkout
+          shows the rates once you&apos;ve entered your address. Either way you see the total
+          before you pay, and DRVN&apos;s fee is never added to it. Starting checkout holds the
+          part for you for 15 minutes.
         </p>
         <p>
           An offer is a promise you intend to keep, so only offer what you would pay. Offers lapse

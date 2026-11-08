@@ -4,7 +4,7 @@ import type { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 
 import { messageDealKey, type TimelineMessage } from "./conversation-timeline";
-import { dealEvents, offerDeal, orderDeal, sortDeals, type Deal, type DealEvent, type OfferDealRow, type OrderDealRow } from "./deals";
+import { dealEvents, enquiryDeal, offerDeal, orderDeal, sortDeals, type Deal, type DealEvent, type OfferDealRow, type OrderDealRow } from "./deals";
 
 /**
  * Reads behind /messages. A conversation is one pair of people
@@ -320,7 +320,7 @@ export async function loadThread(
   let messagesQuery = target.conversationId
     ? supabase
         .from("messages")
-        .select("id, sender_id, body, created_at, kind, attachments, order_id, offer_id, read_at")
+        .select("id, sender_id, body, created_at, kind, attachments, order_id, offer_id, listing_id, read_at")
         .eq("conversation_id", target.conversationId)
         .order("created_at", { ascending: false })
         .limit(THREAD_WINDOW)
@@ -343,6 +343,7 @@ export async function loadThread(
     attachments: string[];
     order_id: string | null;
     offer_id: string | null;
+    listing_id: string | null;
     read_at: string | null;
   }[];
 
@@ -368,7 +369,19 @@ export async function loadThread(
 
   const person = toPerson(people.get(target.otherId), target.otherId);
   const rows = dealRowsMap.get(target.otherId);
-  const deals = dealsFrom(rows, me);
+  // R-directcontact: listings asked about with no offer or order yet are
+  // deals too, so the seller can answer in the same conversation.
+  const enquiryAt = new Map<string, string>();
+  for (const m of rowsDesc) {
+    if (m.listing_id && !m.order_id && !m.offer_id && !enquiryAt.has(m.listing_id)) enquiryAt.set(m.listing_id, m.created_at);
+  }
+  const { data: enquiryListings } = enquiryAt.size
+    ? await supabase.from("listings").select("id, title, seller_id, status, price_cents").in("id", [...enquiryAt.keys()])
+    : { data: [] as { id: string; title: string; seller_id: string; status: string; price_cents: number }[] };
+  const enquiries = (enquiryListings ?? [])
+    .filter((l) => l.seller_id === me || l.seller_id === target.otherId)
+    .map((l) => enquiryDeal({ listing_id: l.id, seller_id: l.seller_id, title: l.title, status: l.status, price_cents: l.price_cents, at: enquiryAt.get(l.id)! }, me));
+  const deals = sortDeals([...dealsFrom(rows, me), ...enquiries]);
   const events = dealEvents(rows?.orders ?? [], rows?.offers ?? [], me, person.firstName);
   // Only events inside the loaded window (or all, when the whole history is here).
   const hasEarlier = rowsDesc.length === THREAD_WINDOW;

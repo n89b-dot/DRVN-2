@@ -14,6 +14,7 @@ import { getPublicPageClient as createClient, getViewer } from "@/lib/supabase/p
 
 import { ActivityGallery } from "@/features/activity/activity-gallery";
 import { MarkRemovedOffer } from "./mark-removed-offer";
+import { partsStillFitted } from "./still-fitted";
 
 import { normalizeBlocks, postLead } from "@/lib/activity-blocks";
 import { pageHeadline, postHeadline } from "@/lib/activity/headline";
@@ -133,20 +134,8 @@ export default async function ActivityDetailPage({
         listing?.status === "active"
           ? { href: `/listings/${listing.id}`, label: "For sale →" }
           : { href: `/cars/${slug}?view=build`, label: "View build entry →" };
-      const saysItCameOff = blocks.some(
-        (b) =>
-          b.type === "mod" &&
-          b.modItemId === mod.id &&
-          (b.action === "removed" || b.action === "replaced")
-      );
-      if (saysItCameOff && mod.status === "installed") {
-        stillFitted.push({
-          id: mod.id,
-          label:
-            [mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw_text || "That part",
-        });
-      }
     }
+    stillFitted.push(...partsStillFitted(blocks, mods ?? []));
   }
 
   // W-4: the parts this update tagged, read from the mirror table so the
