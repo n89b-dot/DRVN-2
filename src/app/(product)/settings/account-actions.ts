@@ -135,7 +135,12 @@ export async function changePassword(
   }
 
   try {
-    const { error } = await supabase.auth.updateUser({ password: next });
+    // The current password goes to Auth as well (OS-W12 follow-up, N20):
+    // with "require current password" on in the hosted project, Auth itself
+    // refuses a password change without it unless the session was opened
+    // from an emailed link, so a stolen session calling Auth directly can't
+    // set a new one. With the setting off, Auth ignores the field.
+    const { error } = await supabase.auth.updateUser({ password: next, current_password: current });
     if (error) {
       const requestedPasswordWorks = await passwordWorks(next);
       if (requestedPasswordWorks) return await passwordChanged(user.id);

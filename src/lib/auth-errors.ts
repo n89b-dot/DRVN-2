@@ -26,6 +26,7 @@ export const AUTH_ERROR_COPY = {
   // banned at sign-in when they are deleted or blocked by an administrator.
   access_blocked: `This account can't sign in. It has been closed or blocked. If you think that's a mistake, email ${SUPPORT_EMAIL}.`,
   same_password: "That's the password you already have.",
+  current_password_wrong: "Your current password isn't right.",
   reauthentication_needed: "Confirm it's you before changing this: sign in again, then retry.",
   session_expired: "Your session has ended. Sign in again to carry on.",
   provider_unavailable: "Google sign-in isn't available right now. Use your email and password instead.",
@@ -60,6 +61,10 @@ export function authErrorCode(error: unknown): AuthErrorCode {
       return "access_blocked";
     case "same_password":
       return "same_password";
+    // Auth's own check when "require current password" is on.
+    case "current_password_required":
+    case "current_password_mismatch":
+      return "current_password_wrong";
     case "reauthentication_needed":
     case "reauthentication_not_valid":
       return "reauthentication_needed";
@@ -91,6 +96,7 @@ const EXPECTED: ReadonlySet<AuthErrorCode> = new Set([
   "rate_limited",
   "access_blocked",
   "same_password",
+  "current_password_wrong",
   "reauthentication_needed",
   "session_expired",
 ]);

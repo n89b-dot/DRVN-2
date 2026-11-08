@@ -2,6 +2,11 @@
 -- stock part that came off (20261019100000). Disposable local DB only.
 begin;
 
+-- save_mod_items takes the revision the editor loaded (N65, 20261107220100).
+-- These checks are about what one save does, so each passes the current one.
+create function pg_temp.save_sheet(p_car uuid, p_items jsonb) returns jsonb
+language sql as $$ select public.save_mod_items(p_car, p_items, public.mod_sheet_revision(p_car)) $$;
+
 do $$
 declare
   owner_id uuid := gen_random_uuid();
@@ -16,7 +21,7 @@ begin
   ) then
     raise exception 'mod_items.origin has no check constraint';
   end if;
-  if (select prosecdef from pg_proc where oid = 'public.save_mod_items(uuid,jsonb)'::regprocedure) then
+  if (select prosecdef from pg_proc where oid = 'public.save_mod_items(uuid,jsonb,text)'::regprocedure) then
     raise exception 'Modification sheet function bypasses caller RLS';
   end if;
 
@@ -32,7 +37,7 @@ begin
     json_build_object('sub', owner_id, 'role', 'authenticated')::text, true);
 
   -- A new mod, and the stock springs it replaced, saved together.
-  perform public.save_mod_items(v_car_id, jsonb_build_array(
+  perform pg_temp.save_sheet(v_car_id, jsonb_build_array(
     jsonb_build_object('id', mod_id, 'group_label', 'Suspension', 'category', 'suspension',
       'brand', 'Eibach', 'product', 'Pro-Kit springs', 'raw_text', 'Eibach Pro-Kit springs'),
     jsonb_build_object('id', stock_id, 'group_label', 'Suspension', 'category', 'suspension',
@@ -51,7 +56,7 @@ begin
   -- An editor that predates origin sends the same lines without it: the
   -- stock line stays stock.
   perform set_config('role', 'authenticated', true);
-  perform public.save_mod_items(v_car_id, jsonb_build_array(
+  perform pg_temp.save_sheet(v_car_id, jsonb_build_array(
     jsonb_build_object('id', mod_id, 'group_label', 'Suspension', 'category', 'suspension',
       'brand', 'Eibach', 'product', 'Pro-Kit springs', 'raw_text', 'Eibach Pro-Kit springs'),
     jsonb_build_object('id', stock_id, 'group_label', 'Suspension', 'category', 'suspension',
@@ -66,7 +71,7 @@ begin
   -- Anything else is refused.
   perform set_config('role', 'authenticated', true);
   begin
-    perform public.save_mod_items(v_car_id, jsonb_build_array(
+    perform pg_temp.save_sheet(v_car_id, jsonb_build_array(
       jsonb_build_object('id', mod_id, 'group_label', 'Suspension', 'raw_text', 'x', 'origin', 'oem')
     ));
   exception when sqlstate '22023' then

@@ -59,7 +59,10 @@ export async function markReadyForPickup(
     .update({ pickup_ready_at: new Date().toISOString() })
     .eq("id", orderId)
     .eq("seller_id", user.id)
-    .eq("status", "paid")
+    // N6: making it available stays possible while a not-received case is
+    // open on the undispatched order (pre-dispute status 'paid'); a
+    // collection made available is no longer refunded automatically.
+    .or("status.eq.paid,and(status.eq.disputed,pre_dispute_status.eq.paid)")
     .eq("is_collection", true)
     .is("pickup_ready_at", null)
     .select("id");

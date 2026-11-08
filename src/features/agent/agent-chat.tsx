@@ -78,11 +78,6 @@ export function AgentChat({
   // send still in flight from before it is dropped when it answers, or the
   // deleted messages would come back (N125).
   const generation = useRef(0);
-  useAgentEvent(AGENT_CHAT_CLEARED, () => {
-    generation.current += 1;
-    attempt.current = null;
-    setMessages([]);
-  });
   const [pending, startTransition] = useTransition();
   const sent = useRef(false);
   const section = useRef<HTMLElement>(null);
@@ -99,6 +94,24 @@ export function AgentChat({
   // can't be sent.
   const [photoJob, setPhotoJob] = useState<PhotoJob | null>(null);
   const uploading = photos.some((photo) => !photo.url && !photo.error);
+
+  // A clear (N125) deletes the chat's photos from Storage, the ones waiting
+  // to send included (R81): they go from the composer too, with the job they
+  // were for, so the next message can't name a deleted photo. An upload
+  // still running finds its place gone and is left for the 48-hour sweep.
+  function dropPhotos() {
+    photosRef.current.forEach((photo) => URL.revokeObjectURL(photo.preview));
+    photosRef.current = [];
+    setPhotos([]);
+    setPhotoJob(null);
+  }
+  // Heard for a clear made here too: ClearAgentChat announces every clear.
+  useAgentEvent(AGENT_CHAT_CLEARED, () => {
+    generation.current += 1;
+    attempt.current = null;
+    setMessages([]);
+    dropPhotos();
+  });
   const ready = photos.flatMap((photo) => (photo.url ? [photo.url] : []));
 
   async function addPhotos(files: File[]) {

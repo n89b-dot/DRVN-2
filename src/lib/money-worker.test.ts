@@ -8,6 +8,7 @@ vi.mock("@/lib/auto-confirm-email", () => ({ processAutoConfirmEmails: quiet }))
 vi.mock("@/features/commerce/returns", () => ({ processReturnTimers: quiet }));
 vi.mock("@/lib/payments/capture-reconciliation", () => ({ reconcileCapturedPayments: quiet }));
 vi.mock("@/lib/payments/dispute-sla", () => ({ processDisputeSla: quiet }));
+vi.mock("@/lib/payments/dispute-clocks", () => ({ processDisputeClocks: quiet }));
 vi.mock("@/lib/payments/payout-deadline", () => ({ processPayoutDeadlines: quiet }));
 vi.mock("@/lib/payments/carry-payout-worker", () => ({ processCarryPayouts: quiet }));
 vi.mock("@/lib/payments/refunds", () => refunds);

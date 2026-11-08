@@ -87,3 +87,13 @@ export function nextAction(order: NextActionInput, isSale: boolean): string | nu
       return null;
   }
 }
+
+/**
+ * OS-W17 (N87): where a pending order's "Finish checkout" goes. An accepted
+ * offer is paid on its own page; a cart order resumes the cart checkout. The
+ * button used to send both to the offer page, which refuses a cart order
+ * ("This checkout link is no longer valid").
+ */
+export function finishCheckoutHref(order: { id: string; origin_offer_id: string | null }): string {
+  return order.origin_offer_id ? `/orders/${order.id}/checkout` : "/checkout";
+}

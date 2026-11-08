@@ -44,6 +44,11 @@ export default async function GaragePage({
   // same editors the full car page mounts, given the same rows. Loaded only
   // when a car is focused (the list view needs none of it), and beside the
   // sheets' measuring rather than after it.
+  // N65: the focused sheet's revision is read before the sheet itself, so it
+  // can only be older than the lines the editor shows, never newer.
+  const focusedRevision = focusedId
+    ? requiredRead(await supabase.rpc("mod_sheet_revision", { p_car: focusedId }), "this car's mod list")
+    : null;
   const [sheets, [focusedCarResult, focusedImagesResult, focusedModsResult]] = await Promise.all([
     measureGarageSheets(supabase, cars),
     focusedId
@@ -149,7 +154,7 @@ export default async function GaragePage({
             overview: <GarageCarOverview sheet={focused} mods={focusedMods ?? []} />,
             mods: (
               <div className="mt-6">
-                <ModsEditor carId={focused.id} carMake={focused.make} initialMods={focusedMods ?? []} />
+                <ModsEditor carId={focused.id} carMake={focused.make} initialMods={focusedMods ?? []} initialRevision={focusedRevision ?? ""} />
               </div>
             ),
             parts: <GarageCarParts sheet={focused} />,

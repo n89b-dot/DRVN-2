@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { OrderStatus } from "@/lib/database.types";
 
 import {
+  finishCheckoutHref,
   isRawStatus,
   isStateGroup,
   nextAction,
@@ -80,5 +81,15 @@ describe("nextAction", () => {
     for (const status of ["pending", "requires_action", "paid", "shipped", "delivered", "disputed"] as const) {
       expect(nextAction(order(status), true)).not.toBe(nextAction(order(status), false));
     }
+  });
+});
+
+describe("finishCheckoutHref", () => {
+  it("N87: a pending cart order finishes in the cart checkout, not the offer page that refuses it", () => {
+    expect(finishCheckoutHref({ id: "order-1", origin_offer_id: null })).toBe("/checkout");
+  });
+
+  it("an accepted offer still finishes on its own checkout page", () => {
+    expect(finishCheckoutHref({ id: "order-1", origin_offer_id: "offer-1" })).toBe("/orders/order-1/checkout");
   });
 });

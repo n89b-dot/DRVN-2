@@ -6,7 +6,8 @@ import { redirect } from "next/navigation";
 import { Rv } from "@/components/livesheet";
 import { ButtonLink, EmptyState, Foot, ObjectRow, PaymentModeNotice } from "@/components/ui";
 import { getBetaAccess } from "@/lib/beta-access";
-import { loadCartSummary, loadInFlightCheckout } from "@/lib/checkout-data";
+import { loadCartSummary, loadCheckoutResume, loadInFlightCheckout } from "@/lib/checkout-data";
+import { readCheckoutKey } from "@/lib/checkout-key";
 import { listSavedCards } from "@/lib/payments/customers";
 import { formatPrice } from "@/lib/payments/fee";
 import { paymentsAreLive } from "@/lib/payments/provider";
@@ -73,6 +74,15 @@ export default async function CheckoutPage() {
   // Guest checkout remains available outside the controlled-beta rollout.
   const savedCards = user ? await listSavedCards(user.id).catch(() => []) : [];
 
+  // OS-W17 (N85): one key per checkout, not per render. A checkout that has
+  // reserved the basket left its key in a cookie; rendering it back means a
+  // reload resumes that attempt (and its payment) instead of starting a
+  // second one that finds the buyer's own parts reserved. A member also gets
+  // the details it was started with, so resuming is one press.
+  const rememberedKey = await readCheckoutKey();
+  const idempotencyKey = rememberedKey ?? randomUUID();
+  const resume = await loadCheckoutResume(user?.id ?? null, rememberedKey);
+
   return (
     <div className="wrap wrap--wide pb-10">
       <Rv as="header" className="pagehead pagehead--task">
@@ -133,9 +143,10 @@ export default async function CheckoutPage() {
           </Rv>
 
           <CheckoutSteps
-            idempotencyKey={randomUUID()}
+            idempotencyKey={idempotencyKey}
+            resume={resume}
             needsEmail={!user}
-            allowsCollection={cart.allowsCollection}
+            allowsCollection={cart.allowsCollection || Boolean(resume?.shipping.isCollection)}
             mixedFulfilment={cart.mixedFulfilment}
             items={cart.lines.map((line) => ({
               id: line.id,
