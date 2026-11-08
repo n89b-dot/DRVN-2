@@ -3102,6 +3102,7 @@ export type Database = {
           counter_amount_cents: number | null
           countered_at: string | null
           created_at: string
+          ended_reason: string | null
           expires_at: string | null
           id: string
           last_round_id: string | null
@@ -3117,6 +3118,7 @@ export type Database = {
           counter_amount_cents?: number | null
           countered_at?: string | null
           created_at?: string
+          ended_reason?: string | null
           expires_at?: string | null
           id?: string
           last_round_id?: string | null
@@ -3132,6 +3134,7 @@ export type Database = {
           counter_amount_cents?: number | null
           countered_at?: string | null
           created_at?: string
+          ended_reason?: string | null
           expires_at?: string | null
           id?: string
           last_round_id?: string | null
@@ -8377,6 +8380,7 @@ export type Database = {
         }
         Returns: Json
       }
+      withdraw_listing: { Args: { p_listing: string }; Returns: Json }
       worker_health_snapshot: { Args: never; Returns: Json }
       write_account_export: {
         Args: {

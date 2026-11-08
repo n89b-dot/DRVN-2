@@ -60,6 +60,7 @@ declare
     'order_buyer_reviewable(uuid)',                    -- boolean, only for the order's buyer or seller
     'price_comparables(text,text,text,uuid)',          -- aggregates of completed sales and live listings of one product, only from 3 up; no rows or ids (20261020140000)
     'reconcile_admin_external_operation(uuid,bigint,text,text)', -- refuses anyone but an admin with step-up
+    'withdraw_listing(uuid)',                          -- the caller's own listing only, listing-first lock; ends its live offers and archives it (N77, 20261107220700)
     'record_listing_view(uuid,text)',                  -- counts the caller's own view (bump_listing_view's rules) and its arrival surface; no viewer ids stored (OS-R-arrival, 20261107220200)
     'record_listing_edit(uuid,text,uuid,timestamp with time zone,jsonb)', -- the caller's own edit request
     'replay_listing_edit(uuid,text,uuid,timestamp with time zone)',      -- same request, replayed for its owner

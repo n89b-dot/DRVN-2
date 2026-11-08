@@ -218,9 +218,14 @@ export default async function OfferThreadPage({
   }
   if (offer.status === "withdrawn") {
     derived.push({
-      label: isBuyer
-        ? "You withdrew the offer"
-        : `${counterpartyName} withdrew the offer`,
+      // N77: the seller withdrew the listing, which ended the offer.
+      label: offer.ended_reason === "listing_withdrawn"
+        ? isBuyer
+          ? "The seller withdrew this listing, so the offer ended"
+          : "You withdrew the listing, so the offer ended"
+        : isBuyer
+          ? "You withdrew the offer"
+          : `${counterpartyName} withdrew the offer`,
       at: offer.updated_at,
     });
   }
