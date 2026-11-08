@@ -66,7 +66,7 @@ export async function loadInFlightCheckout(
   if (!userId && !guestOrderIds.length) return null;
   if (onlyOrderIds && !onlyOrderIds.length) return null;
 
-  const admin = createAdminClient();
+  const admin = createAdminClient({ signPhotos: true }); // N455: shows listing photos
   // Cart orders only: an accepted offer's pending order is finished on its
   // own page (/orders/<id>/checkout), never folded into a cart checkout.
   let query = admin

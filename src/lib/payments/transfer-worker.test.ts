@@ -1355,3 +1355,47 @@ describe("a seller whose Stripe account is restricted (N8)", () => {
     );
   });
 });
+
+// N499 (remediation plan C2; the OS's id for N106, fixed by #91): a crash
+// between creating a Stripe transfer and recording it is recovered by a
+// scoped, complete search, never by re-issuing the create. Stripe keeps an
+// idempotency key for about 24 hours, so a create replayed after a longer
+// outage would make a second transfer: the search is what makes recovery
+// safe at any age.
+describe("N499: crash recovery finds the orphan wherever it sits", () => {
+  it("N499: the orphan is the 1,001st transfer, and recovery finds it without creating another", async () => {
+    // 1,000 newer transfers to other sellers, then the orphan: the 1,001st, newest first.
+    const newer = filler(1_000, (index) => ({
+      created: T0 + 100 + index * 60,
+      destination: `acct_other_${index % 25}`,
+      transfer_group: `pi_other_${index}`,
+    }));
+    const orphan = transfer({ created: T0 + 10 });
+    const history = stripeHistory([orphan, ...newer]);
+    const all = await history({ limit: 1_001 });
+    expect(all.data.at(-1)?.id).toBe("tr_exact");
+    expect(all.data.slice(0, 1_000).some((t) => t.id === "tr_exact")).toBe(false);
+    mocks.transferList.mockImplementation(history);
+
+    await expect(findExistingTransfer(dispatch, { createdAfter: new Date(T0 * 1000).toISOString() })).resolves.toEqual({
+      kind: "found",
+      transferId: "tr_exact",
+    });
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+  });
+
+  it("N499: a crashed payout whose transfer already exists past the first 1,000 is recorded, not sent again", async () => {
+    const newer = filler(1_000, (index) => ({
+      created: T0 + 100 + index * 60,
+      destination: `acct_other_${index % 25}`,
+      transfer_group: `pi_other_${index}`,
+    }));
+    mocks.transferList.mockImplementation(stripeHistory([transfer({ created: T0 + 10 }), ...newer]));
+    const { admin, rpc } = fakeAdmin({ claimed: [{ ...frozenIntent(), created_at: new Date(T0 * 1000).toISOString() } as never] });
+
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ transferred: 1, failed: 0 });
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalledWith("record_transfer_recovery", expect.anything());
+  });
+});
+
