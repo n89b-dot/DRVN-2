@@ -15,12 +15,22 @@ export type TestUser = {
   displayName: string;
 };
 
+/**
+ * A fixture handle that obeys the username rule (N38, 20261107220500):
+ * lowercase a-z, 0-9 and _, 3 to 30 characters. Fixtures write handles with
+ * the service role, past the form, so they must follow the rule themselves.
+ */
+export const FIXTURE_HANDLE = /^[a-z0-9_]{3,30}$/;
+export function fixtureHandle(label: string, unique: string | number): string {
+  return `e2e${label.toLowerCase().replace(/[^a-z0-9_]/g, "")}${unique}`.slice(0, 24);
+}
+
 /** Throwaway user. Emails follow the e2e-*@drvn.test pattern the cleanup sweep looks for. */
 export function makeUser(role: string, stamp: number): TestUser {
   return {
     email: `e2e-${role}-${stamp}@drvn.test`,
     password: "e2e-password-123",
-    username: `e2e${role.toLowerCase().replace(/[^a-z0-9_]/g, "")}${stamp}`.slice(0, 24),
+    username: fixtureHandle(role, stamp),
     displayName: `E2E ${role}`,
   };
 }

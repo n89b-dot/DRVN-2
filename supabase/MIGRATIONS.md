@@ -84,40 +84,21 @@ Apply in order, after every earlier migration, **before the app from #148 serves
 
 `supabase/tests/ci_shim.sql` gains `storage.objects.updated_at` and `metadata` (hosted Storage has both). The three guards were run against a throwaway Postgres with stubbed Supabase objects, not the full chain; CI's sql-guard job runs them on the full chain.
 
-## November 7 — Cloud A blocker batches: OS-W21 OS-W23 OS-R-arrival OS-W08 OS-W11 OS-W32 OS-W33 OS-W31 OS-W34
+## November 7 — deletion scrub and username rules: OS-W34 N16 N38 (not applied anywhere)
 
 | File | Applied to |
 |---|---|
-| `20261107220000_social_write_quotas.sql` | not applied |
-| `20261107220010_car_reports_and_hiding.sql` | not applied |
-| `20261107220020_notification_prefs_private.sql` | not applied |
-| `20261107220100_garage_integrity.sql` | not applied |
-| `20261107220110_mod_sheet_lost_save.sql` | not applied |
-| `20261107220200_listing_view_arrivals.sql` | not applied |
-| `20261107220300_private_agent_chat_photos.sql` | not applied |
-| `20261107220400_account_privacy_lifecycle.sql` | not applied |
 | `20261107220500_username_rules.sql` | not applied |
 | `20261107220510_account_deletion_scrub.sql` | not applied |
 | `20261107220520_deletion_storage_message_photos.sql` | not applied |
-| `20261107220600_blocks_and_message_seller.sql` | not applied |
-| `20261107220700_withdraw_listing.sql` | not applied |
-| `20261107220800_open_beta_and_guest_holds.sql` | not applied |
 
-"Not applied" means not applied by the cloud session that wrote these (it can't reach any hosted database); whoever applies one updates its cell. Apply in version order, after every earlier migration, each with the app from the PR that added it (#95 W21, #105 W23, #109 R-arrival, #116 W08, #119 W11, #149 W34, #121 W32, #122 W33, #126 W31).
+From #149. Apply in order, after every earlier migration (they sort before `20261107220600`, which is already applied: apply them as missing files), together with the app from #149: the new worker calls `scrub_deleted_account`, and the onboarding check calls `username_available`.
 
-- **`220000`–`220020` (OS-W21):** database write quotas on social and message writes (RL429), car reports and moderation holds, notification prefs closed to other members (`my_notification_prefs()`).
-- **`220100`, `220110` (OS-W23):** `save_mod_items(uuid,jsonb,text)` replaces the two-argument one, refusing a stale sheet (40001, hint `stale_mod_sheet`); `mod_sheet_revision_if_matches` lets a lost save's retry converge; gallery and showcase caps for member writes. The app must ship with it: the old two-argument call is dropped.
-- **`220200` (OS-R-arrival):** `record_listing_view` records the arrival surface.
-- **`220300` (OS-W08):** the private `agent-chat-photos` bucket; `agent_chat_append` accepts only that bucket's authenticated URLs.
-- **`220400` (OS-W11):** suspended members keep export and deletion; `my_account_deletion_status()`. Keeps #112's fresh sign-in check in `request_account_deletion`.
-- **`220500` (OS-W34, N38):** audits and fixes existing usernames **on the data** (lowercases the unambiguous, clears the rest back to onboarding; every change in `private.username_audit`), then adds `profiles_username_format`, reserved names and tombstones. Read `private.username_audit` after applying: a cleared member chooses a new handle at onboarding.
-- **`220510` (OS-W34, N16):** `scrub_deleted_account` and the retention columns. It writes `auth.users` and `auth.identities` as a definer function: confirm on the hosted project that the migration role may update them (if not, deletions fail loudly and retry). Redefines `guard_accepted_checkout_shipping`.
-- **`220520` (OS-W34, N16):** lets the deletion worker checkpoint the member's own `message-photos` folder (`deletion_storage_tasks_bucket_check` widened). Apply with `220510`, before the app from #149: the new worker drains that bucket.
-- **`220600` (OS-W32):** `member_blocks` and the block triggers (BL403), suspended-member visibility, Message seller and the first-contact limit (RL429 with no detail).
-- **`220700` (OS-W33):** `withdraw_listing(uuid)`; deleting a listing with offers is refused (LW409).
-- **`220800` (OS-W31):** removes the invite-only beta (drops `beta_access_config` and `private.beta_signup_claims`: allow-listed for the runner in `migration-targets.json`) and caps guest holds. Ship the app from #126 with it: the old app reads the dropped beta functions.
+- **`220500` (N38):** audits and fixes existing usernames **on the data**: it lowercases the unambiguous ones and clears the rest back to onboarding, recording every change in `private.username_audit`. Then it adds `profiles_username_format` (lowercase a-z, 0-9, `_`, 3 to 30 characters), reserved names, tombstones and `username_available(text)`. Read `private.username_audit` after applying: a cleared member chooses a new handle at onboarding.
+- **`220510` (N16):** `scrub_deleted_account` (service role only) and the retention columns on `account_deletion_requests` (`email_digest`, `email_digest_key`, `scrubbed_at`, `retention_starts_at`, `retain_until`). It writes `auth.users` and `auth.identities` as a definer function: confirm on the hosted project that the migration role may update them (if not, deletions fail loudly and retry). It takes `private.account_deletion_lock_key` from `20261108130400`, so apply that first (it is). It restates `guard_accepted_checkout_shipping` from `20260905223236` (its only definition), adding only the scrub's exception for the order's own buyer.
+- **`220520` (N16):** widens `deletion_storage_tasks_bucket_check` to include `message-photos`, which the new worker drains.
 
-Guards: `social_moderation_guard`, `garage_integrity_guard`, `agent_chat_photos_guard`, `account_privacy_lifecycle_guard`, `account_deletion_scrub_guard`, `blocks_and_message_seller_guard`, `withdraw_listing_guard`, `open_beta_guest_holds_guard`. Checked on a fresh `supabase/postgres` (CI's pinned image) with the CI shim: every migration applies and every SQL guard passes.
+Guards: `account_deletion_scrub_guard.sql` (U1–U6, S1–S12; fails before these migrations: the functions don't exist) and `definer_exposure_guard.sql`. Checked on a fresh `supabase/postgres` (CI's pinned image) with the CI shim: every migration applies and every SQL guard passes.
 
 ## November 8 — Payout setup: started to sell, 14 days to finish, N244 (not applied anywhere)
 
