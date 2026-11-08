@@ -25,6 +25,7 @@ export const ADMIN_CAPABILITIES: AdminCapability[] = [
   { family: "order.", description: "Force refunds and message order parties", requires: "admin" },
   { family: "dispute.", description: "Resolve disputes, and reopen a resolved one (audited, history kept)", requires: "admin" },
   { family: "listing.", description: "Take down and restore listings", requires: "admin" },
+  { family: "car.", description: "Lift a moderation hold on a build", requires: "admin" },
   { family: "user.", description: "Suspend and unsuspend accounts", requires: "admin" },
   { family: "payments.", description: "Run workers, replay webhooks, close recoveries", requires: "admin" },
   { family: "recovery.", description: "Close payment-recovery cases", requires: "admin" },

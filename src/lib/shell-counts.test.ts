@@ -29,7 +29,12 @@ function client(prefs: unknown, unread: number) {
     query.then = (resolve: (v: unknown) => unknown) => Promise.resolve({ count: unread, error: null }).then(resolve);
     return query;
   });
-  return { supabase: { from } as unknown as SupabaseClient<Database>, calls };
+  // N62: the member's own settings come from my_notification_prefs, not the column.
+  const rpc = vi.fn((name: string) => {
+    expect(name).toBe("my_notification_prefs");
+    return Promise.resolve({ data: prefs, error: null });
+  });
+  return { supabase: { from, rpc } as unknown as SupabaseClient<Database>, calls };
 }
 
 it("N30: counts every unread notification in the database, past 1,000", async () => {
@@ -39,6 +44,8 @@ it("N30: counts every unread notification in the database, past 1,000", async ()
   // An exact count of no rows — not up to 1,000 kinds counted here.
   expect(read.select).toEqual(["id", { count: "exact", head: true }]);
   expect(read.or).toBeUndefined();
+  // The closed column is never asked for (N62).
+  expect(calls.some((c) => c.table === "profiles")).toBe(false);
 });
 
 it("leaves muted kinds out in the query itself", async () => {

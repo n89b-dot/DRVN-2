@@ -28,7 +28,7 @@ const loadProfileByUsername = cache(async (username: string) => {
   const supabase = await createClient();
   return supabase
     .from("profiles")
-    .select("id, username, display_name, headline, bio, location, links, avatar_url, profile_type, notification_prefs, payouts_enabled, main_car_id, store_note, created_at, updated_at")
+    .select("id, username, display_name, headline, bio, location, links, avatar_url, profile_type, payouts_enabled, main_car_id, store_note, created_at, updated_at")
     .eq("username", username)
     .maybeSingle();
 });

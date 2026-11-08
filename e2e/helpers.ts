@@ -166,7 +166,7 @@ export async function publishListing(
 
 /**
  * Marks a test seller as payable. The dev server runs in Stripe mode, where
- * publishing a listing is gated on `profiles.payouts_enabled` — real accounts
+ * publishing a listing is gated on payout setup (`profiles.payouts_enabled`, or details submitted, 20261108100000) — real accounts
  * earn it through Connect onboarding; test accounts get it flipped directly
  * with the service role. Keyed by username (unique, set during onboarding).
  */

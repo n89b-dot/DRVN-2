@@ -22,6 +22,7 @@ vi.mock("@/features/commerce/returns", () => ({ processReturnTimers: mocks.quiet
 vi.mock("@/lib/payments/capture-reconciliation", () => ({ reconcileCapturedPayments: mocks.quiet }));
 vi.mock("@/lib/payments/dispute-sla", () => ({ processDisputeSla: mocks.quiet }));
 vi.mock("@/lib/payments/dispute-clocks", () => ({ processDisputeClocks: mocks.quiet }));
+vi.mock("@/lib/payments/payout-deadline", () => ({ processPayoutDeadlines: mocks.quiet }));
 vi.mock("@/lib/payments/carry-payout-worker", () => ({ processCarryPayouts: mocks.quiet }));
 vi.mock("@/lib/payments/refunds", () => ({ resumeIncompleteRefunds: mocks.quiet }));
 vi.mock("@/lib/payments/reservation-expiry", () => ({ processReservationExpiries: mocks.quiet }));

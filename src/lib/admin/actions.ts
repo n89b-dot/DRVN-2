@@ -22,6 +22,8 @@ import { reportError } from "@/lib/monitoring";
 import { scheduleMediaCleanup } from "@/lib/media-lifecycle";
 import { takedownTargets } from "@/lib/copyright/notice";
 import { copyrightHosts } from "@/lib/copyright/hosts";
+import type { ReportSubjectType } from "@/lib/database.types";
+import { closeSiblingReports, outcomeForResolution, reporterNotice, type ReporterOutcome } from "./report-outcome";
 
 /**
  * Admin mutations. Every action:
@@ -96,12 +98,13 @@ async function notifyBothParties(
 /**
  * Tells a member who filed a report that it was looked at (admin-22). They
  * used to hear nothing, whatever the outcome. Best-effort: a failed
- * notification never undoes the resolution.
+ * notification never undoes the resolution. N140: the words follow what
+ * really happened — "took down" only after a takedown from this console.
  */
 async function notifyReporter(
   admin: ReturnType<typeof createAdminClient>,
   reportId: string,
-  outcome: "actioned" | "dismissed"
+  outcome: ReporterOutcome
 ) {
   const { data: report } = await admin
     .from("reports")
@@ -109,21 +112,39 @@ async function notifyReporter(
     .eq("id", reportId)
     .maybeSingle();
   if (!report?.reporter_id) return;
-  const what =
-    report.subject_type === "post" ? "post" : report.subject_type === "comment" ? "reply" : report.subject_type === "listing" ? "listing" : "member";
+  const notice = reporterNotice(report.subject_type, outcome);
   const { error } = await admin.from("notifications").insert({
     user_id: report.reporter_id,
     kind: "report_reviewed",
-    section: report.subject_type === "post" || report.subject_type === "comment" ? "engagement" : "marketplace",
-    title: "Thanks — we reviewed your report",
-    body:
-      outcome === "actioned"
-        ? `We took action on the ${what} you reported.`
-        : `We looked at the ${what} you reported and didn't find a breach of DRVN's rules.`,
+    section: notice.section,
+    title: notice.title,
+    body: notice.body,
     href: null,
     actor_id: null,
   });
   if (error) reportError("[admin] reporter notification failed", { reportId, error });
+}
+
+/** N140: a takedown settles every open report on the same thing. Closes
+ *  them and tells each reporter. Best-effort after the takedown committed:
+ *  a failure leaves them open for a human, it never undoes the removal. */
+async function settleSiblingReports(
+  ctx: { admin: ReturnType<typeof createAdminClient>; userId: string },
+  subjects: { type: ReportSubjectType; ids: string[] }[],
+  exceptReportId: string | null,
+  note: string
+) {
+  try {
+    const closed = await closeSiblingReports(ctx.admin, {
+      subjects,
+      exceptReportId,
+      adminId: ctx.userId,
+      note,
+    });
+    for (const report of closed) await notifyReporter(ctx.admin, report.id, "removed");
+  } catch (error) {
+    reportError("[admin] closing sibling reports failed", { subjects, error });
+  }
 }
 
 /** The member's own notice that their account was suspended or restored
@@ -410,6 +431,8 @@ export async function adminRemoveListing(
         return { previousStatus: listing.status };
       }
     );
+    // N140: every open report on this listing is settled by the takedown.
+    await settleSiblingReports(ctx, [{ type: "listing", ids: [listingId] }], null, `Listing removed: ${reason}`);
     revalidatePath("/admin", "layout");
     revalidatePath("/listings");
     revalidatePath(`/listings/${listingId}`);
@@ -674,7 +697,7 @@ export async function adminResolveReport(
         return {};
       }
     );
-    await notifyReporter(ctx.admin, reportId, outcome as "actioned" | "dismissed");
+    await notifyReporter(ctx.admin, reportId, outcomeForResolution(outcome as "actioned" | "dismissed"));
     revalidatePath("/admin", "layout");
     return { ok: outcome === "actioned" ? "Report actioned." : "Report dismissed." };
   } catch (error) {
@@ -751,7 +774,7 @@ export async function adminRemoveReportedContent(
   const isPost = report.subject_type === "post";
 
   try {
-    const { removed } = await auditedAction(
+    const { removed, replyIds } = await auditedAction(
       ctx.admin,
       {
         actorId: ctx.userId,
@@ -776,6 +799,10 @@ export async function adminRemoveReportedContent(
         if (snapshot.error) throw new Error(snapshot.error.message);
         const row = snapshot.data as { author_id: string; title?: string | null; body: unknown } | null;
         if (!row) throw new Error(isPost ? "That post is already gone." : "That reply is already gone.");
+        // A post's replies go with it; their open reports are settled too (N140).
+        const { data: replies } = isPost
+          ? await ctx.admin.from("activity_comments").select("id").eq("post_id", report.subject_id)
+          : { data: [] as { id: string }[] };
 
         const { error } = await ctx.admin
           .from(isPost ? "activity_posts" : "activity_comments")
@@ -804,19 +831,173 @@ export async function adminRemoveReportedContent(
           actor_id: null,
         });
         if (noteError) reportError("[admin] removal notification failed", { reportId, noteError });
-        return { removed: row };
+        return { removed: row, replyIds: (replies ?? []).map((reply) => reply.id) };
       }
     );
     // Deleting the post queued its photos (20261107203000, N51); taken-down
     // content shouldn't stay reachable by link until the daily job.
     if (isPost) scheduleMediaCleanup(removed.author_id);
-    await notifyReporter(ctx.admin, reportId, "actioned");
+    await notifyReporter(ctx.admin, reportId, "removed");
+    await settleSiblingReports(
+      ctx,
+      [
+        { type: report.subject_type, ids: [report.subject_id] },
+        { type: "comment", ids: replyIds },
+      ],
+      reportId,
+      `Removed: ${reason}`
+    );
     revalidatePath("/admin", "layout");
     revalidatePath("/home");
     revalidatePath("/explore");
     return { ok: isPost ? "Post removed; the author and the reporter were told." : "Reply removed; the author and the reporter were told." };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not remove it." };
+  }
+}
+
+/**
+ * Hides a reported build (N53, 20261107220010): the car is made private and
+ * held there — its owner can't republish it or lift the hold — with the
+ * reason shown to them on Manage. Nothing is deleted, so the hold can be
+ * lifted. Every open report on the build is settled and each reporter told.
+ */
+export async function adminHideReportedCar(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const reportId = field(formData, "report_id");
+  const reason = field(formData, "reason").slice(0, 500);
+  if (!reportId) return { error: "Missing report." };
+  if (!reason) return { error: "A reason is required — it is shown to the owner." };
+
+  const { data: report } = await ctx.admin
+    .from("reports")
+    .select("id, subject_type, subject_id, status")
+    .eq("id", reportId)
+    .maybeSingle();
+  if (!report) return { error: "Report not found." };
+  if (report.subject_type !== "car") return { error: "Only a reported build is hidden from here." };
+
+  try {
+    const { car } = await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: "report.hide_car",
+        subjectType: "report",
+        subjectId: reportId,
+        reason,
+        metadata: { subjectType: "car", subjectId: report.subject_id },
+      },
+      async () => {
+        const { data: car } = await ctx.admin
+          .from("cars")
+          .select("id, owner_id, slug, name")
+          .eq("id", report.subject_id)
+          .maybeSingle();
+        if (!car) throw new Error("That build is already gone.");
+        // The hold makes the build private and keeps it so (20261107220010).
+        const { error } = await ctx.admin
+          .from("car_moderation_holds")
+          .insert({ car_id: car.id, reason, hidden_by: ctx.userId, report_id: reportId });
+        if (error?.code === "23505") throw new Error("That build is already hidden.");
+        if (error) throw new Error(error.message);
+
+        await ctx.admin
+          .from("reports")
+          .update({
+            status: "actioned",
+            resolved_by: ctx.userId,
+            resolved_at: new Date().toISOString(),
+            resolution_note: `Hidden: ${reason}`,
+          })
+          .eq("id", reportId)
+          .eq("status", "open");
+
+        const { error: noteError } = await ctx.admin.from("notifications").insert({
+          user_id: car.owner_id,
+          kind: "car_hidden",
+          section: "engagement",
+          title: `DRVN hid your build ${car.name}`,
+          body: reason,
+          href: `/garage/${car.id}/edit`,
+          actor_id: null,
+        });
+        if (noteError) reportError("[admin] hide-car notification failed", { reportId, noteError });
+        return { car };
+      }
+    );
+    await notifyReporter(ctx.admin, reportId, "removed");
+    await settleSiblingReports(ctx, [{ type: "car", ids: [car.id] }], reportId, `Hidden: ${reason}`);
+    revalidatePath("/admin", "layout");
+    revalidatePath(`/cars/${car.slug}`);
+    revalidatePath("/explore");
+    return { ok: "Build hidden; the owner and the reporter were told." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not hide that build." };
+  }
+}
+
+/** Lifts a build's moderation hold (N53). It stays private until its owner
+ *  makes it public again, as a restored listing comes back paused. */
+export async function adminUnhideCar(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const carId = field(formData, "car_id");
+  const reportId = field(formData, "report_id");
+  const reason = field(formData, "reason");
+  // Lifted from the report that hid it, so the audit row sits with that case.
+  if (!carId || !reportId) return { error: "Missing build." };
+  if (!reason) return { error: "A reason is required — it goes in the audit log." };
+
+  try {
+    await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: "car.unhide",
+        subjectType: "report",
+        subjectId: reportId,
+        reason,
+        metadata: { subjectType: "car", subjectId: carId },
+      },
+      async () => {
+        const { data: lifted, error } = await ctx.admin
+          .from("car_moderation_holds")
+          .delete()
+          .eq("car_id", carId)
+          .select("car_id");
+        if (error) throw new Error(error.message);
+        if (!lifted?.length) throw new Error("This build isn't hidden.");
+        const { data: car } = await ctx.admin.from("cars").select("id, owner_id, name").eq("id", carId).maybeSingle();
+        if (!car) throw new Error("That build is gone.");
+        const { error: noteError } = await ctx.admin.from("notifications").insert({
+          user_id: car.owner_id,
+          kind: "car_restored",
+          section: "engagement",
+          title: `${car.name} can be public again`,
+          body: "DRVN lifted the hold. It's still private — make it public from Manage when you're ready.",
+          href: `/garage/${car.id}/edit`,
+          actor_id: null,
+        });
+        if (noteError) reportError("[admin] unhide-car notification failed", { carId, noteError });
+        return {};
+      }
+    );
+    revalidatePath("/admin", "layout");
+    return { ok: "Hold lifted (the build stays private until its owner republishes it)." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not lift the hold." };
   }
 }
 
@@ -1328,7 +1509,7 @@ export async function adminResolveReports(
         }
       );
       done += 1;
-      await notifyReporter(ctx.admin, reportId, outcome as "actioned" | "dismissed");
+      await notifyReporter(ctx.admin, reportId, outcomeForResolution(outcome as "actioned" | "dismissed"));
     } catch (error) {
       failed.push({ id: reportId, error: error instanceof Error ? error.message : "Failed." });
     }

@@ -35,6 +35,7 @@ const JOB_LABEL: Record<string, string> = {
   labelVoids: "Void unused shipping labels, register carrier tracking",
   returns: "Advance return timers",
   disputes: "Dispute deadlines and auto-refunds",
+  payoutDeadlines: "Payout setup deadline (14 days)",
   alerts: "Deliver admin alerts",
   receipts: "Send guest receipts",
   analytics: "Purchase analytics",

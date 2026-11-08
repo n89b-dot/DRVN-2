@@ -16,6 +16,7 @@ import {
   readPayoutHoldPolicy,
   readPublicRiskControls,
 } from "@/lib/payments/payout-hold";
+import { PAYOUT_SETUP_DEADLINE_DAYS } from "@/lib/payments/payout-readiness";
 import { deliveryLabel } from "@/lib/marketplace/delivery";
 import { paymentsAreLive } from "@/lib/payments/provider";
 import { createPublicClient } from "@/lib/supabase/public";
@@ -144,8 +145,12 @@ export default async function TermsPage() {
           your statement.
         </p>
         <p>
-          While live payments are on, you must finish setting up payouts with Stripe before a
-          listing can go live.
+          While live payments are on, you must start setting up payouts with Stripe — send Stripe
+          your details — before a listing can go live. You can list and sell while Stripe checks
+          those details, but you aren&apos;t paid until Stripe switches your payouts on. If it
+          still hasn&apos;t {PAYOUT_SETUP_DEADLINE_DAYS} days after a sale, any order from you
+          that hasn&apos;t been dispatched is cancelled and the buyer refunded in full, and your
+          listings are taken off sale until your payouts are on.
         </p>
 
         <h2>4. Prohibited items</h2>

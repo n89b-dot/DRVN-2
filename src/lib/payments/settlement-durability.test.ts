@@ -467,6 +467,20 @@ describe("webhook persistence failures", () => {
     ).rejects.toThrow("payable seller transfer unblock failed; retry required");
   });
 
+  it("stores setup started (details submitted) with payouts still off (N244, 20261108100000)", async () => {
+    const admin = adminWith({ data: [{ id: "seller_1" }], error: null });
+    await expect(
+      applyAccountUpdate(
+        admin as never,
+        { id: "acct_1", payouts_enabled: false, details_submitted: true } as Stripe.Account
+      )
+    ).resolves.toBe("committed");
+    const sync = admin.from.mock.results[0].value as Record<string, ReturnType<typeof vi.fn>>;
+    expect(sync.update).toHaveBeenCalledWith({ payouts_enabled: false, payout_details_submitted: true });
+    // Nothing to release: the money still waits for payouts enabled.
+    expect(admin.from).toHaveBeenCalledTimes(1);
+  });
+
   it("releases a payable seller's parked payouts at once, restricted-account backoff included (N8)", async () => {
     const admin = adminWith({ data: [{ id: "seller_1" }], error: null }, { data: [], error: null });
     await expect(

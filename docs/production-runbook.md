@@ -358,7 +358,7 @@ Every money queue is durable and visible in **Admin → Payments**:
 - **"Run worker now"** (Admin → Payments) runs the whole scheduled money
   pass — the same `runMoneyWorkerPass` behind `/api/jobs/transfers`:
   expired holds, capture checks, payouts, refunds, label voids, returns,
-  disputes, alerts, analytics and receipts. It reports what it paid out and
+  disputes, the payout setup deadline, alerts, analytics and receipts. It reports what it paid out and
   released, and names any family that failed (those retry next pass).
 - **Is anything running?** Admin → Settings → Background jobs lists each job
   family's last success and failure (`worker_health_snapshot()`, the data
