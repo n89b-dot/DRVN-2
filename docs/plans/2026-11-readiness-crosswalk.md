@@ -127,7 +127,7 @@ Notes:
 
 ## Commerce and money
 
-Proof PR: opened from `cloud/os-proof-sweep-commerce`.
+Proof PR: #101, from `cloud/os-proof-sweep-commerce`.
 
 | Item | Title | Status | Plan id / batch | PR / commit | Proving test (file › test name) |
 |---|---|---|---|---|---|
