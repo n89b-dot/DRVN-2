@@ -11,6 +11,7 @@ import { reportError } from "@/lib/monitoring";
 import { reconcileCapturedPayments } from "@/lib/payments/capture-reconciliation";
 import { processDisputeSla } from "@/lib/payments/dispute-sla";
 import { processCarryPayouts } from "@/lib/payments/carry-payout-worker";
+import { processPayoutDeadlines } from "@/lib/payments/payout-deadline";
 import { resumeIncompleteRefunds } from "@/lib/payments/refunds";
 import { processReservationExpiries } from "@/lib/payments/reservation-expiry";
 import { processDueTransfers, reconcileTransferRecords } from "@/lib/payments/transfer-worker";
@@ -32,7 +33,7 @@ export type MoneyWorkerPass = {
  * One pass of the money worker: every durable queue the money paths write
  * gets its retry heartbeat here — reservation expiries, capture
  * reconciliation, due transfers, transfer-record reconciliation, carry-forward credit payouts, abandoned
- * refunds, label voids and carrier trackers, return timers, the dispute-SLA sweep, the alert
+ * refunds, label voids and carrier trackers, return timers, the dispute-SLA sweep, the payout deadline, the alert
  * outbox, purchase analytics and receipts. Each family is recorded in
  * worker_runs, which is what /api/health/workers and the console read.
  *
@@ -72,6 +73,9 @@ export async function runMoneyWorkerPass(admin: Admin): Promise<MoneyWorkerPass>
     },
     returns: () => processReturnTimers(admin),
     disputes: () => processDisputeSla(admin),
+    // Day 14 with payouts still off: restrict, pause, refund what wasn't
+    // dispatched (20261108100000, N244).
+    payoutDeadlines: () => processPayoutDeadlines(admin, { batch: 5 }),
     alerts: () => processAlertOutbox(admin, { batch: 5 }),
     analytics: () => processPurchaseAnalytics(),
     // Order-access emails, then the auto-confirm warning for guest buyers —

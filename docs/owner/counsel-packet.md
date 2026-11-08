@@ -43,7 +43,7 @@ Where: product definition `docs/DRVN-PRD-2026-09.md`; currency
 |---|---|
 | DRVN (operator, entity TBD) | Runs the platform, holds the Stripe platform account, buys postage, decides disputes it is asked to step into |
 | Member | Account holder: email + password, or Google sign-in. Must be 18+ per the terms (not checked at signup) |
-| Seller | A member who lists parts. Must set up a Stripe Express connected account before a listing can go live while live payments are on |
+| Seller | A member who lists parts. Must start setting up a Stripe Express connected account (details sent to Stripe) before a listing can go live while live payments are on; is paid only once Stripe enables payouts (§3.5) |
 | Shop | A seller who switched their profile to "shop" (self-declared). A separate "verified" badge is granted by hand. No business or VAT details are collected |
 | Buyer | A member, or a **guest** who checks out with an email address (§7) |
 | Admin | DRVN staff in the admin console. Membership is set in the database only; admins must use two-factor sign-in. Admins can read any conversation |
@@ -140,6 +140,17 @@ buyer never confirms, it is never delivered and the seller never paid. A rule
 that marks such orders delivered N days after dispatch (with an in-app warning
 to the buyer 3 days before) is built but **off**; the owner picks N or leaves
 it off. If turned on, the terms need to say so.
+
+**Payout setup (owner ruling 8 November 2026, "go with the eBay approach, 14
+days").** A seller can list, and be bought from, once they have sent Stripe
+their details, even while Stripe is still verifying them. The payout waits
+until Stripe enables payouts and is released then. If payouts still aren't
+enabled 14 days after a sale, an order that hasn't been dispatched is
+cancelled and the buyer refunded in full, and the seller's listings come off
+sale until payouts are enabled. An order already dispatched by then isn't
+refunded; its payout keeps waiting. Whether that is right is **not yet
+ruled**. Terms §3 says the rest. Where: migration `20261108100000`,
+`docs/decisions/seller-payout-setup.md`.
 
 Where: `public.settlement_settings` and `src/lib/payments/payout-hold.ts`
 (migration `20261006100000`); auto-confirm migration `20261006100100`;
