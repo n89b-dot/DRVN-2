@@ -28,13 +28,28 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 8 — follow-up files that merged with no entry here (OS-signals record)
+
+Rows added after these merged without one, so every file has a row
+(`tests/ci/migrations-md.test.ts`). None of the PRs reported applying them;
+what each does is in the file's header comment and its PR.
+
+| File | Applied to |
+|---|---|
+| `20261108130000_guest_holds_by_request.sql` | not applied |
+| `20261108130100_social_moderation_races.sql` | not applied |
+| `20261108130300_dispute_evidence_attach_cap.sql` | not applied |
+| `20261108130500_agent_redact_skips_ids.sql` | not applied |
+
+Merged in #152, #154, #156 and #158, in that order. #152 says it needs applying to shared dev after merge.
+
 ## November 8 — audited exports, old photo metadata, storage reference report: N531, N627, N232 (not applied anywhere)
 
 | File | Applied to |
 |---|---|
-| `20261108120000_admin_export_audit.sql` | — |
-| `20261108120010_photo_metadata_scrub.sql` | — |
-| `20261108120020_storage_reference_report.sql` | — |
+| `20261108120000_admin_export_audit.sql` | not applied |
+| `20261108120010_photo_metadata_scrub.sql` | not applied |
+| `20261108120020_storage_reference_report.sql` | not applied |
 
 Apply in order, after every earlier migration, **before the app from #148 serves the console**: the new export route records every download through `record_admin_export` and refuses to send a file it can't record, so without `120000` every CSV export answers 503.
 
