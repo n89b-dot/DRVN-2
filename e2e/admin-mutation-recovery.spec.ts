@@ -1,7 +1,7 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
-import { cleanupFixtureUser, fixtureAdmin } from "./fixtures";
+import { cleanupFixtureUser, confirmAdminAuthenticator, fixtureAdmin } from "./fixtures";
 
 function totp(secret: string) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -65,7 +65,7 @@ test("admin user, report and case commands recover, persist and enforce permissi
     await expect(secret).toBeVisible();
     await page.getByLabel("Authenticator code").fill(totp((await secret.textContent())!));
     await page.getByRole("button", { name: /verify/i }).click();
-    // MFA returns to the page that asked for it (admin-verify keeps `next`).
+    await confirmAdminAuthenticator(page, admin, actorId, `/admin/users/${targetId}`);
     await expect(page).toHaveURL(new RegExp(`/admin/users/${targetId}$`));
 
     await page.goto(`/admin/listings?q=${encodeURIComponent(listingTitle)}`);

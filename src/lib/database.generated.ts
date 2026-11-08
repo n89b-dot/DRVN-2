@@ -505,6 +505,9 @@ export type Database = {
       admin_users: {
         Row: {
           created_at: string
+          mfa_confirmed_at: string | null
+          mfa_confirmed_by: string | null
+          mfa_factor_id: string | null
           note: string | null
           role: string
           sessions_valid_after: string | null
@@ -512,6 +515,9 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          mfa_confirmed_at?: string | null
+          mfa_confirmed_by?: string | null
+          mfa_factor_id?: string | null
           note?: string | null
           role?: string
           sessions_valid_after?: string | null
@@ -519,6 +525,9 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          mfa_confirmed_at?: string | null
+          mfa_confirmed_by?: string | null
+          mfa_factor_id?: string | null
           note?: string | null
           role?: string
           sessions_valid_after?: string | null
@@ -2213,6 +2222,42 @@ export type Database = {
           key?: string
           updated_at?: string
           value?: string
+        }
+        Relationships: []
+      }
+      ledger_reconciliation_runs: {
+        Row: {
+          checked: Json
+          detail: string | null
+          discrepancies: number
+          finished_at: string | null
+          id: string
+          started_at: string
+          status: string
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          checked?: Json
+          detail?: string | null
+          discrepancies?: number
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          window_end: string
+          window_start: string
+        }
+        Update: {
+          checked?: Json
+          detail?: string | null
+          discrepancies?: number
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          window_end?: string
+          window_start?: string
         }
         Relationships: []
       }
@@ -6274,9 +6319,48 @@ export type Database = {
       activity_post_search_text: { Args: { body: Json }; Returns: string }
       activity_post_visible: { Args: { p_post_id: string }; Returns: boolean }
       actor_name: { Args: { p_id: string }; Returns: string }
+      admin_audit_actor_ids: { Args: { p_query: string }; Returns: string[] }
       admin_cancel_seller_carry_payout: {
         Args: { p_id: string }
         Returns: Json
+      }
+      admin_enrolment_state: { Args: never; Returns: string }
+      admin_export_orders: {
+        Args: {
+          p_after_at?: string
+          p_after_id?: string
+          p_category?: string
+          p_from?: string
+          p_limit?: number
+          p_max_cents?: number
+          p_min_cents?: number
+          p_query?: string
+          p_status?: string
+          p_to?: string
+          p_view: string
+        }
+        Returns: {
+          buyer_display_name: string
+          buyer_id: string
+          buyer_username: string
+          created_at: string
+          currency: string
+          dispute_category: string
+          dispute_reason: string
+          dispute_resolved_at: string
+          disputed_at: string
+          id: string
+          refund_offer_cents: number
+          refunded_cents: number
+          seller_display_name: string
+          seller_id: string
+          seller_username: string
+          sort_at: string
+          status: string
+          title: string
+          total_cents: number
+          transferred: boolean
+        }[]
       }
       admin_open_agent_chat: {
         Args: {
@@ -6297,6 +6381,7 @@ export type Database = {
         Returns: Json
       }
       admin_retry_seller_carry_payout: { Args: { p_id: string }; Returns: Json }
+      admin_retry_transfer_intent: { Args: { p_order: string }; Returns: Json }
       admin_role: { Args: never; Returns: string }
       admin_set_agent_beta_step: {
         Args: { p_open: boolean; p_reason: string; p_step: string }
@@ -6314,6 +6399,15 @@ export type Database = {
       admin_set_agent_spend_limits: {
         Args: { p_global_usd: number; p_member_usd: number; p_reason: string }
         Returns: undefined
+      }
+      admin_users_page: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_query?: string
+          p_state?: string
+        }
+        Returns: Json
       }
       admit_saved_search_digest: {
         Args: {
@@ -6835,6 +6929,10 @@ export type Database = {
           p_worker: string
         }
         Returns: string
+      }
+      confirm_admin_mfa: {
+        Args: { p_confirmed_by: string; p_factor: string; p_user: string }
+        Returns: Json
       }
       consume_rate_limit: {
         Args: { p_key: string; p_limit: number; p_window: string }
@@ -8020,6 +8118,10 @@ export type Database = {
         Args: { p_bucket: string; p_path: string; p_token: string }
         Returns: boolean
       }
+      release_refused_admin_refund: {
+        Args: { p_actor: string; p_detail: string; p_operation: string }
+        Returns: Json
+      }
       release_seller_carry_payout: {
         Args: {
           p_attempts: number
@@ -8299,6 +8401,17 @@ export type Database = {
       settle_seller_cancellation: {
         Args: { p_actor: string; p_order: string; p_reason?: string }
         Returns: Json
+      }
+      settlement_hold_policy: {
+        Args: never
+        Returns: {
+          auto_confirm_after_days: number
+          auto_confirm_notice_days: number
+          card_verification_on: boolean
+          payout_hold_days: number
+          payout_hold_mode: string
+          receipt_release_after_days: number
+        }[]
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }

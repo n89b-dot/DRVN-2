@@ -16,6 +16,7 @@ import { freezeOrderShipping, hashDestination, planCartFulfillment, type Fulfill
 import { getPaymentProvider } from "@/lib/payments/provider";
 import { getStripeCustomerId } from "@/lib/payments/customers";
 import { CHARGE_OUT_OF_BOUNDS_CODE, CHECKOUT_OUT_OF_BOUNDS_MESSAGE } from "@/lib/payments/charge-bounds";
+import { PAYOUTS_NOT_READY_CODE, SELLER_CANNOT_TAKE_PAYMENT_MESSAGE } from "@/lib/payments/payout-readiness";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { capture } from "@/lib/analytics";
@@ -103,6 +104,9 @@ async function purchaseListings(
 
   if (error) {
     if (error.code === CHARGE_OUT_OF_BOUNDS_CODE) return { ...empty, error: CHECKOUT_OUT_OF_BOUNDS_MESSAGE };
+    // purchase_begin leaves out a part whose seller can't be paid; any other
+    // reservation of one is refused (20261107210000, N244).
+    if (error.code === PAYOUTS_NOT_READY_CODE) return { ...empty, error: SELLER_CANNOT_TAKE_PAYMENT_MESSAGE };
     reportError("[commerce] purchase_begin failed", { buyerId, error });
     return { ...empty, error: error.message?.includes("at most") ? error.message : "We couldn't start that purchase. Nothing was charged." };
   }

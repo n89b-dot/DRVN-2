@@ -4,6 +4,7 @@ import type Stripe from "stripe";
 const mocks = vi.hoisted(() => ({
   transferList: vi.fn(),
   transferCreate: vi.fn(),
+  accountRetrieve: vi.fn(),
   paymentIntentRetrieve: vi.fn(),
   stripeSecretKey: vi.fn(() => "sk_test_transfer"),
   adjustmentCents: vi.fn(async () => 0),
@@ -15,9 +16,14 @@ const mocks = vi.hoisted(() => ({
 vi.mock("./stripe", () => ({
   stripeClient: () => ({
     transfers: { list: mocks.transferList, create: mocks.transferCreate },
+    accounts: { retrieve: mocks.accountRetrieve },
     paymentIntents: { retrieve: mocks.paymentIntentRetrieve },
   }),
   stripeSecretKey: mocks.stripeSecretKey,
+  // The real check (stripe.ts): a 400 invalid-request refusal created nothing.
+  provablyNotCreated: (error: unknown) =>
+    (error as { rawType?: string; statusCode?: number } | null)?.rawType === "invalid_request_error" &&
+    (error as { statusCode?: number }).statusCode === 400,
 }));
 vi.mock("./adjustments", () => ({ orderAdjustmentCents: mocks.adjustmentCents }));
 vi.mock("./refunds", () => ({ reversalShareCents: mocks.reversalShareCents }));
@@ -25,8 +31,10 @@ vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
 vi.mock("@/lib/admin/alerts", () => ({ sendAdminAlert: mocks.sendAdminAlert }));
 
 import {
+  accountRestriction,
   CHARGEBACK_HOLD_REASON,
   findExistingTransfer,
+  RESTRICTED_ACCOUNT_REASON,
   processDueTransfers,
   reconcileTransferRecords,
 } from "./transfer-worker";
@@ -55,6 +63,7 @@ function transfer(overrides: Record<string, unknown> = {}): Stripe.Transfer {
 }
 
 type IntentOverrides = Partial<{
+  order_id: string;
   attempts: number;
   available_at: string | null;
   operation_key: string | null;
@@ -109,6 +118,9 @@ type RpcBehavior = Record<
 
 function fakeAdmin(options: {
   claimed?: ReturnType<typeof intent>[];
+  /** Successive claim answers (a pass claims until the queue drains); the
+   *  last repeats. Overrides `claimed`. */
+  claims?: Array<{ data?: unknown; error?: { message: string } | null }>;
   rpc?: RpcBehavior;
   order?: Record<string, unknown> | null | Array<Record<string, unknown> | null>;
   orderError?: { message: string } | null;
@@ -124,8 +136,13 @@ function fakeAdmin(options: {
   const journalFilters: unknown[] = [];
   let orderReadIndex = 0;
   let journalReadIndex = 0;
+  let claimIndex = 0;
   const rpc = vi.fn(async (name: string) => {
     if (name === "claim_transfer_intents") {
+      if (options.claims) {
+        const answer = options.claims[Math.min(claimIndex++, options.claims.length - 1)];
+        return { data: answer.data ?? [], error: answer.error ?? null };
+      }
       return { data: options.claimed ?? [], error: null };
     }
     const behavior = options.rpc?.[name];
@@ -240,6 +257,7 @@ beforeEach(() => {
   mocks.paymentIntentRetrieve.mockResolvedValue({ latest_charge: "ch_source" });
   mocks.transferCreate.mockResolvedValue(transfer());
   mocks.transferList.mockResolvedValue({ data: [], has_more: false });
+  mocks.accountRetrieve.mockReset();
 });
 
 describe("transfer reconciliation", () => {
@@ -252,11 +270,15 @@ describe("transfer reconciliation", () => {
       kind: "found",
       transferId: "tr_exact",
     });
-    expect(mocks.transferList).toHaveBeenNthCalledWith(1, { limit: 100 });
+    // Correlation scope first, read to its end.
+    expect(mocks.transferList).toHaveBeenNthCalledWith(1, { transfer_group: "pi_group", limit: 100 });
     expect(mocks.transferList).toHaveBeenNthCalledWith(2, {
+      transfer_group: "pi_group",
       limit: 100,
       starting_after: "tr_unrelated",
     });
+    // Then the destination scope.
+    expect(mocks.transferList).toHaveBeenNthCalledWith(3, { destination: "acct_seller", limit: 100 });
   });
 
   it.each([
@@ -281,7 +303,7 @@ describe("transfer reconciliation", () => {
     await expect(findExistingTransfer(dispatch)).resolves.toMatchObject({ kind: "unsafe" });
   });
 
-  it("fails closed when the identity-complete lookup reaches its bound", async () => {
+  it("fails closed when a scope is too large to read to its end", async () => {
     mocks.transferList.mockResolvedValue({
       data: Array.from({ length: 100 }, (_, index) =>
         transfer({ id: `tr_unrelated_${index}`, metadata: {} })
@@ -293,6 +315,7 @@ describe("transfer reconciliation", () => {
       kind: "unsafe",
       reason: "Transfer lookup exceeded 1000 records",
     });
+    // The basket's group never holds that many: the bound is ten pages there.
     expect(mocks.transferList).toHaveBeenCalledTimes(10);
   });
 });
@@ -1048,6 +1071,287 @@ describe("transfer record reconciliation", () => {
 
     await expect(reconcileTransferRecords(admin)).rejects.toThrow(
       "Could not verify repaired transfer intent for order-a"
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// N106: crash recovery at scale. Stripe lists newest first and supports
+// transfer_group, destination and created filters; this stand-in honours
+// them over a fixture far past the old 1,000-transfer scan.
+// ---------------------------------------------------------------------------
+
+type ListParams = {
+  limit: number;
+  starting_after?: string;
+  transfer_group?: string;
+  destination?: string;
+  created?: { gte?: number };
+};
+
+function stripeHistory(transfers: Stripe.Transfer[]) {
+  // Newest first, as Stripe returns them.
+  const ordered = [...transfers].sort((a, b) => b.created - a.created || b.id.localeCompare(a.id));
+  return async (params: ListParams) => {
+    let rows = ordered;
+    if (params.transfer_group) rows = rows.filter((t) => t.transfer_group === params.transfer_group);
+    if (params.destination) rows = rows.filter((t) => t.destination === params.destination);
+    if (params.created?.gte != null) rows = rows.filter((t) => t.created >= params.created!.gte!);
+    const start = params.starting_after ? rows.findIndex((t) => t.id === params.starting_after) + 1 : 0;
+    const page = rows.slice(start, start + params.limit);
+    return { data: page, has_more: start + params.limit < rows.length };
+  };
+}
+
+const DAY = 86_400;
+const T0 = 1_800_000_000;
+
+function filler(count: number, overrides: (index: number) => Record<string, unknown>) {
+  return Array.from({ length: count }, (_, index) =>
+    transfer({ id: `tr_fill_${index}`, created: T0 + index * 60, metadata: {}, ...overrides(index) })
+  );
+}
+
+describe("transfer recovery past 1,000 transfers (N106)", () => {
+  it("finds the exact transfer older than the platform's newest 1,000", async () => {
+    const exact = transfer({ created: T0 + 10 });
+    // 1,500 later transfers to other sellers in other baskets.
+    const later = filler(1_500, (index) => ({
+      created: T0 + 100 + index * 60,
+      destination: `acct_other_${index % 40}`,
+      transfer_group: `pi_other_${index}`,
+    }));
+    const history = stripeHistory([exact, ...later]);
+    mocks.transferList.mockImplementation(history);
+
+    // The old unscoped scan read only the newest 1,000 — the exact one is not among them.
+    const newest = await history({ limit: 1_000 });
+    expect(newest.data.some((t) => t.id === "tr_exact")).toBe(false);
+
+    await expect(findExistingTransfer(dispatch)).resolves.toEqual({ kind: "found", transferId: "tr_exact" });
+    expect(mocks.transferList).toHaveBeenCalledWith(expect.objectContaining({ transfer_group: "pi_group" }));
+  });
+
+  it("reads a busy seller's whole history since the intent and still catches a related wrong-group transfer", async () => {
+    // 1,200 transfers to the same seller after the intent; one names this
+    // order but sits in another basket's group, 1,150 deep.
+    const sellerHistory = filler(1_200, (index) => ({
+      created: T0 + index * 60,
+      transfer_group: `pi_basket_${index}`,
+      ...(index === 50 ? { metadata: { order_id: "order-a", transfer_operation: "transfer:order-a" } } : {}),
+    }));
+    mocks.transferList.mockImplementation(stripeHistory(sellerHistory));
+
+    await expect(
+      findExistingTransfer(dispatch, { createdAfter: new Date((T0 - DAY) * 1000).toISOString() })
+    ).resolves.toMatchObject({ kind: "unsafe", reason: expect.stringContaining("1 inconsistent") });
+    const destinationCalls = mocks.transferList.mock.calls.filter(([p]) => (p as ListParams).destination);
+    expect(destinationCalls.length).toBe(12);
+    // Scoped by time: nothing before the intent (less an hour) is read.
+    expect(destinationCalls[0][0]).toMatchObject({ created: { gte: T0 - DAY - 3_600 } });
+  });
+
+  it("answers absent only after reading both scopes to their ends", async () => {
+    const sellerHistory = filler(1_100, (index) => ({ created: T0 + index * 60, transfer_group: `pi_basket_${index}` }));
+    mocks.transferList.mockImplementation(stripeHistory(sellerHistory));
+    await expect(findExistingTransfer(dispatch)).resolves.toEqual({ kind: "absent" });
+    const destinationCalls = mocks.transferList.mock.calls.filter(([p]) => (p as ListParams).destination);
+    expect(destinationCalls.length).toBe(11);
+  });
+
+  it("ignores the seller's transfers from before the intent existed", async () => {
+    const old = transfer({ id: "tr_old_related", created: T0 - 10 * DAY, transfer_group: "pi_older", metadata: { order_id: "order-a" } });
+    mocks.transferList.mockImplementation(stripeHistory([old]));
+    await expect(
+      findExistingTransfer(dispatch, { createdAfter: new Date(T0 * 1000).toISOString() })
+    ).resolves.toEqual({ kind: "absent" });
+  });
+
+  it("reconciles a crashed payout among 1,500 transfers and sends it exactly once", async () => {
+    const later = filler(1_500, (index) => ({
+      created: T0 + index * 60,
+      destination: `acct_other_${index % 40}`,
+      transfer_group: `pi_other_${index}`,
+    }));
+    mocks.transferList.mockImplementation(stripeHistory(later));
+    const { admin, rpc } = fakeAdmin({ claimed: [{ ...frozenIntent(), created_at: new Date(T0 * 1000).toISOString() } as never] });
+
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ transferred: 1, failed: 0 });
+    expect(mocks.transferCreate).toHaveBeenCalledTimes(1);
+    expect(mocks.transferCreate).toHaveBeenCalledWith(expect.any(Object), { idempotencyKey: "transfer:order-a" });
+    expect(rpc).not.toHaveBeenCalledWith("record_transfer_recovery", expect.anything());
+  });
+
+  it("never sends when a scope can't be read to its end", async () => {
+    // A seller with more than 10,000 transfers since the intent.
+    mocks.transferList.mockImplementation(async (params: ListParams) =>
+      params.destination
+        ? { data: Array.from({ length: 100 }, (_, i) => transfer({ id: `tr_${params.starting_after ?? "p"}_${i}`, metadata: {}, transfer_group: "pi_x" })), has_more: true }
+        : { data: [], has_more: false }
+    );
+    const { admin, rpc } = fakeAdmin({ claimed: [frozenIntent()] });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ failed: 1 });
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith(
+      "record_transfer_recovery",
+      expect.objectContaining({ p_detail: "Transfer lookup exceeded 10000 records" })
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// N114: a pass claims until the queue is drained, with bounded concurrency.
+// ---------------------------------------------------------------------------
+
+describe("payout throughput (N114)", () => {
+  const batchOf = (count: number, offset: number) =>
+    Array.from({ length: count }, (_, i) => intent({ order_id: `order-${offset + i}` }));
+
+  it("claims again while batches come back full, then stops", async () => {
+    const { admin, rpc } = fakeAdmin({
+      claims: [{ data: batchOf(16, 0) }, { data: batchOf(16, 16) }, { data: batchOf(3, 32) }],
+    });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ transferred: 35, failed: 0 });
+    expect(rpc.mock.calls.filter(([name]) => name === "claim_transfer_intents")).toHaveLength(3);
+    expect(rpc).toHaveBeenCalledWith("claim_transfer_intents", expect.objectContaining({ p_batch: 16, p_max_attempts: 8 }));
+  });
+
+  it("stops at its round limit, leaving the rest for the next pass", async () => {
+    let offset = 0;
+    const { admin, rpc } = fakeAdmin({ claims: Array.from({ length: 10 }, () => ({ data: batchOf(16, (offset += 16)) })) });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ transferred: 96 });
+    expect(rpc.mock.calls.filter(([name]) => name === "claim_transfer_intents")).toHaveLength(6);
+  });
+
+  it("keeps at most eight payouts in flight", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    mocks.transferCreate.mockImplementation(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      inFlight -= 1;
+      return transfer();
+    });
+    const { admin } = fakeAdmin({ claims: [{ data: batchOf(16, 0) }, { data: [] }] });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ transferred: 16 });
+    expect(peak).toBe(8);
+  });
+
+  it("stops rather than spin when a row it already worked comes back", async () => {
+    const { admin, rpc } = fakeAdmin({ claims: [{ data: batchOf(16, 0) }, { data: batchOf(16, 0) }, { data: batchOf(16, 100) }] });
+    await processDueTransfers(admin);
+    expect(rpc.mock.calls.filter(([name]) => name === "claim_transfer_intents")).toHaveLength(2);
+  });
+
+  it("throws when the queue can't be reached, and keeps the work done when a later claim fails", async () => {
+    const down = fakeAdmin({ claims: [{ error: { message: "database unavailable" } }] });
+    await expect(processDueTransfers(down.admin)).rejects.toThrow("Transfer queue unavailable");
+
+    const later = fakeAdmin({ claims: [{ data: batchOf(16, 0) }, { error: { message: "database unavailable" } }] });
+    await expect(processDueTransfers(later.admin)).resolves.toMatchObject({ transferred: 16, failed: 1 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// N8: Stripe refusing a payout because the seller's account is restricted.
+// ---------------------------------------------------------------------------
+
+function stripeRefusal(code: string, statusCode = 400, rawType = "invalid_request_error") {
+  return Object.assign(new Error(`Stripe refused: ${code}`), { code, statusCode, rawType });
+}
+
+describe("a seller whose Stripe account is restricted (N8)", () => {
+  it("parks the payout as a seller-side wait without spending an attempt, and tells the seller once", async () => {
+    mocks.transferCreate.mockRejectedValue(stripeRefusal("insufficient_capabilities_for_transfer"));
+    const { admin, rpc, inserts } = fakeAdmin({ claimed: [intent({ attempts: 3 })] });
+    const before = Date.now();
+
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ blocked: 1, failed: 0 });
+    const release = (rpc.mock.calls as unknown as Array<[string, Record<string, unknown>]>).find(
+      ([name]) => name === "release_transfer_intent"
+    )![1];
+    expect(release).toMatchObject({ p_status: "blocked_unpayable", p_attempts: null });
+    expect(String(release.p_last_error)).toContain(RESTRICTED_ACCOUNT_REASON);
+    // Back in about a day (Stripe replays a refused key's answer), unless
+    // account.updated releases it sooner.
+    const retryAt = Date.parse(String(release.p_next_attempt_at));
+    expect(retryAt - before).toBeGreaterThanOrEqual(24 * 3_600_000);
+    expect(rpc).not.toHaveBeenCalledWith("record_transfer_recovery", expect.anything());
+    expect(inserts).toContainEqual({
+      table: "notifications",
+      value: expect.objectContaining({ user_id: "seller-a", kind: "payout_blocked" }),
+    });
+  });
+
+  it("doesn't tell the seller again when the payout was already parked for this", async () => {
+    mocks.transferCreate.mockRejectedValue(stripeRefusal("transfers_not_allowed"));
+    const { admin, inserts } = fakeAdmin({
+      claimed: [{ ...frozenIntent(), last_error: `${RESTRICTED_ACCOUNT_REASON} (transfers_not_allowed)` } as never],
+    });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ blocked: 1 });
+    expect(inserts.filter((row) => row.table === "notifications")).toHaveLength(0);
+  });
+
+  it("re-checks a frozen payout at Stripe first, then parks it when Stripe still refuses", async () => {
+    mocks.transferCreate.mockRejectedValue(stripeRefusal("insufficient_capabilities_for_transfer"));
+    const { admin, rpc } = fakeAdmin({ claimed: [frozenIntent()] });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ blocked: 1 });
+    expect(mocks.transferList).toHaveBeenCalled();
+    expect(mocks.transferCreate).toHaveBeenCalledWith(expect.any(Object), { idempotencyKey: "transfer:order-a" });
+    expect(rpc).toHaveBeenCalledWith("release_transfer_intent", expect.objectContaining({ p_status: "blocked_unpayable" }));
+  });
+
+  it("checks the account when a refusal has no restriction code", async () => {
+    mocks.transferCreate.mockRejectedValue(stripeRefusal("parameter_invalid_empty"));
+    mocks.accountRetrieve.mockResolvedValue({ capabilities: { transfers: "inactive" }, requirements: { disabled_reason: null } });
+    const { admin } = fakeAdmin({ claimed: [intent()] });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ blocked: 1 });
+    expect(mocks.accountRetrieve).toHaveBeenCalledWith("acct_seller");
+
+    await expect(accountRestriction(stripeRefusal("parameter_invalid_empty"), "acct_seller")).resolves.toBe(
+      "transfers capability inactive"
+    );
+    mocks.accountRetrieve.mockResolvedValue({ capabilities: { transfers: "active" }, requirements: { disabled_reason: "rejected.fraud" } });
+    await expect(accountRestriction(stripeRefusal("parameter_invalid_empty"), "acct_seller")).resolves.toBe(
+      "account disabled: rejected.fraud"
+    );
+  });
+
+  it("treats a refusal with a payable account as an unexpected failure: backoff, attempts spent", async () => {
+    mocks.transferCreate.mockRejectedValue(stripeRefusal("parameter_invalid_empty"));
+    mocks.accountRetrieve.mockResolvedValue({ capabilities: { transfers: "active" }, requirements: { disabled_reason: null } });
+    const { admin, rpc } = fakeAdmin({ claimed: [intent({ attempts: 2 })] });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ failed: 1, blocked: 0 });
+    expect(rpc).toHaveBeenCalledWith("release_transfer_intent", expect.objectContaining({ p_status: "failed", p_attempts: 3 }));
+  });
+
+  it.each([
+    ["a timeout", Object.assign(new Error("timeout"), { rawType: undefined, statusCode: undefined, code: undefined })],
+    ["a Stripe 500", stripeRefusal("insufficient_capabilities_for_transfer", 500, "api_error")],
+    ["a rate limit", stripeRefusal("rate_limit", 429, "invalid_request_error")],
+  ])("never treats %s as a restriction: the outcome is unknown", async (_label, error) => {
+    mocks.transferCreate.mockRejectedValue(error);
+    const { admin, rpc } = fakeAdmin({ claimed: [intent()] });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ failed: 1, blocked: 0 });
+    expect(mocks.accountRetrieve).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith("release_transfer_intent", expect.objectContaining({ p_status: "failed" }));
+  });
+
+  it("counts an account it can't look up as unexpected, not as a restriction", async () => {
+    mocks.transferCreate.mockRejectedValue(stripeRefusal("parameter_invalid_empty"));
+    mocks.accountRetrieve.mockRejectedValue(new Error("network"));
+    const { admin } = fakeAdmin({ claimed: [intent()] });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ failed: 1, blocked: 0 });
+  });
+
+  it("still hands an exhausted unexpected failure to an operator", async () => {
+    mocks.transferCreate.mockRejectedValue(new Error("Stripe unavailable"));
+    const { admin, rpc } = fakeAdmin({ claimed: [intent({ attempts: 7 })] });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ failed: 1 });
+    expect(rpc).toHaveBeenCalledWith(
+      "record_transfer_recovery",
+      expect.objectContaining({ p_detail: expect.stringContaining("exhausted 8 attempts") })
     );
   });
 });

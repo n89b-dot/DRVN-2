@@ -1,7 +1,7 @@
 import "server-only";
 
 import { reportError } from "@/lib/monitoring";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { adminReadClient } from "./guard";
 
 /**
  * The product identity review list (B1, 20261020120000). grow_products()
@@ -78,7 +78,7 @@ const num = (value: unknown) => (typeof value === "number" ? value : Number(valu
 const obj = (value: unknown): Json => (value && typeof value === "object" ? (value as Json) : {});
 
 export async function getProductCoverage(): Promise<ProductCoverage | null> {
-  const { data, error } = await createAdminClient()
+  const { data, error } = await (await adminReadClient())
     .from("product_grow_runs")
     .select("ran_at, result")
     // Hourly runs only look at what changed; full runs (nightly) measure.
@@ -115,7 +115,7 @@ export async function getIdentityReviews(
   scope: "open" | "closed",
   opts: { kind?: IdentityReviewKind; page?: number } = {}
 ): Promise<IdentityReviewsResult> {
-  const a = createAdminClient();
+  const a = await adminReadClient();
   const page = Math.max(0, opts.page ?? 0);
   let builder = a
     .from("product_identity_reviews")
@@ -197,7 +197,7 @@ export async function getIdentityReviews(
 
 /** Open reviews, for the console nav badge. Null when the count failed. */
 export async function countOpenIdentityReviews(): Promise<number | null> {
-  const { count, error } = await createAdminClient()
+  const { count, error } = await (await adminReadClient())
     .from("product_identity_reviews")
     .select("id", { count: "exact", head: true })
     .eq("status", "open");

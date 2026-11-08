@@ -12,7 +12,7 @@ import {
 } from "@/lib/admin/actions";
 import { OfferRound } from "@/components/commerce";
 import { getOrderDetail } from "@/lib/admin/queries";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { adminReadClient } from "@/lib/admin/guard";
 import { ORDER_STATUS_CHIP } from "@/lib/admin/presentation";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { cx, isPersonStub, personLabel, plural } from "@/lib/format";
@@ -79,9 +79,10 @@ export default async function AdminOrderPage({
   // Agent provenance (plan: admin controls 4): an order made from an offer
   // shows every round, which were the agent's, and the mandate version each
   // was made under, so "the seller didn't mean it" can be checked.
-  const { data: originOffer } = await createAdminClient().from("orders").select("origin_offer_id").eq("id", id).maybeSingle();
+  const admin = await adminReadClient();
+  const { data: originOffer } = await admin.from("orders").select("origin_offer_id").eq("id", id).maybeSingle();
   const { data: rounds } = originOffer?.origin_offer_id
-    ? await createAdminClient()
+    ? await admin
         .from("offer_rounds")
         .select("round_no, actor_role, kind, amount_cents, created_at, actor_task_id, mandate_version")
         .eq("offer_id", originOffer.origin_offer_id)

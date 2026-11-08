@@ -1,7 +1,7 @@
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
-import { cleanupFixtureUser, fixtureAdmin } from "./fixtures";
+import { cleanupFixtureUser, confirmAdminAuthenticator, fixtureAdmin } from "./fixtures";
 
 function totp(secret: string) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -76,7 +76,7 @@ test("admin creates, copies and revokes an invitation while expired links fail c
     await expect(secret).toBeVisible();
     await page.getByLabel("Authenticator code").fill(totp((await secret.textContent())!));
     await page.getByRole("button", { name: /verify/i }).click();
-    // MFA returns to the page that asked for it (admin-verify keeps `next`).
+    await confirmAdminAuthenticator(page, admin, adminUserId, "/admin/invitations");
     await expect(page).toHaveURL(/\/admin\/invitations$/);
     // The console only offers the invitation form while the gate is enforced
     // (a75180c) — with it off, anyone can join and an invitation is moot.

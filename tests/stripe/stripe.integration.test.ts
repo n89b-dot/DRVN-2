@@ -96,6 +96,10 @@ suite("Stripe test-mode integration", () => {
         const { data, error } = await raw.auth.admin.createUser({ email: `stripe-remediation-${crypto.randomUUID()}@drvn.test`, email_confirm: true });
         if (error || !data.user) throw error || new Error("Fixture account missing"); users.push(data.user.id);
       }
+      // This lane runs with real payments, so checkout needs sellers Stripe
+      // can pay (20261107210000); what Connect onboarding would have set.
+      const payable = await raw.from("profiles").update({ payouts_enabled: true }).in("id", users.slice(1));
+      if (payable.error) throw payable.error;
       const listed = await raw.from("listings").insert(users.slice(1).map((seller_id) => ({ seller_id, title: "Stripe settlement fixture", category: "engine", status: "active", price_cents: 1000, shipping_cents: 0, currency: "USD" }))).select("id");
       if (listed.error) throw listed.error;
       const begun = await admin.rpc("purchase_begin", { p_buyer_id: users[0], p_listing_ids: listed.data.map((l) => l.id), p_idempotency_key: `stripe-fixture:${crypto.randomUUID()}` });
@@ -150,6 +154,9 @@ suite("Stripe test-mode integration", () => {
         if (created.error || !created.data.user) throw created.error ?? new Error("Missing expiry user");
         users.push(created.data.user.id);
       }
+      // A seller Stripe can pay, as onboarding leaves them (20261107210000).
+      const payable = await admin.from("profiles").update({ payouts_enabled: true }).eq("id", users[1]);
+      if (payable.error) throw payable.error;
       const listing = await admin.from("listings").insert({ seller_id: users[1], title: "Stripe expiry fixture", category: "engine", status: "active", price_cents: 1200, currency: "USD" }).select("id").single();
       if (listing.error) throw listing.error;
       const begun = await admin.rpc("purchase_begin", { p_buyer_id: users[0], p_listing_ids: [listing.data.id], p_idempotency_key: `expiry:${crypto.randomUUID()}` });

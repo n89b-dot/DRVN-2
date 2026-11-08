@@ -87,12 +87,19 @@ begin
     raise exception 'Exact request replay did not return its original pending listing';
   end if;
 
-  begin
-    perform public.claim_listing_creation(request_id, repeat('b',64));
-  exception when invalid_parameter_value then
-    rejected := true;
-  end;
-  if not rejected then raise exception 'Changed payload reused a listing request'; end if;
+  -- N72: a claim with no listing behind it was refused or abandoned, so a
+  -- changed request takes it over (same listing id) instead of trapping the
+  -- form. Once its listing exists, a changed payload is refused (below).
+  replay_claim := public.claim_listing_creation(request_id, repeat('b',64));
+  if replay_claim->>'listing_id' <> first_claim->>'listing_id'
+     or (replay_claim->>'completed')::boolean
+     or (replay_claim->>'fresh')::boolean then
+    raise exception 'Changed request did not take over its unused claim';
+  end if;
+  replay_claim := public.claim_listing_creation(request_id, repeat('a',64));
+  if replay_claim->>'listing_id' <> first_claim->>'listing_id' then
+    raise exception 'Rebinding an unused claim changed its listing';
+  end if;
 
   perform set_config('request.jwt.claims',jsonb_build_object('sub',other_seller,'role','authenticated')::text,true);
   other_claim := public.claim_listing_creation(request_id, repeat('c',64));
@@ -121,6 +128,14 @@ begin
   if not (replay_claim->>'completed')::boolean then
     raise exception 'Completed request did not remain completed on replay';
   end if;
+  rejected := false;
+  begin
+    perform public.claim_listing_creation(request_id, repeat('b',64));
+  exception when invalid_parameter_value then
+    rejected := true;
+  end;
+  if not rejected then raise exception 'Changed payload reused a completed listing request'; end if;
+  rejected := false;
 
   atomic_claim := public.claim_listing_creation(atomic_request,repeat('f',64));
   saved := public.save_listing_creation(
@@ -179,6 +194,13 @@ begin
   exception when serialization_failure then rejected:=true;
   end;
   if not rejected then raise exception 'Pending replay overwrote a changed listing'; end if;
+  rejected:=false;
+  -- Its listing exists, so the request is spent: a changed payload can't take it.
+  begin
+    perform public.claim_listing_creation(changed_request,repeat('6',64));
+  exception when invalid_parameter_value then rejected:=true;
+  end;
+  if not rejected then raise exception 'Changed payload took over a request whose listing exists'; end if;
   rejected:=false;
 
   denied_claim := public.claim_listing_creation(denied_request,repeat('5',64));

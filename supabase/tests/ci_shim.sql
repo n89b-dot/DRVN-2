@@ -39,6 +39,23 @@ as $$
   select (string_to_array(name, '/'))[1 : array_length(string_to_array(name, '/'), 1) - 1];
 $$;
 
+-- Supabase Auth creates auth.mfa_factors when its service starts; the
+-- database image alone doesn't have it. Admin privilege reads it
+-- (20261107200500), so a stand-in with the columns the migrations use.
+-- The real columns are enums (auth.factor_type, auth.factor_status); the
+-- migrations compare them as text, so text columns behave the same here.
+create table if not exists auth.mfa_factors (
+  id uuid primary key,
+  user_id uuid not null,
+  friendly_name text,
+  factor_type text not null,
+  status text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  secret text
+);
+grant select on auth.mfa_factors to postgres, service_role;
+
 -- This disposable image includes legacy claim helpers. Normalize both JWT
 -- formats explicitly so fixture authentication matches the current Auth API.
 -- This file is CI-only and must never be applied to a hosted project.

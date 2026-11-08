@@ -2,7 +2,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 import { assertAccessible } from "./accessibility";
-import { cleanupFixtureUser, fixtureAdmin } from "./fixtures";
+import { cleanupFixtureUser, confirmAdminAuthenticator, fixtureAdmin } from "./fixtures";
 
 // RR-15: a provider-facing admin operation whose answer was lost blocks the
 // same action on the same record. The console lists it, an admin records
@@ -86,6 +86,7 @@ test("a stuck provider operation is listed, resolved by an admin, and stops bloc
     await expect(secret).toBeVisible();
     await page.getByLabel("Authenticator code").fill(totp((await secret.textContent())!));
     await page.getByRole("button", { name: /verify/i }).click();
+    await confirmAdminAuthenticator(page, admin, actorId, "/admin/audit");
     await expect(page).toHaveURL(/\/admin\/audit$/);
 
     const pending = page.getByRole("region", { name: "Operations that need reconciliation" });

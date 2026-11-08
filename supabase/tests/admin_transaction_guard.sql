@@ -6,7 +6,9 @@ do $$
 declare actor uuid:=gen_random_uuid(); subject uuid:=gen_random_uuid();
 begin
  insert into auth.users(id,email) values(actor,'admin-transaction-actor@example.test'),(subject,'admin-transaction-subject@example.test');
- insert into public.admin_users(user_id) values(actor);
+ -- A confirmed authenticator (20261107200500): without one no admin privilege.
+ insert into auth.mfa_factors(id, user_id, friendly_name, factor_type, status, created_at, updated_at) values (gen_random_uuid(), actor, 'guard', 'totp', 'verified', now(), now());
+ insert into public.admin_users(user_id, mfa_factor_id) select actor, id from auth.mfa_factors where user_id = actor;
  perform set_config('role','authenticated',true);
  perform set_config('request.jwt.claims',json_build_object('sub',actor,'role','authenticated','aal','aal2','amr',json_build_array(json_build_object('method','totp','timestamp',extract(epoch from now())::bigint)))::text,true);
  begin
