@@ -41,7 +41,7 @@ A whole-codebase readiness review of `main` at `c4d318f` (merge of PR #136, 8 No
 
 **The ten things that matter most**
 
-1. **#88 `main` was red for 56 minutes today and the run at HEAD had not finished when this was written.** PR #123's SQL guard updated `beta_access_config`, which PR #126 dropped; every merge from 02:16 to 03:12 UTC failed `sql-guard`. PR #136 fixed it. Treat every PR merged in that window (#126, #130, #131, #129) as merged on a red main until the run on `c4d318f` passes.
+1. **#88 `main` has had no finished green run since 02:03 UTC, and the run that would prove the fix keeps being replaced.** The 02:16 run (merge of #123) failed a non-deterministic SQL guard (#100). Every run since #126 merged at 02:37 failed because #123's new guard updated `beta_access_config`, which #126 dropped. PR #136 fixed that at 03:12, but each later merge (#135, #119, #134) replaced the queued main run before it started, so at the time of writing the only run executing predated the fix. Hold merges to `main` for about 35 minutes after the current run finishes so one run can complete. Treat #126, #129, #130, #131 and #135 as merged on a red main until it does.
 2. **#89 Three merged PRs carry P1 defects that are live on shared dev and fixed only in open follow-ups.** #123 (payout setup: dispatch fence bypass, refund queue starvation, a partial refund blocking a full one) is fixed in #134; #122 (withdrawal undoes moderation, buyer offer history 404s) in #132; #105 (stale mod-sheet overwrites) in #133. None of the three should be deployed anywhere without its follow-up.
 3. **B7 is still open:** account deletion keeps a trader's email, address and messages, and the worker returns before deleting the Stripe customer, while `src/app/(legal)/privacy/page.tsx:299` still promises saved cards are deleted. The fix is the queued batch OS-W34; PR #119 (W11) covers only suspended members' rights and the ZIP export.
 4. **B3 is still open:** there is no sales tax anywhere in the code and the Terms are still headed as an unreviewed working draft. Both are the owner's and counsel's.
@@ -151,7 +151,7 @@ Run on a clean checkout of `main` at `43aef2a` with a fresh `npm ci`, one job at
 | Lint (`eslint . --max-warnings=0`) | Pass, 0 warnings (3 Nov: 655 warnings) |
 | Unit tests (`vitest run`) | **2,494 passed, 2 failed, 8 skipped, 296 files** (3 Nov: 1,183 tests) |
 | Generated database types (`db:types:check`) | Not run locally: it needs a local Supabase on port 54322, which was stopped. CI's `sql-guard` job runs it and passed on every green main run today |
-| CI on `main` | Last fully green run: `cfd7da5` (PR #125, 02:03 UTC: verify, e2e on chromium, firefox and webkit, sql-guard, stripe-integration, secrets). `b1f532a` and `ab24753` failed `sql-guard` only (see #88). The run on `c4d318f` was pending |
+| CI on `main` | Last fully green run: `cfd7da5` (PR #125, 02:03 UTC: verify, e2e on chromium, firefox and webkit, sql-guard, stripe-integration, secrets). `b1f532a` failed `sql-guard` on a non-deterministic approval guard (#100); every run since 02:37 failed it on the dropped beta table (#88). The runs for `c4d318f` and later heads were queued or replaced |
 | Migrations from scratch | Not run locally (Docker stopped). PR #135's author ran all 262 on a fresh PostgreSQL 17 with the CI shim and every guard passed; CI's `sql-guard` does the same on every PR |
 | End-to-end (Playwright) | Not run locally. Passed on `main` at `b1f532a` on all three browsers |
 
@@ -200,9 +200,9 @@ Other 3 November items re-checked: photos after delete now queue in `media_clean
 
 ---
 
-## 5. New findings on main (88 to 99)
+## 5. New findings on main (88 to 100)
 
-**#88 `main` was red on `sql-guard` from 02:16 to 03:12 UTC (High while it lasted, Checked).** Described in section 1. Fixed by #136. What it shows: two cloud sessions merged conflicting changes (#126 dropped a table, #123 added a guard that used it) within forty minutes, and nothing before the merge caught it because each PR was green against the main it was based on. Rule to adopt: a PR that was green more than an hour ago, or that a later merge touched the same schema objects as, gets its checks rerun on current main before merging.
+**#88 `main` has been red on `sql-guard` since 02:37 UTC and no run has yet proved the fix (High while it lasts, Checked).** Described in section 1. Fixed in code by #136. What it shows: two cloud sessions merged conflicting changes (#126 dropped a table, #123 added a guard that used it) within forty minutes, and nothing before the merge caught it because each PR was green against the main it was based on; then the merge rate itself kept the proving run from starting, because a queued run in a concurrency group is replaced by the next push even with cancel-in-progress off. Rules to adopt: a PR that was green more than an hour ago, or that a later merge touched the same schema objects as, gets its checks rerun on current main before merging; and after a fix to a red main, merges pause until one main run finishes.
 
 **#89 Three merged PRs carry P1 defects fixed only in open follow-ups (High, Reported by the blockers session, titles confirmed).** #123 → #134, #122 → #132, #105 → #133. Merge the three follow-ups before anything deploys, and apply nothing from #123 to staging without #134.
 
@@ -225,6 +225,8 @@ Other 3 November items re-checked: photos after delete now queue in `media_clean
 **#98 The crosswalk cites a test that is not on main (Low, Checked).** `docs/plans/2026-11-readiness-crosswalk.md` names `tests/ci/dependency-advisories.test.ts` for B1; `tests/ci/` holds no such file. The proof-sweep PRs that add other named tests (#98, #100, #101, #103) are open, so their tests are not on `main` either.
 
 **#99 Eighty-five uncommitted design-concept files sit in the main checkout (Low, Reported by the board session).** `design-mockups/` assets and ledger changes have been uncommitted on the shared checkout for weeks and Neil never ruled on them. Commit them to a branch or discard them; a dirty shared checkout hides real changes.
+
+**#100 `supabase/tests/agent_approval_outcomes_guard.sql` is non-deterministic (Medium, Reported by the CI investigation session, log confirmed).** The `b1f532a` run on `main` failed it with "FAIL 8: a refused accept was recorded as refused /" (status refused, no owner event), the replay branch of the decide function, when nothing merged since the green run touched approvals or offers; the same guard passed on the next two finished runs. FAIL 7 does not check `replayed`, which is why the failure surfaces as FAIL 8. A flaky guard on the release gate turns every merge into a coin toss; make the guard deterministic (fix the ordering it depends on, or assert `replayed` in FAIL 7) before it costs another red main.
 
 Carried from 3 November and still open with no PR: usernames are only validated in the form (N442); transfer crash recovery only searches 1,000 transfers (N499, not re-traced today); old message photos may keep metadata (N627); the recovery plan rehearses the database but not storage files or Stripe state (N232, runbook §6 covers the database restore only); private cars' and draft listings' photos are publicly readable (N455, a decision); deploys don't wait for CI or check migrations (N528, moot until a deployment exists).
 
@@ -360,8 +362,8 @@ Everything here is outside the bug list. Status is read from the documents and c
 
 **This weekend, engineer (stabilise what merged)**
 
-1. Confirm the run on `c4d318f` is green; rerun #132 and #133 on current main; merge #134, #132, #133, #107, #119 and #94 when green. Close #135.
-2. Fix the flaky copyright test (#90) and the privacy-page sentence (#93) in one small PR.
+1. Pause merges to `main` until one run finishes green with #136 in it (about 35 minutes with no new pushes); then rerun #132 and #133 on current main and merge #132, #133, #107 and #94 when green (#134, #119 and #135 merged while this was being written).
+2. Fix the flaky copyright test (#90), the non-deterministic approval guard (#100) and the privacy-page sentence (#93) in one small PR.
 3. Apply the 30 missing migrations to staging with the runner, set staging's `job_config` rows, backfill shared dev's migration history (#91, #92).
 4. Commit the Codex queue into the repository and work it down (#95).
 5. Add a SQL guard for the job inventory's families (#96); fix the release-candidate script's beta gate once Neil rules (#94).
@@ -386,10 +388,10 @@ Everything here is outside the bug list. Status is read from the documents and c
 
 ## 9. Method and sources
 
-- Code and migrations read on a clean checkout of `main` at `43aef2a`; PR and run data from GitHub at 22:00–23:15 Eastern; `main` moved to `c4d318f` (PR #136) while this was being written.
+- Code and migrations read on a clean checkout of `main` at `43aef2a`; PR and run data from GitHub at 22:00–23:25 Eastern; `main` moved to `c4d318f` (PR #136) and then on through #135, #119 and #134 while this was being written.
 - Read-only probes of the shared dev project (`supabase_migrations.schema_migrations`, `pg_proc`, `information_schema`) and of staging through the `os_reader` role.
 - Local check suite as recorded in section 3.
 - Two independent read-only verification passes over the 3 November blockers and the owner checklist, each re-tracing the code; their file and line citations are the ones given above.
-- Written summaries from the sessions that worked on DRVN today: "Blockers and CI/GitHub Actions" (merges, migrations, Codex queue, P1 follow-ups), "Work status dashboard" (board state, cloud sessions A to G), "Supabase upgrade and staging setup" (staging facts), "DRVN Intelligence OS Milestone 1" and "Intelligence OS issue tracking alignment" (OS counts and ingestion rules), "DRVN Intelligence OS reconstruction", "Computer performance slowdown" (the worktree governor) and "Fable agent comment review" (CI proof on main).
+- Written summaries from the sessions that worked on DRVN today: "Blockers and CI/GitHub Actions" (merges, migrations, Codex queue, P1 follow-ups), "Work status dashboard" (board state, cloud sessions A to G), "Supabase upgrade and staging setup" (staging facts), "DRVN Intelligence OS Milestone 1" and "Intelligence OS issue tracking alignment" (OS counts and ingestion rules), "DRVN Intelligence OS reconstruction", "Computer performance slowdown" (the worktree governor), "Fable agent comment review" (CI proof on main) and "DRVN CI red status investigation" (the two distinct causes of today's red main).
 - The Intelligence OS Blockers API at 21:53 Eastern for the 99 open items.
 - Nothing in the project was modified other than adding this file.
