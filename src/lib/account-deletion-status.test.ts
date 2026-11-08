@@ -1,0 +1,21 @@
+import { describe, expect, it } from "vitest";
+
+import { deletionStatusNotice } from "./account-deletion-status";
+
+describe("N35 a member can see where their deletion stands", () => {
+  it("says a held request is on hold, why, and that nothing was deleted", () => {
+    const notice = deletionStatusNotice({ outcome: "temporary_financial_hold", next_action: "Finish outstanding orders, then request deletion again.", updated_at: "2026-11-07T00:00:00Z" });
+    expect(notice?.title).toBe("Your deletion request is on hold");
+    expect(notice?.body).toContain("Finish outstanding orders");
+    expect(notice?.body).toContain("Nothing has been deleted yet");
+  });
+
+  it("says when an operator has to finish it, and how to ask", () => {
+    expect(deletionStatusNotice({ outcome: "operator_attention", next_action: null, updated_at: "x" })?.body).toContain("hello@drvn.app");
+  });
+
+  it("says nothing when there is no request or it's done", () => {
+    expect(deletionStatusNotice(null)).toBeNull();
+    expect(deletionStatusNotice({ outcome: "completed", next_action: null, updated_at: "x" })).toBeNull();
+  });
+});

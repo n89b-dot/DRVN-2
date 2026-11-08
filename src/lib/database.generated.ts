@@ -8194,6 +8194,7 @@ export type Database = {
         Args: { p_car: string; p_items: Json }
         Returns: string
       }
+      my_account_deletion_status: { Args: never; Returns: Json }
       my_car_vin: { Args: { p_car: string }; Returns: string }
       my_default_offer_floor: { Args: never; Returns: number }
       my_dispute_evidence_upload_count: {

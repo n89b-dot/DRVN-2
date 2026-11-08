@@ -91,7 +91,8 @@ describe("account deletion", () => {
 
     mocks.rpc.mockResolvedValue({ data: null, error: { code: "42501", message: "Account access is suspended" } });
     const suspended = await deleteAccount({}, form({ confirm: "DELETE", current_password: "typed-now" }));
-    expect(suspended.error).toMatch(/suspended/);
+    // N39: a suspension doesn't stop a request; only a deletion underway does.
+    expect(suspended.error).toBe("Your account's deletion is already underway.");
     expect(suspended.error).not.toContain("Account access is suspended");
   });
 });

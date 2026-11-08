@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 
-import { TileHead } from "@/components/ui";
+import { Alert, TileHead } from "@/components/ui";
 import { BlockButton } from "@/features/social/block-button";
+import type { DeletionStatus } from "@/lib/account-deletion-status";
 import { AgentChatPrivacy } from "./agent-chat-privacy";
 import { AgentSection } from "./agent-section";
 import { loadAnalyticsConsent } from "./analytics-consent";
@@ -15,7 +16,6 @@ import { listSavedCards } from "@/lib/payments/customers";
 import { getPaymentProvider, paymentsAreLive } from "@/lib/payments/provider";
 import { integratedShippingEnabled } from "@/lib/shipping/provider";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
-import { Alert } from "@/components/ui";
 import { googleSignInEnabled } from "@/lib/auth-providers";
 import { authenticatedRecently, signsInWithPassword } from "@/lib/reauthentication";
 
@@ -53,6 +53,7 @@ export default async function SettingsPage({
     { count: agentChatMessages },
     claims,
     google,
+    { data: deletionStatus },
     { data: notificationPrefs },
   ] = await Promise.all([
     supabase
@@ -88,6 +89,8 @@ export default async function SettingsPage({
     // session's verified claims (no extra round trip; getViewer did the same).
     supabase.auth.getClaims().then(({ data }) => data?.claims ?? null, () => null),
     googleSignInEnabled(),
+    // N35: where an earlier deletion request stands, the member's own only.
+    supabase.rpc("my_account_deletion_status"),
     // N62: notification settings are closed to other members; the caller's
     // own come from a function that answers only for them.
     supabase.rpc("my_notification_prefs"),
@@ -158,6 +161,7 @@ export default async function SettingsPage({
           notification_prefs: notificationPrefs ?? {},
         }}
         logout={logout}
+        deletionStatus={(deletionStatus as unknown as DeletionStatus) ?? null}
         identityProof={{
           usesPassword: signsInWithPassword(claims?.app_metadata),
           google,
