@@ -25,6 +25,33 @@ baselined migration history, rehearsed restore.
      emailed link. The app is stricter: Settings verifies the current
      password, and `/login/reset` only accepts a session opened from a reset
      link within the hour.
+   - **Require the current password to change it: on.** "Secure password
+     change" exempts any session under 24 hours old, so on its own a stolen
+     fresh session can call Auth's `updateUser({ password })` directly and
+     skip both app checks. Supabase Auth's
+     `security_update_password_require_current_password` closes that: Auth
+     refuses a password change without the correct `current_password` unless
+     the session was opened from an emailed link (Auth's own recovery rule:
+     `otp`, `magiclink` or `recovery` sign-ins). Settings already sends
+     `current_password`, and the reset page uses a reset-link session, so
+     nothing in the app changes when it goes on. The CLI pinned in CI
+     (2.116.0) has no `config.toml` key for it, so set it on the hosted
+     project through the Management API (the dashboard may also show it
+     under Authentication → Providers → Email):
+
+     ```sh
+     curl -X PATCH "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth" \
+       -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" \
+       -d '{"security_update_password_require_current_password": true, "security_update_password_require_reauthentication": true}'
+     # check: GET the same URL; both fields read true
+     ```
+
+     What stays open with it on: a stolen session that was itself opened from
+     an emailed link (confirming sign-up through `/confirm`, a guest's order
+     link, a reset link) still counts as a recovery session for its whole
+     life, and Auth lets it set a password without the current one. Shorter
+     sessions narrow that: Authentication → Sessions → time-box or
+     inactivity timeout (owner's choice; a paid-plan feature).
    - **Secure email change: on** (`double_confirm_changes`): both addresses
      must confirm. The app also asks for the password, or a Google sign-in
      within ten minutes, before it requests the change or an account deletion.
