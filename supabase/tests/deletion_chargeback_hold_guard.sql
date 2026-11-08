@@ -96,7 +96,7 @@ begin
      not like 'Order ' || upper(left(done_order::text, 8)) || ' has an open bank chargeback.%' then
     raise exception 'FAIL 8: the next step does not say the order waits on the bank (OS-W11)';
   end if;
-  if not ('chargebacks' = any((select affected_data_classes from public.account_deletion_requests where user_id = buyer))) then
+  if not coalesce((select affected_data_classes @> array['chargebacks'] from public.account_deletion_requests where user_id = buyer), false) then
     raise exception 'FAIL 9: the paused case does not list chargebacks (OS-W11)';
   end if;
 
