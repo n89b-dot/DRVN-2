@@ -381,11 +381,27 @@ export type Order = {
   dispute_outcome: DisputeOutcome | null;
   /** Once-only marker for the ops webhook alert on SLA breach (migration 0022). */
   dispute_sla_alerted_at: string | null;
-  /** Status to restore on resolution — always shipped/delivered/completed. */
+  /** Status to restore on resolution: paid (a not-received case on an
+   *  undispatched order), shipped, delivered or completed. */
   pre_dispute_status: OrderStatus | null;
   /** The seller's outstanding refund offer, awaiting buyer acceptance. */
   refund_offer_cents: number | null;
   refund_offered_at: string | null;
+  /** refund_offered_at + 48 hours, set by the database (20261107210300). */
+  refund_offer_expires_at: string | null;
+  /** Frozen when the order became paid (20261107210300): the seller's
+   *  dispatch deadline and the latest delivery date (shipping orders), or the
+   *  date the item must be available (collection). */
+  dispatch_by: string | null;
+  deliver_by: string | null;
+  available_by: string | null;
+  /** Where deliver_by's transit came from: the rated quote, the documented
+   *  fallback, or 'collection'. */
+  delivery_estimate_source: string | null;
+  /** The open case's seller-response deadline (3 business days) and the
+   *  last moment either party can escalate (21 business days). */
+  dispute_respond_by: string | null;
+  dispute_escalate_until: string | null;
   /** Stripe Transfer that moved this order's net to the seller (migration 0016). */
   transfer_reference: string | null;
   transferred_at: string | null;
@@ -422,6 +438,9 @@ export type DisputeCategory =
   | "item_not_as_described"
   | "damaged_in_transit"
   | "wrong_item"
+  /** R-disputecats (20261107210300): both take the not-as-described path. */
+  | "counterfeit"
+  | "does_not_fit"
   | "other";
 
 export type OrderItem = {
@@ -905,7 +924,7 @@ export type AdminUser = {
   created_at: string;
 };
 
-export type AdminAuditSubjectType = "order" | "listing" | "user" | "report" | "dispute" | "payment" | "product_review" | "agent";
+export type AdminAuditSubjectType = "order" | "listing" | "user" | "report" | "dispute" | "payment" | "product_review" | "agent" | "copyright_notice";
 
 export type AdminAuditLogEntry = {
   id: number;
@@ -926,6 +945,8 @@ export type ReportReason =
   | "scam_or_fraud"
   | "offensive_content"
   | "wrong_category"
+  /** 20261107231002: a member's report that a listing or photo copies someone's work. */
+  | "copyright"
   | "other";
 
 export type Report = {

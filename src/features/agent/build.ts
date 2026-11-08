@@ -42,6 +42,10 @@ export async function confirmBuildChange(cardId: string): Promise<BuildChangeSta
 
   const { data: car } = await supabase.from("cars").select("id").eq("id", draft.car).eq("owner_id", user.id).maybeSingle();
   if (!car) return { error: "That car isn't in your garage any more." };
+  // N65: read the revision before the sheet, so the save can only be refused
+  // as stale, never land over a newer edit this plan didn't see.
+  const { data: revision } = await supabase.rpc("mod_sheet_revision", { p_car: car.id });
+  if (!revision) return { error: "Couldn't read your build. Try again." };
   const { data: mods, error } = await supabase
     .from("mod_items")
     .select("id, group_label, brand, product, part_number, category, confidence, raw_text, position, status, product_url, image_url, source_domain, ref_price_cents, ref_price_currency, origin")
@@ -53,7 +57,8 @@ export async function confirmBuildChange(cardId: string): Promise<BuildChangeSta
   if (plan.kind === "stale") return { error: "That part isn't on the car any more. Open the editor to make the change." };
   if (plan.kind === "saved") return { ok: "Already on your build.", sellHref: plan.sellHref };
 
-  const result = await saveModItems(car.id, plan.items as ModItemInput[]);
+  const result = await saveModItems(car.id, plan.items as ModItemInput[], revision);
+  if (result.stale) return { error: "Your build changed since this was drafted. Open the editor to make the change." };
   if (result.error) return { error: result.error };
   if (draft.kind === "build_list") {
     capture(user.id, { event: "agent_build_list_confirmed", props: { lines: Math.min(draft.lines.length, 40) } });

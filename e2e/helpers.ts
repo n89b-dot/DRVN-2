@@ -30,6 +30,8 @@ export async function signUp(page: Page, user: TestUser) {
   await page.goto("/signup");
   await page.getByLabel(/email/i).fill(user.email);
   await page.getByLabel(/^password$/i).fill(user.password);
+  // R69-age: sign-up asks for the 18+ confirmation (and onboarding then doesn't).
+  await page.getByLabel(/18 or over/i).check();
   await page.getByRole("button", { name: /sign up|create account/i }).click();
 
   // With email confirmation off, signup lands on onboarding.
@@ -164,7 +166,7 @@ export async function publishListing(
 
 /**
  * Marks a test seller as payable. The dev server runs in Stripe mode, where
- * publishing a listing is gated on `profiles.payouts_enabled` — real accounts
+ * publishing a listing is gated on payout setup (`profiles.payouts_enabled`, or details submitted, 20261108100000) — real accounts
  * earn it through Connect onboarding; test accounts get it flipped directly
  * with the service role. Keyed by username (unique, set during onboarding).
  */

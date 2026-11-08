@@ -10,7 +10,10 @@
 --         checkout skips or refuses a seller who can't be paid, including
 --         one whose payouts lapsed after publishing; no new payment starts
 --         for one whose payouts lapsed after an offer was accepted
---         (20261107210050); stub mode exempt
+--         (20261107210050); stub mode exempt. Since 20261108100000 the
+--         rule is "setup started" (details submitted); this file's unpaid
+--         seller never submitted details, so it is still refused here.
+--         The new rule is payout_setup_started_guard.sql's.
 --   N72   (claim rebinding is in listing_creation_request_guard.sql)
 --   N71   a seller's own "Mark sold" doesn't count as a sale
 --   N26   the settlement row is private; the hold policy projection is

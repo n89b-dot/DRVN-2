@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   itemsRead: vi.fn(),
   guestIdentity: vi.fn(),
   guestBuyer: vi.fn(),
+  recordAge: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -50,6 +51,7 @@ vi.mock("@/lib/checkout-key", async (importOriginal) => ({
   forgetCheckoutKey: mocks.forgetKey,
 }));
 vi.mock("./checkout-release", () => ({ releaseCartCheckout: mocks.release }));
+vi.mock("@/lib/age-confirmation-record", () => ({ recordAgeConfirmation: mocks.recordAge }));
 vi.mock("./checkout-shipping", () => ({
   freezeOrderShipping: vi.fn(),
   hashDestination: vi.fn().mockReturnValue("destination-hash"),
@@ -146,6 +148,7 @@ function checkoutForm(includeAddress = true) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.recordAge.mockResolvedValue(true);
   mocks.auth.mockResolvedValue({ data: { user: { id: "buyer-1" } } });
   mocks.beta.mockResolvedValue({ enforced: true, eligible: true });
   mocks.orderRead.mockResolvedValue({ data: pendingOfferOrder, error: null });
@@ -397,6 +400,7 @@ it("N85: a guest's lapsed attempt is not replayed either", async () => {
   mocks.replayOrdersRead.mockResolvedValue({ data: [{ id: "order-1", status: "payment_failed" }], error: null });
   const form = cartCheckoutForm();
   form.set("email", "guest@example.test");
+  form.set("age_confirmed", "yes");
   const shipping = { name: "Buyer One", line1: "10 Main Street", line2: null, city: "Detroit", postcode: "48201", country: "US", state: null, phone: null, isCollection: false };
   const lapsedKey = createHash("sha256")
     .update(JSON.stringify(["guest:browser-1", FORM_KEY, shipping, ["listing-1"]]))
@@ -706,4 +710,33 @@ it("reserves nothing when the saved Stripe customer can't be read", async () => 
   expect(result.error).toContain("Nothing was charged");
   expect(mocks.purchaseBegin).not.toHaveBeenCalled();
   expect(mocks.createPayment).not.toHaveBeenCalled();
+});
+
+// R69-age: a guest confirms 18+ before any account is made or emailed.
+it("guest checkout refuses a post without the 18+ box and creates no account", async () => {
+  mocks.auth.mockResolvedValue({ data: { user: null } });
+  mocks.beta.mockResolvedValue({ enforced: false, eligible: true });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  const form = cartCheckoutForm();
+  form.set("email", "guest@drvn.test");
+
+  await expect(checkoutCart({}, form)).resolves.toEqual({ error: "Confirm you're 18 or over to continue." });
+  expect(mocks.guestBuyer).not.toHaveBeenCalled();
+  expect(mocks.recordAge).not.toHaveBeenCalled();
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
+});
+
+it("guest checkout records the 18+ confirmation against the guest account before the order", async () => {
+  mocks.auth.mockResolvedValue({ data: { user: null } });
+  mocks.beta.mockResolvedValue({ enforced: false, eligible: true });
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  mocks.guestBuyer.mockResolvedValue({ buyer: { id: "guest-1", created: false } });
+  mocks.recordAge.mockResolvedValue(false);
+  const form = cartCheckoutForm();
+  form.set("email", "guest@drvn.test");
+  form.set("age_confirmed", "yes");
+
+  await expect(checkoutCart({}, form)).resolves.toEqual({ error: "We couldn't start that purchase. Nothing was charged." });
+  expect(mocks.recordAge).toHaveBeenCalledWith("guest-1", "guest_checkout");
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
 });

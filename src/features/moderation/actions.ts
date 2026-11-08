@@ -23,6 +23,7 @@ const REASONS: ReportReason[] = [
   "scam_or_fraud",
   "offensive_content",
   "wrong_category",
+  "copyright",
   "other",
 ];
 

@@ -22,7 +22,7 @@ Enforced by: CHECK constraints mod_items_status_check + mod_items_removed_at_agr
 
 ### Orders
 
-Enforced by: CHECK constraint (0007) + purchase RPCs + dispute paths (0014/0021)
+Enforced by: CHECK constraint (0007) + purchase RPCs + dispute paths (0014/0021) + open_order_dispute and the orders_guard_dispute finality trigger (20261107210300)
 
 | From | May move to |
 | --- | --- |
@@ -33,7 +33,7 @@ Enforced by: CHECK constraint (0007) + purchase RPCs + dispute paths (0014/0021)
 | `shipped` | `delivered` · `disputed` · `refunded` |
 | `delivered` | `completed` · `disputed` · `refunded` |
 | `completed` | `disputed` · `refunded` |
-| `disputed` | `shipped` · `delivered` · `completed` · `refunded` |
+| `disputed` | `paid` · `shipped` · `delivered` · `completed` · `refunded` |
 | `cancelled` | **terminal** |
 | `refunded` | **terminal** |
 

@@ -78,11 +78,6 @@ export function AgentChat({
   // send still in flight from before it is dropped when it answers, or the
   // deleted messages would come back (N125).
   const generation = useRef(0);
-  useAgentEvent(AGENT_CHAT_CLEARED, () => {
-    generation.current += 1;
-    attempt.current = null;
-    setMessages([]);
-  });
   const [pending, startTransition] = useTransition();
   const sent = useRef(false);
   const section = useRef<HTMLElement>(null);
@@ -99,6 +94,24 @@ export function AgentChat({
   // can't be sent.
   const [photoJob, setPhotoJob] = useState<PhotoJob | null>(null);
   const uploading = photos.some((photo) => !photo.url && !photo.error);
+
+  // A clear (N125) deletes the chat's photos from Storage, the ones waiting
+  // to send included (R81): they go from the composer too, with the job they
+  // were for, so the next message can't name a deleted photo. An upload
+  // still running finds its place gone and is left for the 48-hour sweep.
+  function dropPhotos() {
+    photosRef.current.forEach((photo) => URL.revokeObjectURL(photo.preview));
+    photosRef.current = [];
+    setPhotos([]);
+    setPhotoJob(null);
+  }
+  // Heard for a clear made here too: ClearAgentChat announces every clear.
+  useAgentEvent(AGENT_CHAT_CLEARED, () => {
+    generation.current += 1;
+    attempt.current = null;
+    setMessages([]);
+    dropPhotos();
+  });
   const ready = photos.flatMap((photo) => (photo.url ? [photo.url] : []));
 
   async function addPhotos(files: File[]) {
@@ -142,6 +155,22 @@ export function AgentChat({
     if (scroller) scroller.scrollTo({ top: scroller.scrollHeight, behavior });
     else window.scrollTo({ top: document.documentElement.scrollHeight, behavior });
   }, [messages]);
+
+  // R-audit-composer: on phones and tablets the composer is pinned above the
+  // bottom bar (02-shell.css), out of the page's flow, so the page keeps
+  // room for it at its end. Its height changes (a longer message, a topic,
+  // photos), so it is measured. The side panel's composer isn't pinned.
+  useEffect(() => {
+    const box = section.current?.querySelector<HTMLElement>(".chatbox");
+    if (!box || section.current?.closest(".sidepanel__body") || typeof ResizeObserver === "undefined") return;
+    const root = document.documentElement;
+    const observer = new ResizeObserver(() => root.style.setProperty("--agent-composer-h", `${box.offsetHeight}px`));
+    observer.observe(box);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--agent-composer-h");
+    };
+  }, []);
 
   // A send can come back pending (its first attempt is still running): ask
   // for the reply until it lands, while this chat is on screen. The request

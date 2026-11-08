@@ -6,6 +6,7 @@ import { Alert, ButtonLink, EmptyState, Foot, ObjectRow, SheetTabs, ThreadDivide
 import { ApprovalActions } from "@/features/agent/approval-actions";
 import { buyerStops } from "@/features/agent/buyer-stops";
 import { StopBuyerAgent } from "@/features/agent/stop-buyer-agent";
+import { StopNotices } from "@/features/agent/stop-notice";
 import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
 import { AGENT_ACCEPT_RULE, AGENT_FOOT } from "@/lib/agent/copy";
 import { loadAgentMode } from "@/lib/agent/member-mode";
@@ -301,106 +302,110 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
     <div className="wrap">
       <AgentHeader status={status} />
 
-      {mode !== "act" && (
-        // AG-7: the member turned it down in Settings; nothing new starts from here.
-        <Alert title={`Your agent is set to ${AGENT_MODE_LABEL[mode]}`} className="mb-6">
-          {mode === "off"
-            ? "It does nothing until you turn it back on. "
-            : "It answers and suggests, but won't negotiate or start anything for you. "}
-          <Link href="/settings#agent" className="jumplink">
-            Change it in Settings →
-          </Link>
-          {!chatOpen && (
-            <>
-              {" "}
-              Your chat with it is under{" "}
-              <Link href="/settings#privacy" className="jumplink">
-                Settings → Privacy
-              </Link>
-              , where you can clear it.
-            </>
-          )}
-        </Alert>
-      )}
+      {/* Mounted whatever the page shows, so "Stopped." outlives the row
+          its control sat on (stop-notice.tsx). */}
+      <StopNotices>
+        {mode !== "act" && (
+          // AG-7: the member turned it down in Settings; nothing new starts from here.
+          <Alert title={`Your agent is set to ${AGENT_MODE_LABEL[mode]}`} className="mb-6">
+            {mode === "off"
+              ? "It does nothing until you turn it back on. "
+              : "It answers and suggests, but won't negotiate or start anything for you. "}
+            <Link href="/settings#agent" className="jumplink">
+              Change it in Settings →
+            </Link>
+            {!chatOpen && (
+              <>
+                {" "}
+                Your chat with it is under{" "}
+                <Link href="/settings#privacy" className="jumplink">
+                  Settings → Privacy
+                </Link>
+                , where you can clear it.
+              </>
+            )}
+          </Alert>
+        )}
 
-      {nothingYet && chatOpen ? (
-        // First visit (design 08): what it does, in three groups, then the chat.
-        <section className="tile" aria-label="What your agent does">
-          <TileHead label="Your agent works for you, inside limits you set." />
-          <div className="rowlist">
-            <ObjectRow title="Selling" meta="Handles offers on your listings within your minimum and target. Turn it on from a listing." href="/listings" />
-            <ObjectRow title="Buying" meta="Negotiates a part for you up to your private max. Start it from a listing's Make an offer." href="/marketplace" />
-            <ObjectRow title="Garage" meta="Answers what fits your car and what parts sell for. Ask below." />
-          </div>
-          <p className="field__hint mt-3">Nothing to set up first. {AGENT_ACCEPT_RULE} It never messages anyone else.</p>
-        </section>
-      ) : nothingYet ? (
-        <EmptyState
-          title="Your agent works for you, inside limits you set."
-          action={
-            <ButtonLink href="/listings" variant="live">
-              Choose a listing
-            </ButtonLink>
-          }
-        >
-          Turn on “Let DRVN handle offers” on a listing: set your minimum and target, and your agent counters for you.{" "}
-          {AGENT_ACCEPT_RULE} It never messages the other side.
-        </EmptyState>
-      ) : (
-        <>
-          <SheetTabs label="What your agent is doing" tabs={tabs} initialTab={view} />
+        {nothingYet && chatOpen ? (
+          // First visit (design 08): what it does, in three groups, then the chat.
+          <section className="tile" aria-label="What your agent does">
+            <TileHead label="Your agent works for you, inside limits you set." />
+            <div className="rowlist">
+              <ObjectRow title="Selling" meta="Handles offers on your listings within your minimum and target. Turn it on from a listing." href="/listings" />
+              <ObjectRow title="Buying" meta="Negotiates a part for you up to your private max. Start it from a listing's Make an offer." href="/marketplace" />
+              <ObjectRow title="Garage" meta="Answers what fits your car and what parts sell for. Ask below." />
+            </div>
+            <p className="field__hint mt-3">Nothing to set up first. {AGENT_ACCEPT_RULE} It never messages anyone else.</p>
+          </section>
+        ) : nothingYet ? (
+          <EmptyState
+            title="Your agent works for you, inside limits you set."
+            action={
+              <ButtonLink href="/listings" variant="live">
+                Choose a listing
+              </ButtonLink>
+            }
+          >
+            Turn on “Let DRVN handle offers” on a listing: set your minimum and target, and your agent counters for you.{" "}
+            {AGENT_ACCEPT_RULE} It never messages the other side.
+          </EmptyState>
+        ) : (
+          <>
+            <SheetTabs label="What your agent is doing" tabs={tabs} initialTab={view} />
 
-          {byDay.size > 0 && (
-            <section className="mt-6 grid gap-2" aria-label="What your agent did">
-              {[...byDay.entries()].reverse().map(([label, dayEvents]) => (
-                <div key={label} className="grid gap-2">
-                  <ThreadDivider>{label}</ThreadDivider>
-                  {dayEvents.map((event) => (
-                    <ThreadEvent key={event.id} when={time(event.created_at)}>
-                      {eventLine(event)}
+            {byDay.size > 0 && (
+              <section className="mt-6 grid gap-2" aria-label="What your agent did">
+                {[...byDay.entries()].reverse().map(([label, dayEvents]) => (
+                  <div key={label} className="grid gap-2">
+                    <ThreadDivider>{label}</ThreadDivider>
+                    {dayEvents.map((event) => (
+                      <ThreadEvent key={event.id} when={time(event.created_at)}>
+                        {eventLine(event)}
+                      </ThreadEvent>
+                    ))}
+                  </div>
+                ))}
+                {pending.map((approval) => {
+                  const task = taskById.get(approval.task_id);
+                  return (
+                    <ThreadEvent key={approval.id} live>
+                      {approvalLine(approval.reason, approval.amount_cents)} on {titleOf(task?.listing_id ?? null)} · needs you
                     </ThreadEvent>
-                  ))}
-                </div>
+                  );
+                })}
+              </section>
+            )}
+          </>
+        )}
+
+        {nudges.length > 0 && (
+          // A5: listings that aren't moving, with a price a rule suggests. It
+          // opens the editor with that price filled in; nothing changes until
+          // the seller saves.
+          <section className="tile mt-6" aria-label="Worth a look">
+            <TileHead label="Worth a look" />
+            <div className="rowlist">
+              {nudges.map((nudge) => (
+                <ObjectRow
+                  key={nudge.listingId}
+                  media={{ src: nudge.image ?? undefined, alt: nudge.title }}
+                  mediaHref={`/listings/${nudge.listingId}`}
+                  title={nudge.title}
+                  meta={`${formatPrice(nudge.priceCents)} → ${formatPrice(nudge.suggestedCents)} · ${nudge.reason}`}
+                  actions={
+                    <ButtonLink href={`/listings/${nudge.listingId}/edit?suggest=${nudge.suggestedCents}`} variant="ghost">
+                      Review the price
+                    </ButtonLink>
+                  }
+                />
               ))}
-              {pending.map((approval) => {
-                const task = taskById.get(approval.task_id);
-                return (
-                  <ThreadEvent key={approval.id} live>
-                    {approvalLine(approval.reason, approval.amount_cents)} on {titleOf(task?.listing_id ?? null)} · needs you
-                  </ThreadEvent>
-                );
-              })}
-            </section>
-          )}
-        </>
-      )}
+            </div>
+          </section>
+        )}
 
-      {nudges.length > 0 && (
-        // A5: listings that aren't moving, with a price a rule suggests. It
-        // opens the editor with that price filled in; nothing changes until
-        // the seller saves.
-        <section className="tile mt-6" aria-label="Worth a look">
-          <TileHead label="Worth a look" />
-          <div className="rowlist">
-            {nudges.map((nudge) => (
-              <ObjectRow
-                key={nudge.listingId}
-                media={{ src: nudge.image ?? undefined, alt: nudge.title }}
-                mediaHref={`/listings/${nudge.listingId}`}
-                title={nudge.title}
-                meta={`${formatPrice(nudge.priceCents)} → ${formatPrice(nudge.suggestedCents)} · ${nudge.reason}`}
-                actions={
-                  <ButtonLink href={`/listings/${nudge.listingId}/edit?suggest=${nudge.suggestedCents}`} variant="ghost">
-                    Review the price
-                  </ButtonLink>
-                }
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {chatOpen && <AgentChat initial={chat} about={about} jobs={await agentStepOpen("jobs")} userId={user.id} />}
+        {chatOpen && <AgentChat initial={chat} about={about} jobs={await agentStepOpen("jobs")} userId={user.id} />}
+      </StopNotices>
 
       <Foot left={AGENT_FOOT} right={<Link href="/offers">All offers →</Link>} />
     </div>

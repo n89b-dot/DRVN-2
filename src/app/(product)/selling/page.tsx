@@ -13,7 +13,8 @@ import {
 import { ListingRow } from "@/components/commerce";
 import { formatPrice } from "@/lib/payments/fee";
 import { getSellerLedger } from "@/lib/payments/ledger";
-import { sellerCanPublish } from "@/lib/payments/connect";
+import { getPayoutSetupState } from "@/lib/payments/connect";
+import { PAYOUT_SETUP_DEADLINE_DAYS } from "@/lib/payments/payout-readiness";
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { reportError } from "@/lib/monitoring";
@@ -35,7 +36,7 @@ export default async function SellingPage() {
   const user = await getViewer();
   if (!user) redirect("/login");
 
-  const [offersCount, tallyRes, questionsRes, toShipRes, ledgerRead, canPublish, soonestRes, viewRes, recentRes] = await Promise.all([
+  const [offersCount, tallyRes, questionsRes, toShipRes, ledgerRead, payoutSetup, soonestRes, viewRes, recentRes] = await Promise.all([
     loadOffersNeedingAttention(supabase, user.id),
     supabase.rpc("seller_register_tally", { p_seller: user.id }),
     supabase.rpc("seller_open_questions", { p_seller: user.id }),
@@ -45,7 +46,7 @@ export default async function SellingPage() {
       .eq("seller_id", user.id)
       .eq("status", "paid"),
     getSellerLedger(supabase, user.id),
-    sellerCanPublish(user.id).catch(() => true),
+    getPayoutSetupState(user.id).catch(() => null),
     // H-6: the two figures that were only on Home. They ride in the same
     // round as everything else rather than waiting behind it.
     supabase
@@ -116,9 +117,10 @@ export default async function SellingPage() {
         sub="Everything selling-related in one place: what needs you first, how the stock stands, and where the money is."
       />
 
-      {/* Shown whenever publishing is blocked — test mode included, where
-          the gate is just as real — and it names money already waiting. */}
-      {!canPublish && (
+      {/* Where payout setup stands (N244, 20261108100000): publishing
+          needs it started, the money needs it finished, and 14 days after a
+          sale an unfinished setup takes the listings down. */}
+      {payoutSetup === "not_started" && (
         <Alert tone="live" title="Payouts aren't set up yet">
           {waitingCents > 0
             ? `You have ${money(waitingCents)} from sales waiting, and new listings can't go live until `
@@ -127,6 +129,28 @@ export default async function SellingPage() {
             {waitingCents > 0 ? "payouts are set up" : "set up payouts"}
           </Link>
           . Drafts still save.
+        </Alert>
+      )}
+      {payoutSetup === "verifying" && (
+        <Alert title="Stripe is checking your payout details">
+          You can list and sell meanwhile. Your sale money is paid out once Stripe switches payouts
+          on. If it still hasn&apos;t {PAYOUT_SETUP_DEADLINE_DAYS} days after a sale, an order you
+          haven&apos;t dispatched is cancelled and the buyer refunded, and your listings come down
+          until it has.{" "}
+          <Link href="/payouts" className="underline">
+            Check payouts
+          </Link>
+        </Alert>
+      )}
+      {payoutSetup === "restricted" && (
+        <Alert tone="live" title="Your listings are off sale">
+          A sale passed {PAYOUT_SETUP_DEADLINE_DAYS} days without your payouts switched on, so your
+          live listings were paused and any order you hadn&apos;t dispatched was cancelled and
+          refunded.{" "}
+          <Link href="/payouts" className="underline">
+            Finish payout setup
+          </Link>{" "}
+          and your listings come back on their own.
         </Alert>
       )}
 

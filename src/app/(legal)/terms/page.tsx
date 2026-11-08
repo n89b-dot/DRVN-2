@@ -4,6 +4,8 @@ import { Rv } from "@/components/livesheet";
 import {
   AUTO_REFUND_AFTER_DAYS,
   DISPUTE_WINDOW_DAYS,
+  ESCALATION_CLOSES_DAYS,
+  REFUND_OFFER_HOURS,
   SELLER_RESPONSE_DAYS,
 } from "@/features/commerce/disputes";
 import { RETURN_SHIP_DAYS, SELLER_INSPECT_HOURS } from "@/lib/domain/return-policy";
@@ -14,6 +16,7 @@ import {
   readPayoutHoldPolicy,
   readPublicRiskControls,
 } from "@/lib/payments/payout-hold";
+import { PAYOUT_SETUP_DEADLINE_DAYS } from "@/lib/payments/payout-readiness";
 import { deliveryLabel } from "@/lib/marketplace/delivery";
 import { paymentsAreLive } from "@/lib/payments/provider";
 import { createPublicClient } from "@/lib/supabase/public";
@@ -98,7 +101,9 @@ export default async function TermsPage() {
         <h2>2. Your account</h2>
         <p>
           You need an account to sell or post. You must be at least 18, provide accurate
-          information, and keep your sign-in details to yourself. One person, one account.
+          information, and keep your sign-in details to yourself. We ask you to confirm you&apos;re
+          18 or over when you join, when you first sign in with Google, and when you buy without an
+          account; we keep that you confirmed, never your date of birth. One person, one account.
           You&apos;re responsible for activity under your account. You can sign in with an email
           and password, or with Google where it&apos;s offered.
         </p>
@@ -141,8 +146,12 @@ export default async function TermsPage() {
           your statement.
         </p>
         <p>
-          While live payments are on, you must finish setting up payouts with Stripe before a
-          listing can go live.
+          While live payments are on, you must start setting up payouts with Stripe — send Stripe
+          your details — before a listing can go live. You can list and sell while Stripe checks
+          those details, but you aren&apos;t paid until Stripe switches your payouts on. If it
+          still hasn&apos;t {PAYOUT_SETUP_DEADLINE_DAYS} days after a sale, any order from you
+          that hasn&apos;t been dispatched is cancelled and the buyer refunded in full, and your
+          listings are taken off sale until your payouts are on.
         </p>
 
         <h2>4. Prohibited items</h2>
@@ -261,17 +270,22 @@ export default async function TermsPage() {
         </p>
         <ul>
           <li>
-            A buyer can report a problem within {DISPUTE_WINDOW_DAYS} days of delivery (no
-            deadline if it never arrived) if the item didn&apos;t arrive, arrived damaged, is
-            significantly not as described, or is the wrong item. Changing your mind isn&apos;t
-            covered unless the seller is a shop that offers change-of-mind returns.
+            A buyer can report a problem within {DISPUTE_WINDOW_DAYS} days of delivery if the item
+            arrived damaged, is significantly not as described, is counterfeit, doesn&apos;t fit
+            as listed, or is the wrong item. An item that never arrived can be reported from the
+            latest delivery date shown on the order until {DISPUTE_WINDOW_DAYS} days after it,
+            whether or not it was dispatched. Changing your mind isn&apos;t covered unless the
+            seller is a shop that offers change-of-mind returns.
           </li>
           <li>
-            The seller has {SELLER_RESPONSE_DAYS} days to respond — with a partial refund, a full
-            refund, or a return. After that the buyer can ask DRVN to step in, and DRVN reviews
-            the order record and both sides&apos; evidence and decides how the money on the order
-            moves. A problem the seller ignores is refunded automatically on day{" "}
-            {AUTO_REFUND_AFTER_DAYS}.
+            The seller has {SELLER_RESPONSE_DAYS} business days to respond — with tracking, a
+            partial or full refund, or a return. A refund offer stands for {REFUND_OFFER_HOURS}{" "}
+            hours. After that either side can ask DRVN to step in, up to {ESCALATION_CLOSES_DAYS}{" "}
+            business days after the report, and DRVN reviews the order record and both
+            sides&apos; evidence and decides how the money on the order moves. An item that never
+            arrived, with no valid tracking, is refunded in full. A problem the seller ignores is
+            refunded automatically on day {AUTO_REFUND_AFTER_DAYS}. A resolved dispute is final.
+            Business days are Monday to Friday.
           </li>
           <li>
             An agreed return must be posted with tracking within {RETURN_SHIP_DAYS} days. The seller
@@ -289,12 +303,20 @@ export default async function TermsPage() {
           legal rights buyer and seller have against each other.
         </p>
 
-        <h2>9. Your content</h2>
+        <h2 id="copyright">9. Your content and other people&apos;s copyright</h2>
         <p>
           Your photos, descriptions and build posts stay yours. By posting them you grant DRVN a
           licence to display and distribute them on the platform and in links shared elsewhere. You
           confirm you have the right to post them. A listing you sell is frozen onto the order —
           photos included — as the record of the sale, even if you later edit or delete it.
+        </p>
+        <p>
+          Don&apos;t post photos or text that someone else owns without their permission, and that
+          includes what a listing import brings in from another site. A rights holder can send us a{" "}
+          <Link href="/copyright">copyright notice</Link>. When a notice is complete we remove the
+          content wherever DRVN holds it — the one exception to the frozen order record above — and
+          tell you what was removed and why. If you think it was a mistake, reply to us with your
+          reasons. Accounts that repeatedly post other people&apos;s work are suspended.
         </p>
 
         <h2>10. Reviews</h2>
@@ -319,10 +341,16 @@ export default async function TermsPage() {
           liability that cannot lawfully be limited, including for death, personal injury or fraud.
         </p>
 
-        <h2>13. Changes</h2>
+        <h2 id="changes">13. Changes</h2>
         <p>
           We may update these terms. Material changes will be announced in the app before they take
-          effect, and continuing to use DRVN afterwards means you accept them.
+          effect — every member gets a notification linking here — and the date at the top changes.
+          Continuing to use DRVN afterwards means you accept them.
+        </p>
+        <p>
+          <strong>7 November 2026:</strong> new members confirm they&apos;re 18 or over (section
+          2), and rights holders can send a copyright notice, which can remove content from orders
+          too (section 9).
         </p>
 
         <h2>14. Contact</h2>

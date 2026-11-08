@@ -23,7 +23,7 @@ export type AdminCapability = {
 
 export const ADMIN_CAPABILITIES: AdminCapability[] = [
   { family: "order.", description: "Force refunds and message order parties", requires: "admin" },
-  { family: "dispute.", description: "Resolve disputes", requires: "admin" },
+  { family: "dispute.", description: "Resolve disputes, and reopen a resolved one (audited, history kept)", requires: "admin" },
   { family: "listing.", description: "Take down and restore listings", requires: "admin" },
   { family: "user.", description: "Suspend and unsuspend accounts", requires: "admin" },
   { family: "payments.", description: "Run workers, replay webhooks, close recoveries", requires: "admin" },
@@ -34,6 +34,7 @@ export const ADMIN_CAPABILITIES: AdminCapability[] = [
   { family: "invitation.", description: "Issue and revoke beta invitations", requires: "admin" },
   { family: "operation.", description: "Record the outcome of a provider operation that lost its answer", requires: "admin" },
   { family: "product.", description: "Decide product identity: merge, keep separate, dismiss", requires: "admin" },
+  { family: "copyright.", description: "Act on copyright notices: take content down, or close with no action", requires: "admin" },
   { family: "agent.", description: "Pause and resume the agent: everyone, one side, one member, mandate, listing or account", requires: "admin" },
 ];
 

@@ -10,8 +10,13 @@ import {
 import {
   DISPUTE_CATEGORIES,
   DISPUTE_WINDOW_DAYS,
+  ESCALATION_CLOSES_DAYS,
+  REFUND_OFFER_HOURS,
   SELLER_RESPONSE_DAYS,
+  disputeCategoriesFor,
 } from "@/features/commerce/disputes";
+import { addBusinessDays } from "@/lib/domain/business-days";
+import { pickupHandoffState } from "@/lib/domain/pickup-handoff";
 import { fitmentLabel, readCommercialSnapshot } from "@/features/commerce/snapshot";
 import { signEvidenceUrls } from "@/lib/evidence-urls";
 import { formatPrice } from "@/lib/payments/fee";
@@ -104,6 +109,26 @@ export default async function OrderDetailPage({
     : null;
   // Computed here, not in JSX — `new Date()`, the purity lint's house pattern.
   const reportWindowClosed = Boolean(reportClosesAt && reportClosesAt.getTime() < new Date().getTime());
+
+  // N6 (20261107210300): "item never arrived" on an order not yet dispatched
+  // (or, for collection, not yet handed over) opens at the latest delivery
+  // date — or the availability deadline — frozen at purchase, for 30 days.
+  // open_order_dispute re-checks it all.
+  const notReceivedOpensAt = order.is_collection
+    ? (order.available_by ? new Date(order.available_by) : null)
+    : order.deliver_by
+      ? new Date(order.deliver_by)
+      : null;
+  const notReceivedClosesAt = notReceivedOpensAt
+    ? new Date(notReceivedOpensAt.getTime() + DISPUTE_WINDOW_DAYS * 86_400_000)
+    : null;
+  const nowMs = new Date().getTime();
+  const notReceivedOpen = Boolean(
+    notReceivedOpensAt &&
+      notReceivedClosesAt &&
+      nowMs >= notReceivedOpensAt.getTime() &&
+      nowMs <= notReceivedClosesAt.getTime(),
+  );
 
   const counterpartyId = isBuyer ? order.seller_id : order.buyer_id;
   // C-1: the buyer's own cars are offered only once the part has arrived.
@@ -313,37 +338,54 @@ export default async function OrderDetailPage({
     (isBuyer ? order.seller_label : order.buyer_label) ??
     "DRVN member";
 
-  // Escalation gate (0024): seller-response window passed, no live offer, not
-  // already escalated. Computed here, not in JSX — render stays pure.
+  // The case's clocks, frozen when it opened (20261107210300): the seller's
+  // 3 business days, then escalation by either side until 21 business days.
+  // Legacy cases count from disputed_at. Computed here, not in JSX — render
+  // stays pure (`new Date()`, the purity lint's house pattern).
+  const sellerResponseDueBy = order.dispute_respond_by
+    ? new Date(order.dispute_respond_by)
+    : order.disputed_at
+      ? addBusinessDays(new Date(order.disputed_at), SELLER_RESPONSE_DAYS)
+      : null;
+  const escalationClosesAt = order.dispute_escalate_until
+    ? new Date(order.dispute_escalate_until)
+    : order.disputed_at
+      ? addBusinessDays(new Date(order.disputed_at), ESCALATION_CLOSES_DAYS)
+      : null;
+  const sellerResponseOverdue = Boolean(
+    sellerResponseDueBy && nowMs > sellerResponseDueBy.getTime(),
+  );
+  // N92: an offer stands for 48 hours; an expired one is no offer at all.
+  const offerExpiresAt = order.refund_offer_expires_at ? new Date(order.refund_offer_expires_at) : null;
+  const liveOffer = Boolean(
+    order.refund_offer_cents && (!order.refund_offered_at || (offerExpiresAt && offerExpiresAt.getTime() > nowMs)),
+  );
+  // Escalation gate (escalate_order_dispute re-checks all of it): either
+  // party, inside the window, not already escalated; the buyer waits out a
+  // live offer.
   const canEscalate =
-    isBuyer &&
+    (isBuyer || isSeller) &&
     order.status === "disputed" &&
     !order.dispute_escalated_at &&
-    !order.refund_offer_cents &&
-    Boolean(order.disputed_at) &&
-    // `new Date()` not `Date.now()` — the purity lint's house pattern.
-    new Date().getTime() - new Date(order.disputed_at!).getTime() >
-      SELLER_RESPONSE_DAYS * 86_400_000;
-
-  // Seller-response deadline (0024/0021), for the same reason canEscalate is
-  // computed here rather than in JSX — `new Date()` not `Date.now()`, the
-  // purity lint's house pattern.
-  const sellerResponseDueBy = order.disputed_at
-    ? new Date(
-        new Date(order.disputed_at).getTime() +
-          SELLER_RESPONSE_DAYS * 86_400_000,
-      )
-    : null;
-  const sellerResponseOverdue = Boolean(
-    sellerResponseDueBy && new Date().getTime() > sellerResponseDueBy.getTime(),
-  );
+    sellerResponseOverdue &&
+    Boolean(escalationClosesAt && nowMs <= escalationClosesAt.getTime()) &&
+    !(isBuyer && liveOffer);
+  // A not-received case on an order never dispatched: the seller can still
+  // dispatch (or make a collection available) while it is open.
+  const caseBeforeDispatch = order.status === "disputed" && order.pre_dispute_status === "paid";
+  // The pass and the scan during a case follow the same rule as the scan page
+  // and pickup_redeem. The chargeback part is the database's: a pass it
+  // refuses says so on mint or redemption.
+  const caseHandoffOpen =
+    caseBeforeDispatch && pickupHandoffState(order, { chargebackOpen: false }) === "redeemable";
 
   // Stripe sent the buyer back before its webhook settled the order: the
   // money is on its way, so don't ask them to pay again.
   const confirmingPayment = Boolean(processing) && isBuyer && order.status === "pending";
   const action = confirmingPayment ? "Confirming your payment" : nextAction(order, isSeller);
   const canFinishCheckout = isBuyer && order.status === "pending" && !confirmingPayment;
-  const canDispatch = isSeller && order.status === "paid" && !order.is_collection;
+  const canDispatch =
+    isSeller && (order.status === "paid" || caseBeforeDispatch) && !order.is_collection;
   // Money only moved once the order was paid. An unpaid or failed checkout,
   // or one cancelled before payment, charged nobody and pays nobody out.
   const moneyMoved =
@@ -883,6 +925,11 @@ export default async function OrderDetailPage({
           {isSeller && order.status === "paid" && order.is_collection && (
             <Rv className="tile" stagger={3}>
               <span className="microlabel microlabel--ink">Pickup</span>
+              {!order.pickup_ready_at && order.available_by && (
+                <p className="spec-note">
+                  Make it available by {new Date(order.available_by).toLocaleDateString()}.
+                </p>
+              )}
               <div className="mt-3">
                 {order.pickup_ready_at ? (
                   <RedeemPickupForm orderId={id} />
@@ -893,8 +940,29 @@ export default async function OrderDetailPage({
             </Rv>
           )}
 
+          {/* A not-received case on a collection never handed over: making
+              it available and the handoff itself both stay possible; the
+              case stays open (pickup_mint_pass / pickup_redeem). */}
+          {isSeller && caseBeforeDispatch && order.is_collection && (
+            <Rv className="tile" stagger={3}>
+              <span className="microlabel microlabel--ink">Pickup</span>
+              <p className="spec-note">
+                {order.pickup_ready_at
+                  ? "The buyer reported it never arrived. Scan their Pickup Pass at handoff — the case stays open until it's closed."
+                  : "The buyer reported it never arrived. Make it available now, or offer a refund in the dispute below."}
+              </p>
+              <div className="mt-3">
+                {caseHandoffOpen ? (
+                  <RedeemPickupForm orderId={id} />
+                ) : (
+                  <ReadyForPickupButton orderId={id} />
+                )}
+              </div>
+            </Rv>
+          )}
+
           {isBuyer &&
-            order.status === "paid" &&
+            (order.status === "paid" || caseHandoffOpen) &&
             order.is_collection &&
             order.pickup_ready_at && (
               <Rv className="tile" stagger={3}>
@@ -908,8 +976,20 @@ export default async function OrderDetailPage({
           {canDispatch && (
             <Rv id="dispatch" className="tile jumptarget" stagger={3}>
               <span className="microlabel microlabel--ink">Dispatch</span>
+              {order.status === "disputed" ? (
+                <p className="spec-note">
+                  The buyer reported it never arrived. Add tracking now, or offer a refund in the
+                  dispute below — the case stays open either way.
+                </p>
+              ) : (
+                order.dispatch_by && (
+                  <p className="spec-note">
+                    Dispatch by {new Date(order.dispatch_by).toLocaleDateString()}.
+                  </p>
+                )
+              )}
               <div className="mt-3 grid gap-4">
-                {pendingLabel && (
+                {pendingLabel && order.status === "paid" && (
                   <BuyLabelPanel
                     orderId={id}
                     quotedCents={pendingLabel.quoted_cents}
@@ -966,6 +1046,42 @@ export default async function OrderDetailPage({
               <div className="mt-3">
                 <ReceivedButton orderId={id} />
               </div>
+            </Rv>
+          )}
+
+          {isBuyer && order.status === "paid" && (
+            <Rv className="tile" stagger={4}>
+              <span className="microlabel microlabel--ink">Hasn&apos;t arrived?</span>
+              {notReceivedOpen && notReceivedClosesAt ? (
+                <>
+                  <p className="spec-note">
+                    {order.is_collection
+                      ? order.pickup_ready_at
+                        ? "It still hasn't been handed over."
+                        : "The seller hasn't made it available in time."
+                      : "It's past the latest delivery date."}{" "}
+                    You can report it never arrived until {notReceivedClosesAt.toLocaleDateString()}.
+                    The seller then has {SELLER_RESPONSE_DAYS} business days to add tracking or
+                    refund you.{" "}
+                    <Link href="/protection" className="jumplink">
+                      How protection works
+                    </Link>
+                  </p>
+                  <div className="mt-3">
+                    <ReportProblemForm orderId={id} categories={disputeCategoriesFor("undispatched")} />
+                  </div>
+                </>
+              ) : notReceivedOpensAt && nowMs < notReceivedOpensAt.getTime() ? (
+                <p className="spec-note">
+                  {order.is_collection ? "The seller should make it available by " : "It should arrive by "}
+                  {notReceivedOpensAt.toLocaleDateString()}. If it hasn&apos;t, you can report it
+                  from then.
+                </p>
+              ) : (
+                <p className="spec-note">
+                  The window to report it never arrived has closed. Message the seller below.
+                </p>
+              )}
             </Rv>
           )}
 
@@ -1048,8 +1164,15 @@ export default async function OrderDetailPage({
               {sellerResponseDueBy && !order.dispute_escalated_at && (
                 <p className="spec-note">
                   {sellerResponseOverdue
-                    ? `Seller response was due ${sellerResponseDueBy.toLocaleDateString()} — ${isBuyer ? "you can now ask DRVN to step in." : "the buyer can now ask DRVN to step in."}`
-                    : `Seller response due by ${sellerResponseDueBy.toLocaleDateString()}. Escalation to DRVN opens after that.`}
+                    ? `Seller response was due ${sellerResponseDueBy.toLocaleDateString()} — either side can ask DRVN to step in${escalationClosesAt ? ` until ${escalationClosesAt.toLocaleDateString()}` : ""}.`
+                    : `Seller response due by ${sellerResponseDueBy.toLocaleDateString()} (${SELLER_RESPONSE_DAYS} business days). Escalation to DRVN opens after that.`}
+                </p>
+              )}
+              {caseBeforeDispatch && order.dispute_category === "item_not_received" && (
+                <p className="spec-note">
+                  {isBuyer
+                    ? "If the seller hasn't added valid tracking by then, asking DRVN to step in refunds you in full."
+                    : "Without valid tracking by then, DRVN refunds the buyer in full when the case is escalated."}
                 </p>
               )}
 
@@ -1101,12 +1224,15 @@ export default async function OrderDetailPage({
                 <DisputeEvidenceForm orderId={id} userId={user.id} />
               </div>
 
-              {order.refund_offer_cents ? (
+              {order.refund_offer_cents && liveOffer ? (
                 <div className="mt-3 grid gap-2">
                   <p className="spec-note">
                     {isBuyer
                       ? `The seller offered a refund of ${formatPrice(order.refund_offer_cents)}.`
                       : `You offered a refund of ${formatPrice(order.refund_offer_cents)} — waiting on the buyer.`}
+                    {offerExpiresAt
+                      ? ` The offer expires ${offerExpiresAt.toLocaleString()} (${REFUND_OFFER_HOURS} hours).`
+                      : ""}
                   </p>
                   {isBuyer && (
                     <AcceptRefundButton
@@ -1123,8 +1249,9 @@ export default async function OrderDetailPage({
                       totalCents={order.total_cents}
                     />
                     {/* §25: the third resolution — item back first, refund
-                        after. Hidden once an RMA is already running. */}
-                    {!activeReturn && (
+                        after. Hidden once an RMA is already running, and
+                        when nothing was ever sent to come back. */}
+                    {!activeReturn && !caseBeforeDispatch && (
                       <ProposeReturnForm
                         orderId={id}
                         items={(items ?? []).map((item) => ({
@@ -1144,8 +1271,9 @@ export default async function OrderDetailPage({
               {canEscalate && (
                 <div className="mt-3">
                   <p className="spec-note">
-                    The seller has had {SELLER_RESPONSE_DAYS} days — you can
-                    bring DRVN in.
+                    {isBuyer
+                      ? `The seller has had ${SELLER_RESPONSE_DAYS} business days — you can bring DRVN in.`
+                      : "You can bring DRVN in to decide this case."}
                   </p>
                   <EscalateDisputeButton orderId={id} />
                 </div>

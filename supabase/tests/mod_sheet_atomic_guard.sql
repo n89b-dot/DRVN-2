@@ -1,6 +1,11 @@
 -- Transactional/idempotent modification-sheet guard. Disposable local DB only.
 begin;
 
+-- save_mod_items takes the revision the editor loaded (N65, 20261107220100).
+-- These checks are about what one save does, so each passes the current one.
+create function pg_temp.save_sheet(p_car uuid, p_items jsonb) returns jsonb
+language sql as $$ select public.save_mod_items(p_car, p_items, public.mod_sheet_revision(p_car)) $$;
+
 create or replace function pg_temp.reject_mod_write()
 returns trigger language plpgsql as $$
 begin
@@ -26,10 +31,10 @@ declare
   initial_payload jsonb;
   rejected boolean := false;
 begin
-  if (select prosecdef from pg_proc where oid = 'public.save_mod_items(uuid,jsonb)'::regprocedure) then
+  if (select prosecdef from pg_proc where oid = 'public.save_mod_items(uuid,jsonb,text)'::regprocedure) then
     raise exception 'Modification sheet function bypasses caller RLS';
   end if;
-  if has_function_privilege('anon', 'public.save_mod_items(uuid,jsonb)', 'execute') then
+  if has_function_privilege('anon', 'public.save_mod_items(uuid,jsonb,text)', 'execute') then
     raise exception 'Anonymous callers can save modification sheets';
   end if;
 
@@ -64,8 +69,8 @@ begin
     json_build_object('sub', owner_id, 'role', 'authenticated')::text,
     true
   );
-  perform public.save_mod_items(v_car_id, initial_payload);
-  perform public.save_mod_items(v_car_id, initial_payload);
+  perform pg_temp.save_sheet(v_car_id, initial_payload);
+  perform pg_temp.save_sheet(v_car_id, initial_payload);
 
   perform set_config('role', 'none', true);
   if (select count(*) from public.mod_items where car_id = v_car_id) <> 2 then
@@ -85,7 +90,7 @@ begin
     true
   );
   begin
-    perform public.save_mod_items(
+    perform pg_temp.save_sheet(
       v_car_id,
       jsonb_build_array(
         jsonb_build_object(
@@ -118,7 +123,7 @@ begin
     true
   );
   begin
-    perform public.save_mod_items(v_car_id, initial_payload);
+    perform pg_temp.save_sheet(v_car_id, initial_payload);
   exception when insufficient_privilege then
     rejected := true;
   end;
@@ -172,7 +177,7 @@ begin
     jsonb_build_object('id', replaced_id, 'group_label', 'Other', 'brand', 'Guard', 'product', 'Original'),
     jsonb_build_object('id', doomed_id, 'group_label', 'Other', 'brand', 'Guard', 'product', 'Doomed')
   );
-  perform public.save_mod_items(v_car_id, function_payload);
+  perform pg_temp.save_sheet(v_car_id, function_payload);
 
   perform set_config('role', 'none', true);
   if exists (select 1 from public.mod_items where car_id = v_car_id and status <> 'installed') then
@@ -193,7 +198,7 @@ begin
     json_build_object('sub', owner_id, 'role', 'authenticated')::text,
     true
   );
-  perform public.save_mod_items(v_car_id, jsonb_build_array(
+  perform pg_temp.save_sheet(v_car_id, jsonb_build_array(
     jsonb_build_object('id', kept_id, 'group_label', 'Other', 'brand', 'Guard', 'product', 'Kept'),
     jsonb_build_object('id', fresh_id, 'group_label', 'Other', 'brand', 'Guard', 'product', 'Replacement'),
     jsonb_build_object('id', replaced_id, 'group_label', 'Other', 'brand', 'Guard',
@@ -225,7 +230,7 @@ begin
     json_build_object('sub', owner_id, 'role', 'authenticated')::text,
     true
   );
-  perform public.save_mod_items(v_car_id, jsonb_build_array(
+  perform pg_temp.save_sheet(v_car_id, jsonb_build_array(
     jsonb_build_object('id', kept_id, 'group_label', 'Other', 'brand', 'Guard', 'product', 'Kept'),
     jsonb_build_object('id', fresh_id, 'group_label', 'Other', 'brand', 'Guard', 'product', 'Replacement'),
     jsonb_build_object('id', replaced_id, 'group_label', 'Other', 'brand', 'Guard',
@@ -247,7 +252,7 @@ begin
     true
   );
   begin
-    perform public.save_mod_items(v_car_id, jsonb_build_array(
+    perform pg_temp.save_sheet(v_car_id, jsonb_build_array(
       jsonb_build_object('id', kept_id, 'group_label', 'Other', 'brand', 'Guard',
                          'product', 'Kept', 'ref_price_cents', 12000)
     ));
@@ -259,7 +264,7 @@ begin
   -- An unknown state is refused outright rather than silently installed.
   rejected := false;
   begin
-    perform public.save_mod_items(v_car_id, jsonb_build_array(
+    perform pg_temp.save_sheet(v_car_id, jsonb_build_array(
       jsonb_build_object('id', kept_id, 'group_label', 'Other', 'brand', 'Guard',
                          'product', 'Kept', 'status', 'binned')
     ));
@@ -293,7 +298,7 @@ begin
     json_build_object('sub', owner_id, 'role', 'authenticated')::text,
     true
   );
-  perform public.save_mod_items(v_car_id, jsonb_build_array(
+  perform pg_temp.save_sheet(v_car_id, jsonb_build_array(
     jsonb_build_object('id', fresh_id, 'group_label', 'Other', 'brand', 'Guard', 'product', 'Replacement')
   ));
   perform set_config('role', 'none', true);

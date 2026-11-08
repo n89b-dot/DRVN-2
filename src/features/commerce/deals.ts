@@ -259,7 +259,6 @@ export function offerDeal(offer: OfferDealRow, me: string, now = Date.now()): De
 
 const TONE_RANK: Record<DealTone, number> = { move: 0, ok: 1, quiet: 2 };
 
-/** Your move first, then anything still in progress, then newest. */
 /** A listing enquiry as a deal: the buyer asked, the seller answers. */
 export function enquiryDeal(row: EnquiryDealRow, me: string): Deal {
   const side: DealSide = row.seller_id === me ? "selling" : "buying";
@@ -282,6 +281,7 @@ export function enquiryDeal(row: EnquiryDealRow, me: string): Deal {
   };
 }
 
+/** Your move first, then anything still in progress, then newest. */
 export function sortDeals(deals: Deal[]): Deal[] {
   return [...deals].sort((a, b) => {
     if (a.active !== b.active) return a.active ? -1 : 1;
