@@ -1,6 +1,6 @@
 # Applying migrations
 
-## November 7 — Settlement correctness and reconciliation, OS-W20
+## November 7 — Settlement correctness and reconciliation, OS-W20 (not applied anywhere)
 
 | File | Applied to |
 |---|---|
