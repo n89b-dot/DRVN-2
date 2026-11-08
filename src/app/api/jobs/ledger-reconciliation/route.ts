@@ -17,15 +17,16 @@ export const dynamic = "force-dynamic";
  * everything in its window answers 503 so the family shows it, and the next
  * run covers the window again.
  */
-async function run() {
+async function run(since: string | null) {
   if (!process.env.CRON_SECRET) {
     reportError("[ledger] CRON_SECRET is not configured");
     return new Response(null, { status: 404 });
   }
   try {
-    const summary = await reconcileLedger(createAdminClient());
+    const summary = await reconcileLedger(createAdminClient(), { since });
     return Response.json(summary, { status: summary.complete ? 200 : 503 });
   } catch (error) {
+    if (error instanceof RangeError) return new Response(error.message, { status: 400 });
     reportError("[ledger] reconciliation run failed", error);
     return new Response("worker failed", { status: 500 });
   } finally {
@@ -34,7 +35,11 @@ async function run() {
 }
 
 export async function POST(request: Request) {
-  return trackedWorker("ledgerReconciliation", request, run);
+  // `?since=<ISO time>`: the operator's pass after a database restore (N232,
+  // docs/production-runbook.md §6) covers Stripe from the recovery point,
+  // not from the restored run history. The schedule never sends it.
+  const since = new URL(request.url).searchParams.get("since");
+  return trackedWorker("ledgerReconciliation", request, () => run(since));
 }
 
 export const maxDuration = 300;

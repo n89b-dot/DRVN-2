@@ -969,6 +969,7 @@ export async function searchUsers(
  *  waiting on an operator. Oldest first, because the oldest is the one a
  *  member has waited longest on. */
 export type AccountDeletionCase = {
+  id: string;
   /** Null once the account itself is gone. */
   userId: string | null;
   person: PartyRef | null;
@@ -984,25 +985,36 @@ export type AccountDeletionCase = {
   retainUntil: string | null;
 };
 
+export const ACCOUNT_DELETIONS_PAGE_SIZE = 50;
+
 /**
  * OS-W11 N35: nothing showed where account deletions stood — "operator
  * attention" existed only inside the worker. Every unfinished case, with
- * who acts next and since when.
+ * who acts next and since when, a page at a time: oldest first with the id
+ * as a tiebreak, so a page boundary never repeats or skips a case and a
+ * long-lived hold can't hide everything asked after it.
  */
-export async function getAccountDeletionCases(limit = 50): Promise<{ rows: AccountDeletionCase[]; total: number }> {
+export async function getAccountDeletionCases(page = 0): Promise<{ rows: AccountDeletionCase[]; total: number; page: number; hasMore: boolean }> {
   const a = await admin();
+  const size = ACCOUNT_DELETIONS_PAGE_SIZE;
+  const from = Math.max(0, page) * size;
   const { data, error, count } = await a
     .from("account_deletion_requests")
-    .select("user_id, outcome, next_action, responsible_owner, policy_decisions_pending, updated_at, requested_at, review_at, retain_until", { count: "exact" })
+    .select("id, user_id, outcome, next_action, responsible_owner, policy_decisions_pending, updated_at, requested_at, review_at, retain_until", { count: "exact" })
     .neq("outcome", "completed")
     .order("requested_at", { ascending: true })
-    .limit(limit);
+    .order("id", { ascending: true })
+    .range(from, from + size - 1);
   unlessFailed("account deletions", error);
   const rows = data ?? [];
   const people = await partiesFor(a, rows.map((r) => r.user_id));
+  const total = count ?? from + rows.length;
   return {
-    total: count ?? rows.length,
+    total,
+    page: Math.max(0, page),
+    hasMore: from + rows.length < total,
     rows: rows.map((r) => ({
+      id: r.id,
       userId: r.user_id,
       person: r.user_id ? (people.get(r.user_id) ?? null) : null,
       outcome: r.outcome as AccountDeletionCase["outcome"],

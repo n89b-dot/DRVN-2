@@ -420,6 +420,8 @@ export async function escalateDispute(
   return { ok: "Escalated — DRVN support will review this case." };
 }
 
+const MAX_EVIDENCE_MESSAGE = "You've attached the maximum of 8 photos.";
+
 export async function addDisputeEvidence(
   _prev: CommerceState,
   formData: FormData
@@ -454,15 +456,9 @@ export async function addDisputeEvidence(
     return { error: "Evidence can only be added while the dispute is open." };
   }
 
-  const { data: existing } = await admin
-    .from("dispute_evidence")
-    .select("id")
-    .eq("order_id", orderId)
-    .eq("uploader_id", user.id);
-  if ((existing?.length ?? 0) >= 8) {
-    return { error: "You've attached the maximum of 8 photos." };
-  }
-
+  // The 8-photo limit is held by the database (20261108130300): the insert
+  // counts this party's photos under a per-dispute lock, so two attaches at
+  // once can't both pass it. A count here first would race.
   const { error } = await admin.from("dispute_evidence").insert({
     order_id: orderId,
     uploader_id: user.id,
@@ -470,6 +466,7 @@ export async function addDisputeEvidence(
     storage_path: url,
     note: note || null,
   });
+  if (error?.code === "23514") return { error: MAX_EVIDENCE_MESSAGE };
   if (error) return { error: error.message };
   // Attached evidence is in use (the media reference check reads
   // storage_path); stamp its staging row so the 48h sweep needn't re-check.

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Rv } from "@/components/livesheet";
 import { adminSuspendUser, adminUnsuspendUser } from "@/lib/admin/actions";
 import { isDeletionPending, SUSPENDED_CHIP } from "@/lib/admin/presentation";
-import { getAccountDeletionCases, searchUsers, USER_STATE_FILTERS, USERS_PAGE_SIZE, type UserStateFilter } from "@/lib/admin/queries";
+import { ACCOUNT_DELETIONS_PAGE_SIZE, getAccountDeletionCases, searchUsers, USER_STATE_FILTERS, USERS_PAGE_SIZE, type UserStateFilter } from "@/lib/admin/queries";
 import { cx, isPersonStub, personLabel } from "@/lib/format";
 
 import { ActionDialog } from "../_components/action-dialog";
@@ -33,21 +33,33 @@ function daysSince(iso: string): string {
 export default async function AdminUsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; state?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; state?: string; page?: string; dpage?: string }>;
 }) {
-  const { q, state, page: pageParam } = await searchParams;
+  const { q, state, page: pageParam, dpage: deletionPageParam } = await searchParams;
   const page = Math.max(0, Number.parseInt(pageParam ?? "0", 10) || 0);
+  const deletionPage = Math.max(0, Number.parseInt(deletionPageParam ?? "0", 10) || 0);
   const activeState = (USER_STATE_FILTERS.some((f) => f.key === state)
     ? state
     : "all") as UserStateFilter;
-  const [{ rows, total, hasMore }, deletions] = await Promise.all([searchUsers(q, activeState, page), getAccountDeletionCases()]);
+  const [{ rows, total, hasMore }, deletions] = await Promise.all([searchUsers(q, activeState, page), getAccountDeletionCases(deletionPage)]);
 
   const pagerHref = (target: number) =>
     `/admin/users?${new URLSearchParams({
       ...(q ? { q } : {}),
       ...(activeState !== "all" ? { state: activeState } : {}),
       ...(target > 0 ? { page: String(target) } : {}),
+      ...(deletionPage > 0 ? { dpage: String(deletionPage) } : {}),
     })}`;
+  // The deletion queue pages on its own (dpage), keeping the user search
+  // where it was.
+  const deletionPagerHref = (target: number) =>
+    `/admin/users?${new URLSearchParams({
+      ...(q ? { q } : {}),
+      ...(activeState !== "all" ? { state: activeState } : {}),
+      ...(page > 0 ? { page: String(page) } : {}),
+      ...(target > 0 ? { dpage: String(target) } : {}),
+    })}#deletions`;
+  const deletionFrom = deletions.page * ACCOUNT_DELETIONS_PAGE_SIZE;
 
   return (
     <>
@@ -62,9 +74,16 @@ export default async function AdminUsersPage({
       {/* N35: every account deletion that hasn't finished, oldest first,
           with who acts next. "Operator attention" used to exist only inside
           the deletion worker. */}
-      {deletions.rows.length > 0 && (
-        <section className="tile mb-6" aria-label="Account deletions not finished">
+      {deletions.total > 0 && (
+        <section id="deletions" className="tile mb-6" aria-label="Account deletions not finished">
           <TileHead label="Account deletions not finished" end={<span className="kv">{deletions.total}</span>} />
+          {deletions.total > deletions.rows.length && (
+            <p className="order__meta mb-2">
+              {deletions.rows.length
+                ? `Showing ${deletionFrom + 1}–${deletionFrom + deletions.rows.length} of ${deletions.total}`
+                : `None on this page · ${deletions.total} in all`}
+            </p>
+          )}
           <table className="ledger">
             <thead>
               <tr>
@@ -76,7 +95,7 @@ export default async function AdminUsersPage({
             </thead>
             <tbody>
               {deletions.rows.map((d) => (
-                <tr key={`${d.userId ?? "gone"}-${d.requestedAt}`}>
+                <tr key={d.id}>
                   <td data-label="Member">
                     {d.userId ? (
                       <Link href={`/admin/users/${d.userId}`} className="order__name block hover:text-live">
@@ -108,6 +127,13 @@ export default async function AdminUsersPage({
               ))}
             </tbody>
           </table>
+          <Pager
+            page={deletions.page}
+            hasMore={deletions.hasMore}
+            href={deletionPagerHref}
+            prevLabel="← Older cases"
+            nextLabel="Newer cases →"
+          />
         </section>
       )}
 

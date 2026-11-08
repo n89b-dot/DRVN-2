@@ -12,7 +12,7 @@ import { guestCheckoutIdentity, isPlausibleEmail, setGuestOrders } from "@/lib/g
 import { resolveGuestBuyer, sendOrderAccessLink } from "./guest-buyer";
 import { AGE_CONFIRMATION_REQUIRED, ageConfirmedIn } from "@/lib/age-confirmation";
 import { recordAgeConfirmation } from "@/lib/age-confirmation-record";
-import { admitGuestHolds, settleGuestHolds } from "./guest-holds";
+import { admitGuestHolds, releaseGuestHolds } from "./guest-holds";
 import { freezeOrderShipping, hashDestination, planCartFulfillment, type FulfillmentPlan } from "./checkout-shipping";
 import { getPaymentProvider } from "@/lib/payments/provider";
 import { getStripeCustomerId } from "@/lib/payments/customers";
@@ -417,8 +417,11 @@ async function purchaseListings(
           orderId: order.order_id,
           shipWrite,
         });
+        // The orders are reserved (and a guest's holds bound to them), so
+        // the outcome keeps them: this is not "nothing was reserved".
         return {
           ...empty,
+          orderIds: result.orders.map((candidate) => candidate.order_id),
           skipped,
           error: "Couldn't confirm the delivery method for this order. Nothing was charged.",
         };
@@ -711,6 +714,10 @@ export async function checkoutCart(
     resumingByOrder = false;
   };
   let cartIds: string[] | undefined;
+  /** A by-order resume whose details changed: the released attempt's basket,
+   *  which is all the restarted checkout may buy (never this device's other
+   *  cart lines, which that checkout was not opened for). */
+  let restartBasket: string[] | undefined;
 
   let replay:
     | {
@@ -874,10 +881,12 @@ export async function checkoutCart(
           revalidatePath("/checkout");
           for (const id of listingIds) revalidatePath(`/listings/${id}`);
           if (resumingByOrder) {
-            // Restarting from another device: the basket is the released
-            // attempt's, so it becomes this device's cart to check out again.
-            cartIds = [...new Set([...listingIds, ...cartIds])];
-            await setCartIds(cartIds);
+            // Restarting from another device: the restarted checkout buys the
+            // released attempt's basket and nothing else. Its parts are also
+            // kept in this device's cart (so a restart that needs fresh rates
+            // isn't lost); the cart's other lines are left exactly as they are.
+            restartBasket = listingIds;
+            await setCartIds([...new Set([...listingIds, ...cartIds])]);
           }
           startNewAttempt();
         } else {
@@ -896,7 +905,7 @@ export async function checkoutCart(
   const requestHeaders = await headers();
   const subject = abuseIdentity(requestHeaders, user?.id);
   if (!(await allowAction(RATE_LIMITS.checkout, subject))) return { error: rateLimitMessage(RATE_LIMITS.checkout) };
-  const ids = replay?.listingIds ?? cartIds ?? await getCartIds();
+  const ids = replay?.listingIds ?? restartBasket ?? cartIds ?? await getCartIds();
   if (!ids.length) {
     // "Finish checkout" from an order on another device lands on an empty
     // cart: say what is actually holding the parts.
@@ -1026,17 +1035,20 @@ export async function checkoutCart(
 
   // N89 (OS-W31): a guest's holds are admitted first, atomically capped at
   // 2 live per device and per network and 1 per listing (guest_hold_admit,
-  // 20261107220800). Nothing is reserved without an admission.
-  let guestHolds: string[] | null = null;
+  // 20261107220800). Nothing is reserved without an admission. Admissions
+  // belong to this request (its idempotency key), and purchase_begin binds
+  // them to its orders in the same transaction (20261108130000).
+  let guestHolds = false;
   if (guestEmail) {
     const admitted = await admitGuestHolds(createAdminClient(), {
       device: effectiveBrowserIdentity,
       network: subject,
       listingIds: ids,
       buyerId,
+      request: idempotencyKey,
     });
     if ("error" in admitted) return { error: admitted.error };
-    guestHolds = admitted.holds;
+    guestHolds = true;
   }
 
   const outcome = await purchaseListings(buyerId, ids, {
@@ -1048,7 +1060,10 @@ export async function checkoutCart(
     fulfillment: plan,
   });
 
-  if (guestHolds) await settleGuestHolds(createAdminClient(), guestHolds, buyerId, outcome.orderIds.length > 0);
+  // Nothing reserved: give back this request's own unbound admissions (a
+  // no-op once purchase_begin has committed, which settles them itself).
+  // Bound admissions, and other requests' admissions, are never touched.
+  if (guestHolds && !outcome.orderIds.length) await releaseGuestHolds(createAdminClient(), idempotencyKey);
 
   // Whatever happens next — an inline confirmation or a Stripe redirect — the
   // guest has no session, so this browser needs a receipt saying which orders
@@ -1064,6 +1079,20 @@ export async function checkoutCart(
     await removeCartIds(outcome.purchased.map((p) => p.listingId));
   }
 
+  // A by-order restart that reserved its replacement: from here on the
+  // replacement is the checkout to recover, whatever happens next. Its key is
+  // remembered and the page moves to its order, so a reload or a retry
+  // resumes the pending replacement instead of the released order (whose
+  // parts the replacement now holds). A payment-step failure (a shipping
+  // freeze, a reconciliation) says so on that page.
+  const replacementOrderId = restartBasket && !outcome.purchased.length ? outcome.orderIds[0] : undefined;
+  if (replacementOrderId) {
+    await rememberCheckoutKey(effectiveRawKey);
+    const params = new URLSearchParams({ order: replacementOrderId });
+    if (!outcome.payment) params.set("resume", "incomplete");
+    redirect(`/checkout?${params.toString()}`);
+  }
+
   // Async processor: hand the client secret back so the form can swap to the
   // Payment Element confirmation step. The cart stays intact until the money
   // is actually confirmed (the return route clears it).
@@ -1071,7 +1100,8 @@ export async function checkoutCart(
     // OS-W17 (N85): the basket is reserved under this key; a reload renders
     // it back and resumes this payment instead of starting a second one.
     // A checkout resumed by its order has no key on this device (the page
-    // keeps resuming it by order), so nothing is remembered for it.
+    // keeps resuming it by order), so nothing is remembered for it. (A
+    // restarted one was handled above.)
     if (!resumingByOrder) await rememberCheckoutKey(effectiveRawKey);
     return { payment: outcome.payment };
   }

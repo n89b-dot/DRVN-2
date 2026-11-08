@@ -17,6 +17,7 @@ export type Database = {
           completed_at: string | null
           email_digest: string | null
           email_digest_key: string | null
+          hold_order_id: string | null
           id: string
           job_id: string | null
           next_action: string
@@ -37,6 +38,7 @@ export type Database = {
           completed_at?: string | null
           email_digest?: string | null
           email_digest_key?: string | null
+          hold_order_id?: string | null
           id?: string
           job_id?: string | null
           next_action: string
@@ -57,6 +59,7 @@ export type Database = {
           completed_at?: string | null
           email_digest?: string | null
           email_digest_key?: string | null
+          hold_order_id?: string | null
           id?: string
           job_id?: string | null
           next_action?: string
@@ -72,6 +75,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "account_deletion_requests_hold_order_id_fkey"
+            columns: ["hold_order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "account_deletion_requests_job_id_fkey"
             columns: ["job_id"]
@@ -2345,6 +2355,7 @@ export type Database = {
           network_key: string
           order_id: string | null
           released_at: string | null
+          request_key: string | null
         }
         Insert: {
           admitted_until?: string
@@ -2356,6 +2367,7 @@ export type Database = {
           network_key: string
           order_id?: string | null
           released_at?: string | null
+          request_key?: string | null
         }
         Update: {
           admitted_until?: string
@@ -2367,6 +2379,7 @@ export type Database = {
           network_key?: string
           order_id?: string | null
           released_at?: string | null
+          request_key?: string | null
         }
         Relationships: [
           {
@@ -6695,6 +6708,19 @@ export type Database = {
     }
     Functions: {
       account_deletion_blockers: { Args: { p_user: string }; Returns: Json }
+      account_deletion_finalise: {
+        Args: {
+          p_job: string
+          p_lease: string
+          p_retained: Json
+          p_user: string
+        }
+        Returns: Json
+      }
+      account_deletion_hold_gate: {
+        Args: { p_job: string; p_lease: string; p_user: string }
+        Returns: Json
+      }
       activity_post_search_text: { Args: { body: Json }; Returns: string }
       activity_post_visible: { Args: { p_post_id: string }; Returns: boolean }
       actor_name: { Args: { p_id: string }; Returns: string }
@@ -7200,6 +7226,15 @@ export type Database = {
         }[]
       }
       charge_cents_in_bounds: { Args: { p_cents: number }; Returns: boolean }
+      check_photo_rewrite: {
+        Args: {
+          p_bucket: string
+          p_object: string
+          p_path: string
+          p_token: string
+        }
+        Returns: string
+      }
       claim_listing_creation: {
         Args: { p_payload_hash: string; p_request: string }
         Returns: Json
@@ -7214,6 +7249,10 @@ export type Database = {
       }
       claim_payout_deadline_cancellations: {
         Args: { p_limit?: number }
+        Returns: Json
+      }
+      claim_photo_rewrite: {
+        Args: { p_bucket: string; p_path: string }
         Returns: Json
       }
       claim_refund_replacement_provider: {
@@ -7624,6 +7663,17 @@ export type Database = {
         Args: { p_reference: string }
         Returns: undefined
       }
+      finish_photo_rewrite: {
+        Args: {
+          p_bucket: string
+          p_detail?: string
+          p_object: string
+          p_outcome: string
+          p_path: string
+          p_token: string
+        }
+        Returns: string
+      }
       finish_remediation_job: {
         Args: { p_error?: string; p_id: string; p_lease: string }
         Returns: undefined
@@ -7682,14 +7732,11 @@ export type Database = {
           p_device: string
           p_listing_ids: string[]
           p_network: string
+          p_request: string
         }
         Returns: string[]
       }
-      guest_hold_bind: {
-        Args: { p_buyer: string; p_hold_ids: string[] }
-        Returns: number
-      }
-      guest_hold_release: { Args: { p_hold_ids: string[] }; Returns: number }
+      guest_hold_release: { Args: { p_request: string }; Returns: number }
       has_embedded_media_reference: {
         Args: { p_url: string }
         Returns: boolean
@@ -8352,6 +8399,34 @@ export type Database = {
         Args: { p_delivered_at: string; p_now: boolean; p_order: string }
         Returns: string
       }
+      photo_metadata_candidates: {
+        Args: {
+          p_after?: string
+          p_bucket: string
+          p_limit?: number
+          p_uploaded_before?: string
+        }
+        Returns: {
+          path: string
+          size_bytes: number
+          updated_at: string
+        }[]
+      }
+      photo_metadata_scrub_summary: {
+        Args: never
+        Returns: {
+          bucket: string
+          objects: number
+          outcome: string
+        }[]
+      }
+      photo_rewrite_strays: {
+        Args: { p_bucket: string; p_limit?: number }
+        Returns: {
+          path: string
+          reason: string
+        }[]
+      }
       pickup_mint_pass: {
         Args: {
           p_buyer_id: string
@@ -8511,6 +8586,17 @@ export type Database = {
           p_seen_through: number
         }
         Returns: Json
+      }
+      record_admin_export: {
+        Args: {
+          p_detail?: string
+          p_export?: string
+          p_filters?: Json
+          p_phase: string
+          p_rows?: number
+          p_view?: string
+        }
+        Returns: string
       }
       record_capture_recovery: {
         Args: { p_amount?: number; p_detail: string; p_key: string }
@@ -8990,6 +9076,15 @@ export type Database = {
           updated_at: string
         }[]
       }
+      storage_object_rows: {
+        Args: { p_after?: string; p_bucket: string; p_limit?: number }
+        Returns: {
+          created_at: string
+          expected_reason: string
+          path: string
+        }[]
+      }
+      storage_reference_report: { Args: { p_sample?: number }; Returns: Json }
       suggested_builders: {
         Args: { p_limit?: number; p_viewer?: string }
         Returns: {
@@ -9006,6 +9101,10 @@ export type Database = {
       sync_activity_post_listings: {
         Args: { p_listing_ids: string[]; p_post_id: string }
         Returns: undefined
+      }
+      take_down_reported_content: {
+        Args: { p_actor: string; p_reason: string; p_report: string }
+        Returns: Json
       }
       trending_models: {
         Args: { p_days?: number; p_limit?: number }

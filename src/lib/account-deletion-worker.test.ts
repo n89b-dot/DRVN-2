@@ -63,7 +63,9 @@ vi.mock("@/lib/supabase/admin", () => ({
         state.calls.push(name);
         state.rpcArgs[name] = args;
         if (name === "claim_remediation_jobs") return { data: [{ id: "job-1", lease_id: "lease-1", payload: { user_id: "u-1" } }], error: null };
-        if (name === "account_deletion_blockers") return { data: { financial_hold: false, retained_identity: true }, error: null };
+        if (name === "account_deletion_hold_gate") return { data: { financial_hold: false, retained_identity: true, held: false, hold_order_id: null }, error: null };
+        // A trader: kept for their orders; finalise records it and finishes the job (20261108130400).
+        if (name === "account_deletion_finalise") return { data: { financial_hold: false, retained_identity: true, held: false, outcome: "operator_attention" }, error: null };
         if (name === "scrub_deleted_account") return state.scrubError ? { data: null, error: state.scrubError } : { data: { messages: 1 }, error: null };
         if (name === "finish_remediation_job") state.finished.push(args);
         return { data: null, error: null };

@@ -106,10 +106,14 @@ begin
   if p_user is null then
     raise exception 'A deletion scrub needs an account' using errcode = '22023';
   end if;
-  perform pg_advisory_xact_lock(hashtextextended('account-deletion:' || p_user::text, 0));
+  -- The deletion lock the hold gate, finalise and the hold requeue take
+  -- (20261108130400), so a hold can't commit halfway through a scrub.
+  perform pg_advisory_xact_lock(private.account_deletion_lock_key(p_user));
 
   select * into v_request from public.account_deletion_requests where user_id = p_user for update;
-  if not found or v_request.outcome = 'temporary_financial_hold'
+  -- A case resumed after a hold still reads temporary_financial_hold until
+  -- its outcome is recorded, so the live blocker check below decides.
+  if not found
      or not exists (select 1 from public.remediation_jobs j where j.dedup_key = 'delete:' || p_user::text) then
     raise exception 'This account has no deletion under way' using errcode = '55000';
   end if;

@@ -6,7 +6,13 @@ unless it says `--apply` with the code that dry run printed:
 ```bash
 node scripts/apply-migration.mjs --target shared-dev supabase/migrations/<file>.sql
 node scripts/apply-migration.mjs --target shared-dev --apply --confirm <code> supabase/migrations/<file>.sql
+node scripts/apply-migration.mjs --target shared-dev --status   # read-only: applied vs on disk, as JSON
 ```
+
+Every file in `supabase/migrations/` gets a row below, and its "Applied to"
+cell is `not applied`, `shared-dev YYYY-MM-DD`, `staging YYYY-MM-DD` or
+`production YYYY-MM-DD` (several joined with `; `). `tests/ci/migrations-md.test.ts`
+enforces it; rows older than the check are in `supabase/migrations-md-baseline.json`.
 
 `--target` names a project in `supabase/migration-targets.json` and must be
 the project `.env.local` (or `--env-file`) points at. The connection verifies
@@ -21,6 +27,46 @@ psql" below.
 history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
+
+## November 8 — account deletion checks financial holds before banning sign-in: OS-W11 (#157, not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261108130400_deletion_hold_before_ban.sql` | shared-dev 2026-11-08 |
+
+Apply after every earlier migration, together with the app from #157: the new worker calls `account_deletion_hold_gate` and `account_deletion_finalise`, which the old database doesn't have, and the old worker still runs against the new database (its RPCs are unchanged or restated). New `account_deletion_requests.hold_order_id` (FK to orders, `on delete set null`, partial index), `private.account_deletion_lock_key`, `private.account_deletion_hold_order`, `private.account_deletion_lease_held`, `private.requeue_account_deletion_for_hold`, `private.account_deletion_hold_appeared` and the deferred constraint trigger `account_deletion_hold_watch` on `orders`, `returns`, `refund_operations`, `payment_recoveries`, `transfer_intents` and `payment_requests`. Restated: `pause_account_deletion_hold` (from `20260905185725`; records and names the order to settle) and `block_deleted_account_writes` (from `20260905130250`; a member whose deletion is paused on a hold may write). What holds a deletion (`account_deletion_blockers`) is unchanged. Guards: `deletion_hold_before_ban_guard.sql`, `deletion_hold_race_guard.sql` (two sessions over dblink).
+
+## November 8 — files merged with no entry here (record gaps after #143)
+
+These four merged on 8 Nov 2026 after `tests/ci/migrations-md.test.ts` (#143) and before anyone added their rows, which left `main` red. `node scripts/apply-migration.mjs --target shared-dev --status` (read-only, 8 Nov) lists each of them, and the three `120000`–`120020` files above, as applied on the shared dev project. They are not on staging or production.
+
+| File | Applied to |
+|---|---|
+| `20261108130000_guest_holds_by_request.sql` | shared-dev 2026-11-08 |
+| `20261108130100_social_moderation_races.sql` | shared-dev 2026-11-08 |
+| `20261108130300_dispute_evidence_attach_cap.sql` | shared-dev 2026-11-08 |
+| `20261108130500_agent_redact_skips_ids.sql` | shared-dev 2026-11-08 |
+
+- **`130000`** — OS-W17/N89 checkout follow-up (#152); see that PR.
+- **`130100`** — OS-W21 follow-up (#154): a moderation hold always takes the car's row lock; the dispute-evidence upload count locks the uploader's folder; `listing_save` notifications are de-duplicated; `take_down_reported_content` closes every report on a post and its replies in one transaction. Guards: `social_moderation_guard.sql`, `social_moderation_race_guard.sql`.
+- **`130300`** — OS-W29 (#156): a BEFORE INSERT trigger holds the 8-photo dispute-evidence limit under a per-order-and-uploader lock. Guard: `dispute_evidence_cap_race_guard.sql`.
+- **`130500`** — #158: `agent_redact_cards` never scans UUID-shaped text, so card redaction can't corrupt ids. Guards: `agent_redact_ids_guard.sql`, `agent_tool_audit_guard.sql`.
+
+## November 8 — audited exports, old photo metadata, storage reference report: N531, N627, N232 (shared dev)
+
+| File | Applied to |
+|---|---|
+| `20261108120000_admin_export_audit.sql` | shared-dev 2026-11-08 |
+| `20261108120010_photo_metadata_scrub.sql` | shared-dev 2026-11-08 |
+| `20261108120020_storage_reference_report.sql` | shared-dev 2026-11-08 |
+
+Apply in order, after every earlier migration, **before the app from #148 serves the console**: the new export route records every download through `record_admin_export` and refuses to send a file it can't record, so without `120000` every CSV export answers 503.
+
+- **`120000`** — `admin_audit_log_subject_type_check` gains `export` (rebuilt from the constraint as it stands). `guard_audit_actor` restated from `0040` (its only definition): export rows (`export.started` / `export.completed` / `export.failed` on an `export` subject) may name any console member, so a viewer's export is recorded; every other row still needs a full admin. New `record_admin_export(phase, view, filters, export, rows, detail)`, called with the admin's own session (`is_admin()`), finishing only the caller's own export, once. Who may export is unchanged (N135). Guard: `admin_export_audit_guard.sql`.
+- **`120010`** — new `private.media_rewrite_claims` (lease with the object's `storage.objects.id`) and `private.photo_metadata_scrubs` (outcomes); `photo_metadata_candidates`, `claim_photo_rewrite`, `check_photo_rewrite`, `finish_photo_rewrite`, `photo_metadata_scrub_summary` (service role only) for `scripts/owner/scrub-photo-metadata.mjs`. `photo_rewrite_strays` lists unfinished leases and tombstoned paths with an object again, which every run deletes before its scan. `claim_media_deletion` restated from `20261107203000` (its only definition), adding only: a photo under a live rewrite lease is left for later. `agent_chat_photos_expired` restated from `20261107220300` (its only definition): the same lease rule, and its default age now comes from the new `private.agent_chat_photo_retention()` (still 48 hours; the app stops passing its own). Storage's write always upserts, so the rewrite is fenced on the object's identity (a recreated photo is deleted again). Guard: `photo_metadata_scrub_guard.sql`.
+- **`120020`** — read-only `private.storage_reference_rows`, `storage_object_rows`, `storage_reference_report` (service role only) for `scripts/owner/storage-reference-check.mjs` and the restore runbook (`docs/production-runbook.md` §6a). Chat photos the sweep has deleted (`private.agent_chat_photo_swept`: the sweep's own 48 hours plus one `drvn-agent-worker` interval) and tombstoned deletions count as `expectedMissing`, not missing; `storage_object_rows.expected_reason` gives the byte check the same rule. Guard: `storage_reference_report_guard.sql`.
+
+`supabase/tests/ci_shim.sql` gains `storage.objects.updated_at` and `metadata` (hosted Storage has both). The three guards were run against a throwaway Postgres with stubbed Supabase objects, not the full chain; CI's sql-guard job runs them on the full chain.
 
 ## November 7 — Cloud A blocker batches: OS-W21 OS-W23 OS-R-arrival OS-W08 OS-W11 OS-W32 OS-W33 OS-W31 OS-W34
 
@@ -1828,8 +1874,15 @@ node scripts/apply-migration.mjs --target shared-dev --record-only --apply --con
   with the same lexer for the objects it creates: functions (schema, name and
   identity argument types), tables, columns, views, sequences, indexes,
   triggers, policies, named constraints, types and enum values, schemas,
-  extensions and roles, at top level or as static DDL in a `DO` block
-  (including a `format()` whose object names are static). It walks the whole
+  extensions and roles, at top level or as static DDL in a `DO` block. An
+  `EXECUTE` in a `DO` block is read only when it is a lone literal or one
+  whole `format('…', …)` call whose created object names are all static;
+  any other expression (a literal `||` anything, a variable, a function's
+  result) is SQL built at run time and the file can't be checked. A
+  function's identity keeps each argument type's schema (`private.kind` is
+  not `public.kind`); only built-in aliases (`int` → `integer`, …) and the
+  `public.`/`pg_catalog.` qualifiers, which `format_type` omits under the
+  `search_path = public` the catalog is read with, are normalised. It walks the whole
   tree in name order, so it knows the last thing any file does to each
   object. Each object must be in the target's catalog (read in a read-only
   transaction); an object a later file drops isn't expected. For a function
@@ -1838,7 +1891,8 @@ node scripts/apply-migration.mjs --target shared-dev --record-only --apply --con
   aside); an earlier definition, replaced later, only has to exist.
 - **What it refuses.** A file with any object missing, a latest function body
   that differs, or something it can't check (dynamic DDL that names objects
-  at run time, a kind of object it doesn't read, a `%TYPE` argument) is not
+  at run time, a kind of object it doesn't read, an unnamed index or added
+  constraint, a `%TYPE` argument) is not
   recorded and is listed with every reason. So is a file with nothing to
   check: data changes, grants, comments and `ALTER … SET` aren't objects, and
   a file of only those (or whose objects were all dropped later) can't be
