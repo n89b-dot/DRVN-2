@@ -108,6 +108,15 @@ begin
     raise exception 'Unreviewed SECURITY DEFINER functions executable by signed-in members: %', exposed;
   end if;
 
+  -- N38 (OS-W34): the onboarding check answers visitors, but the handles it
+  -- guards (reserved, retired) stay unreadable, and the deletion scrub is
+  -- the server's alone.
+  if not has_function_privilege('anon', 'public.username_available(text)', 'execute')
+     or has_table_privilege('anon', 'private.username_tombstones', 'select')
+     or has_function_privilege('authenticated', 'public.scrub_deleted_account(uuid,text,text)', 'execute') then
+    raise exception 'FAIL N38: the username check, the retired handles or the deletion scrub is exposed wrongly (N38, N16)';
+  end if;
+
   -- The internal ones stay closed to every client role.
   foreach internal in array array[
     'public.notify(uuid,text,text,text,text,text,uuid)',
