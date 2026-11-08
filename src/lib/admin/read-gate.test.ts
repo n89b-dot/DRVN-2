@@ -140,7 +140,6 @@ describe("console pages and the export route, requested directly (no layout)", (
     ["/admin/audit", async () => (await import("@/app/(admin)/admin/audit/page")).default({ searchParams: Promise.resolve({}) })],
     ["/admin/users/[id]", async () => (await import("@/app/(admin)/admin/users/[id]/page")).default({ params: Promise.resolve({ id: ID }) } as never)],
     ["/admin/orders/[id]", async () => (await import("@/app/(admin)/admin/orders/[id]/page")).default({ params: Promise.resolve({ id: ID }) })],
-    ["/admin/invitations", async () => (await import("@/app/(admin)/admin/invitations/page")).default()],
     ["/admin/agent", async () => (await import("@/app/(admin)/admin/agent/page")).default()],
     ["/admin/agent/members/[id]", async () => (await import("@/app/(admin)/admin/agent/members/[id]/page")).default({ params: Promise.resolve({ id: ID }) })],
     ["/admin/cases", async () => (await import("@/app/(admin)/admin/cases/page")).default({ searchParams: Promise.resolve({}) })],

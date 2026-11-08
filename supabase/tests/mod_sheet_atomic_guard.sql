@@ -33,7 +33,6 @@ begin
     raise exception 'Anonymous callers can save modification sheets';
   end if;
 
-  update public.beta_access_config set enforced = false where singleton;
   insert into auth.users(id, email) values
     (owner_id, 'mod-sheet-owner@drvn.test'),
     (outsider_id, 'mod-sheet-outsider@drvn.test');

@@ -9,7 +9,6 @@ import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 import { offerMoveCore, type OfferMoveKind } from "@/lib/capabilities/negotiation";
 import type { CommerceState } from "./action-types";
-import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 import { SUSPENDED_MESSAGE, isSuspended } from "@/lib/suspension";
 import {
   CHARGE_OUT_OF_BOUNDS_CODE,
@@ -64,8 +63,6 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
   // Exact committed-response replay bypasses admission/rate consumption. The
   // RPC verifies the original buyer/listing/amount/message before returning.
   if (!existingRequest.data) {
-    const betaAccess = await getBetaAccess(user.id, "buyer");
-    if (!betaAccess.eligible) return { error: betaCommerceError("buyer") };
     if (!(await allowAction(RATE_LIMITS.makeOffer, user.id))) {
       return { error: rateLimitMessage(RATE_LIMITS.makeOffer) };
     }
@@ -216,10 +213,6 @@ export async function respondToOffer(
   if (!offerId || !["accepted", "declined", "countered"].includes(decision) || round === null) {
     return { error: "Pick accept, counter or decline." };
   }
-  if (decision !== "declined") {
-    const betaAccess = await getBetaAccess(user.id, "seller");
-    if (!betaAccess.eligible) return { error: betaCommerceError("seller") };
-  }
   const counter = decision === "countered" ? readAmount(formData, "counter_amount") : undefined;
   if (decision === "countered" && !counter) return { error: "Enter the amount you'd accept." };
 
@@ -298,8 +291,6 @@ export async function counterOffer(
   formData: FormData
 ): Promise<CommerceState> {
   const { supabase, user } = await requireUser();
-  const betaAccess = await getBetaAccess(user.id, "buyer");
-  if (!betaAccess.eligible) return { error: betaCommerceError("buyer") };
   const offerId = String(formData.get("offer_id") ?? "");
   const round = readRound(formData);
   const amount = readAmount(formData, "counter_amount");
@@ -322,8 +313,6 @@ export async function acceptCounter(
   formData: FormData
 ): Promise<CommerceState> {
   const { supabase, user } = await requireUser();
-  const betaAccess = await getBetaAccess(user.id, "buyer");
-  if (!betaAccess.eligible) return { error: betaCommerceError("buyer") };
   const offerId = String(formData.get("offer_id") ?? "");
   const round = readRound(formData);
   if (!offerId || round === null) return { error: "Missing offer." };

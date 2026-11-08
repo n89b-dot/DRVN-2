@@ -34,7 +34,6 @@ import { classifyArrival } from "@/lib/marketplace/arrival";
 import { listingHref, normalizeMarketplaceState, shoppingReturn } from "@/lib/marketplace/state";
 import { listingShareDescription } from "@/lib/share-copy";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
-import { getBetaAccess } from "@/lib/beta-access";
 
 import { ReportButton } from "@/features/moderation/report-button";
 import { PurchaseActions } from "./purchase-actions";
@@ -147,12 +146,11 @@ export default async function ListingPage({
   const agentMode = user && (await agentTabOpen()) ? await loadAgentMode(user.id) : "act";
 
   // Round 1: everything that needs only the listing id or the viewer.
-  const [{ data: listing }, { data: images }, selectedVehicle, betaBuyerAccess, { data: taggedPostRows }] =
+  const [{ data: listing }, { data: images }, selectedVehicle, { data: taggedPostRows }] =
     await Promise.all([
       loadListing(id),
       loadListingImages(id),
       shoppingState.vehicle ? resolveVehicleFilter(shoppingState.vehicle) : Promise.resolve(null),
-      getBetaAccess(user?.id, "buyer"),
       // W-4: updates that tagged this part, with their photos, in one read.
       // Only ever posts on public builds — see the filter below. A LEFT join
       // to cars: a post about this part may have no car at all (W-5), and an
@@ -508,9 +506,6 @@ export default async function ListingPage({
               <PurchaseActions
                 listingId={listing.id}
                 isLoggedIn={Boolean(user)}
-                betaEnforced={betaBuyerAccess.enforced}
-                buyerEligible={betaBuyerAccess.eligible}
-                accessUnavailable={Boolean(betaBuyerAccess.unavailable)}
                 isOwn={false}
                 isActive={listing.status === "active"}
                 paymentsLive={paymentsAreLive()}

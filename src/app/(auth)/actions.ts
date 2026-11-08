@@ -11,8 +11,7 @@ import { allowAction, RATE_LIMITS, type RateLimitRule } from "@/lib/rate-limit";
 import { siteUrl } from "@/lib/site";
 import { onboardingPath, safeRedirectPath } from "@/lib/safe-redirect";
 import { DISPLAY_NAME_MAX } from "@/lib/limits";
-import { getBetaAccess, prepareBetaSignup } from "@/lib/beta-access";
-import { AUTH_ERROR_COPY, authErrorCode, publicAuthError } from "@/lib/auth-errors";
+import { authErrorCode, publicAuthError } from "@/lib/auth-errors";
 import { reportError } from "@/lib/monitoring";
 import { hasRecoveryAuthorisation } from "@/lib/reauthentication";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -132,15 +131,12 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   if (password.length < 8) {
     return fail("Password must be at least 8 characters.", "password");
   }
-  // N42: counted before the invitation check and before Supabase is asked,
+  // N42: counted before Supabase is asked,
   // so a throttled attempt can't send a confirmation email to anyone. Same
   // answer whether or not the address is registered.
   if (await throttled(RATE_LIMITS.signUp, RATE_LIMITS.signUpEmailCeiling, RATE_LIMITS.signUpNetwork, email)) {
     return fail("Too many sign-up attempts. Wait a while and try again.");
   }
-
-  const prepared = await prepareBetaSignup(email, String(formData.get("invite") ?? ""));
-  if (prepared.error) return fail(prepared.error);
 
   // RR-07: the confirmation email opens in a new tab, often on another
   // device, so the destination has to travel inside its link. The email
@@ -156,7 +152,6 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
     password,
     options: {
       emailRedirectTo: confirmed.toString(),
-      ...(prepared.claimId ? { data: { beta_claim_id: prepared.claimId } } : {}),
     },
   });
 
@@ -168,17 +163,6 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
           ? "email"
           : undefined;
     return fail(publicAuthError(error, "sign-up"), field);
-  }
-
-  // In enforced mode, the Auth trigger is the authority: a direct Auth user
-  // without the server-minted claim gets no membership or public profile.
-  if (prepared.enforced) {
-    const access = await getBetaAccess(data.user?.id, "buyer");
-    const sellerAccess = await getBetaAccess(data.user?.id, "seller");
-    if (!access.eligible && !sellerAccess.eligible) {
-      await supabase.auth.signOut();
-      return fail("This invitation could not be accepted. It may already have been used.");
-    }
   }
 
   // If email confirmation is disabled, a session exists now → onboarding.
@@ -232,19 +216,8 @@ export async function completeOnboarding(
     redirect("/login");
   }
 
-  const [buyerAccess, sellerAccess] = await Promise.all([
-    getBetaAccess(user.id, "buyer"),
-    getBetaAccess(user.id, "seller"),
-  ]);
-  if (buyerAccess.enforced && !buyerAccess.eligible && !sellerAccess.eligible) {
-    // Said as what it means here, with the way out beside the form (N40).
-    return {
-      error: buyerAccess.unavailable
-        ? AUTH_ERROR_COPY.unavailable
-        : "This account can't be set up: it isn't on an invitation. Sign out below and use the email your invitation was sent to.",
-    };
-  }
-
+  // OS-W31: the invite-only beta is gone, so every account can finish
+  // onboarding; the missing-profile repair below stays (N40, #86).
   const { data: updated, error } = await supabase
     .from("profiles")
     .update({ username, display_name: displayName })

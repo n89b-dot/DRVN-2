@@ -1394,27 +1394,6 @@ export type Database = {
           },
         ]
       }
-      beta_access_config: {
-        Row: {
-          enforced: boolean
-          singleton: boolean
-          updated_at: string
-          updated_by: string | null
-        }
-        Insert: {
-          enforced: boolean
-          singleton?: boolean
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Update: {
-          enforced?: boolean
-          singleton?: boolean
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Relationships: []
-      }
       beta_invitations: {
         Row: {
           consumed_at: string | null
@@ -2088,6 +2067,64 @@ export type Database = {
             columns: ["follower_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      guest_holds: {
+        Row: {
+          admitted_until: string
+          buyer_id: string | null
+          created_at: string
+          device_key: string
+          id: string
+          listing_id: string
+          network_key: string
+          order_id: string | null
+          released_at: string | null
+        }
+        Insert: {
+          admitted_until?: string
+          buyer_id?: string | null
+          created_at?: string
+          device_key: string
+          id?: string
+          listing_id: string
+          network_key: string
+          order_id?: string | null
+          released_at?: string | null
+        }
+        Update: {
+          admitted_until?: string
+          buyer_id?: string | null
+          created_at?: string
+          device_key?: string
+          id?: string
+          listing_id?: string
+          network_key?: string
+          order_id?: string | null
+          released_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guest_holds_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "guest_holds_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "guest_holds_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
             referencedColumns: ["id"]
           },
         ]
@@ -6620,10 +6657,6 @@ export type Database = {
         }
         Returns: Json
       }
-      beta_access_status: {
-        Args: { p_role?: string; p_user_id?: string }
-        Returns: Json
-      }
       bind_cart_checkout_payment: {
         Args: {
           p_buyer: string
@@ -7125,6 +7158,20 @@ export type Database = {
         }[]
       }
       grow_products: { Args: { p_full?: boolean }; Returns: Json }
+      guest_hold_admit: {
+        Args: {
+          p_buyer: string
+          p_device: string
+          p_listing_ids: string[]
+          p_network: string
+        }
+        Returns: string[]
+      }
+      guest_hold_bind: {
+        Args: { p_buyer: string; p_hold_ids: string[] }
+        Returns: number
+      }
+      guest_hold_release: { Args: { p_hold_ids: string[] }; Returns: number }
       has_embedded_media_reference: {
         Args: { p_url: string }
         Returns: boolean
@@ -7773,10 +7820,6 @@ export type Database = {
       }
       post_search_doc: {
         Args: { p_intro: string; p_search_text: string; p_title: string }
-        Returns: string
-      }
-      prepare_beta_signup: {
-        Args: { p_email: string; p_token_hash: string }
         Returns: string
       }
       prepare_outbound_label: {

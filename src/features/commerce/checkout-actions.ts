@@ -10,6 +10,7 @@ import { abuseIdentity } from "@/lib/abuse-identity";
 import { getCartIds, removeCartIds } from "@/lib/cart";
 import { guestCheckoutIdentity, isPlausibleEmail, setGuestOrders } from "@/lib/guest-checkout";
 import { resolveGuestBuyer, sendOrderAccessLink } from "./guest-buyer";
+import { admitGuestHolds, settleGuestHolds } from "./guest-holds";
 import { freezeOrderShipping, hashDestination, planCartFulfillment, type FulfillmentPlan } from "./checkout-shipping";
 import { getPaymentProvider } from "@/lib/payments/provider";
 import { getStripeCustomerId } from "@/lib/payments/customers";
@@ -21,7 +22,6 @@ import { capture } from "@/lib/analytics";
 import { createClient } from "@/lib/supabase/server";
 import type { Json, PurchaseBeginResult } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
-import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 import type { CommerceState, CheckoutOutcome, ShippingDetails } from "./action-types";
 
 const PAYMENT_SETTLED_ORDER_STATUSES = new Set([
@@ -465,11 +465,6 @@ export async function checkoutCart(
   formData: FormData
 ): Promise<CommerceState> {
   const { user } = await optionalUser();
-  const betaAccess = await getBetaAccess(user?.id, "buyer");
-  if (betaAccess.enforced && !user) {
-    return { error: "Sign in with an invited beta account to check out." };
-  }
-  if (!betaAccess.eligible) return { error: betaCommerceError("buyer") };
 
   const { shipping, error: shippingError } = readShipping(formData);
   if (shippingError) return { error: shippingError };
@@ -712,6 +707,21 @@ export async function checkoutCart(
     .update(JSON.stringify([effectiveBrowserIdentity, effectiveRawKey, shipping, [...ids].sort()]))
     .digest("hex");
 
+  // N89 (OS-W31): a guest's holds are admitted first, atomically capped at
+  // 2 live per device and per network and 1 per listing (guest_hold_admit,
+  // 20261107220800). Nothing is reserved without an admission.
+  let guestHolds: string[] | null = null;
+  if (guestEmail) {
+    const admitted = await admitGuestHolds(createAdminClient(), {
+      device: effectiveBrowserIdentity,
+      network: subject,
+      listingIds: ids,
+      buyerId,
+    });
+    if ("error" in admitted) return { error: admitted.error };
+    guestHolds = admitted.holds;
+  }
+
   const outcome = await purchaseListings(buyerId, ids, {
     useSavedCustomer: Boolean(user),
     idempotencyKey,
@@ -720,6 +730,8 @@ export async function checkoutCart(
     shipping: replay ? undefined : shipping,
     fulfillment: plan,
   });
+
+  if (guestHolds) await settleGuestHolds(createAdminClient(), guestHolds, buyerId, outcome.orderIds.length > 0);
 
   // Whatever happens next — an inline confirmation or a Stripe redirect — the
   // guest has no session, so this browser needs a receipt saying which orders
@@ -777,9 +789,6 @@ export async function completeReservedOrder(
 ): Promise<CommerceState> {
   const { user } = await requireUser();
   const admin = createAdminClient();
-
-  const betaAccess = await getBetaAccess(user.id, "buyer");
-  if (!betaAccess.eligible) return { error: betaCommerceError("buyer") };
 
   const orderId = String(formData.get("order_id") ?? "");
   if (!orderId) return { error: "Missing order." };

@@ -31,7 +31,7 @@ export const ADMIN_CAPABILITIES: AdminCapability[] = [
   { family: "report.", description: "Action or dismiss moderation reports", requires: "admin" },
   { family: "note.", description: "Record internal notes", requires: "admin" },
   { family: "case.", description: "Claim, label and work operations cases", requires: "admin" },
-  { family: "invitation.", description: "Issue and revoke beta invitations", requires: "admin" },
+  { family: "invitation.", description: "Beta invitations (history: the invite-only beta was removed in OS-W31)", requires: "admin" },
   { family: "operation.", description: "Record the outcome of a provider operation that lost its answer", requires: "admin" },
   { family: "product.", description: "Decide product identity: merge, keep separate, dismiss", requires: "admin" },
   { family: "agent.", description: "Pause and resume the agent: everyone, one side, one member, mandate, listing or account", requires: "admin" },

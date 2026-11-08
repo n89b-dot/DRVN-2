@@ -4,8 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { ButtonLink, EmptyState, Foot, ObjectRow, PaymentModeNotice } from "@/components/ui";
-import { getBetaAccess } from "@/lib/beta-access";
+import { Foot, ObjectRow, PaymentModeNotice } from "@/components/ui";
 import { loadCartSummary, loadInFlightCheckout } from "@/lib/checkout-data";
 import { listSavedCards } from "@/lib/payments/customers";
 import { formatPrice } from "@/lib/payments/fee";
@@ -27,37 +26,6 @@ export default async function CheckoutPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const betaAccess = await getBetaAccess(user?.id, "buyer");
-  if (betaAccess.unavailable) {
-    // The check failed — not a "no". Still no checkout, but the buyer is
-    // told to try again rather than that they aren't invited.
-    return (
-      <div className="wrap pb-10">
-        <EmptyState
-          mark="!"
-          title="We couldn't check your checkout access"
-          action={<ButtonLink href="/checkout">Try again</ButtonLink>}
-        >
-          Something went wrong on our side, so checkout is paused for a moment. Nothing new has been
-          charged.
-        </EmptyState>
-      </div>
-    );
-  }
-  if (betaAccess.enforced && !user) redirect("/login?next=%2Fcheckout");
-  if (!betaAccess.eligible) {
-    return (
-      <div className="wrap pb-10">
-        <EmptyState
-          mark="β"
-          title="Checkout is limited to invited members"
-          action={<ButtonLink href="/marketplace">Back to the marketplace</ButtonLink>}
-        >
-          Your account can still browse DRVN and access existing orders. New purchases require an active beta membership.
-        </EmptyState>
-      </div>
-    );
-  }
 
   // Submitting the shipping step reserves every listing in the basket, and a
   // server action re-renders the route it ran on — so by the time this runs

@@ -27,7 +27,6 @@ import {
   MIN_CHARGE_CENTS,
   chargeWithinBounds,
 } from "@/lib/payments/charge-bounds";
-import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 import { PAYOUTS_NOT_READY_CODE } from "@/lib/payments/payout-readiness";
 
 import { MAX_SHIPPING_CENTS, PAYOUTS_REQUIRED, PHOTO_REQUIRED, listingWriteRefusal } from "./listing-refusal";
@@ -275,9 +274,6 @@ async function readListingFields(formData: FormData, userId: string) {
 
 export async function createListing(_prev: SellState, formData: FormData): Promise<SellState> {
   const { supabase, user } = await requireUser();
-
-  const betaAccess = await getBetaAccess(user.id, "seller");
-  if (!betaAccess.eligible) return { error: betaCommerceError("seller") };
 
   const parsed = await readListingFields(formData, user.id);
   if ("error" in parsed) return { error: parsed.error };
@@ -659,10 +655,6 @@ export async function setListingStatus(
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "") as ListingStatus;
   if (!id || !SETTABLE_STATUSES.includes(status)) return { error: "Missing listing or status." };
-  if (status === "active") {
-    const betaAccess = await getBetaAccess(user.id, "seller");
-    if (!betaAccess.eligible) return { error: betaCommerceError("seller") };
-  }
 
   const { data: existing } = await supabase
     .from("listings")

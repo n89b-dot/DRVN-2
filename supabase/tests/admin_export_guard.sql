@@ -21,7 +21,6 @@ declare
   r record;
   page jsonb;
 begin
-  update public.beta_access_config set enforced = false where singleton = true;
   insert into auth.users(id, email, raw_user_meta_data) values
     (buyer, 'export-buyer@example.test', '{"full_name": "Exportguard Buyer"}'),
     (seller, 'export-seller@example.test', '{"full_name": "Exportguard Seller"}'),
