@@ -9,9 +9,9 @@ Status words: **merged** (on `main`, CI green) · **open** (PR up, merged by han
 | Item | Ids | PR | Merge commit | Status |
 |---|---|---|---|---|
 | Staging and shared dev catch-up | R-staging-behind | #167 | `72ec871` | merged: `20261107220500`–`220520` (#149) applied to both, `20261108140000` (#166) to staging |
-| A1 approval guard | OS-W36 N677 (N676) | #168, #180 | `1b8080c` | merged (#180 open: Codex's FAIL 7 null-safety fix). Cause: card redaction mangled ~0.3% of random UUIDs (fixed by #158), not ordering. FAIL 0 now sweeps 5,000 ids; sql-guard passed 3 times on the PR |
+| A1 approval guard | OS-W36 N677 (N676) | #168, #180 | `1b8080c`, `f22754f` | merged; #180 is Codex's FAIL 7 null-safety fix and a fixed mangled id in FAIL 0. Cause: card redaction mangled ~0.3% of random UUIDs (fixed by #158), not ordering. FAIL 0 now sweeps 5,000 ids; sql-guard passed 3 times on the PR |
 | A2 strict status checks | (owner) | — | — | done by the orchestrator at Neil's go-ahead: `protect-main` ruleset id `26808907`, strict on; `docs/owner/branch-protection.md` records it |
-| A3 Codex queue file | #95 | #171 | `2f68c91` | merged: 106 rows, 26 code PRs owe a review; reviews run rationed after the merges |
+| A3 Codex queue file | #95 | #171 | `2f68c91` | merged: 106 rows. Reviews run rationed: #149, #159, #162, #166, #168, #172 done 8 Nov (findings in `docs/review-evidence/2026-11-08-codex-post-merge-review.md`, OS N690–N694); the rest stay owed in the queue |
 | A4 inventory families | OS-W36 N680 | #168 | `1b8080c` | merged |
 | A5 crosswalk test | #98 | #170 | `4a53c25` | merged (the missing test arrived with #103) |
 | A6 migration order test | #97 | #169 | `d2c09f8` | merged |
@@ -22,6 +22,7 @@ Status words: **merged** (on `main`, CI green) · **open** (PR up, merged by han
 | B3 release-candidate script | OS-W37 R-rcconfig | #172 | `1ffd7bc` | merged |
 | B4 production target | (prep for D4) | — | — | owner: waits for the production project |
 | C1 deletion proof on staging | B7 N418 N439 N442 | — | — | owner: waits for D3 |
+| Codex findings on #149 (deletion scrub) | OS-W34 N418 N690 N691 N692 N693 | #181 | `7b71ce5` | merged: a scrubbed member is never reinstated (late holds go to an operator), other members' notifications lose a deleted member's words, a per-handle lock closes the tombstone race, and retained cases from before #149 were requeued once. `20261108180000` applied to shared dev and staging before merge |
 | C2 transfer recovery | N499 | #176 | `c7dad28` | merged: already fixed by #91; adds N499 tests, corrects the crosswalk |
 | C3 deploy gating | N528 | #175 | `c55bf60` | merged, with D2 |
 | C4 private-car and draft photos | OS-W38 N455 | #178 (#177 closed, branch deleted) | `3698591` | merged; `20261108160000` applied after the merge to shared dev then staging (below); the account export links photos for seven days |
@@ -60,7 +61,7 @@ On 8 November, from about 18:45 to 18:54 UTC, `main` had no ruleset, so `gh pr m
 
 CI's `secrets-full` lane scans every reachable ref (`git log --all`), not just `main` and the PR. On 8 November, #177's first commit carried a JWT-shaped test fixture that gitleaks' generic-api-key rule flags. #177 was closed and replaced by #178 (one clean commit), but its branch `fix/os-w38-private-photos` stayed on the remote. That turned `secrets-full` red on every PR and on `main` at `1b8080c` until the branch was deleted. **Rule:** when a closed PR's history holds a false positive, delete its branch. Main's failed jobs were rerun rather than fixed forward.
 
-**Follow-up (not built yet, its own small PR after the current queue):** scope the history lane to commits reachable from `main` plus the PR head instead of `--all`, or add a `.gitleaks.toml` allowlist for `token=` fixtures in `src/**/*.test.ts`.
+**Follow-up, considered and not built:** scoping the history lane to `main` plus the PR head would stop a stray branch failing every run. But in a public repository every pushed branch is public, so a real secret on any branch is exposed, and `--all` is the right coverage. The safe variant is a narrow `.gitleaks.toml` allowlist for `token=` fixtures in `src/**/*.test.ts`. The executor recommends neither for now: test fixtures should use plainly fake tokens (`not-a-real-token`), and a closed PR whose history holds a false positive gets its branch deleted.
 
 ## Defaults applied
 
@@ -96,4 +97,5 @@ One line each: what to do and where.
 
 ## Blocked
 
+- **N694 (#172's Codex finding):** older prose rows sit outside the two-day staging rule. Recorded only, by design: all 120 are in the frozen baseline and on staging.
 - **#53 design docs reconcile (A7):** 82 files, conflicting with `main` since October, touching components that have changed since. Resolving it is a design session of its own; the brand assets (favicon, icons, manifest, OG cards in `src/lib/og/card.tsx`) are the part worth splitting out. Left open.

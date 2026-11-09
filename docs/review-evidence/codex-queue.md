@@ -97,7 +97,7 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #146 | 2026-11-08 | OS-signals: migration rows record who, which commit and which PR | owed | owed | — |
 | #147 | 2026-11-08 | OS-R-migrations: a verified record-only mode for the migration runner | full | 2026-11-07 | P1 found |
 | #148 | 2026-11-08 | N531 N627 N232: audited admin exports, old message photo metadata s… | full + fix-check | 2026-11-08 | P1 found; fix-check done |
-| #149 | 2026-11-08 | OS-W34 N16 N38: deletion scrubs personal data on a 6-year key clock… | full | 2026-11-08 | P1 found (2 P1, 2 P2; 2026-11-08-codex-post-merge-review.md) |
+| #149 | 2026-11-08 | OS-W34 N16 N38: deletion scrubs personal data on a 6-year key clock… | full | 2026-11-08 | P1 found (2 P1, 2 P2: N690–N693, fixed in #181) |
 | #150 | 2026-11-08 | R69-dmca: blocked-media cache ages from the caller's clock (fixes a… | owed | owed | — |
 | #151 | 2026-11-08 | OS-R-migrations: record-only refuses dynamic SQL it can't parse, ke… | fix-check | 2026-11-07 | fix-check of an earlier PR's findings |
 | #152 | 2026-11-08 | Checkout: resume never adds unrelated cart items; guest hold admiss… | fix-check | 2026-11-07 | fix-check of an earlier PR's findings |
@@ -109,7 +109,7 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #158 | 2026-11-08 | Agent: card-number redaction never corrupts ids | full | 2026-11-08 | P2 found |
 | #159 | 2026-11-08 | Agent: emails containing ids are still redacted for the model | full | 2026-11-08 | clean |
 | #161 | 2026-11-08 | docs(migrations): record 20261108130400 as applied to shared dev | skipped | — | docs only (ruling, 7 Nov) |
-| #162 | 2026-11-08 | OS-signals: staging caught up to main; shared dev history gaps reco… | owed | owed | — |
+| #162 | 2026-11-08 | OS-signals: staging caught up to main; shared dev history gaps reco… | full | 2026-11-08 | clean |
 | #163 | 2026-11-08 | docs(plans): remediation plan from the 7 Nov readiness report | skipped | — | docs only (ruling, 7 Nov) |
 | #164 | 2026-11-08 | OS-W11: an open bank chargeback holds account deletion | full | 2026-11-08 | P1 found |
 | #165 | 2026-11-08 | docs: mark 20261108140000 applied to shared dev (#164) | skipped | — | docs only (ruling, 7 Nov) |
@@ -119,4 +119,12 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #168 | 2026-11-08 | OS-W36 N677 N680: approval guard fails deterministically; job inventory … | full | 2026-11-08 | P2 found (FAIL 7 null-safe; fixed in the next PR) |
 | #170 | 2026-11-08 | test(ci): the crosswalk cites only files that exist; advisory floors … | owed | owed | — |
 | #171 | 2026-11-08 | docs: the Codex review queue moves into the repository (#95) | owed | owed | — |
-| #172 | 2026-11-08 | OS-W37 R-rcconfig R-staging-behind: guest hold caps is the 15th release … | full | 2026-11-08 | P2 found (legacy prose rows outside the staging rule; filed) |
+| #172 | 2026-11-08 | OS-W37 R-rcconfig R-staging-behind: guest hold caps is the 15th release … | full | 2026-11-08 | P2 found (N694, recorded only) |
+| #173 | 2026-11-08 | OS-W38 N540: the sandbox payment override can never be on a hosted deployment | owed | owed | — |
+| #174 | 2026-11-08 | OS-W38 N686: members from before the 18+ confirmation confirm it once at their next sign-in | owed | owed | — |
+| #175 | 2026-11-08 | OS-W39 N634 N528 N224: deploy pipeline gated on release-gate and migrations; infrastructure… | owed | owed | — |
+| #176 | 2026-11-08 | N499: crash recovery finds an orphaned transfer past the newest 1,000, and never re-issues… | owed | owed | — |
+| #178 | 2026-11-08 | OS-W38 N455: member photos are private objects, shown through signed URLs | owed | owed | — |
+| #179 | 2026-11-08 | docs: remediation record brought current; branch protection requires up-to-date… | skipped | — | docs only (ruling, 7 Nov) |
+| #180 | 2026-11-08 | OS-W36 N677: FAIL 7 is null-safe and FAIL 0 always includes a mangled id (Codex review… | owed | owed | — |
+| #181 | 2026-11-08 | OS-W34 N418: late holds after the scrub, notification previews, handle lock, old retained… | owed | owed | — |
