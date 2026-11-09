@@ -21,7 +21,11 @@ import { sitemapPages } from "@/lib/sitemap-pages";
 import robots from "@/app/robots";
 
 it("answers during a database outage with fixed sitemaps and no database read", async () => {
+  // The production rules: only a deployment named production lists the
+  // sitemaps (#121, src/lib/deployment.test.ts covers the rest).
+  vi.stubEnv("DRVN_DEPLOY_ENV", "production");
   const result = await robots();
+  vi.unstubAllEnvs();
   expect(result.sitemap).toEqual(["https://drvn.example/sitemap.xml", "https://drvn.example/catalog/sitemap/index.xml"]);
   expect(result.host).toBe("https://drvn.example");
   const rules = Array.isArray(result.rules) ? result.rules : [result.rules];
