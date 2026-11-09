@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ sign: vi.fn(), reportError: vi.fn() }));
+const mocks = vi.hoisted(() => ({ sign: vi.fn(), rpc: vi.fn(), reportError: vi.fn() }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
 vi.mock("@supabase/supabase-js", () => ({
-  createClient: () => ({ storage: { from: (bucket: string) => ({ createSignedUrls: (paths: string[], expiresIn: number) => mocks.sign(bucket, paths, expiresIn) }) } }),
+  createClient: () => ({
+    storage: { from: (bucket: string) => ({ createSignedUrls: (paths: string[], expiresIn: number) => mocks.sign(bucket, paths, expiresIn) }) },
+    rpc: (fn: string, args: unknown) => mocks.rpc(fn, args),
+  }),
 }));
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://proj.supabase.co";
@@ -20,6 +23,8 @@ const signedFor = (bucket: string, path: string) => `${O}/storage/v1/object/sign
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // No shared memo by default: the read finds nothing and the offer keeps this instance's URL.
+  mocks.rpc.mockImplementation(async (fn: string, args: { p_signed?: unknown[] }) => ({ data: fn === "photo_signatures_offer" ? args.p_signed : [], error: null }));
   mocks.sign.mockImplementation(async (bucket: string, paths: string[]) => ({
     data: paths.map((path) => ({ path, signedUrl: signedFor(bucket, path), error: null })),
     error: null,
@@ -97,3 +102,47 @@ describe("photo signing at the database boundary (N455)", () => {
     expect(EXPORT_PHOTO_LINK_SECONDS).toBe(604_800);
   });
 });
+
+describe("one signed URL per photo per window across instances (OS-W41, report five #117)", () => {
+  const at = (minute: number) => Date.UTC(2026, 10, 10, 9, minute);
+
+  it("uses the URL another instance already signed, without minting", async () => {
+    const url = canonical("car-images", "shared-hit.webp");
+    const theirs = `${O}/storage/v1/object/sign/car-images/${ME}/shared-hit.webp?token=other-instance`;
+    mocks.rpc.mockImplementation(async (fn: string) => ({
+      data: fn === "photo_signatures_read" ? [{ bucket: "car-images", path: `${ME}/shared-hit.webp`, signed_url: theirs }] : [],
+      error: null,
+    }));
+    expect((await signedPhotoUrls([url], at(1))).get(url)).toBe(theirs);
+    expect(mocks.sign).not.toHaveBeenCalled();
+    expect(mocks.rpc).toHaveBeenCalledWith("photo_signatures_read", { p_window: expect.any(Number), p_objects: [{ bucket: "car-images", path: `${ME}/shared-hit.webp` }] });
+  });
+
+  it("offers what it minted and shows the race's winner", async () => {
+    const url = canonical("listing-images", "race.webp");
+    const winner = `${O}/storage/v1/object/sign/listing-images/${ME}/race.webp?token=won-first`;
+    mocks.rpc.mockImplementation(async (fn: string) => ({
+      data: fn === "photo_signatures_offer" ? [{ bucket: "listing-images", path: `${ME}/race.webp`, signed_url: winner }] : [],
+      error: null,
+    }));
+    expect((await signedPhotoUrls([url], at(2))).get(url)).toBe(winner);
+    expect(mocks.sign).toHaveBeenCalledTimes(1);
+    expect(mocks.rpc).toHaveBeenCalledWith("photo_signatures_offer", {
+      p_window: expect.any(Number),
+      p_signed: [{ bucket: "listing-images", path: `${ME}/race.webp`, signed_url: signedFor("listing-images", `${ME}/race.webp`) }],
+    });
+  });
+
+  it("the export's fixed-life links never touch the shared memo", async () => {
+    await signPhotosForExport({ url: canonical("car-images", "export-shared.webp") }, at(3));
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("signs on its own, and reports once, when the shared memo is unavailable", async () => {
+    mocks.rpc.mockImplementation(async () => ({ data: null, error: { message: "function public.photo_signatures_read does not exist" } }));
+    const url = canonical("activity-images", "no-shared.webp");
+    expect((await signedPhotoUrls([url], at(4))).get(url)).toBe(signedFor("activity-images", `${ME}/no-shared.webp`));
+    expect(mocks.reportError).toHaveBeenCalledWith("[photos] shared signing memo unavailable; signing per instance", expect.anything());
+  });
+});
+

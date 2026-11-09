@@ -32,6 +32,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 10 — one signed photo URL per window across instances: report five #117 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110100000_photo_signatures_shared.sql` | not applied |
+
+Adds `private.photo_signatures` and the service-role functions `photo_signatures_read` and `photo_signatures_offer`, the shared memo that makes every app instance show one signed URL per member photo per hour-long window (`src/lib/supabase/photo-signing.ts`). Order does not matter: the app signs per instance, as before, while the functions are missing (it reports that once and retries every five minutes). Nothing else reads the table.
+
 ## November 8 — deletion: late holds after the scrub, other members' notifications, the tombstone race, old retained cases: N418 (not applied anywhere)
 
 | File | Applied to |

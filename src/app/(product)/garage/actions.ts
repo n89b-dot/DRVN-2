@@ -14,6 +14,7 @@ import { allowAction, rateLimitMessage, RATE_LIMITS } from "@/lib/rate-limit";
 import type { PartLinkFields } from "@/lib/mods/part-link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { signedPhotoUrl } from "@/lib/supabase/photo-signing";
 import { capture } from "@/lib/analytics";
 import { reportError } from "@/lib/monitoring";
 import { confirmIdentity } from "@/lib/confirm-identity";
@@ -550,7 +551,8 @@ export async function readPartLink(url: string): Promise<
   // The mod line's fields only: where the fetch landed is the agent's provenance, not part of the line.
   const { ok, fetched_url: fetchedUrl, ...part } = result;
   void fetchedUrl;
-  return { ok, part };
+  // #105: the thumbnail was just stored in a private bucket; the editor shows it signed.
+  return { ok, part: { ...part, image_url: await signedPhotoUrl(part.image_url) } };
 }
 
 /**
@@ -608,7 +610,9 @@ export async function addCarImage(carId: string, url: string): Promise<ActionSta
   const changed = await galleryChange(carId, "add", { url });
   if (changed.error) return { error: changed.error };
   await finalizeMediaUrls(supabase, [url]);
-  return { image: changed.result?.image };
+  // #105: the service role's answer is canonical; the gallery shows the photo at once.
+  const image = changed.result?.image;
+  return { image: image ? { ...image, url: await signedPhotoUrl(image.url) } : image };
 }
 
 export async function deleteCarImage(formData: FormData): Promise<ActionState> {

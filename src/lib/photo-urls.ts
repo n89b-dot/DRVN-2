@@ -114,3 +114,16 @@ export function signingWindow(nowMs: number): { window: number; expiresIn: numbe
   const window = Math.floor(now / SIGNING_WINDOW_SECONDS);
   return { window, expiresIn: (window + 2) * SIGNING_WINDOW_SECONDS - now };
 }
+
+const UNSIGNED_MEMBER_PHOTO = new RegExp(`/storage/v1/object/public/(?:${BUCKETS})/`);
+
+/**
+ * A member photo still in its canonical spelling: signing failed or a loader
+ * read it without the signing wrapper, and the storage layer will refuse it.
+ * `Media` shows the no-photo plate for it rather than a broken image (#105).
+ * Origin-agnostic on purpose, so it works in the browser bundle too.
+ */
+export function isUnsignedMemberPhoto(src: string | null | undefined): boolean {
+  return typeof src === "string" && UNSIGNED_MEMBER_PHOTO.test(src);
+}
+

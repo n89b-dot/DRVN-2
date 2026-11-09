@@ -157,7 +157,8 @@ export default async function SellPage({
     // P-9: no client select grant on the floor; see `my_default_offer_floor`.
     supabase.rpc("my_default_offer_floor"),
     importParam
-      ? createAdminClient()
+      ? // #105: the import's photos are shown as the form's previews.
+        createAdminClient({ signPhotos: true })
           .from("listing_imports")
           .select("*")
           .eq("id", importParam)

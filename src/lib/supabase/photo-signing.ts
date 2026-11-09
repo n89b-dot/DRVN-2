@@ -26,9 +26,17 @@ import {
  *    so this is the visibility check the page already made, applied once.
  *
  * Signed URLs are minted in batches per bucket and reused for the rest of the
- * hour-long signing window in this process, so one photo keeps one URL for
- * the hour (the image optimiser and browsers can cache it), and each lasts to
- * the end of the next window.
+ * hour-long signing window, so one photo keeps one URL for the hour (the
+ * image optimiser and browsers can cache it), and each lasts to the end of
+ * the next window. "One URL" holds across server instances (#117): a
+ * process memo sits in front of a shared one in the database
+ * (20261110100000, `photo_signatures_read` / `_offer`), where the first
+ * instance to sign a photo in a window wins and every other reads its URL.
+ * If the shared memo is unreachable, the instance signs on its own, as before.
+ *
+ * A photo that can't be signed keeps its canonical URL, which the storage
+ * layer refuses. That is reported here, and `Media` shows the no-photo plate
+ * for it instead of a broken image (src/components/ui/primitives.tsx).
  */
 
 type Signed = { window: number; url: string };
@@ -80,26 +88,86 @@ export async function signedPhotoUrls(
     for (const [key, value] of memo) if (value.window !== window) memo.delete(key);
     if (memo.size > MAX_MEMO) memo.clear();
   }
+
+  const keep = (url: string, signed: string) => {
+    out.set(url, signed);
+    if (!fixedExpiresIn) memo.set(url, { window, url: signed });
+  };
+  const urlByObject = new Map<string, string>();
+  for (const [bucket, objects] of missing) for (const o of objects) urlByObject.set(`${bucket}/${o.path}`, o.url);
+
+  // The shared memo first: another instance may already have signed these.
+  if (!fixedExpiresIn) {
+    const known = await sharedSignatures("photo_signatures_read", window, [...missing].flatMap(([bucket, objects]) => objects.map((o) => ({ bucket, path: o.path }))));
+    for (const row of known) {
+      const url = urlByObject.get(`${row.bucket}/${row.path}`);
+      if (url) keep(url, row.signed_url);
+    }
+  }
+
+  const minted: { bucket: string; path: string; signed_url: string }[] = [];
   await Promise.all(
-    [...missing].map(async ([bucket, objects]) => {
+    [...missing].map(async ([bucket, all]) => {
+      const objects = all.filter((o) => !out.has(o.url));
+      if (!objects.length) return;
       try {
         const { data, error } = await signingClient()
           .storage.from(bucket)
           .createSignedUrls(objects.map((o) => o.path), expiresIn);
         if (error) throw error;
         const byPath = new Map((data ?? []).filter((d) => d.signedUrl && !d.error).map((d) => [d.path, d.signedUrl]));
+        const refused = objects.filter((o) => !byPath.has(o.path));
+        if (refused.length) reportError("[photos] storage would not sign some photos", { bucket, count: refused.length });
         for (const object of objects) {
           const signed = byPath.get(object.path);
-          if (!signed) continue;
-          out.set(object.url, signed);
-          if (!fixedExpiresIn) memo.set(object.url, { window, url: signed });
+          if (signed) minted.push({ bucket, path: object.path, signed_url: signed });
         }
       } catch (error) {
         reportError("[photos] signing failed", { bucket, count: objects.length, error });
       }
     })
   );
+  if (!minted.length) return out;
+  if (fixedExpiresIn) {
+    for (const m of minted) out.set(urlByObject.get(`${m.bucket}/${m.path}`)!, m.signed_url);
+    return out;
+  }
+  // Offer what this instance minted; where another instance won the race, its URL is the one shown.
+  const winners = new Map((await sharedSignatures("photo_signatures_offer", window, minted)).map((row) => [`${row.bucket}/${row.path}`, row.signed_url]));
+  for (const m of minted) {
+    const key = `${m.bucket}/${m.path}`;
+    keep(urlByObject.get(key)!, winners.get(key) ?? m.signed_url);
+  }
   return out;
+}
+
+type SharedRow = { bucket: string; path: string; signed_url: string };
+let sharedUnavailableReported = false;
+/** After a failure, sign per instance for a while instead of paying for a call that fails. */
+let sharedRetryAt = 0;
+const SHARED_RETRY_MS = 5 * 60_000;
+
+/** The shared memo's read or offer; on any failure, nothing (this instance's own URLs stand). */
+async function sharedSignatures(
+  fn: "photo_signatures_read" | "photo_signatures_offer",
+  window: number,
+  objects: readonly { bucket: string; path: string; signed_url?: string }[],
+): Promise<SharedRow[]> {
+  if (!objects.length || Date.now() < sharedRetryAt) return [];
+  try {
+    const args = fn === "photo_signatures_read" ? { p_window: window, p_objects: objects } : { p_window: window, p_signed: objects };
+    // The shared memo's functions are not in the generated types' public schema client used here.
+    const { data, error } = await (signingClient() as unknown as { rpc: (f: string, a: unknown) => Promise<{ data: SharedRow[] | null; error: unknown }> }).rpc(fn, args);
+    if (error) throw error;
+    return data ?? [];
+  } catch (error) {
+    sharedRetryAt = Date.now() + SHARED_RETRY_MS;
+    if (!sharedUnavailableReported) {
+      sharedUnavailableReported = true;
+      reportError("[photos] shared signing memo unavailable; signing per instance", { fn, error });
+    }
+    return [];
+  }
 }
 
 /** One signed photo URL; anything that isn't a member photo comes back as it was. */
