@@ -16,6 +16,7 @@ The dated record that each piece of production and staging infrastructure was se
 | Supabase project (`drvn-staging` exists; production per runbook §1) (D4) | 2026-11-07, Neil (`zubstjuviwourzgrziqc`) | | `docs/staging-setup.md` |
 | Point-in-time recovery (D4; recommended on for production) | n/a: daily backups on staging | | |
 | Production added to `supabase/migration-targets.json` by a PR (B4) | n/a | | |
+| Vehicle catalogue filled and generations seeded (`scripts/import-vehiclesdb.mjs --apply`, runbook §3a, #119) | | | the script's closing counts |
 | Email provider, sending domain verified (DKIM, return-path, DMARC) (D-mail) | | | |
 | Stripe Connect (Express), platform profile, restricted keys (E1) | | | |
 | Stripe webhooks (`scripts/owner/stripe-webhooks.mjs`), platform and Connect (E1) | | | |

@@ -120,6 +120,33 @@ every table in `public`.
    config declares this as `"guestCheckout": "capped"` (§13), and the
    `guest-hold-caps` gate proves it on staging.
 
+## 2a. Fill the vehicle catalogue [ENGINEER]
+
+A new project's catalogue is empty. `0041_vehicle_catalog.sql` seeds makes
+and models from cache tables that are empty on a new project, and
+`20261020100000_vehicle_generations.sql` joins its curated generations to that
+catalogue, so it inserts nothing. Until this step runs, the Add Car dialog,
+the sell form's fitment fields and the Marketplace's make filters have
+nothing to offer (#119).
+
+From the same staging-only checkout as step 2, after the schema and before
+any tester signs up:
+
+```bash
+node scripts/import-vehiclesdb.mjs --target staging            # dry run: fetches, verifies, counts
+node scripts/import-vehiclesdb.mjs --target staging --apply    # imports, then re-runs the generations seed
+```
+
+The script reads the env file the way the migration runner does
+(`--env-file`, default `.env.local`). It fetches VehiclesDB's car catalogue
+**at the pinned release** (`scripts/lib/vehicle-catalog.mjs`: a commit, and a
+sha256 per file; other bytes are refused). It upserts makes and models, then
+runs the generations migration's own curated seed and backfill again, all in
+one transaction. Expect about 300 makes, about 5,500 models and a non-zero
+generation count. All of it is idempotent, so re-running after a VehiclesDB
+upgrade (a PR that changes the pin) is safe. Attribution ("Vehicle data by
+VehiclesDB") is already in the Add Car dialog; the data is CC BY 4.0.
+
 ## 3. Supabase Auth [OWNER clicks, ENGINEER can drive]
 
 Authentication → URL configuration:
