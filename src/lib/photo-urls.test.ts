@@ -62,3 +62,30 @@ describe("member photo spellings (N455)", () => {
     expect(signingWindow((start + SIGNING_WINDOW_SECONDS) * 1000).window).toBe(early.window + 1);
   });
 });
+
+describe("photo fields and expired links (N940, #178 review)", () => {
+  it("names the photo-shaped keys and refuses member-written ones", async () => {
+    const { isPhotoFieldKey } = await import("./photo-urls");
+    for (const key of ["url", "urls", "image", "images", "image_url", "cover_image_url", "cover_url", "imported_images", "removed_image_urls", "beforeUrl", "afterUrl", "thumbnail"]) {
+      expect(isPhotoFieldKey(key, {}), key).toBe(true);
+    }
+    for (const key of ["body", "text", "description", "bio", "title", "product_url", "source_url", "video_url", "href", "links", "content_urls"]) {
+      expect(isPhotoFieldKey(key, {}), key).toBe(false);
+    }
+    expect(isPhotoFieldKey("url", { label: "website", url: "x" })).toBe(false);
+  });
+
+  it("an expired or malformed signed link reads as expired; a live one and anything else does not", async () => {
+    const { signedPhotoLinkExpired } = await import("./photo-urls");
+    const at = Date.UTC(2026, 10, 10, 12);
+    const link = (payload: object | null) =>
+      `https://p.supabase.co/storage/v1/object/sign/listing-images/u/a.webp?token=e30.${payload ? Buffer.from(JSON.stringify(payload)).toString("base64url") : ""}.s`;
+    expect(signedPhotoLinkExpired(link({ exp: at / 1000 - 1 }), at)).toBe(true);
+    expect(signedPhotoLinkExpired(link({ exp: at / 1000 + 600 }), at)).toBe(false);
+    expect(signedPhotoLinkExpired(link({}), at)).toBe(true);
+    expect(signedPhotoLinkExpired(link(null), at)).toBe(true);
+    expect(signedPhotoLinkExpired("https://p.supabase.co/storage/v1/object/public/listing-images/u/a.webp", at)).toBe(false);
+    expect(signedPhotoLinkExpired("/hero.png", at)).toBe(false);
+    expect(signedPhotoLinkExpired(null, at)).toBe(false);
+  });
+});

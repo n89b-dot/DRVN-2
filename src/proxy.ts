@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { blockedMediaKeys, imageRequestObjectKey } from "@/lib/copyright/blocked-media";
 import { buildContentSecurityPolicy, reportingEndpointsHeader } from "@/lib/csp";
+import { signedPhotoLinkExpired } from "@/lib/photo-urls";
 import { updateSession } from "@/lib/supabase/proxy";
 
 export async function proxy(request: NextRequest) {
@@ -30,6 +31,15 @@ export async function proxy(request: NextRequest) {
  * no session refresh, no policy headers, as before this gate existed.
  */
 async function imageGate(request: NextRequest) {
+  // #178 review: a member photo's signed link that has run out is refused
+  // before the optimiser can serve the copy it kept for the object's own
+  // (longer) Cache-Control.
+  if (signedPhotoLinkExpired(request.nextUrl.searchParams.get("url"))) {
+    return new NextResponse("This photo link has expired.", {
+      status: 404,
+      headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
   const key = imageRequestObjectKey(request.nextUrl);
   if (key && (await blockedMediaKeys()).has(key)) {
     return new NextResponse("This image was removed after a copyright notice.", {

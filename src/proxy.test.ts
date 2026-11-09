@@ -109,3 +109,28 @@ describe("copyright image gate", () => {
     expect(blocked.keys).not.toHaveBeenCalled();
   });
 });
+
+describe("an expired member-photo link is refused before the optimiser's cache (N940, #178 review)", () => {
+  const OWNER = "8f6c2a52-3d1e-4b8a-9c3f-2b1d4e5f6a7b";
+  const token = (exp: number | undefined) =>
+    ["e30", Buffer.from(JSON.stringify(exp === undefined ? { url: "x" } : { url: "x", exp })).toString("base64url"), "sig"].join(".");
+  const signedRequest = (exp: number | undefined) =>
+    new NextRequest(
+      `https://drvn.example/_next/image?url=${encodeURIComponent(`https://project.supabase.co/storage/v1/object/sign/car-images/${OWNER}/a.webp?token=${token(exp)}`)}&w=640&q=75`,
+    );
+
+  it("refuses an expired, unreadable or expiry-less token with a 404 and nothing cacheable", async () => {
+    blocked.keys.mockResolvedValue(new Set());
+    for (const exp of [Math.floor(Date.now() / 1000) - 60, undefined]) {
+      const response = await proxy(signedRequest(exp));
+      expect(response.status).toBe(404);
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
+    }
+  });
+
+  it("passes a live token through", async () => {
+    blocked.keys.mockResolvedValue(new Set());
+    const response = await proxy(signedRequest(Math.floor(Date.now() / 1000) + 3600));
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+  });
+});

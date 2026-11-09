@@ -146,3 +146,54 @@ describe("one signed URL per photo per window across instances (N954, report fiv
   });
 });
 
+
+describe("only photo fields are signed, never a URL a member wrote (N940, #178 review)", () => {
+  const other = canonical("car-images", "someone-elses-private.webp");
+  const mine = canonical("car-images", "my-cover.webp");
+  const json = (value: unknown) => new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } });
+  const read = async (value: unknown) => {
+    const res = await photoFetch((async () => json(value)) as unknown as typeof fetch, { sign: true })(`${O}/rest/v1/rpc/x`, { method: "POST" });
+    return res.json();
+  };
+
+  it("leaves a photo URL pasted into a comment, a description, a bio or a whole-value comment canonical", async () => {
+    const out = await read([
+      { body: `look at this ${other} nice` },
+      { body: other },
+      { description: other, bio: `${other}`, title: other },
+    ]);
+    expect(JSON.stringify(out)).not.toContain("/object/sign/");
+    expect(mocks.sign).not.toHaveBeenCalled();
+  });
+
+  it("leaves a profile link, a product link and a video link canonical", async () => {
+    const out = await read({ links: [{ label: "website", url: other }], product_url: other, video_url: other, source_url: other });
+    expect(JSON.stringify(out)).not.toContain("/object/sign/");
+    expect(mocks.sign).not.toHaveBeenCalled();
+  });
+
+  it("signs the photo fields: url rows, cover and image columns, post image and before/after blocks", async () => {
+    const out = await read({
+      cover_image_url: mine,
+      car_images: [{ url: canonical("car-images", "g1.webp") }],
+      image: canonical("listing-images", "card.webp"),
+      body: [
+        { type: "images", urls: [canonical("activity-images", "p1.webp")] },
+        { type: "before_after", beforeUrl: canonical("activity-images", "b.webp"), afterUrl: canonical("activity-images", "a.webp") },
+        { type: "text", text: `see ${other}` },
+      ],
+    });
+    expect(out.cover_image_url).toBe(signedFor("car-images", `${ME}/my-cover.webp`));
+    expect(out.car_images[0].url).toBe(signedFor("car-images", `${ME}/g1.webp`));
+    expect(out.image).toBe(signedFor("listing-images", `${ME}/card.webp`));
+    expect(out.body[0].urls[0]).toBe(signedFor("activity-images", `${ME}/p1.webp`));
+    expect(out.body[1].beforeUrl).toBe(signedFor("activity-images", `${ME}/b.webp`));
+    expect(out.body[2].text).toBe(`see ${other}`);
+  });
+
+  it("the export links the member's photo fields for seven days and not a URL they wrote in a comment", async () => {
+    const out = await signPhotosForExport({ cars: [{ cover_image_url: mine }], comments: [{ body: other }] });
+    expect(out.cars[0].cover_image_url).toBe(signedFor("car-images", `${ME}/my-cover.webp`));
+    expect(out.comments[0].body).toBe(other);
+  });
+});

@@ -127,3 +127,93 @@ export function isUnsignedMemberPhoto(src: string | null | undefined): boolean {
   return typeof src === "string" && UNSIGNED_MEMBER_PHOTO.test(src);
 }
 
+/**
+ * Which values in a database answer are photo fields that may be signed
+ * (#178 review, P1). Signing every canonical photo URL anywhere in a
+ * response let a member paste someone else's private photo URL into a
+ * comment, a description, a bio or a profile link and get it signed for every
+ * reader, the export included. Only whole values under a photo-shaped key are
+ * signed: the columns and aliases that hold photos (url, image, images,
+ * image_url, cover_image_url, cover_url, imported_images, a post's image and
+ * before/after blocks), never a URL inside prose, and never a profile link's
+ * `{ label, url }`. Every structured photo column is also owner-checked when
+ * written (member_media_ref_ok, 20261107203000), so what these keys hold is
+ * the row owner's own photo.
+ */
+const PHOTO_KEY = /(?:^|_)(?:image|images|photo|photos|cover|covers|thumbnail|thumb)(?:_urls?)?$/i;
+const PHOTO_EXACT = new Set(["url", "urls", "src", "beforeUrl", "afterUrl"]);
+const NOT_PHOTO = new Set(["product_url", "source_url", "canonical_url", "video_url", "content_urls", "href", "website", "links", "link"]);
+
+export function isPhotoFieldKey(key: string | null, holder: Record<string, unknown> | null): boolean {
+  if (!key || NOT_PHOTO.has(key)) return false;
+  // A profile link ({ label, url }) is member-written text, not a photo.
+  if (key === "url" && holder && "label" in holder) return false;
+  return PHOTO_EXACT.has(key) || PHOTO_KEY.test(key);
+}
+
+function isWholeCanonicalPhoto(value: string, origin: string): boolean {
+  return value.startsWith(origin) && signedPhotoObject(value, origin) !== null;
+}
+
+/** The canonical photo URLs held in photo fields of a parsed answer. */
+export function photoFieldUrls(value: unknown, origin: string | null = storageOrigin()): string[] {
+  if (!origin) return [];
+  const found = new Set<string>();
+  const visit = (node: unknown, key: string | null, holder: Record<string, unknown> | null) => {
+    if (typeof node === "string") {
+      if (isPhotoFieldKey(key, holder) && isWholeCanonicalPhoto(node, origin)) found.add(node);
+    } else if (Array.isArray(node)) {
+      for (const item of node) visit(item, key, holder);
+    } else if (node && typeof node === "object") {
+      const object = node as Record<string, unknown>;
+      for (const [k, v] of Object.entries(object)) visit(v, k, object);
+    }
+  };
+  visit(value, null, null);
+  return [...found];
+}
+
+/** The same answer with each photo field's canonical URL replaced by its signed spelling, where one was minted. */
+export function replacePhotoFields<T>(value: T, signed: ReadonlyMap<string, string>, origin: string | null = storageOrigin()): T {
+  if (!origin || !signed.size) return value;
+  const visit = (node: unknown, key: string | null, holder: Record<string, unknown> | null): unknown => {
+    if (typeof node === "string") {
+      return isPhotoFieldKey(key, holder) ? (signed.get(node) ?? node) : node;
+    }
+    if (Array.isArray(node)) return node.map((item) => visit(item, key, holder));
+    if (node && typeof node === "object") {
+      const object = node as Record<string, unknown>;
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(object)) out[k] = visit(v, k, object);
+      return out;
+    }
+    return node;
+  };
+  return visit(value, null, null) as T;
+}
+
+const SIGNED_ROUTE = new RegExp(`/storage/v1/object/sign/(?:${BUCKETS})/[^?#]+\\?(?:[^#]*&)?token=([A-Za-z0-9._~-]+)`);
+
+/**
+ * Whether an image source is a member-photo link whose token has run out, or
+ * can't be read (#178 review, P2). Next keeps a resized copy for the larger
+ * of its TTL and the object's own Cache-Control, so an old link could keep
+ * serving a photo long after it expired, including after its car went
+ * private. The proxy refuses such a source before the optimiser can answer
+ * from its cache. A token with a later expiry that wasn't minted by Storage
+ * misses the cache and is refused by Storage itself.
+ */
+export function signedPhotoLinkExpired(source: string | null, nowMs = Date.now()): boolean {
+  if (!source) return false;
+  const match = SIGNED_ROUTE.exec(source);
+  if (!match) return false;
+  try {
+    const payload = match[1].split(".")[1];
+    if (!payload) return true;
+    const json = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(payload.length / 4) * 4, "=")));
+    return typeof json.exp !== "number" || json.exp * 1000 <= nowMs;
+  } catch {
+    return true;
+  }
+}
+

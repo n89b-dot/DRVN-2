@@ -14,6 +14,7 @@ import { allowAction, rateLimitMessage, RATE_LIMITS } from "@/lib/rate-limit";
 import type { PartLinkFields } from "@/lib/mods/part-link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { canonicalPhotoUrl } from "@/lib/photo-urls";
 import { signedPhotoUrl } from "@/lib/supabase/photo-signing";
 import { capture } from "@/lib/analytics";
 import { reportError } from "@/lib/monitoring";
@@ -1082,7 +1083,10 @@ export async function updateActivityPost(
     if (previous.error) {
       reportError("[activity] prior image projection lookup failed", { postId, error: previous.error });
     } else {
-      previousImages = previous.data ?? [];
+      // Read through the signing client, so these come back signed; compared
+      // with the canonical URLs the save keeps, every kept photo looked
+      // removed and went to the deletion check (#178 review).
+      previousImages = (previous.data ?? []).map((image) => ({ url: canonicalPhotoUrl(image.url) }));
     }
 
     // A quick post's photos live in the gallery and in no block, so the
@@ -1091,7 +1095,7 @@ export async function updateActivityPost(
     // in a block aren't the editor's to drop: they are carried through.
     const { normalizeBlocks: normalizePrior } = await import("@/lib/activity-blocks");
     const priorBlockUrls = new Set(
-      normalizePrior(post.body ?? []).flatMap((b) => (b.type === "images" ? b.urls : []))
+      normalizePrior(post.body ?? []).flatMap((b) => (b.type === "images" ? b.urls.map((url) => canonicalPhotoUrl(url)) : []))
     );
     // The edit page now hands those photos to the editor as a photos block,
     // so a body that arrives WITH photos is the member's full choice

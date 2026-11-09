@@ -5,8 +5,8 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { reportError } from "@/lib/monitoring";
 import {
   canonicalizePhotoUrlsInText,
-  canonicalPhotoUrlsInText,
-  replacePhotoUrlsInText,
+  photoFieldUrls,
+  replacePhotoFields,
   signedPhotoObject,
   signingWindow,
   storageOrigin,
@@ -176,19 +176,32 @@ export async function signedPhotoUrl<T extends string | null | undefined>(url: T
   return ((await signedPhotoUrls([url])).get(url) ?? url) as T;
 }
 
-/** Every canonical photo URL inside a text (a JSON body) signed, in one batch per bucket. */
+/**
+ * The photo fields of a JSON answer signed, in one batch per bucket. Only
+ * whole values under photo-shaped keys (src/lib/photo-urls.ts,
+ * isPhotoFieldKey): a photo URL written into prose, a profile link or any
+ * other member-written field stays canonical, which the storage layer
+ * refuses (#178 review). Text that isn't JSON is left as it is.
+ */
 export async function signPhotoUrlsInText(text: string): Promise<string> {
-  const urls = canonicalPhotoUrlsInText(text);
+  if (!text.includes("/storage/v1/object/public/")) return text;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return text;
+  }
+  const urls = photoFieldUrls(parsed);
   if (!urls.length) return text;
-  return replacePhotoUrlsInText(text, await signedPhotoUrls(urls));
+  return JSON.stringify(replacePhotoFields(parsed, await signedPhotoUrls(urls)));
 }
 
-/** Every canonical photo URL in a value (rows, nested objects) signed. */
+/** Every photo field in a value (rows, nested objects) signed. */
 export async function signPhotosIn<T>(value: T): Promise<T> {
   if (value == null) return value;
-  const text = JSON.stringify(value);
-  const signed = await signPhotoUrlsInText(text);
-  return signed === text ? value : (JSON.parse(signed) as T);
+  const urls = photoFieldUrls(value);
+  if (!urls.length) return value;
+  return replacePhotoFields(value, await signedPhotoUrls(urls));
 }
 
 /** How long a photo link in a member's data export opens for: the export's own download life. */
@@ -198,14 +211,14 @@ export const EXPORT_PHOTO_LINK_SECONDS = 7 * 24 * 60 * 60;
  * A member's own photos in their data export (N455): the stored canonical
  * URL no longer opens, so each becomes a link that opens for seven days. The
  * rows were selected for the requesting member only, by the export's own
- * ownership filters.
+ * ownership filters, and only photo fields are linked: another member's photo
+ * URL the member wrote into a comment or description is not (#178 review).
  */
 export async function signPhotosForExport<T>(value: T, nowMs = Date.now()): Promise<T> {
   if (value == null) return value;
-  const text = JSON.stringify(value);
-  const urls = canonicalPhotoUrlsInText(text);
+  const urls = photoFieldUrls(value);
   if (!urls.length) return value;
-  return JSON.parse(replacePhotoUrlsInText(text, await signedPhotoUrls(urls, nowMs, EXPORT_PHOTO_LINK_SECONDS))) as T;
+  return replacePhotoFields(value, await signedPhotoUrls(urls, nowMs, EXPORT_PHOTO_LINK_SECONDS));
 }
 
 function requestUrl(input: RequestInfo | URL): string {
