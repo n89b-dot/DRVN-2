@@ -3,15 +3,23 @@
 The dev seed scripts (`.seed-community.mjs`, `.seed-stories.mjs`,
 `.seed-supercars.mjs`) sign in as ten shared test accounts
 (`kaito@drvn.test`, `marisol@drvn.test`, `tommy@drvn.test`, `lena@`,
-`marcus@`, `jade@`, `ryo@`, `dario@`, `imani@`, `felix@drvn.test`). They now
-read the password from `DRVN_SEED_PASSWORD`, but the old hard-coded password
-is still in git history. Anyone with a copy of the repo can sign in to those
-accounts on the shared dev project until the password changes.
+`marcus@`, `jade@`, `ryo@`, `dario@`, `imani@`, `felix@drvn.test`). They read
+the password from `DRVN_SEED_PASSWORD`, which lives only in `.env.local` and
+the password manager, never in the repository.
 
-These are test accounts on the dev project, not real members. The risk is
-someone posting or messaging as them on dev, or using them to poke at dev
-data. It is not a production risk, but it should be closed before the repo is
-shared more widely (for example, made public for branch protection).
+**Rotated on 7 November 2026** on the shared dev project, together with the
+console-admin and viz-check passwords (R-password; `README.md` in this folder
+records it). The password that was once hard-coded is still in git history,
+and that is harmless: it opens nothing since the rotation, and rewriting
+history would disrupt every clone. What remains for the owner is to say so in
+the Intelligence OS, which closes the item on the owner's word, not on this
+page.
+
+These are test accounts on the dev project, not real members. Rotate again
+whenever the value may have leaked (a shared screen, a pasted `.env.local`),
+and before any new project is seeded. The browser suite's own throwaway
+accounts (`e2e-*@drvn.test`) take a random password per account from
+`e2e/helpers.ts` and need no rotation.
 
 Script: `scripts/owner/rotate-seed-password.mjs`. Who: owner, or an engineer
 with the dev project's secret key. About 5 minutes.

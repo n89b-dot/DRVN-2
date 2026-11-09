@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { fixtureAdmin } from "./fixtures";
 import { VIEWPORTS } from "./viewports";
-import { attachSellPhoto, enableSellerPayouts, sellCommitButton, signIn, signUp, watchEscapedRedirects } from "./helpers";
+import { attachSellPhoto, enableSellerPayouts, fixturePassword, sellCommitButton, signIn, signUp, watchEscapedRedirects } from "./helpers";
 
 /**
  * The golden path, end to end: a seller lists a part off a car they own, a buyer
@@ -16,13 +16,13 @@ import { attachSellPhoto, enableSellerPayouts, sellCommitButton, signIn, signUp,
 const stamp = Date.now();
 const seller = {
   email: `e2e-seller-${stamp}@drvn.test`,
-  password: "e2e-password-123",
+  password: fixturePassword(),
   username: `e2eseller${stamp}`.slice(0, 24),
   displayName: "E2E Seller",
 };
 const buyer = {
   email: `e2e-buyer-${stamp}@drvn.test`,
-  password: "e2e-password-123",
+  password: fixturePassword(),
   username: `e2ebuyer${stamp}`.slice(0, 24),
   displayName: "E2E Buyer",
 };
@@ -31,7 +31,7 @@ const carName = `E2E Test Car ${stamp}`;
 const partTitle = `E2E Test Downpipe ${stamp}`;
 const partPrice = "250";
 
-test.describe.serial("golden path", () => {
+test.describe.serial("golden path (R-password: fixture accounts take a random password)", () => {
   test("seller signs up and adds a car", async ({ page }) => {
     await signUp(page, seller);
 
