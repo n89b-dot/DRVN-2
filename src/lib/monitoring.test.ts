@@ -130,7 +130,7 @@ describe("nested errors (N104)", () => {
 });
 
 
-describe("error reports name the deployment (OS-W40, report five #123)", () => {
+describe("error reports name the deployment (N961, report five #123)", () => {
   it("staging and production are distinct environments in Sentry", async () => {
     const fetcher = stubSentry();
     vi.stubEnv("NODE_ENV", "production");

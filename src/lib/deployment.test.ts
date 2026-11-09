@@ -13,7 +13,7 @@ async function robotsTag(): Promise<string | undefined> {
   return all.headers.find((header) => header.key === "X-Robots-Tag")?.value;
 }
 
-describe("staging stays out of search engines (OS-W40, report five #121)", () => {
+describe("staging stays out of search engines (N958, report five #121)", () => {
   it("only a deployment named production is indexable", () => {
     expect(isIndexable({ DRVN_DEPLOY_ENV: "production" })).toBe(true);
     expect(isIndexable({ DRVN_DEPLOY_ENV: "staging" })).toBe(false);
