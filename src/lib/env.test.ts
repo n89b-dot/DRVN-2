@@ -20,6 +20,9 @@ const LIVE = {
   NEXT_PUBLIC_SITE_URL: "https://drvn.example",
   CRON_SECRET: "test-cron-secret-at-least-32-characters",
   GUEST_RECEIPT_SECRET: "test-receipt-secret-at-least-32-characters",
+  NEXT_PUBLIC_SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co",
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_x",
+  SUPABASE_SECRET_KEY: "sb_secret_x",
 };
 
 describe("resolvePaymentsMode", () => {
@@ -173,3 +176,16 @@ describe("the sandbox payment override is never on a hosted deployment (N540)", 
   });
 });
 
+describe("the database keys are checked at boot (OS-W40, report five #123)", () => {
+  it("live-money production refuses to boot without the Supabase URL, public key or secret key", () => {
+    for (const name of ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SECRET_KEY"]) {
+      const env = { ...LIVE, [name]: undefined };
+      expect(() => validatePaymentsEnv(env), name).toThrow(new RegExp(name));
+    }
+  });
+
+  it("accepts either generation of key", () => {
+    const legacy = { ...LIVE, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: undefined, SUPABASE_SECRET_KEY: undefined, NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon", SUPABASE_SERVICE_ROLE_KEY: "service" };
+    expect(() => validatePaymentsEnv(legacy)).not.toThrow();
+  });
+});

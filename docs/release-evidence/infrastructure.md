@@ -24,6 +24,7 @@ The dated record that each piece of production and staging infrastructure was se
 | Sentry project with 2FA (D5) | | | |
 | Alert webhook (Slack or equivalent) (D5) | | | |
 | Uptime check on `/api/version`, paging the owner (D5) | | | |
+| Uptime check on `/api/health/workers` with the `CRON_SECRET` bearer, every 3–5 minutes, paging a phone: the primary worker monitor (runbook §9b, #104) | | | a deliberate stop that paged and recovered |
 | Worker monitor variables `DRVN_MONITOR_ENABLED`, `DRVN_MONITOR_ORIGIN`, secret `DRVN_MONITOR_SECRET` (D5) | | | |
 | First admin enrolled with MFA and confirmed (runbook §5, N666) | | | |
 

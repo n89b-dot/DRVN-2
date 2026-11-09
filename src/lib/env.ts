@@ -220,6 +220,11 @@ export function validatePaymentsEnv(env: EnvLike = process.env): {
     if (!env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) missing.push("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY");
     // Live money without error reporting is flying blind — required, not advised.
     if (!env.SENTRY_DSN) missing.push("SENTRY_DSN");
+    // The database keys are otherwise read at first use, so a missing secret
+    // key surfaced as an error on the first page that needed it (#123).
+    for (const names of [URL_KEYS, PUBLIC_KEYS, SECRET_KEYS]) {
+      if (!names.some((name) => env[name])) missing.push(names.join(" or "));
+    }
     if (missing.length) {
       throw new PaymentsConfigError(
         `Live-money production is missing required configuration: ${missing.join(", ")}.`
