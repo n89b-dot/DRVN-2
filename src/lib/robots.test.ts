@@ -20,7 +20,7 @@ import { sitemapPages } from "@/lib/sitemap-pages";
 // (architecture.test.ts), so its test sits here beside the sitemap tests.
 import robots from "@/app/robots";
 
-it("answers during a database outage with fixed sitemaps and no database read", async () => {
+it("answers during a database outage with fixed sitemaps and no database read (OS-W40)", async () => {
   // The production rules: only a deployment named production lists the
   // sitemaps (#121, src/lib/deployment.test.ts covers the rest).
   vi.stubEnv("DRVN_DEPLOY_ENV", "production");
