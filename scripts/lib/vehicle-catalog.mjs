@@ -22,11 +22,23 @@ export const VEHICLESDB = {
   },
 };
 
+/** @typedef {{ release?: string, commit: string, files: Record<string, string> }} PinnedSource */
+
+/**
+ * @param {string} file
+ * @param {PinnedSource} [source]
+ */
 export function vehiclesDbUrl(file, source = VEHICLESDB) {
   return `https://raw.githubusercontent.com/vehiclesdb/vehiclesdb/${source.commit}/${file}`;
 }
 
-/** Parses a fetched file, refusing any bytes that are not the pinned ones. */
+/**
+ * Parses a fetched file, refusing any bytes that are not the pinned ones.
+ *
+ * @param {string} file
+ * @param {Uint8Array} bytes
+ * @param {PinnedSource} [source]
+ */
 export function verifiedJson(file, bytes, source = VEHICLESDB) {
   const expected = source.files[file];
   if (!expected) throw new Error(`${file} is not a pinned VehiclesDB file`);
