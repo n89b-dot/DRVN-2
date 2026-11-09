@@ -17,6 +17,8 @@
  *    thrown: rendering, route handlers (the Stripe webhook), server actions.
  */
 
+import { monitoringEnvironment } from "@/lib/deployment";
+
 type Level = "fatal" | "error" | "warning" | "info";
 
 type CaptureContext = {
@@ -86,7 +88,7 @@ async function send(event: Record<string, unknown>): Promise<void> {
       event_id: id,
       timestamp: now,
       platform: "javascript",
-      environment: process.env.NODE_ENV ?? "development",
+      environment: monitoringEnvironment(), // staging and production apart (#123)
       server_name: "drvn",
       ...release,
       ...event,

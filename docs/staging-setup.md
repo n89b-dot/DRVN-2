@@ -173,6 +173,7 @@ Emails:
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | step 1.3 |
 | `SUPABASE_SECRET_KEY` | step 1.3 — server only |
 | `NEXT_PUBLIC_SITE_URL` | the staging origin, `https://…`, no path |
+| `DRVN_DEPLOY_ENV` | `staging` (the production project gets `production`). Required: a hosted deploy without it refuses to boot. Anything but `production` answers robots.txt with `Disallow: /` and sends `X-Robots-Tag: noindex`, so staging stays out of search engines, and error reports carry it as their environment (`src/lib/deployment.ts`) |
 | `PAYMENTS_MODE` | `stripe` |
 | `STRIPE_SECRET_KEY` | Stripe **test mode** → Developers → API keys (`sk_test_…`). A test key keeps the site's test-mode notices on |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | same page (`pk_test_…`) |

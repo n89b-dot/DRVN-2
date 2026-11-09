@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+import { isIndexable } from "./src/lib/deployment";
+
 /** Supabase storage host, derived from the project URL. */
 function supabaseHost(): string | null {
   try {
@@ -90,6 +92,11 @@ const nextConfig: NextConfig = {
             key: "Permissions-Policy",
             value: 'camera=(), microphone=(), geolocation=(), payment=(self "https://js.stripe.com" "https://*.js.stripe.com")',
           },
+          // #121: staging and every other deployment not named production
+          // tell search engines to stay away (src/lib/deployment.ts). The
+          // host's own deployment protection is not used: it would also
+          // block the scheduled jobs and Stripe's webhooks.
+          ...(isIndexable() ? [] : [{ key: "X-Robots-Tag", value: "noindex, nofollow" }]),
         ],
       },
     ];

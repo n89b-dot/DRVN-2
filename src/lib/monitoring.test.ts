@@ -129,3 +129,16 @@ describe("nested errors (N104)", () => {
   });
 });
 
+
+describe("error reports name the deployment (OS-W40, report five #123)", () => {
+  it("staging and production are distinct environments in Sentry", async () => {
+    const fetcher = stubSentry();
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DRVN_DEPLOY_ENV", "staging");
+    await captureMessage("synthetic");
+    expect(sentEvent(fetcher).environment).toBe("staging");
+    vi.stubEnv("DRVN_DEPLOY_ENV", "production");
+    await captureMessage("synthetic");
+    expect(sentEvent(fetcher, 1).environment).toBe("production");
+  });
+});
