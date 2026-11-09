@@ -26,3 +26,29 @@ describe("/api/version (OS-signals)", () => {
     }
   });
 });
+
+describe("/api/version sha fallback (OS-W40, report five #120)", () => {
+  it("falls through an empty VERCEL_GIT_COMMIT_SHA to GIT_COMMIT_SHA", async () => {
+    process.env.VERCEL_GIT_COMMIT_SHA = "";
+    process.env.GIT_COMMIT_SHA = "def456";
+    try {
+      const body = await GET().json();
+      expect(body.sha).toBe("def456");
+    } finally {
+      delete process.env.VERCEL_GIT_COMMIT_SHA;
+      delete process.env.GIT_COMMIT_SHA;
+    }
+  });
+
+  it("reports null, not an empty string, when no sha is set", async () => {
+    process.env.VERCEL_GIT_COMMIT_SHA = "";
+    process.env.GIT_COMMIT_SHA = "";
+    try {
+      const body = await GET().json();
+      expect(body.sha).toBeNull();
+    } finally {
+      delete process.env.VERCEL_GIT_COMMIT_SHA;
+      delete process.env.GIT_COMMIT_SHA;
+    }
+  });
+});
