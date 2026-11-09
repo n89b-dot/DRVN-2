@@ -88,7 +88,7 @@ describe("migration status (OS-signals)", () => {
   });
 });
 
-describe("--status over the session pooler (OS-W40, report five #114)", () => {
+describe("--status over the session pooler (N951, report five #114)", () => {
   const pooled = {
     "fixture-dev": { ref: REF, note: "fixture", pooler: "aws-0-us-east-1.pooler.supabase.com", statusRoute: "pooler" },
   };
