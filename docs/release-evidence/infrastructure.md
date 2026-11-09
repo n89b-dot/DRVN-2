@@ -57,6 +57,7 @@ Set in the host's environment for each project (never in the repository). `job_c
 | `SENTRY_DSN` | required (live) | | | | |
 | `ADMIN_ALERT_WEBHOOK_URL` | required (live), `https:` | | | | |
 | `NEXT_PUBLIC_SITE_URL` | required (live), `https:` | | | | |
+| `DRVN_DEPLOY_ENV` | required (hosted): `production` or `staging` | | | | Only `production` is indexable (#121) |
 | `CRON_SECRET` | required (live), ≥ 32 chars | | | | |
 | `GUEST_RECEIPT_SECRET` | required (live), ≥ 32 chars | | | | |
 | `ACCOUNT_EMAIL_DIGEST_KEY` | optional (recommended before launch), ≥ 32 chars | | | | |
