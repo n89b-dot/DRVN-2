@@ -127,7 +127,7 @@ describe("the deploy decisions (N528)", () => {
   });
 });
 
-describe("the version step says what it got (OS-W40, report five #115)", () => {
+describe("the version step says what it got (N952, report five #115)", () => {
   const SHA = "aee656d9aee656d9aee656d9aee656d9aee656d9";
 
   it("describes a status and body, trimmed, or a network error", () => {
