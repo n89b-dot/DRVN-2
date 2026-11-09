@@ -1,5 +1,5 @@
 {
-  "description": "The only Supabase projects scripts/apply-migration.mjs and scripts/import-vehiclesdb.mjs will connect to. Each run names one with --target, and it must be the project the env file points at. Add a project (production included) by a reviewed PR. Project refs are not secrets; they are in every public project URL.",
+  "description": "The only Supabase projects scripts/apply-migration.mjs and scripts/import-vehiclesdb.mjs will connect to. Each run names one with --target, and it must be the project the env file points at. Add a project (production included) by a reviewed PR. Project refs are not secrets; they are in every public project URL. Optional per target: \"pooler\" pins the project's Supabase session-pooler host (Database settings, Connect, Session pooler; the region's aws-<n>-<region>.pooler.supabase.com), and \"statusRoute\": \"pooler\" makes read-only --status use it, which GitHub's IPv4-only runners need unless the project has Supabase's IPv4 add-on. Applies always connect to the direct host.",
   "targets": {
     "shared-dev": {
       "ref": "grunnjojhdevhuckujmc",
@@ -7,7 +7,9 @@
     },
     "staging": {
       "ref": "zubstjuviwourzgrziqc",
-      "note": "drvn-staging, us-east-1"
+      "note": "drvn-staging, us-east-1",
+      "pooler": "aws-0-us-east-1.pooler.supabase.com",
+      "statusRoute": "pooler"
     }
   },
   "dynamicSqlAllowed_description": "Files allowed to run risky SQL on a database that already has tables: a top-level TRUNCATE or DROP TABLE, or dynamic SQL (EXECUTE in a DO block, or in a function the file creates and calls) that the runner can't show to be safe. Each entry names the file, the sha256 of its exact bytes (the dry run prints the first 12 characters; `shasum -a 256 <file>` gives all of it) and why it's safe. A destructive baseline (0001) can't be allowed here.",
