@@ -44,6 +44,14 @@ emergency door, add yourself as a bypass actor in the UI (Settings → Rules →
 Rulesets → protect-main → Bypass list, "for pull requests only") and write
 down when you use it.
 
+**Watched (#112).** `.github/workflows/protection-watch.yml` runs
+`scripts/check-branch-protection.mjs` on every push to `main`, hourly and by
+hand. It fails, and GitHub emails the failure, when `main` has lost the pull
+request rule, `release-gate` (pinned to GitHub Actions, on an up-to-date
+branch), the force-push block or the deletion block. Re-apply with
+`--apply` below. Run it yourself any time:
+`node scripts/check-branch-protection.mjs`.
+
 Re-running `--apply` updates the existing ruleset (found by name) instead of
 creating a second one.
 

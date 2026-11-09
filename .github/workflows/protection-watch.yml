@@ -1,0 +1,31 @@
+# Report five #112: fail loudly when main loses the protect-main ruleset or
+# stops requiring release-gate on an up-to-date branch. Runs on every push to
+# main (so a merge made while protection was off is caught at once), every
+# hour (GitHub may delay or drop scheduled runs on a quiet repository; the
+# push trigger is the dependable one), and by hand. Reads only public data.
+name: Branch protection watch
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  protection:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.22.0
+      - run: node scripts/check-branch-protection.mjs "$GITHUB_REPOSITORY" main
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
