@@ -77,6 +77,8 @@ async function waitForGate(sha, { timeoutMinutes = 90, intervalSeconds = 60 } = 
  * status and the start of the body, or the network error. A deployment that
  * refuses to boot answers 500 on every request; printing what it said, rather
  * than polling silently for fifteen minutes, points at the missing variable.
+ *
+ * @param {{ status?: number, text?: string, error?: string }} attempt
  */
 export function describeAttempt({ status, text, error }) {
   if (error) return `no answer (${error})`;
