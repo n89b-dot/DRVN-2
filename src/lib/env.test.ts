@@ -176,7 +176,7 @@ describe("the sandbox payment override is never on a hosted deployment (N540)", 
   });
 });
 
-describe("the database keys are checked at boot (OS-W40, report five #123)", () => {
+describe("the database keys are checked at boot (N962, report five #123)", () => {
   it("live-money production refuses to boot without the Supabase URL, public key or secret key", () => {
     for (const name of ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SECRET_KEY"]) {
       const env = { ...LIVE, [name]: undefined };
