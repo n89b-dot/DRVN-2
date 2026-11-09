@@ -25,7 +25,7 @@ afterEach(() => {
   host.remove();
 });
 
-describe("a photo the storage layer would refuse shows the no-photo plate (OS-W41, report five #105)", () => {
+describe("a photo the storage layer would refuse shows the no-photo plate (N940, report five #105)", () => {
   it("recognises a member photo still in its canonical spelling, and nothing else", () => {
     expect(isUnsignedMemberPhoto(unsigned)).toBe(true);
     expect(isUnsignedMemberPhoto(signed)).toBe(false);

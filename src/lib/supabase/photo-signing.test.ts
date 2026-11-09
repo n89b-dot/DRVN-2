@@ -103,7 +103,7 @@ describe("photo signing at the database boundary (N455)", () => {
   });
 });
 
-describe("one signed URL per photo per window across instances (OS-W41, report five #117)", () => {
+describe("one signed URL per photo per window across instances (N954, report five #117)", () => {
   const at = (minute: number) => Date.UTC(2026, 10, 10, 9, minute);
 
   it("uses the URL another instance already signed, without minting", async () => {
