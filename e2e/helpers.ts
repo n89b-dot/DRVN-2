@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
 
 /**
@@ -25,11 +26,20 @@ export function fixtureHandle(label: string, unique: string | number): string {
   return `e2e${label.toLowerCase().replace(/[^a-z0-9_]/g, "")}${unique}`.slice(0, 24);
 }
 
+/**
+ * A password for a throwaway account, new for every account (R-password): test
+ * passwords never live in the repository, and a fixture account that outlives its
+ * run cannot be opened from the source.
+ */
+export function fixturePassword(): string {
+  return `E2e-${randomUUID()}!`;
+}
+
 /** Throwaway user. Emails follow the e2e-*@drvn.test pattern the cleanup sweep looks for. */
 export function makeUser(role: string, stamp: number): TestUser {
   return {
     email: `e2e-${role}-${stamp}@drvn.test`,
-    password: "e2e-password-123",
+    password: fixturePassword(),
     username: fixtureHandle(role, stamp),
     displayName: `E2E ${role}`,
   };
