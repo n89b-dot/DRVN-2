@@ -130,7 +130,7 @@ describe("nested errors (N104)", () => {
 });
 
 
-describe("release identity fallback (OS-W40, report five #120)", () => {
+describe("release identity fallback (N957, report five #120)", () => {
   it("falls through empty SENTRY_RELEASE and VERCEL_GIT_COMMIT_SHA to GIT_COMMIT_SHA", async () => {
     const fetcher = stubSentry();
     vi.stubEnv("SENTRY_RELEASE", "");

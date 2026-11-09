@@ -27,7 +27,7 @@ describe("/api/version (OS-signals)", () => {
   });
 });
 
-describe("/api/version sha fallback (OS-W40, report five #120)", () => {
+describe("/api/version sha fallback (N957, report five #120)", () => {
   it("falls through an empty VERCEL_GIT_COMMIT_SHA to GIT_COMMIT_SHA", async () => {
     process.env.VERCEL_GIT_COMMIT_SHA = "";
     process.env.GIT_COMMIT_SHA = "def456";
