@@ -23,7 +23,7 @@ const PROTECTED = [
   },
 ];
 
-describe("branch protection watch (OS-W42, report five #112)", () => {
+describe("branch protection watch (N949, report five #112)", () => {
   it("accepts main as protect-main protects it", () => {
     expect(protectionProblems(PROTECTED)).toEqual([]);
   });
