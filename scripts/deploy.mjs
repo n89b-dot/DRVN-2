@@ -72,23 +72,62 @@ async function waitForGate(sha, { timeoutMinutes = 90, intervalSeconds = 60 } = 
   }
 }
 
-async function waitForVersion(origin, sha, { timeoutMinutes = 15, intervalSeconds = 20 } = {}) {
+/**
+ * One poll of /api/version, in words, for the job log (#115): the HTTP
+ * status and the start of the body, or the network error. A deployment that
+ * refuses to boot answers 500 on every request; printing what it said, rather
+ * than polling silently for fifteen minutes, points at the missing variable.
+ */
+export function describeAttempt({ status, text, error }) {
+  if (error) return `no answer (${error})`;
+  const body = String(text ?? '').replace(/\s+/g, ' ').trim();
+  return `HTTP ${status}: ${body.length > 300 ? `${body.slice(0, 300)}…` : body || '(empty body)'}`;
+}
+
+export async function waitForVersion(origin, sha, {
+  timeoutMinutes = 15,
+  intervalSeconds = 20,
+  fetchImpl = fetch,
+  log = console.log,
+  wait = sleep,
+  now = Date.now,
+} = {}) {
   const url = new URL('/api/version', origin);
   if (url.protocol !== 'https:') throw new Error('The deployed origin must be https');
-  const deadline = Date.now() + timeoutMinutes * 60_000;
+  const deadline = now() + timeoutMinutes * 60_000;
   let last = null;
+  let lastSeen = null;
   for (;;) {
+    let attempt;
     try {
-      const res = await fetch(url, { headers: { 'cache-control': 'no-cache' } });
+      const res = await fetchImpl(url, { headers: { 'cache-control': 'no-cache' } });
+      const text = await res.text();
+      attempt = { status: res.status, text };
       if (res.ok) {
-        last = await res.json();
-        if (versionMatches(last, sha)) return console.log(`${url.origin} reports ${last.sha}`);
+        try {
+          last = JSON.parse(text);
+        } catch {
+          last = null;
+        }
+        if (last && versionMatches(last, sha)) return log(`${url.origin} reports ${last.sha}`);
       }
-    } catch {
+    } catch (error) {
       // A deploy in progress can refuse connections for a moment.
+      attempt = { error: error?.cause?.code ?? error?.message ?? String(error) };
     }
-    if (Date.now() > deadline) throw new Error(`${url.origin} still reports ${last?.sha ?? 'nothing'}, not ${sha}, after ${timeoutMinutes} minutes`);
-    await sleep(intervalSeconds * 1000);
+    // Print each new answer once, so the log shows the deploy's progress
+    // without a line every twenty seconds.
+    const seen = describeAttempt(attempt);
+    if (seen !== lastSeen) log(`${url.origin}/api/version: ${seen}`);
+    lastSeen = seen;
+    if (now() > deadline) {
+      throw new Error(
+        `${url.origin} still reports ${last?.sha ?? 'nothing'}, not ${sha}, after ${timeoutMinutes} minutes. ` +
+          `Last answer: ${seen}. A 500 on every request usually means the app refused to boot: ` +
+          'check the host\'s function logs for the missing variable (docs/staging-setup.md, "What the app refuses to boot without").',
+      );
+    }
+    await wait(intervalSeconds * 1000);
   }
 }
 

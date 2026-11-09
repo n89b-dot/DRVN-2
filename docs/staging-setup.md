@@ -36,6 +36,65 @@ Parity with shared dev was checked at 765c7cd, before the last two migrations: t
 
 **Keeping staging current:** every migration merged to `main` must also be applied to staging, the same as dev. Apply it from the staging-only checkout (step 2.1), then rerun the history seed. Migrations can merge with timestamps earlier than ones already applied, so find new files with `git diff --name-only --diff-filter=A <last applied commit> origin/main -- supabase/migrations`, not by filename order.
 
+## The order to do the steps in (#115)
+
+The sections keep their numbers, because other documents cite them, but **the
+first deploy comes last**. A hosted deployment refuses the payment stub
+(N540), so staging runs in Stripe mode, and in that mode the app refuses to
+start without the Stripe, Sentry and alert values. A deploy made before they
+exist builds fine, then answers every request with an error.
+
+1. §0, §1, §2, §3: domain, Supabase project, schema, Auth.
+2. §2a: fill the vehicle catalogue (after the schema, before testers).
+3. §4.1–4.2: create the hosting project and attach the domain. **Do not
+   deploy.** Keep automatic Git deploys off.
+4. §5 (Stripe test mode and **both** webhooks), §6 (EasyPost, if used),
+   §8 (Sentry), §9 (alert webhook). Stripe creates webhook endpoints for a URL
+   that isn't live yet, and the signing secrets exist from that moment.
+5. §4.3: set every variable in the table, including the values from step 4.
+   Check them against "What the app refuses to boot without", below.
+6. §11: GitHub environments, secrets and variables; then
+   `DRVN_DEPLOY_STAGING = true`. The first deploy runs on the next green push
+   to `main`.
+7. §7 (scheduler), §10 (monitor), §12 (first admin), §13 (evidence), once
+   staging answers `/api/version` with the commit.
+
+### What the app refuses to boot without
+
+Checked together at server start (`src/instrumentation.ts`,
+`validatePaymentsEnv` in `src/lib/env.ts`), so one failed boot lists every
+problem at once in the host's function logs. On staging (production build,
+Stripe mode):
+
+| Variable | Rule |
+|---|---|
+| `STRIPE_SECRET_KEY` | set (`sk_test_…` on staging) |
+| `STRIPE_WEBHOOK_SECRET`, `STRIPE_CONNECT_WEBHOOK_SECRET` | both set (§5.1, §5.2) |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | set |
+| `SENTRY_DSN` | an `https://<key>@<host>/<number>` DSN (§8) |
+| `ADMIN_ALERT_WEBHOOK_URL` | an `https:` URL (§9) |
+| `NEXT_PUBLIC_SITE_URL` | an `https:` origin with no path, query or credentials |
+| `CRON_SECRET`, `GUEST_RECEIPT_SECRET` | each at least 32 characters, and different from each other |
+| `ACCOUNT_EMAIL_DIGEST_KEY` | at least 32 characters, if set |
+| `DRVN_DEPLOY_ENV` | `staging` or `production` |
+| `PAYMENTS_ALLOW_STUB_IN_PRODUCTION` | **absent** |
+| `AGENT_MODEL`, `AGENT_WORKER_DATABASE_URL` | valid, if `AGENTS_BETA=on` |
+
+The Supabase URL and keys are read on first use, not at boot. A missing one
+fails the first page that needs the database.
+
+If the deploy workflow's "Staging reports this commit" step prints
+`HTTP 500` on every poll, the app is refusing to boot: open the host's
+function logs and look for `PaymentsConfigError`. The step prints each new
+answer it gets (status and the start of the body) and gives up after fifteen
+minutes.
+
+**`NEXT_PUBLIC_*` values are fixed when the deploy workflow builds** (on the
+GitHub runner, from `vercel pull`), not when the host serves. After changing
+one in the host's settings, re-run the Deploy workflow for that commit
+(Actions → Deploy → Re-run). Redeploying from the host's dashboard reuses the
+old build, and it skips the release gate.
+
 ---
 
 ## 0. Before you start [OWNER]
@@ -198,7 +257,9 @@ Emails:
 
 Never set `PAYMENTS_ALLOW_STUB_IN_PRODUCTION` on staging — the candidate
 declares `paymentMode: "stripe-test"`, and the app refuses to boot with it
-on a hosted deployment (N540). Deploy; the build must start without a
+on a hosted deployment (N540). **Don't deploy yet.** The Stripe, Sentry and
+alert rows above need §5, §8 and §9 first ("The order to do the steps in",
+above). The first deploy is §11.4's, and it must start without a
 `PaymentsConfigError` in the logs. A boot failure lists every missing or
 invalid variable at once.
 
@@ -241,7 +302,7 @@ Only if staging declares `shippingMode: "easypost-test"`.
 
 ## 7. Scheduler → app [ENGINEER]
 
-The migrations already created the pg_cron jobs (19 as of 7 Nov 2026); the HTTP ones do
+The migrations already created the pg_cron jobs (twenty-one, listed in runbook §4); the HTTP ones do
 nothing until the database knows where the app is. In the SQL editor:
 
 ```sql
@@ -313,8 +374,15 @@ on a separate host (`docs/remediation-release-and-monitoring.md`).
    `rc-YYYYMMDD` tag on `main`, through the `production` environment.
    - Repository secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`,
      `VERCEL_STAGING_PROJECT_ID`, `VERCEL_PRODUCTION_PROJECT_ID`,
-     `STAGING_SUPABASE_DB_PASSWORD`, `PRODUCTION_SUPABASE_DB_PASSWORD`,
      `ADMIN_ALERT_WEBHOOK_URL`.
+   - **Environment secrets, not repository secrets (#123):**
+     `STAGING_SUPABASE_DB_PASSWORD` on the `staging` environment and
+     `PRODUCTION_SUPABASE_DB_PASSWORD` on the `production` environment
+     (Settings → Environments → the environment → Add secret). A repository
+     secret can be read by any workflow on any branch. An environment secret
+     reaches only a job that names that environment, and production's waits
+     for its required reviewer. The workflow reads them under the same names,
+     so nothing else changes.
    - Repository variables: `DRVN_STAGING_ORIGIN`, `DRVN_PRODUCTION_ORIGIN`,
      `DRVN_STAGING_SUPABASE_URL`, `DRVN_PRODUCTION_SUPABASE_URL`, and
      `DRVN_DEPLOY_STAGING = true` to switch the staging job on.

@@ -10,7 +10,7 @@ import path from "node:path";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
-import { alertPayload, gateVerdict, missingMigrations, validReleaseTag, versionMatches } from "../../scripts/deploy.mjs";
+import { alertPayload, describeAttempt, gateVerdict, missingMigrations, validReleaseTag, versionMatches, waitForVersion } from "../../scripts/deploy.mjs";
 
 type Step = { name?: string; uses?: string; run?: string; if?: string; env?: Record<string, string>; with?: Record<string, unknown> };
 type Job = { if?: string; environment?: string; permissions?: Record<string, string>; steps: Step[] };
@@ -124,5 +124,55 @@ describe("the deploy decisions (N528)", () => {
   it("N634: the alert is plain text, bounded", () => {
     expect(alertPayload("deployed")).toEqual({ text: "deployed" });
     expect(alertPayload("x".repeat(5000)).text).toHaveLength(3000);
+  });
+});
+
+describe("the version step says what it got (OS-W40, report five #115)", () => {
+  const SHA = "aee656d9aee656d9aee656d9aee656d9aee656d9";
+
+  it("describes a status and body, trimmed, or a network error", () => {
+    expect(describeAttempt({ status: 500, text: "Internal\n  Server Error" })).toBe("HTTP 500: Internal Server Error");
+    expect(describeAttempt({ status: 200, text: "" })).toBe("HTTP 200: (empty body)");
+    expect(describeAttempt({ status: 502, text: "x".repeat(400) })).toMatch(/^HTTP 502: x{300}…$/);
+    expect(describeAttempt({ error: "ENOTFOUND" })).toBe("no answer (ENOTFOUND)");
+  });
+
+  it("prints each new answer once and names the last one when it gives up", async () => {
+    const answers = [
+      { status: 500, body: "A server error occurred" },
+      { status: 500, body: "A server error occurred" },
+      { status: 200, body: JSON.stringify({ sha: "0000000000" }) },
+    ];
+    let clock = 0;
+    let call = 0;
+    const lines: string[] = [];
+    const fetchImpl = async () => {
+      const answer = answers[Math.min(call++, answers.length - 1)];
+      return new Response(answer.body, { status: answer.status });
+    };
+    await expect(
+      waitForVersion("https://staging.example", SHA, {
+        timeoutMinutes: 1,
+        intervalSeconds: 20,
+        fetchImpl: fetchImpl as typeof fetch,
+        log: (line: string) => lines.push(line),
+        wait: async (ms: number) => { clock += ms; },
+        now: () => clock,
+      }),
+    ).rejects.toThrow(/still reports 0000000000, not aee656d9.*Last answer: HTTP 200: \{"sha":"0000000000"\}.*refused to boot/);
+    expect(lines).toEqual([
+      "https://staging.example/api/version: HTTP 500: A server error occurred",
+      'https://staging.example/api/version: HTTP 200: {"sha":"0000000000"}',
+    ]);
+  });
+
+  it("returns as soon as the deployment names the commit", async () => {
+    const lines: string[] = [];
+    await waitForVersion("https://staging.example", SHA, {
+      fetchImpl: (async () => new Response(JSON.stringify({ sha: SHA }), { status: 200 })) as typeof fetch,
+      log: (line: string) => lines.push(line),
+      wait: async () => {},
+    });
+    expect(lines).toEqual([`https://staging.example reports ${SHA}`]);
   });
 });
