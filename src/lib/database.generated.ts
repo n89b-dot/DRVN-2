@@ -3664,6 +3664,63 @@ export type Database = {
           },
         ]
       }
+      order_email_outbox: {
+        Row: {
+          attempts: number
+          created_at: string
+          id: string
+          kind: string
+          last_error: string | null
+          lease_expires_at: string | null
+          lease_id: string | null
+          next_attempt_at: string
+          notification_id: string
+          order_id: string
+          provider_message_id: string | null
+          recipient_id: string
+          sent_at: string | null
+          skip_reason: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          id?: string
+          kind: string
+          last_error?: string | null
+          lease_expires_at?: string | null
+          lease_id?: string | null
+          next_attempt_at?: string
+          notification_id: string
+          order_id: string
+          provider_message_id?: string | null
+          recipient_id: string
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          id?: string
+          kind?: string
+          last_error?: string | null
+          lease_expires_at?: string | null
+          lease_id?: string | null
+          next_attempt_at?: string
+          notification_id?: string
+          order_id?: string
+          provider_message_id?: string | null
+          recipient_id?: string
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       order_item_snapshot_images: {
         Row: {
           alt: string | null
