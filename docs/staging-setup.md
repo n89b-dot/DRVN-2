@@ -371,8 +371,10 @@ on a separate host (`docs/remediation-release-and-monitoring.md`).
    `rc-YYYYMMDD` tag on `main`, through the `production` environment.
    - Repository secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`,
      `VERCEL_STAGING_PROJECT_ID`, `VERCEL_PRODUCTION_PROJECT_ID`,
-     `STAGING_SUPABASE_DB_PASSWORD`, `PRODUCTION_SUPABASE_DB_PASSWORD`,
-     `ADMIN_ALERT_WEBHOOK_URL`.
+     `STAGING_SUPABASE_READER_PASSWORD`, `PRODUCTION_SUPABASE_READER_PASSWORD`,
+     `ADMIN_ALERT_WEBHOOK_URL`. The two database secrets are the password of
+     `deploy_reader`, a read-only login made as below. The workflow holds no
+     database owner's password (work review #138).
    - Repository variables: `DRVN_STAGING_ORIGIN`, `DRVN_PRODUCTION_ORIGIN`,
      `DRVN_STAGING_SUPABASE_URL`, `DRVN_PRODUCTION_SUPABASE_URL`, and
      `DRVN_DEPLOY_STAGING = true` to switch the staging job on.
@@ -381,6 +383,31 @@ on a separate host (`docs/remediation-release-and-monitoring.md`).
      a person's approval as well as the tag.
    - The pipeline never applies a migration. If staging or production lacks
      one, the deploy stops and names it; apply it with the runner (§2).
+   - **The read-only login `deploy_reader`.** The deploy's migration check
+     reads one table, `supabase_migrations.schema_migrations`, so it signs in
+     with a login that can do nothing else. Make it once on each database
+     (staging, then production when it exists), as the owner, in the
+     dashboard's SQL editor, with a new password of 32 or more characters
+     for each database:
+
+     ```sql
+     create role deploy_reader login password '<new password>' connection limit 3;
+     alter role deploy_reader set default_transaction_read_only = on;
+     alter role deploy_reader set statement_timeout = '10s';
+     grant usage on schema supabase_migrations to deploy_reader;
+     grant select on supabase_migrations.schema_migrations to deploy_reader;
+     ```
+
+     Put each password in its secret above and nowhere else. To rotate one,
+     run `alter role deploy_reader password '<new password>';` and update the
+     secret. The runner checks the login on every use and refuses it if it
+     is a superuser, can create roles, bypasses row-level security, is not
+     read-only by default, or can write the history table, so a wrong
+     password pasted here cannot quietly be an owner's. To try it by hand,
+     put `SUPABASE_DB_READER_USER=deploy_reader` and
+     `SUPABASE_DB_READER_PASSWORD=…` in an env file beside
+     `NEXT_PUBLIC_SUPABASE_URL` and run
+     `node scripts/apply-migration.mjs --target staging --env-file <file> --status`.
 
 ## 12. First admin [ENGINEER]
 

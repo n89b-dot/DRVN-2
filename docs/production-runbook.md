@@ -98,6 +98,14 @@ node scripts/apply-migration.mjs --target production supabase/migrations/*.sql
 node scripts/apply-migration.mjs --target production --apply --confirm <code> supabase/migrations/*.sql
 ```
 
+`--status` reads one table and changes nothing, so it does not need the
+owner's password. When the env file carries `SUPABASE_DB_READER_USER` and
+`SUPABASE_DB_READER_PASSWORD`, `--status` signs in with that read-only login
+and ignores any owner password in the file. The deploy workflow does this
+with `deploy_reader` (`docs/staging-setup.md` §11.4) and holds no owner
+password. The runner refuses a login given as read-only that could write.
+Every other mode still signs in as the owner.
+
 Each file runs in one transaction with its row in
 `supabase_migrations.schema_migrations`; a failing self-check raises, rolls
 back that file (and its row) and stops the run. Rerunning the same command

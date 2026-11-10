@@ -160,3 +160,104 @@ describe("--status over the session pooler (N951, report five #114)", () => {
     expect(() => loadTargets(bad)).toThrow(/no pooler host/);
   });
 });
+
+describe("N634: --status signs in with a read-only login when the env file has one (work review #138)", () => {
+  type ReaderRow = Record<string, unknown>;
+  const READ_ONLY: ReaderRow = { role: "deploy_reader", read_only_default: "on", rolsuper: false, rolcreaterole: false, rolcreatedb: false, rolbypassrls: false, can_write_history: false, can_create_in_public: false };
+
+  async function withEnv(envLines: string[], argv: string[], reader: ReaderRow | null = READ_ONLY, targets: Record<string, unknown> = { "fixture-dev": { ref: REF, note: "fixture" } }) {
+    const file = path.join(dir, `env-${Math.random().toString(36).slice(2)}.fixture`);
+    fs.writeFileSync(file, [`NEXT_PUBLIC_SUPABASE_URL=https://${REF}.supabase.co`, ...envLines, ""].join("\n"));
+    const out: string[] = [];
+    const err: string[] = [];
+    const configs: Array<Record<string, unknown>> = [];
+    const base = fakeClient(["20261107100000"]);
+    const client = {
+      ...base,
+      async query(text: string) {
+        if (text.includes("from pg_roles r where r.rolname = current_user")) {
+          base.queries.push(text);
+          return { rows: reader ? [reader] : [] };
+        }
+        return base.query(text);
+      },
+    };
+    const code = await run([...argv, "--env-file", file], {
+      log: (line: string) => out.push(line),
+      error: (line: string) => err.push(line),
+      targets,
+      ca: "fixture-ca",
+      allowed: {},
+      migrationsDir: "/fixture/supabase/migrations",
+      listMigrations: () => ["20261107100000_a.sql"],
+      createClient: (config: Record<string, unknown>) => { configs.push(config); return client; },
+    });
+    return { code, out, err, configs, queries: base.queries };
+  }
+  const READER = ["SUPABASE_DB_READER_USER=deploy_reader", "SUPABASE_DB_READER_PASSWORD=reader-secret"];
+
+  it("uses the reader's name and password, needs no owner password, and checks the login before reading", async () => {
+    const { code, out, configs, queries } = await withEnv(READER, ["--target", "fixture-dev", "--status"]);
+    expect(code).toBe(0);
+    expect(configs[0]).toMatchObject({ host: `db.${REF}.supabase.co`, user: "deploy_reader", password: "reader-secret" });
+    expect(JSON.parse(out[0])).toMatchObject({ target: "fixture-dev", count: 1, missing: [] });
+    expect(queries[0]).toBe("begin transaction read only");
+    expect(queries[1]).toContain("from pg_roles r where r.rolname = current_user");
+  });
+
+  it("prefers the reader to an owner password in the same file, and qualifies its name with the project on the pooler", async () => {
+    const pooled = { "fixture-dev": { ref: REF, pooler: "aws-0-us-east-1.pooler.supabase.com", statusRoute: "pooler" } };
+    const { code, configs } = await withEnv([...READER, "SUPABASE_DB_PASSWORD=owner-secret"], ["--target", "fixture-dev", "--status"], READ_ONLY, pooled);
+    expect(code).toBe(0);
+    expect(configs[0]).toMatchObject({ host: "aws-0-us-east-1.pooler.supabase.com", user: `deploy_reader.${REF}`, password: "reader-secret" });
+  });
+
+  it("refuses a login given as read-only that could write, naming each reason, and prints no status", async () => {
+    const cases: Array<[ReaderRow, RegExp]> = [
+      [{ ...READ_ONLY, read_only_default: "off" }, /not read-only by default/],
+      [{ ...READ_ONLY, rolsuper: true }, /it is a superuser/],
+      [{ ...READ_ONLY, rolcreaterole: true }, /it can create roles/],
+      [{ ...READ_ONLY, rolbypassrls: true }, /it bypasses row-level security/],
+      [{ ...READ_ONLY, can_write_history: true }, /it can write the migration history/],
+      [{ ...READ_ONLY, can_create_in_public: true }, /it can create objects in public/],
+      [{ ...READ_ONLY, role: "postgres" }, /signed in as postgres, not deploy_reader/],
+    ];
+    for (const [row, reason] of cases) {
+      const { code, out, err } = await withEnv(READER, ["--target", "fixture-dev", "--status"], row);
+      expect(code, String(reason)).toBe(1);
+      expect(err.join("\n")).toMatch(/the read-only login is not read-only/);
+      expect(err.join("\n")).toMatch(reason);
+      expect(out).toEqual([]);
+    }
+  });
+
+  it("refuses the owner, a platform role or half a login as the reader, before connecting", async () => {
+    for (const user of ["postgres", "supabase_admin", "service_role", "authenticator", "pg_read_all_data", "Deploy Reader"]) {
+      const { code, err, configs } = await withEnv([`SUPABASE_DB_READER_USER=${user}`, "SUPABASE_DB_READER_PASSWORD=x"], ["--target", "fixture-dev", "--status"]);
+      expect(code, user).toBe(1);
+      expect(err.join("\n")).toMatch(/must be a read-only role's name/);
+      expect(configs).toEqual([]);
+    }
+    const half = await withEnv(["SUPABASE_DB_READER_USER=deploy_reader"], ["--target", "fixture-dev", "--status"]);
+    expect(half.code).toBe(1);
+    expect(half.err.join("\n")).toMatch(/needs both SUPABASE_DB_READER_USER and SUPABASE_DB_READER_PASSWORD/);
+    expect(half.configs).toEqual([]);
+  });
+
+  it("never uses the reader for anything but --status, and says what is missing when the file has no login at all", async () => {
+    const dry = await withEnv(READER, ["--target", "fixture-dev", "supabase/migrations/20261107100000_a.sql"]);
+    expect(dry.code).toBe(1);
+    expect(dry.err.join("\n")).toMatch(/has no SUPABASE_DB_PASSWORD/);
+    expect(dry.configs).toEqual([]);
+    const none = await withEnv([], ["--target", "fixture-dev", "--status"]);
+    expect(none.code).toBe(1);
+    expect(none.err.join("\n")).toMatch(/neither a read-only login .* nor SUPABASE_DB_PASSWORD/);
+  });
+
+  it("with only an owner password, --status works as before and runs no reader check", async () => {
+    const { code, configs, queries } = await withEnv(["SUPABASE_DB_PASSWORD=owner-secret"], ["--target", "fixture-dev", "--status"]);
+    expect(code).toBe(0);
+    expect(configs[0]).toMatchObject({ user: "postgres", password: "owner-secret" });
+    expect(queries.some((q) => q.includes("from pg_roles r"))).toBe(false);
+  });
+});
