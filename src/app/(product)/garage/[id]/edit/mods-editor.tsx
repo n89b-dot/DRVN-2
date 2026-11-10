@@ -5,7 +5,7 @@ import { unstable_rethrow } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
-import { ActionFooter, Button, Checkbox, TextField, TileHead } from "@/components/ui";
+import { ActionFooter, Button, Checkbox, PhotoImage, TextField, TileHead } from "@/components/ui";
 import type { ModItem, ModOrigin, ModStatus } from "@/lib/database.types";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import {
@@ -938,8 +938,8 @@ export function ModsEditor({
                    it was captured — and correct it if the shop lied. */
                 <span className="modrow__via">
                   {row.image_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={row.image_url} alt="" className="modrow__thumb" />
+                     
+                    <PhotoImage plain src={row.image_url} alt="" className="modrow__thumb" />
                   )}
                   {row.product_url ? (
                     <a href={row.product_url} target="_blank" rel="nofollow noreferrer" className="jumplink">

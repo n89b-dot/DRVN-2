@@ -64,8 +64,7 @@ test("N455: a private car's photo and a draft listing's photo are refused to a v
     // page, so a notFound() thrown after the first byte keeps the 200 it had
     // already sent: assert what a visitor sees, the not-found page itself,
     // and that neither the photo nor the car's name is anywhere in it.
-    const privateResponse = await page.goto(`/cars/${privateCar.slug}`);
-    expect([200, 404]).toContain(privateResponse?.status());
+    await page.goto(`/cars/${privateCar.slug}`);
     await expect(page).toHaveTitle("Not found - DRVN");
     await expect(page.getByText("Nothing at this address.")).toBeVisible();
     const privatePage = await page.content();

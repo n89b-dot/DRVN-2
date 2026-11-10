@@ -15,7 +15,8 @@
 -- functions, executable only by the service role (the signer's own client).
 --
 -- Rows older than the previous window are deleted as offers arrive, a bounded
--- batch at a time, so the table holds about two windows of photos.
+-- batch at a time, and daily by drvn-cron-history-prune; a deleted member's
+-- rows go when their scrub runs. The table holds about two windows of photos.
 --
 -- Idempotent.
 -- ============================================================================
@@ -62,19 +63,25 @@ security definer
 set search_path = ''
 as $$
 begin
+  -- In key order, so two instances offering overlapping photos in different
+  -- orders take the keys in the same order and never deadlock. Paths the
+  -- table would refuse are left out, so one bad path can't fail the batch.
   insert into private.photo_signatures (bucket, path, signing_window, signed_url)
-  select o.bucket, o.path, p_window, o.signed_url
+  select distinct on (o.bucket, o.path) o.bucket, o.path, p_window, o.signed_url
     from jsonb_to_recordset(coalesce(p_signed, '[]'::jsonb)) as o(bucket text, path text, signed_url text)
    where o.bucket in ('car-images', 'listing-images', 'activity-images')
-     and o.path is not null and o.signed_url is not null
+     and o.path is not null and length(o.path) between 3 and 512 and o.signed_url is not null
+   order by o.bucket, o.path
   on conflict on constraint photo_signatures_pkey do nothing;
 
-  -- Windows before the previous one can never be served again.
+  -- Windows before the previous one can never be served again. Rows another
+  -- offer is already removing are skipped, not waited for.
   delete from private.photo_signatures d
    where d.ctid in (
      select x.ctid from private.photo_signatures x
       where x.signing_window < p_window - 1
       limit 1000
+      for update skip locked
    );
 
   return query
@@ -84,6 +91,49 @@ begin
       on s.bucket = o.bucket and s.path = o.path and s.signing_window = p_window;
 end;
 $$;
+
+-- The daily clean-up (drvn-cron-history-prune, an existing job) also drops
+-- every row older than the previous window, so paths (which name their
+-- owner) don't sit at rest when no offers arrive. From 20261107191000, with
+-- that one delete added; the job's command is unchanged.
+create or replace function private.prune_cron_history()
+returns integer
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  removed integer;
+begin
+  delete from cron.job_run_details where coalesce(end_time, start_time) < now() - interval '14 days';
+  get diagnostics removed = row_count;
+  delete from private.photo_signatures where created_at < now() - interval '2 hours';
+  return removed;
+end;
+$$;
+revoke all on function private.prune_cron_history() from public, anon, authenticated;
+
+-- A deleted account's signed links go with its personal data: when the
+-- deletion scrub records scrubbed_at, every row under that member's folders
+-- is removed.
+create or replace function private.photo_signatures_forget_member()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if new.user_id is not null and new.scrubbed_at is not null and old.scrubbed_at is null then
+    delete from private.photo_signatures where split_part(path, '/', 1) = new.user_id::text;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function private.photo_signatures_forget_member() from public, anon, authenticated;
+drop trigger if exists photo_signatures_forget_member on public.account_deletion_requests;
+create trigger photo_signatures_forget_member
+  after update of scrubbed_at on public.account_deletion_requests
+  for each row execute function private.photo_signatures_forget_member();
 
 revoke all on function public.photo_signatures_read(bigint, jsonb) from public, anon, authenticated;
 revoke all on function public.photo_signatures_offer(bigint, jsonb) from public, anon, authenticated;

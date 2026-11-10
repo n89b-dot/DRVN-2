@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { blockedMediaKeys, imageRequestObjectKey } from "@/lib/copyright/blocked-media";
 import { buildContentSecurityPolicy, reportingEndpointsHeader } from "@/lib/csp";
-import { signedPhotoLinkExpired } from "@/lib/photo-urls";
+import { isUnsignedMemberPhoto, signedPhotoLinkExpired } from "@/lib/photo-urls";
 import { updateSession } from "@/lib/supabase/proxy";
 
 export async function proxy(request: NextRequest) {
@@ -34,7 +34,11 @@ async function imageGate(request: NextRequest) {
   // #178 review: a member photo's signed link that has run out is refused
   // before the optimiser can serve the copy it kept for the object's own
   // (longer) Cache-Control.
-  if (signedPhotoLinkExpired(request.nextUrl.searchParams.get("url"))) {
+  // A member photo in its canonical (unsigned) spelling is refused too: the
+  // optimiser may still hold a copy cached before the photos went private
+  // (Codex on #178). Pure checks on the URL: no database or auth call.
+  const source = request.nextUrl.searchParams.get("url");
+  if (signedPhotoLinkExpired(source) || isUnsignedMemberPhoto(source)) {
     return new NextResponse("This photo link has expired.", {
       status: 404,
       headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" },

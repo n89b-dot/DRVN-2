@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 
 import { cx } from "@/lib/format";
-import { isUnsignedMemberPhoto } from "@/lib/photo-urls";
+import { usePhotoFallback } from "./photo-image";
 
 import { Icon } from "./icons";
 
@@ -105,8 +105,8 @@ export function Media({
   // #105: a member photo that reached the page unsigned, or whose link the
   // storage layer refused (an expired or unsigned link), shows the no-photo
   // plate instead of a broken image. Keyed by src, so a new photo gets a try.
-  const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  if (!src || failedSrc === src || isUnsignedMemberPhoto(src)) {
+  const { shown, onError } = usePhotoFallback(src);
+  if (!shown) {
     // The plate variants carry a drawn mark; the plain fallback stays empty so
     // thumbnails and inline media don't sprout a badge at 40px.
     const marked = fallbackClassName.includes("plate-undrawn");
@@ -134,14 +134,14 @@ export function Media({
       {/* Optimization is on: next.config.ts allows the Supabase storage host,
           so these resize and serve AVIF/WebP instead of full-size originals. */}
       <Image
-        src={src}
+        src={shown}
         alt={alt}
         fill
         sizes={resolvedSizes}
         loading={leading ? "eager" : "lazy"}
         fetchPriority={leading ? "high" : undefined}
         className="object-cover"
-        onError={() => setFailedSrc(src)}
+        onError={onError}
         style={
           focal && focal.x !== null && focal.y !== null
             ? { objectPosition: `${Math.round(focal.x * 100)}% ${Math.round(focal.y * 100)}%` }

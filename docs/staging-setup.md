@@ -361,6 +361,13 @@ by #126).
 
 ## 13. Release-candidate evidence — the 15 gates [ENGINEER, OWNER reviews]
 
+**Staging proofs that need two server instances (before the gates).** One
+signed link per photo across instances (#117, N954): with staging serving
+from at least two instances, open one public car page twice in different
+browsers. Every photo's `/object/sign/…?token=` must be the same in both,
+and `select count(*) from private.photo_signatures` must grow once per
+photo per hour, not once per instance.
+
 1. Write the candidate config **outside the checkout** (no secrets in it):
    ```json
    {

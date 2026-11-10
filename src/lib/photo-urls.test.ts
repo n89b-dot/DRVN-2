@@ -89,3 +89,45 @@ describe("photo fields and expired links (N940, #178 review)", () => {
     expect(signedPhotoLinkExpired(null, at)).toBe(false);
   });
 });
+
+describe("the signer's photo keys match the schema (N940, #178 review)", () => {
+  // Every column in the public schema whose name looks like it holds a URL or
+  // an image, classified by hand. A new one fails this test until someone
+  // decides whether it holds member photos (sign it) or member-written text
+  // (never sign it), so a photo column can't ship unsigned and a prose
+  // column can't ship signed.
+  const CLASSIFIED: Record<string, "photo" | "not photo"> = {
+    url: "photo", // car_images, listing_images, activity_images, order snapshots; dispute evidence and staged uploads aren't signed buckets
+    image_url: "photo", // car_hotspots, mod_items: owner-checked on write
+    cover_image_url: "photo", // cars
+    imported_images: "photo", // listing_imports
+    images: "photo", // agent_messages (message-photos, not a signed bucket)
+    avatar_url: "not photo", // public avatars bucket, never signed
+    video_url: "not photo", // member-written
+    product_url: "not photo", // member-written
+    source_url: "not photo", // the import's source page
+    canonical_url: "not photo", // the import's source page
+    content_urls: "not photo", // a claimant's list of links
+    links: "not photo", // member-written profile links
+  };
+
+  it("classifies every url, image and photo column in the generated schema, and the signer agrees", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { isPhotoFieldKey } = await import("./photo-urls");
+    const types = fs.readFileSync(path.resolve(__dirname, "database.generated.ts"), "utf8");
+    const columns = new Set<string>();
+    for (const table of types.matchAll(/\n {6}[a-z_]+: \{\n {8}Row: \{\n([\s\S]*?)\n {8}\}/g)) {
+      for (const column of table[1].matchAll(/\n {10}([a-z_]+):/g)) {
+        if (/(url|urls|image|images|photo|photos|cover|thumb|thumbnail|banner|src|links)$/.test(column[1])) columns.add(column[1]);
+      }
+    }
+    expect(columns.size).toBeGreaterThan(5);
+    const unclassified = [...columns].filter((c) => !(c in CLASSIFIED));
+    expect(unclassified, "classify these columns in this test and, if they hold photos, in isPhotoFieldKey").toEqual([]);
+    for (const [column, kind] of Object.entries(CLASSIFIED)) {
+      if (column === "avatar_url") continue; // a photo key in shape, but its bucket is public and never matches
+      expect(isPhotoFieldKey(column, {}), column).toBe(kind === "photo");
+    }
+  });
+});

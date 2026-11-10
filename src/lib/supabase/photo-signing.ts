@@ -50,7 +50,9 @@ function signingClient() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) throw new Error("Photo signing needs the Supabase URL and secret key");
-    signer = createSupabaseClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+    // Bounded like the admin client: a stalled Storage or memo call must not hang a render.
+    const timed: typeof fetch = (input, init) => fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(10_000) });
+    signer = createSupabaseClient(url, key, { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: timed } });
   }
   return signer;
 }
@@ -99,7 +101,7 @@ export async function signedPhotoUrls(
   // The shared memo first: another instance may already have signed these.
   if (!fixedExpiresIn) {
     const known = await sharedSignatures("photo_signatures_read", window, [...missing].flatMap(([bucket, objects]) => objects.map((o) => ({ bucket, path: o.path }))));
-    for (const row of known) {
+    for (const row of known ?? []) {
       const url = urlByObject.get(`${row.bucket}/${row.path}`);
       if (url) keep(url, row.signed_url);
     }
@@ -133,7 +135,15 @@ export async function signedPhotoUrls(
     return out;
   }
   // Offer what this instance minted; where another instance won the race, its URL is the one shown.
-  const winners = new Map((await sharedSignatures("photo_signatures_offer", window, minted)).map((row) => [`${row.bucket}/${row.path}`, row.signed_url]));
+  const offered = await sharedSignatures("photo_signatures_offer", window, minted);
+  if (!offered) {
+    // Not stored in the shared memo: shown for this response only, never
+    // remembered here, so the next response tries the shared memo again
+    // instead of keeping this instance's own URL for the rest of the window.
+    for (const m of minted) out.set(urlByObject.get(`${m.bucket}/${m.path}`)!, m.signed_url);
+    return out;
+  }
+  const winners = new Map(offered.map((row) => [`${row.bucket}/${row.path}`, row.signed_url]));
   for (const m of minted) {
     const key = `${m.bucket}/${m.path}`;
     keep(urlByObject.get(key)!, winners.get(key) ?? m.signed_url);
@@ -142,31 +152,43 @@ export async function signedPhotoUrls(
 }
 
 type SharedRow = { bucket: string; path: string; signed_url: string };
-let sharedUnavailableReported = false;
-/** After a failure, sign per instance for a while instead of paying for a call that fails. */
+/** A shared-memo call that takes longer than this is given up for this response. */
+export const SHARED_BUDGET_MS = 1_500;
+/** After a failure, a short pause before the next call (a missing function, an outage), not a long one. */
+const SHARED_RETRY_MS = 30_000;
+/** Failures are reported at most this often, with how many there were since the last report. */
+const SHARED_REPORT_MS = 10 * 60_000;
 let sharedRetryAt = 0;
-const SHARED_RETRY_MS = 5 * 60_000;
+let sharedReportedAt = 0;
+let sharedFailures = 0;
 
-/** The shared memo's read or offer; on any failure, nothing (this instance's own URLs stand). */
+/**
+ * The shared memo's read or offer. Null when it can't be asked or failed
+ * (this response signs on its own, and remembers nothing); otherwise its rows.
+ */
 async function sharedSignatures(
   fn: "photo_signatures_read" | "photo_signatures_offer",
   window: number,
   objects: readonly { bucket: string; path: string; signed_url?: string }[],
-): Promise<SharedRow[]> {
-  if (!objects.length || Date.now() < sharedRetryAt) return [];
+): Promise<SharedRow[] | null> {
+  if (!objects.length) return [];
+  if (Date.now() < sharedRetryAt) return null;
   try {
     const args = fn === "photo_signatures_read" ? { p_window: window, p_objects: objects } : { p_window: window, p_signed: objects };
-    // The shared memo's functions are not in the generated types' public schema client used here.
-    const { data, error } = await (signingClient() as unknown as { rpc: (f: string, a: unknown) => Promise<{ data: SharedRow[] | null; error: unknown }> }).rpc(fn, args);
+    type Call = { abortSignal: (signal: AbortSignal) => PromiseLike<{ data: SharedRow[] | null; error: unknown }> };
+    const call = (signingClient() as unknown as { rpc: (f: string, a: unknown) => Call }).rpc(fn, args);
+    const { data, error } = await call.abortSignal(AbortSignal.timeout(SHARED_BUDGET_MS));
     if (error) throw error;
     return data ?? [];
   } catch (error) {
     sharedRetryAt = Date.now() + SHARED_RETRY_MS;
-    if (!sharedUnavailableReported) {
-      sharedUnavailableReported = true;
-      reportError("[photos] shared signing memo unavailable; signing per instance", { fn, error });
+    sharedFailures += 1;
+    if (Date.now() - sharedReportedAt >= SHARED_REPORT_MS) {
+      reportError("[photos] shared signing memo failed; signing per response", { fn, failures: sharedFailures, error });
+      sharedReportedAt = Date.now();
+      sharedFailures = 0;
     }
-    return [];
+    return null;
   }
 }
 
@@ -211,12 +233,17 @@ export const EXPORT_PHOTO_LINK_SECONDS = 7 * 24 * 60 * 60;
  * A member's own photos in their data export (N455): the stored canonical
  * URL no longer opens, so each becomes a link that opens for seven days. The
  * rows were selected for the requesting member only, by the export's own
- * ownership filters, and only photo fields are linked: another member's photo
- * URL the member wrote into a comment or description is not (#178 review).
+ * ownership filters. Only photo fields are linked, and only objects in the
+ * member's own folder: another member's photo URL the member wrote into a
+ * comment, or another member's photo on a row the export carries, is not
+ * (#178 review).
  */
-export async function signPhotosForExport<T>(value: T, nowMs = Date.now()): Promise<T> {
+export async function signPhotosForExport<T>(value: T, ownerId: string, nowMs = Date.now()): Promise<T> {
   if (value == null) return value;
-  const urls = photoFieldUrls(value);
+  // The member's own objects only: their folder is the path's first segment.
+  // A photo field on an exported row naming someone else's object (a
+  // conversation's listing, say) stays canonical.
+  const urls = photoFieldUrls(value).filter((url) => signedPhotoObject(url)?.path.split("/")[0] === ownerId);
   if (!urls.length) return value;
   return replacePhotoFields(value, await signedPhotoUrls(urls, nowMs, EXPORT_PHOTO_LINK_SECONDS));
 }
