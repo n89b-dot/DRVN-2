@@ -489,8 +489,9 @@ calls a judgement.
    number; say what was removed and where it was; state, under penalty of
    perjury, that it was removed by mistake or misidentification; consent to
    the jurisdiction of the federal court for their address; and be signed.
-   Whether it is valid is counsel's call, not the operator's. File it in the
-   takedown log with the date it arrived. The database has nowhere for it:
+   Whether it is valid is counsel's call, not the operator's. File the
+   message itself with the copyright agent's records and open a line in the
+   takedown log (below) the day it arrives. The database has nowhere for it:
    do not write it into the notice.
 2. **Send it to the person who complained**, promptly, with a line saying the
    content will be restored in ten business days unless they tell the
@@ -514,11 +515,30 @@ calls a judgement.
      a listing an acted-on notice holds, by design. And the blocklist is
      kept by file, not by notice, so removing one notice's row can unblock a
      file that a second notice still covers (work review #150).
-5. **Log what was done:** the three dates (arrived, sent on, restored), who
-   decided it was valid, and the new listing's id.
+5. **Finish the line in the takedown log**, so the whole event can be read
+   from it later.
 6. **A second notice about the restored content**, after the complainant has
    gone to court or otherwise, goes to counsel before anything is taken down
    again.
+
+**The takedown log.** No code stands behind this procedure, so the log is
+the audit record. It is one dated document the copyright agent keeps beside
+the copyright inbox, outside the database, backed up with the business's
+other records (the restore procedure in §6 reads from it). One line per
+counter-notice, filled in as the steps happen, never rewritten afterwards:
+
+| What | Where it comes from |
+|---|---|
+| The notice it answers | the notice's id, from its page in Admin (the id in the address) |
+| Who sent the counter-notice | the member's handle and account id, and the address it came from |
+| When it arrived | the date and time on the message, with the time zone |
+| Who recorded it | the operator's name |
+| Who judged it valid, and when | counsel's name and the date of their answer |
+| When it was sent to the complainant | the date and time, and the address it went to |
+| The two dates of the wait | the tenth and the fourteenth business day after it arrived |
+| Whether a court action was notified | yes or no, with the date and the message if yes |
+| When the member was told they may list again | the date and time |
+| What came back | the new listing's id, or the garage photo or post the member added again |
 
 What the set-aside control will add when it returns: a record of the
 counter-notice in the database, the waiting period counted in business days
