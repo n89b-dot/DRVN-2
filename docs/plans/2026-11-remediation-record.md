@@ -254,6 +254,7 @@ One table for both plans; the OS reads it exactly (`docs/ids.md`, "The table the
 | N1054 N1056 N1058 N1059 N1060 | #1-3.2 | step | #218, #219, #228 | engineer | The deploy path: read-only login, key kinds at boot, one commit-sha rule, rollback caveats, the admin gate on every console path |
 | N667 N1061 | #1-3.3 | step | #220, #233, #228, #235 | engineer | The vehicle catalogue filled on staging with its counts recorded; the corrected audit for damaged ids |
 | N725 | #1-3.4 | step | #214 | engineer | Per-change Codex reviews waived by Neil's ruling; the queue test refuses an owed row |
+| new | #1-4.8 | fixed | #223 | engineer | A report carries one small table the OS reads exactly, checked before the OS meets it |
 | N1036 | #1-X1 | step | #200, #211 | engineer | The duplicate test fix: closed, the fix merged with #200 |
 | N1036 N1079 | #1-X2 | step |  | engineer | Fixed-date sweep: every unit test passes with the clock 400 days and five years ahead |
 | new | #1-AL1 | after launch |  | engineer | The seller's ledger reads every unpaid sale on each load, and that set grows with refunds that are never paid out |

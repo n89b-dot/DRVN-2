@@ -283,7 +283,7 @@ describe("the record's table: both remediation plans, step by step (plan 1 step 
     const text = fs.readFileSync(path.join(root, RECORD_FILE), "utf8");
     expect(osTableProblems(text, RECORD_FILE)).toEqual([]);
     const findings = new Set([...text.matchAll(/^\|[^|]*\| (#\d-[A-Za-z0-9.]+) \|/gm)].map((m) => m[1]));
-    const steps = ["1", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "2.9", "2.10", "2.11", "2.12", "2.13", "3.1", "3.2", "3.3", "3.4"];
+    const steps = ["1", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "2.9", "2.10", "2.11", "2.12", "2.13", "3.1", "3.2", "3.3", "3.4", "4.8"];
     expect(steps.filter((step) => !findings.has(`#1-${step}`))).toEqual([]);
   });
 });
