@@ -40,9 +40,10 @@ export class RefusedOperationError extends Error {
  *  and the function that checks and closes each one. */
 const RELEASABLE_ON_REFUSAL = new Map<string, "release_refused_admin_refund" | "release_refused_dispute_retry">([
   ["order.force_refund", "release_refused_admin_refund"],
-  // A refused chargeback retry is released while the chargeback is still
-  // held for review (20261110170000).
+  // A refused chargeback retry or write-off is released while the chargeback
+  // is still held for review (20261110170000, 20261110180000).
   ["recovery.retry_dispute", "release_refused_dispute_retry"],
+  ["recovery.write_off_dispute", "release_refused_dispute_retry"],
 ]);
 
 export async function writeAudit(admin: Admin, entry: AuditEntry): Promise<void> {

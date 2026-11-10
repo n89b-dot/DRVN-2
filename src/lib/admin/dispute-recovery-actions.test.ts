@@ -38,7 +38,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   }),
 }));
 
-import { adminRetryDisputeRecovery } from "./actions";
+import { adminRetryDisputeRecovery, adminWriteOffDisputeRecovery } from "./actions";
 
 const CASE = "6f1c2b9e-1a2b-4c3d-8e9f-0a1b2c3d4e5f";
 const form = (fields: Record<string, string>) => {
@@ -103,5 +103,28 @@ describe("retry a chargeback held for review (N944, report five #108)", () => {
     mocks.context.mockResolvedValue(null);
     expect(await adminRetryDisputeRecovery(null, form({ recovery_id: CASE, reason: "x" }))).toEqual({ error: "Not found." });
     expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe("write off a chargeback the bank took (N944, report five #108)", () => {
+  const writeOffCheck = { dispute_id: "dp_1", written_off: false, before: { amount_cents: 5000, currency: "usd", order_ids: ["o1"], case_id: CASE, case_opened: "2026-08-01T00:00:00Z", withheld_from_seller_cents: 4500, held_event_id: "evt_lost" } };
+
+  it("dry-runs, then writes off as the admin with the note, the state before in the audit", async () => {
+    mocks.rpc.mockResolvedValue({ data: writeOffCheck, error: null });
+    const result = await adminWriteOffDisputeRecovery(null, form({ recovery_id: CASE, reason: "Recovery failed for 90 days" }));
+    expect(result).toEqual({ ok: expect.stringContaining("seller isn't paid") });
+    expect(mocks.rpc).toHaveBeenNthCalledWith(1, "admin_write_off_dispute_recovery", { p_dispute: "dp_1", p_actor: "admin-1", p_note: "Recovery failed for 90 days", p_dry_run: true });
+    expect(mocks.rpc).toHaveBeenNthCalledWith(2, "admin_write_off_dispute_recovery", { p_dispute: "dp_1", p_actor: "admin-1", p_note: "Recovery failed for 90 days" });
+    expect(mocks.audited).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ action: "recovery.write_off_dispute", metadata: { disputeId: "dp_1", before: writeOffCheck.before } }),
+      expect.any(Function),
+    );
+  });
+
+  it("says why it refuses (not lost, or before 90 days) and journals nothing", async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: { message: "Stripe hasn't closed this dispute as lost, so there is no loss to write off." } });
+    expect(await adminWriteOffDisputeRecovery(null, form({ recovery_id: CASE, reason: "x" }))).toEqual({ error: expect.stringContaining("closed this dispute as lost") });
+    expect(mocks.audited).not.toHaveBeenCalled();
   });
 });
