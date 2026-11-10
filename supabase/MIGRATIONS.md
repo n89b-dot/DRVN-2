@@ -32,6 +32,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 10 — write off a chargeback held for review after 90 days: N944 (report five #108, part B)
+
+| File | Applied to |
+|---|---|
+| `20261110180000_chargeback_write_off.sql` | not applied |
+
+Adds the journal state `written_off`, `private.dispute_terminal_states()` (the one list of settled states, mirrored by `src/lib/payments/dispute-terminal.ts`), `public.platform_chargeback_losses` and `public.admin_write_off_dispute_recovery(p_dispute, p_actor, p_note, p_dry_run)`, service role only. A write-off needs Stripe's dispute closed as lost and 90 days since the case opened; it cancels the orders' unpaid payouts, closes them as refunded by the bank, records the platform's loss, and closes the case and the journal as written off. Restates `private.order_has_unresolved_chargeback`, `public.account_deletion_blockers`, `private.account_deletion_hold_order` and the `account_deletion_hold_watch` trigger with the terminal list replaced by the function, `public.apply_stripe_dispute_event` (from `20261110170000`) with a written-off entry terminal, and `public.release_refused_dispute_retry` with the write-off added. Needs `20261110170000` first.
+
 ## November 10 — Retry a chargeback held for review: N944 (report five #108, part A)
 
 | File | Applied to |

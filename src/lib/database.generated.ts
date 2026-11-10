@@ -4313,6 +4313,50 @@ export type Database = {
           },
         ]
       }
+      platform_chargeback_losses: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          currency: string
+          dispute_id: string
+          note: string
+          order_ids: string[]
+          recorded_by: string
+          recovery_id: string | null
+          withheld_from_seller_cents: number
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          currency: string
+          dispute_id: string
+          note: string
+          order_ids: string[]
+          recorded_by: string
+          recovery_id?: string | null
+          withheld_from_seller_cents: number
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          dispute_id?: string
+          note?: string
+          order_ids?: string[]
+          recorded_by?: string
+          recovery_id?: string | null
+          withheld_from_seller_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_chargeback_losses_dispute_id_fkey"
+            columns: ["dispute_id"]
+            isOneToOne: true
+            referencedRelation: "stripe_dispute_journal"
+            referencedColumns: ["dispute_id"]
+          },
+        ]
+      }
       pickup_confirmations: {
         Row: {
           attempts: number
@@ -6822,6 +6866,10 @@ export type Database = {
       }
       admin_order_money_window: {
         Args: { p_from: string; p_to: string }
+        Returns: Json
+      }
+      admin_write_off_dispute_recovery: {
+        Args: { p_actor: string; p_dispute: string; p_dry_run?: boolean; p_note: string }
         Returns: Json
       }
       admin_retry_dispute_recovery: {

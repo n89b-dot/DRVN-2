@@ -1194,6 +1194,58 @@ export async function adminRetryDisputeRecovery(_prev: AdminActionState, formDat
   return { ok: `Replayed Stripe's event: the chargeback is now ${after?.state ?? "updated"}.` };
 }
 
+type DisputeWriteOffCheck = {
+  dispute_id: string;
+  before: { amount_cents: number; currency: string; order_ids: string[]; case_id: string; case_opened: string; withheld_from_seller_cents: number; held_event_id: string };
+};
+
+/**
+ * Write off a chargeback held for review (20261110180000), under the rule:
+ * only once Stripe has closed it as lost, 90 days after its case opened. The
+ * seller is never paid for those orders (their unpaid payouts are
+ * cancelled), DRVN records the loss against the platform, the case closes as
+ * written off. A dry run first, so a refusal journals nothing.
+ */
+export async function adminWriteOffDisputeRecovery(_prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+  const recoveryId = field(formData, "recovery_id");
+  const reason = field(formData, "reason");
+  if (!/^[0-9a-f-]{36}$/i.test(recoveryId)) return { error: "Missing recovery case." };
+  if (!reason) return { error: "A reason is required — it goes in the audit log." };
+  const { data: recovery } = await ctx.admin.from("payment_recoveries").select("id, recovery_key, order_id").eq("id", recoveryId).maybeSingle();
+  const disputeId = recovery?.recovery_key?.startsWith("stripe:dispute:") ? recovery.recovery_key.slice("stripe:dispute:".length) : null;
+  if (!recovery || !disputeId) return { error: "That isn't a chargeback held for review." };
+
+  const check = await ctx.admin.rpc("admin_write_off_dispute_recovery", { p_dispute: disputeId, p_actor: ctx.userId, p_note: reason, p_dry_run: true });
+  if (check.error) return { error: check.error.message };
+  const before = (check.data as unknown as DisputeWriteOffCheck).before;
+  try {
+    await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: "recovery.write_off_dispute",
+        subjectType: "payment",
+        subjectId: recoveryId,
+        orderId: recovery.order_id ?? undefined,
+        reason,
+        metadata: { disputeId, before },
+      },
+      async () => {
+        const { data, error } = await ctx.admin.rpc("admin_write_off_dispute_recovery", { p_dispute: disputeId, p_actor: ctx.userId, p_note: reason });
+        if (error) throw new RefusedOperationError(error.message);
+        return data;
+      }
+    );
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not write the chargeback off." };
+  }
+  revalidatePath("/admin", "layout");
+  return { ok: "Written off: DRVN records the loss, the seller isn't paid for these orders, and the case is closed." };
+}
+
 // ---------- Seller credit payouts (20261008100100 / 20261026150000) ----------
 
 type CarryPayoutControl = "retry" | "cancel";

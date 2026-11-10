@@ -7,6 +7,7 @@ import {
   adminReplaceFailedRefund,
   adminResolveRecovery,
   adminRetryDisputeRecovery,
+  adminWriteOffDisputeRecovery,
   adminRetryCarryPayout,
   adminRetryTransfer,
   adminRunTransferWorker,
@@ -118,6 +119,7 @@ export default async function AdminPaymentsPage({
                   {r.recovery_key?.startsWith("stripe:dispute:") ? (
                     // #108: a chargeback held for review closes through its
                     // journal, or the seller's payout stays frozen.
+                    <>
                     <ActionDialog
                       action={adminRetryDisputeRecovery}
                       title="Retry this chargeback"
@@ -128,6 +130,18 @@ export default async function AdminPaymentsPage({
                       fields={[{ kind: "reason", placeholder: "e.g. The payment record was corrected" }]}
                       submitLabel="Retry"
                     />
+                    <ActionDialog
+                      action={adminWriteOffDisputeRecovery}
+                      title="Write this chargeback off"
+                      trigger="Write off"
+                      triggerClassName="relbtn !static"
+                      hidden={{ recovery_id: r.id }}
+                      danger
+                      confirmNote={`Chargeback ${r.recovery_key.slice("stripe:dispute:".length)} on ${r.order_id ? r.orderTitle : "orders not yet attributed"}, ${r.amount_cents != null ? formatPrice(r.amount_cents) : "amount unknown"}. Only once Stripe has closed it as lost, 90 days or more after this case opened. DRVN records the loss; the seller is not paid for these orders (any payout still waiting is cancelled); the orders close as refunded by the bank. The seller's other orders are untouched.`}
+                      fields={[{ kind: "reason", placeholder: "e.g. Recovery from the seller failed for 90 days" }]}
+                      submitLabel="Write off"
+                    />
+                    </>
                   ) : (
                   <ActionDialog
                     action={adminResolveRecovery}

@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
 import { sendAdminAlert } from "@/lib/admin/alerts";
+import { disputeSettled } from "./dispute-terminal";
 
 /**
  * The transfer worker — the only code that moves money to sellers. The
@@ -66,12 +67,8 @@ const MAX_GROUP_PAGES = 10;
  *  any real seller; beyond it the lookup is unsafe, never guessed. */
 const MAX_DESTINATION_PAGES = 100;
 
-/**
- * Terminal provider outcomes. Any other journal state — open, loss_pending,
- * recovery, or one added later — is an unresolved chargeback. Mirrors
- * private.order_has_unresolved_chargeback (20261107130000); fails closed.
- */
-const RESOLVED_CHARGEBACK_STATES = new Set(["won", "warning_closed", "lost"]);
+// Settled chargeback states: one list, shared with the database
+// (src/lib/payments/dispute-terminal.ts, private.dispute_terminal_states()).
 export const CHARGEBACK_HOLD_REASON =
   "Payout frozen: a bank chargeback on this order is unresolved";
 
@@ -500,7 +497,7 @@ async function readTransferOrder(admin: Admin, orderId: string, failure: string)
     .contains("order_ids", [orderId]);
   if (disputeError) throw new Error("Could not read the order's bank chargebacks");
   const chargebackUnresolved = (disputes ?? []).some(
-    (dispute) => !RESOLVED_CHARGEBACK_STATES.has(dispute.state)
+    (dispute) => !disputeSettled(dispute.state)
   );
   return { order, chargebackUnresolved };
 }

@@ -380,8 +380,17 @@ normal handling. If it still doesn't match, it's held again. Once Stripe's
 outcome is applied, the case closes by itself. Retry refuses, in words, a
 chargeback that was already won, closed or lost before a conflicting event
 held it, one held while a loss was being booked, and one with no stored event
-to replay. Those stay for the owner; the write-off after 90 days is a
-separate control, still to come. Never edit `stripe_dispute_journal` by hand.
+to replay. Those stay for the owner. Never edit `stripe_dispute_journal` by
+hand.
+
+**Write off** (20261110180000), beside Retry, is for a chargeback the bank
+took that couldn't be recovered from the seller: only once Stripe has closed
+it as **lost**, and 90 days or more after its case opened (DRVN funds a
+chargeback, recovers it from the seller, writes it off after 90 days; a
+default the owner confirms). It never pays the seller for those orders: their
+waiting payouts are cancelled, the orders close as refunded by the bank, the
+loss is recorded against the platform (`platform_chargeback_losses`), and the
+case closes as written off. The seller's other orders are untouched.
 
 - **Refund operations** (`refund_operations`, 0026): anything not `completed`
   appears here. The worker pass (`/api/jobs/transfers`) resumes abandoned
