@@ -481,6 +481,49 @@ reachable for at most about two hours, and only to someone who already held
 its live link. Photos uploaded before 10 Nov 2026 carry a year's
 Cache-Control on their object, but the proxy's expiry check covers them too.
 
+### How long a link that is already out keeps working (work review #132 to #137)
+
+A member photo is only ever handed out as a signed link, and a signed link
+cannot be called back: it works until its own time runs out or the object is
+deleted. What changes at once is that no new link is made for anyone who can
+no longer see the row the photo belongs to.
+
+| What happened | New links | A link someone already holds |
+|---|---|---|
+| A build is made private; a listing is paused, taken down or goes back to draft | None for anyone but the owner, from their next page load | Works until it runs out: between one and two hours after it was signed. Links are signed for the current clock hour and the one after (`signingWindow` in `src/lib/photo-urls.ts`) |
+| The photo itself is removed (the member deletes it, or an account deletion empties their storage) | None | Stops when the object is deleted. Our image optimiser can answer from its own copy until the link's time runs out, so at most about two hours, and only for someone who held the live link |
+| A member is banned | None for other people: their listings are paused and their builds read as empty | As the first row: up to two hours. A ban deletes no photo |
+| A copyright takedown | None | Refused at once on our pages (451 at `/_next/image`), and the object is deleted |
+| A member's data export | Not applicable | Each photo link inside the export works for seven days from when the export was built (`EXPORT_PHOTO_LINK_SECONDS` in `src/lib/supabase/photo-signing.ts`), whatever the member does to the build or listing afterwards. It stops early only when the object is deleted: the member deletes the photo, or the account |
+
+To cut one link short, delete the object (the member's own delete, or by hand
+in Storage). There is no way to call back one link and keep the photo.
+Supabase signs these links with the project's JWT secret, so changing that
+secret ends every link at once; it also signs every member out and changes
+the API keys. Treat it as a last resort and read Supabase's current
+documentation first.
+
+Link previews are different. The picture in a preview is a card generated at
+an address of ours (`opengraph-image`), with the photo drawn into it, made
+new for each request and read as a signed-out visitor. Once a listing is no
+longer on sale or sold, or a build is private, the card has no photo. A chat
+or a search engine that fetched the card earlier keeps its own copy for as
+long as it chooses; we cannot call that back.
+
+If photos are missing on a page: a member photo that reaches the browser
+unsigned is reported to monitoring as a warning, "A member photo reached a
+page unsigned (bucket)", tagged with the bucket and the first part of the
+page's address (never the rest of it), at most once for each such area in a
+page load and at most thirty a minute across all visitors. One area means a
+read that skipped the signing wrapper (`tests/ci/unsigned-photo-reads.test.ts`
+is the check for the service-role kind). Many areas at once, together with
+"signing failed" or "signing ran past its budget" from the server, means the
+photo store is failing or slow for that bucket: a page waits at most two and
+a half seconds for it, that bucket alone is paused (two seconds, doubling to
+thirty while it keeps failing) and tried again by itself, and links signed in
+the last hour go on being shown meanwhile. An export page is not written
+while the store does not answer; its job is tried again.
+
 ## 5d. Account deletions: every state and the safe action (#106, #108)
 
 Admin → People → "Account deletions not finished" lists every case that isn't

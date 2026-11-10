@@ -81,9 +81,10 @@ const loadSourceCar = cache(async (carId: string) => {
 });
 
 /**
- * Per-listing metadata with the cover as the OG image. A part listing is the
- * unit people paste into group chats, and every one of them previously unfurled
- * as the site-wide tagline with no picture.
+ * Per-listing metadata. A part listing is the unit people paste into group
+ * chats, and every one of them previously unfurled as the site-wide tagline
+ * with no picture. The picture is the generated card next door
+ * (opengraph-image.tsx), not the cover photo's own signed link.
  */
 export async function generateMetadata({
   params,
@@ -91,12 +92,10 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const [{ data: listing }, { data: images }] = await Promise.all([loadListing(id), loadListingImages(id)]);
+  const { data: listing } = await loadListing(id);
 
   if (!listing) return { title: "Listing not found - DRVN" };
   const { data: sourceCar } = listing.source_car_id ? await loadSourceCar(listing.source_car_id) : { data: null };
-
-  const image = images?.[0] ?? null;
 
   const price = formatPrice(listing.price_cents);
   const sold = listing.status === "sold";
@@ -110,15 +109,18 @@ export async function generateMetadata({
     robots: ["active", "sold"].includes(listing.status)
       ? undefined
       : { index: false, follow: false },
+    // No `images` here (work review #132): the share image is the generated
+    // card at opengraph-image.tsx in this segment, whose address is ours and
+    // does not run out. The cover photo's own link is signed and stops
+    // working within two hours, so a pasted listing lost its picture.
     openGraph: {
       title: `${listing.title} — ${price}`,
       description,
       url: `/listings/${id}`,
       type: "website",
-      images: image?.url ? [{ url: image.url }] : undefined,
     },
     twitter: {
-      card: image?.url ? "summary_large_image" : "summary",
+      card: "summary_large_image",
       title: `${listing.title} — ${price}`,
       description,
     },

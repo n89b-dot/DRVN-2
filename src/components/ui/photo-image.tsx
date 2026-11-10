@@ -1,8 +1,9 @@
 "use client";
 
 import Image, { type ImageProps } from "next/image";
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 
+import { reportUnsignedPhoto } from "@/lib/photo-report";
 import { isMemberPhotoSource, isUnsignedMemberPhoto } from "@/lib/photo-urls";
 
 /**
@@ -12,10 +13,18 @@ import { isMemberPhotoSource, isUnsignedMemberPhoto } from "@/lib/photo-urls";
  * expired; either used to show a broken image. Both now show the no-photo
  * plate. Other images are untouched. Keyed by src, so a new photo gets its
  * own try.
+ *
+ * N1053: the plate used to hide an unsigned photo, so a page reading photos
+ * without the signing wrapper looked fine to its author. One arriving here
+ * is now reported to monitoring (once for each page; src/lib/photo-report.ts).
  */
 export function usePhotoFallback(src: string | null | undefined): { shown: string | null; onError: () => void } {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const shown = !src || failedSrc === src || isUnsignedMemberPhoto(src) ? null : src;
+  const unsigned = isUnsignedMemberPhoto(src);
+  useEffect(() => {
+    if (unsigned && src) reportUnsignedPhoto(src);
+  }, [unsigned, src]);
+  const shown = !src || failedSrc === src || unsigned ? null : src;
   // Only a member photo falls back on a failed load (an expired or refused
   // link); any other image keeps the browser's own behaviour, as before.
   return { shown, onError: () => { if (isMemberPhotoSource(src)) setFailedSrc(src ?? null); } };
