@@ -214,7 +214,8 @@ describe("only photo fields are signed, never a URL a member wrote (N940, #178 r
 
 describe("a failed offer is not remembered locally (N954, review of #196)", () => {
   it("the next response asks the shared memo again rather than keeping this instance's URL", async () => {
-    vi.useFakeTimers({ now: Date.UTC(2026, 10, 10, 10, 0) });
+    // Ahead of the real clock: earlier tests leave a retry pause measured on it.
+    vi.useFakeTimers({ now: Date.now() + 86_400_000 });
     try {
       const url = canonical("car-images", "offer-fails.webp");
       mocks.rpc.mockImplementation(async (fn: string) => (fn === "photo_signatures_offer" ? { data: null, error: { code: "40P01", message: "deadlock detected" } } : { data: [], error: null }));
@@ -292,7 +293,7 @@ describe("only database-guarded places are signed (N940, #196 review)", () => {
 
 describe("while the shared memo is down, the process memo still works (N954, #196 review)", () => {
   it("reuses this process's link until the shared memo is tried again", async () => {
-    vi.useFakeTimers({ now: Date.UTC(2026, 10, 11, 10, 0) });
+    vi.useFakeTimers({ now: Date.now() + 2 * 86_400_000 });
     try {
       mocks.rpc.mockImplementation(async () => ({ data: null, error: { message: "down" } }));
       const url = canonical("listing-images", "outage.webp");
