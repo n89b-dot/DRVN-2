@@ -8739,6 +8739,22 @@ export type Database = {
         Args: { p_payment_reference: string; p_refund_references: string[] }
         Returns: Json
       }
+      record_copyright_counter_notice: {
+        Args: {
+          p_consents: boolean
+          p_member_address: string
+          p_member_name: string
+          p_notice: string
+          p_received_at: string
+          p_signature: string
+          p_statement: string
+        }
+        Returns: string
+      }
+      reinstate_after_counter_notice: {
+        Args: { p_note: string; p_notice: string }
+        Returns: Json
+      }
       reject_copyright_notice: {
         Args: { p_note: string; p_notice: string }
         Returns: undefined
