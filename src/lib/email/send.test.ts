@@ -24,11 +24,11 @@ describe("the email seam", () => {
     const message = { to: "member@drvn.test", subject: "s", text: "t", html: "h", idempotencyKey: "k" };
     const unknown = emailTransport({ EMAIL_PROVIDER: "unknown", EMAIL_FROM: "alerts@drvn.example" });
     expect(unknown).not.toBeNull();
-    await expect(unknown!.send(message)).resolves.toEqual({ status: "retry", reason: "unknown: unknown provider" });
+    await expect(unknown!.send(message)).resolves.toEqual({ status: "retry", reason: "unknown: unknown provider", provider: true });
     expect(emailTransport({ EMAIL_PROVIDER: "toString", EMAIL_FROM: "alerts@drvn.example" })!.name).toBe("toString");
     await expect(emailTransport({ EMAIL_PROVIDER: "toString", EMAIL_FROM: "a@drvn.example" })!.send(message)).resolves.toMatchObject({ status: "retry" });
     TRANSPORTS.fixture = () => async () => ({ status: "sent", providerId: null });
-    await expect(emailTransport({ EMAIL_PROVIDER: "fixture" })!.send(message)).resolves.toEqual({ status: "retry", reason: "fixture: EMAIL_FROM missing" });
+    await expect(emailTransport({ EMAIL_PROVIDER: "fixture" })!.send(message)).resolves.toEqual({ status: "retry", reason: "fixture: EMAIL_FROM missing", provider: true });
     expect(reportError).toHaveBeenCalled();
   });
 

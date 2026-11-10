@@ -2219,6 +2219,27 @@ export type Database = {
           },
         ]
       }
+      dispatch_reminders: {
+        Row: {
+          created_at: string
+          dispatch_by: string
+          order_id: string
+          seller_id: string
+        }
+        Insert: {
+          created_at?: string
+          dispatch_by: string
+          order_id: string
+          seller_id: string
+        }
+        Update: {
+          created_at?: string
+          dispatch_by?: string
+          order_id?: string
+          seller_id?: string
+        }
+        Relationships: []
+      }
       dispute_evidence: {
         Row: {
           created_at: string
@@ -3676,6 +3697,7 @@ export type Database = {
           next_attempt_at: string
           notification_id: string
           order_id: string
+          provider_held_at: string | null
           provider_message_id: string | null
           recipient_id: string
           sent_at: string | null
@@ -3694,6 +3716,7 @@ export type Database = {
           next_attempt_at?: string
           notification_id: string
           order_id: string
+          provider_held_at?: string | null
           provider_message_id?: string | null
           recipient_id: string
           sent_at?: string | null
@@ -3712,6 +3735,7 @@ export type Database = {
           next_attempt_at?: string
           notification_id?: string
           order_id?: string
+          provider_held_at?: string | null
           provider_message_id?: string | null
           recipient_id?: string
           sent_at?: string | null
@@ -7335,6 +7359,7 @@ export type Database = {
         Args: { p_limit: number }
         Returns: {
           attempt: number
+          buyer: boolean
           email: string
           guest: boolean
           id: string
@@ -8690,6 +8715,7 @@ export type Database = {
         }
         Returns: Json
       }
+      raise_dispatch_reminders: { Args: never; Returns: number }
       raise_payout_setup_reminders: { Args: never; Returns: number }
       recommend_listings: {
         Args: { p_limit?: number; p_user: string }

@@ -126,5 +126,13 @@ export async function processPayoutDeadlines(
   } catch (reminderFailure) {
     reportError("[payout-deadline] setup reminders failed", { error: reminderFailure });
   }
+  // And one reminder per paid order, a day before its dispatch date (work
+  // review #147). The same rule: its failure is reported, never counted here.
+  try {
+    const { error: dispatchError } = await admin.rpc("raise_dispatch_reminders");
+    if (dispatchError) throw dispatchError;
+  } catch (dispatchFailure) {
+    reportError("[payout-deadline] dispatch reminders failed", { error: dispatchFailure });
+  }
   return summary;
 }

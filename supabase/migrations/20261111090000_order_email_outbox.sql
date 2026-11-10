@@ -47,10 +47,15 @@ create table if not exists public.order_email_outbox (
   order_id uuid not null,
   kind text not null check (kind in (
     'order_sold', 'order_paid', 'order_shipped', 'order_delivered', 'receipt_auto_confirmed',
-    'order_disputed', 'dispute_resolved', 'admin_action', 'order_refunded', 'payout_setup_reminder')),
+    'order_disputed', 'dispute_resolved', 'admin_action', 'order_refunded', 'payout_setup_reminder',
+    'order_cancelled', 'order_partially_refunded', 'dispatch_reminder')),
   status text not null default 'pending' check (status in ('pending', 'sending', 'sent', 'skipped', 'failed')),
   skip_reason text check (skip_reason is null or skip_reason in (
-    'email_off', 'stale', 'account_closed', 'no_address', 'not_a_party', 'muted', 'rate_capped', 'rejected')),
+    'email_off', 'stale', 'account_closed', 'no_address', 'not_a_party', 'muted', 'rejected')),
+  -- Set while the row waits because our own account with the provider is at
+  -- fault (a rotated key, a lapsed domain): such a row is not counted as an
+  -- attempt and is kept 72 hours, not 24 (work review #147).
+  provider_held_at timestamptz,
   attempts integer not null default 0 check (attempts >= 0),
   next_attempt_at timestamptz not null default now(),
   lease_id uuid,
@@ -64,6 +69,8 @@ create table if not exists public.order_email_outbox (
 );
 create index if not exists order_email_outbox_due_idx on public.order_email_outbox (next_attempt_at) where status in ('pending', 'sending');
 create index if not exists order_email_outbox_recipient_idx on public.order_email_outbox (recipient_id, sent_at);
+-- What an operator looks at, and what the prune removes.
+create index if not exists order_email_outbox_settled_idx on public.order_email_outbox (updated_at) where status in ('sent', 'skipped', 'failed');
 
 alter table public.order_email_outbox enable row level security;
 revoke all on table public.order_email_outbox from public, anon, authenticated;
@@ -85,7 +92,8 @@ declare
   v_order uuid;
 begin
   if new.kind not in ('order_sold', 'order_paid', 'order_shipped', 'order_delivered', 'receipt_auto_confirmed',
-                      'order_disputed', 'dispute_resolved', 'admin_action', 'order_refunded', 'payout_setup_reminder') then
+                      'order_disputed', 'dispute_resolved', 'admin_action', 'order_refunded', 'payout_setup_reminder',
+                      'order_cancelled', 'order_partially_refunded', 'dispatch_reminder') then
     return new;
   end if;
   -- Exactly /orders/<uuid>: anything else (a fragment, a query, another
@@ -140,8 +148,14 @@ create trigger order_emails_account_closed
 -- ---------------------------------------------------------------------------
 -- Claim and complete
 -- ---------------------------------------------------------------------------
+-- Claims up to p_limit rows to send. Rows that can never be sent (stale, a
+-- closed account, no address) are marked skipped on the way and do not count
+-- towards p_limit: a skipped row at the head of the queue used to end the
+-- pass with nothing sent (work review #147). A member at the hourly cap is
+-- passed over and tried again later, not dropped.
+drop function if exists public.claim_order_emails(integer);
 create or replace function public.claim_order_emails(p_limit integer)
-returns table (id uuid, attempt integer, recipient_id uuid, order_id uuid, kind text, email text, guest boolean, notification_prefs jsonb)
+returns table (id uuid, attempt integer, recipient_id uuid, order_id uuid, kind text, email text, guest boolean, buyer boolean, notification_prefs jsonb)
 language plpgsql
 security definer
 set search_path = public, pg_temp
@@ -154,37 +168,47 @@ declare
   v_buyer boolean;
   v_reason text;
   v_lease uuid;
+  v_limit integer := least(greatest(coalesce(p_limit, 10), 1), 50);
+  v_claimed integer := 0;
 begin
   for v_row in
-    select q.id, q.recipient_id, q.order_id, q.kind, q.attempts, q.created_at
+    select q.id, q.recipient_id, q.order_id, q.kind, q.attempts, q.created_at, q.provider_held_at
       from public.order_email_outbox q
      where (q.status = 'pending' and q.next_attempt_at <= now())
         or (q.status = 'sending' and q.lease_expires_at < now())
      order by q.next_attempt_at, q.id
-     limit least(greatest(coalesce(p_limit, 10), 1), 50)
+     limit 500
      for update of q skip locked
   loop
+    exit when v_claimed >= v_limit;
     select nullif(btrim(u.email), ''), u.confirmed_at is not null into v_email, v_confirmed
       from auth.users u where u.id = v_row.recipient_id;
     select v_row.recipient_id = o.buyer_id into v_buyer from public.orders o where o.id = v_row.order_id;
 
     v_reason := case
-      when v_row.created_at < now() - interval '24 hours' then 'stale'
+      when v_row.created_at < now() - case when v_row.provider_held_at is not null then interval '72 hours' else interval '24 hours' end then 'stale'
       when exists (select 1 from public.profiles p where p.id = v_row.recipient_id and p.suspended_at is not null)
         or exists (select 1 from public.account_deletion_requests r where r.user_id = v_row.recipient_id
                     and (r.outcome <> 'temporary_financial_hold' or r.scrubbed_at is not null)) then 'account_closed'
       when v_buyer is null then 'not_a_party'
       when v_email is null then 'no_address'
       -- An unconfirmed address is a guest's: only the buyer's own emails.
-      when not v_confirmed and not (v_buyer and v_row.kind in ('order_paid', 'order_shipped', 'receipt_auto_confirmed', 'order_refunded', 'dispute_resolved', 'admin_action')) then 'no_address'
-      when (select count(*) from public.order_email_outbox s
-             where s.recipient_id = v_row.recipient_id
-               and ((s.status = 'sent' and s.sent_at > now() - interval '1 hour') or s.status = 'sending')) >= 20 then 'rate_capped'
+      when not v_confirmed and not (v_buyer and v_row.kind in ('order_paid', 'order_shipped', 'receipt_auto_confirmed', 'order_refunded', 'order_partially_refunded', 'order_cancelled', 'dispute_resolved', 'admin_action')) then 'no_address'
     end;
 
     if v_reason is not null then
       update public.order_email_outbox
          set status = 'skipped', skip_reason = v_reason, lease_id = null, lease_expires_at = null, updated_at = now()
+       where order_email_outbox.id = v_row.id;
+      continue;
+    end if;
+
+    -- Twenty an hour to one person: the rest wait half an hour, in order.
+    if (select count(*) from public.order_email_outbox s
+         where s.recipient_id = v_row.recipient_id
+           and ((s.status = 'sent' and s.sent_at > now() - interval '1 hour') or s.status = 'sending')) >= 20 then
+      update public.order_email_outbox
+         set status = 'pending', next_attempt_at = now() + interval '30 minutes', lease_id = null, lease_expires_at = null, updated_at = now()
        where order_email_outbox.id = v_row.id;
       continue;
     end if;
@@ -202,7 +226,9 @@ begin
     kind := v_row.kind;
     email := v_email;
     guest := not v_confirmed;
+    buyer := v_buyer;
     select coalesce(p.notification_prefs, '{}'::jsonb) into notification_prefs from public.profiles p where p.id = v_row.recipient_id;
+    v_claimed := v_claimed + 1;
     return next;
   end loop;
 end;
@@ -210,9 +236,11 @@ $$;
 revoke all on function public.claim_order_emails(integer) from public, anon, authenticated;
 grant execute on function public.claim_order_emails(integer) to service_role;
 
--- p_outcome: sent, retry, rejected (the provider will never take it), or
--- skipped (p_reason: muted, email_off). Fenced by attempt: a late answer for
--- an earlier attempt changes nothing.
+-- p_outcome: sent, retry, rejected (the provider will never take it), provider
+-- (our own account with the provider is at fault: the row goes back to
+-- waiting, this attempt is not counted, and it is kept 72 hours), or skipped
+-- (p_reason: muted, email_off). Fenced by attempt: a late answer for an
+-- earlier attempt changes nothing. Returns the row's new status, or 'held'.
 create or replace function public.complete_order_email(
   p_id uuid, p_attempt integer, p_outcome text, p_provider_message_id text default null,
   p_error text default null, p_reason text default null)
@@ -245,6 +273,13 @@ begin
            next_attempt_at = now() + (interval '10 minutes' * power(2, greatest(v_row.attempts - 1, 0))), updated_at = now()
      where id = p_id;
     return 'pending';
+  elsif p_outcome = 'provider' then
+    update public.order_email_outbox
+       set status = 'pending', attempts = greatest(v_row.attempts - 1, 0), provider_held_at = coalesce(v_row.provider_held_at, now()),
+           last_error = left(p_error, 200), lease_id = null, lease_expires_at = null,
+           next_attempt_at = now() + interval '10 minutes', updated_at = now()
+     where id = p_id;
+    return 'held';
   elsif p_outcome = 'rejected' then
     update public.order_email_outbox
        set status = 'skipped', skip_reason = 'rejected', last_error = left(p_error, 200), lease_id = null, lease_expires_at = null, updated_at = now()
@@ -332,6 +367,8 @@ begin
            (array_agg(u.order_id order by u.day desc, u.order_id))[1] as order_id
       from unpaid u
      where u.day between 0 and 13
+       -- Before the limit: with it after, sellers past the first 200 by id were never reached.
+       and not exists (select 1 from public.payout_setup_reminders r where r.seller_id = u.seller_id and r.reminded_on = current_date)
      group by u.seller_id
     having bool_or(u.day in (3, 7, 12))
      order by u.seller_id
@@ -359,6 +396,132 @@ end;
 $$;
 revoke all on function public.raise_payout_setup_reminders() from public, anon, authenticated;
 grant execute on function public.raise_payout_setup_reminders() to service_role;
+
+-- ---------------------------------------------------------------------------
+-- A partial refund has no notice of its own (work review #147): the order's
+-- status does not change, so notify_on_order_status says nothing, and the
+-- buyer learns of the money only from their bank. This raises one, to both
+-- parties, when refunded_cents rises and the order is not fully refunded. A
+-- full refund keeps its own notice (order_refunded). A chargeback the bank
+-- decided is not a refund from DRVN and raises nothing here.
+-- ---------------------------------------------------------------------------
+create or replace function private.notify_on_partial_refund()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_amount text;
+begin
+  if new.refunded_cents <= old.refunded_cents or new.refunded_cents >= new.total_cents
+     or new.status in ('refunded', 'cancelled')
+     or coalesce(new.cancel_reason, '') like 'Card dispute lost (%' then
+    return new;
+  end if;
+  v_amount := to_char((new.refunded_cents - old.refunded_cents) / 100.0, 'FM999G999G990D00') || ' ' || upper(new.currency);
+  perform public.notify(new.buyer_id, 'order_partially_refunded', 'marketplace',
+    'Part of your order was refunded', v_amount || ' was refunded to the card you paid with.', '/orders/' || new.id, null);
+  perform public.notify(new.seller_id, 'order_partially_refunded', 'marketplace',
+    'A partial refund was issued on a sale', v_amount || ' was refunded to the buyer.', '/orders/' || new.id, null);
+  return new;
+end;
+$$;
+revoke all on function private.notify_on_partial_refund() from public, anon, authenticated;
+
+drop trigger if exists orders_notify_partial_refund on public.orders;
+create trigger orders_notify_partial_refund
+  after update of refunded_cents on public.orders
+  for each row execute function private.notify_on_partial_refund();
+
+-- ---------------------------------------------------------------------------
+-- The dispatch deadline (work review #147): a seller is told once, a day
+-- ahead, that a paid order must be dispatched by its date (orders.dispatch_by,
+-- frozen when the order was paid; null for collection). One reminder per
+-- order, recorded in its own row so the dedupe does not depend on the notice
+-- surviving. Called by the money pass, after the payout reminders.
+-- ---------------------------------------------------------------------------
+create table if not exists public.dispatch_reminders (
+  order_id uuid primary key,
+  seller_id uuid not null references auth.users (id) on delete cascade,
+  dispatch_by timestamptz not null,
+  created_at timestamptz not null default now()
+);
+alter table public.dispatch_reminders enable row level security;
+revoke all on table public.dispatch_reminders from public, anon, authenticated;
+grant all on table public.dispatch_reminders to service_role;
+comment on table public.dispatch_reminders is
+  'One dispatch reminder per order (20261111090000, work review #147). Service role only.';
+
+create or replace function public.raise_dispatch_reminders()
+returns integer
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_row record;
+  v_n integer := 0;
+begin
+  for v_row in
+    select o.id, o.seller_id, o.dispatch_by
+      from public.orders o
+     where o.status = 'paid' and o.shipped_at is null
+       and o.dispatch_by is not null and o.dispatch_by <= now() + interval '24 hours'
+       -- Not for an order long past its date: that is the dispatch deadline's own handling.
+       and o.dispatch_by > now() - interval '24 hours'
+       and not exists (select 1 from public.dispatch_reminders r where r.order_id = o.id)
+     order by o.dispatch_by
+     limit 200
+  loop
+    insert into public.dispatch_reminders (order_id, seller_id, dispatch_by)
+    values (v_row.id, v_row.seller_id, v_row.dispatch_by)
+    on conflict (order_id) do nothing;
+    if not found then
+      continue;
+    end if;
+    perform public.notify(v_row.seller_id, 'dispatch_reminder', 'marketplace',
+      'An order is due to be dispatched', 'Mark it dispatched with its tracking number once it is on its way.', '/orders/' || v_row.id, null);
+    v_n := v_n + 1;
+  end loop;
+  return v_n;
+end;
+$$;
+revoke all on function public.raise_dispatch_reminders() from public, anon, authenticated;
+grant execute on function public.raise_dispatch_reminders() to service_role;
+
+-- ---------------------------------------------------------------------------
+-- Pruning (work review #147): nothing removed a settled row. Sent, skipped
+-- and failed rows go after 90 days, as do the two reminder ledgers; the rate
+-- cap only reads the last hour. Restated from 20261110190000 with these
+-- three deletes added (the job is unchanged).
+-- ---------------------------------------------------------------------------
+create or replace function private.prune_cron_history()
+returns integer
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  removed integer;
+begin
+  delete from cron.job_run_details where coalesce(end_time, start_time) < now() - interval '14 days';
+  get diagnostics removed = row_count;
+  -- Rows an offer is writing right now are skipped, not waited for.
+  delete from private.photo_signatures d
+   where d.ctid in (select x.ctid from private.photo_signatures x
+                     where x.created_at < now() - interval '2 hours'
+                     for update skip locked);
+  -- 20261110190000: quarantined photo references past their 90 days.
+  delete from private.photo_refs_quarantined where expires_at < now();
+  -- 20261111090000: settled order emails and reminder ledgers past 90 days.
+  delete from public.order_email_outbox where status in ('sent', 'skipped', 'failed') and updated_at < now() - interval '90 days';
+  delete from public.payout_setup_reminders where created_at < now() - interval '90 days';
+  delete from public.dispatch_reminders where created_at < now() - interval '90 days';
+  return removed;
+end;
+$$;
+revoke all on function private.prune_cron_history() from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Job inventory: orderEmails joins the money pass. From 20261108100000.
@@ -401,8 +564,19 @@ begin
   if has_table_privilege('authenticated', 'public.order_email_outbox', 'select')
      or has_function_privilege('authenticated', 'public.claim_order_emails(integer)', 'execute')
      or has_function_privilege('anon', 'public.claim_order_emails(integer)', 'execute')
-     or has_table_privilege('authenticated', 'public.payout_setup_reminders', 'select') then
-    raise exception '20261111090000: the order email outbox is reachable by a member';
+     or has_table_privilege('authenticated', 'public.payout_setup_reminders', 'select')
+     or has_table_privilege('authenticated', 'public.dispatch_reminders', 'select')
+     or has_function_privilege('authenticated', 'public.skip_order_emails_email_off()', 'execute')
+     or has_function_privilege('authenticated', 'public.raise_dispatch_reminders()', 'execute')
+     or has_function_privilege('anon', 'public.raise_dispatch_reminders()', 'execute')
+     or has_function_privilege('authenticated', 'public.complete_order_email(uuid, integer, text, text, text, text)', 'execute') then
+    raise exception '20261111090000: the order email outbox is reachable by a member (N1063)';
+  end if;
+  -- A trigger function runs as the role that writes the row: every one here is SECURITY DEFINER.
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+              where n.nspname = 'private' and p.proname in ('queue_order_email', 'order_emails_account_closed', 'notify_on_partial_refund')
+                and not p.prosecdef) then
+    raise exception '20261111090000: an order email trigger function is not SECURITY DEFINER (N1063)';
   end if;
   raise notice 'PASS: 20261111090000 self-checks';
 end $$;

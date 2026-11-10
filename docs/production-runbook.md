@@ -1076,20 +1076,39 @@ While `EMAIL_PROVIDER` is unset, `/api/health/workers` lists the job
 cannot page anyone. Setting `EMAIL_PROVIDER` puts both back in the check, and
 a provider that is set but misconfigured stays in it.
 
-**Order emails (#116).** Every in-app order notice (sold, receipt,
-dispatched, delivered, auto-confirmed, dispute opened and decided, refunded,
-DRVN support's updates, and the day 3/7/12 payout-setup reminders) queues one
-row in `public.order_email_outbox` in the same transaction
+**Order emails (#116, work review #147).** Every in-app order notice (sold,
+receipt, dispatched, delivered, auto-confirmed, dispute opened and decided,
+refunded, part-refunded, cancelled, DRVN support's updates, the day 3/7/12
+payout-setup reminders and a reminder a day before an order's dispatch date)
+queues one row in `public.order_email_outbox` in the same transaction
 (20261111090000). The row holds the recipient's user id and the order id
 only. The money pass drains it last (`orderEmails`, `src/lib/order-emails.ts`),
-10 at a time within 20 seconds, with a 10-second limit per send. Retries back
-off 10, 20, 40 and 80 minutes, then fail. Rows older than 24 hours are
-skipped. So are deleted, suspended or address-less accounts, muted kinds
-(receipts, refunds, payout notices and support updates can't be muted), and
-anything past 20 an hour to one person. A guest buyer is emailed only about
-their own order, with no link of ours. Admin → Settings → Background jobs
-shows the family. To see what's waiting:
-`select status, skip_reason, count(*) from public.order_email_outbox group by 1, 2;`
+one row at a time until the queue is empty or its time is up (up to two
+minutes, and never past the pass's own limit), with a 10-second limit per
+send. An ordinary failure is retried after 10, 20, 40 and 80 minutes, then
+fails. Rows older than 24 hours are skipped. So are deleted, suspended or
+address-less accounts and muted kinds (receipts, refunds, cancellations,
+payout notices and support updates can't be muted). Past 20 an hour to one
+person, the rest wait half an hour. A guest buyer is emailed only about
+their own order, with no link of ours.
+
+**When the provider refuses our account** (a rotated or suspended API key, a
+sending domain that is no longer verified, a plan's quota): every email
+would fail the same way, so the pass stops at the first one. That row goes
+back to waiting without the attempt counted, nothing is dropped, and rows
+held this way are kept 72 hours, not 24. An alert "Order emails are not
+going out" is raised at most once an hour (Admin → Payments, and the alert
+channel), the `orderEmails` family shows as failing in
+`/api/health/workers`, and Sentry gets the provider's status and error name
+(never an address). Fix the key, the domain or the plan; the next pass
+sends what waited. **An email that will never be sent** (five failed
+attempts, or a message the provider refuses) raises its own alert naming
+the order, once.
+
+Settled rows (sent, skipped, failed) and the two reminder ledgers are
+removed after 90 days by the daily prune job. To see what's waiting or what
+failed:
+`select status, skip_reason, last_error, count(*) from public.order_email_outbox group by 1, 2, 3;`
 
 `/api/jobs/media-gc` and `/api/jobs/listing-imports` are scheduled the same
 way. To run any of them by hand:

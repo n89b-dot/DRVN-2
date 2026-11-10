@@ -48,7 +48,8 @@ import { runMoneyWorkerPass } from "./money-worker";
 
 const ORDER = "a1b2c3d4-0000-4000-8000-000000000001";
 const events: string[] = [];
-const outbox = Array.from({ length: 6 }, (_, i) => ({
+// More rows than a hung provider lets the budget reach (one timeout each), so some are left unclaimed.
+const outbox = Array.from({ length: 40 }, (_, i) => ({
   id: `row-${i}`, attempt: 1, recipient_id: "seller", order_id: ORDER, kind: "order_sold", email: "s@drvn.test", guest: false, notification_prefs: {},
 }));
 const admin = {

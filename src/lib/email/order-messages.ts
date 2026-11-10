@@ -20,7 +20,10 @@ export type OrderEmailKind =
   | "dispute_resolved"
   | "admin_action"
   | "order_refunded"
-  | "payout_setup_reminder";
+  | "payout_setup_reminder"
+  | "order_cancelled"
+  | "order_partially_refunded"
+  | "dispatch_reminder";
 
 export type OrderEmailFacts = {
   orderId: string;
@@ -37,6 +40,16 @@ export type OrderEmailFacts = {
   trackingNumber: string | null;
   /** True when the order was refunded because the seller's payouts weren't set up in 14 days. */
   payoutDeadlineRefund: boolean;
+  /** True when this email goes to the order's buyer; false, to its seller. */
+  buyer: boolean;
+  /** True when the "refund" is a card dispute the buyer's bank decided against the sale: the bank returns the money, DRVN does not. */
+  chargebackLost: boolean;
+  /** True when the dispute on the order is a card dispute raised through the buyer's bank, not a problem reported on DRVN. */
+  cardDispute: boolean;
+  /** Everything refunded on the order so far. */
+  refundedCents: number;
+  /** Why DRVN itself cancelled the order, when it did; null when a person did, whose reason is never quoted. */
+  cancelledBecause: "timeout" | "abandoned" | null;
 };
 
 export type RenderedEmail = { subject: string; text: string; html: string };
@@ -108,21 +121,45 @@ function body(kind: OrderEmailKind, facts: OrderEmailFacts): Body {
         lines: [`We've marked ${item} as received (order ${ref}), as the delivery window has passed.`, "If something is wrong with it, open the order and tell us."],
       };
     case "order_disputed":
-      return {
-        subject: `A problem was reported with order ${ref}`,
-        lines: [`The buyer reported a problem with ${item} (order ${ref}).`, "Open the order to see it and reply."],
-      };
+      return facts.cardDispute
+        ? {
+            subject: `A card dispute was opened on order ${ref}`,
+            lines: [`The buyer's bank opened a card dispute on ${item} (order ${ref}).`, "The bank decides it, and the payout for this order waits until it does. Open the order to see where it stands."],
+          }
+        : {
+            subject: `A problem was reported with order ${ref}`,
+            lines: [`The buyer reported a problem with ${item} (order ${ref}).`, "Open the order to see it and reply."],
+          };
     case "dispute_resolved":
-      return {
-        subject: `The problem with order ${ref} is resolved`,
-        lines: [`The reported problem with ${item} (order ${ref}) has been resolved.`, "Open the order to see the outcome."],
-      };
+      return facts.cardDispute
+        ? {
+            subject: `The card dispute on order ${ref} is closed`,
+            lines: [`The card dispute on ${item} (order ${ref}) has been closed by the bank.`, "Open the order to see the outcome."],
+          }
+        : {
+            subject: `The problem with order ${ref} is resolved`,
+            lines: [`The reported problem with ${item} (order ${ref}) has been resolved.`, "Open the order to see the outcome."],
+          };
     case "admin_action":
       return {
         subject: `An update from DRVN on order ${ref}`,
         lines: [`DRVN support updated order ${ref} (${item}).`, "Open the order to see what changed."],
       };
     case "order_refunded":
+      // A card dispute the bank decided for the buyer is recorded as a refund,
+      // but DRVN sends no money: the bank already took it back (work review
+      // #147). Nobody is told a refund is on its way.
+      if (facts.chargebackLost) {
+        return facts.buyer
+          ? {
+              subject: `Your card dispute on order ${ref} was decided`,
+              lines: [`Your bank decided the card dispute on ${item} (order ${ref}) in your favour, and the order is closed.`, "The money comes back from your bank, on your bank's own timing. DRVN is not sending a separate refund."],
+            }
+          : {
+              subject: `The card dispute on order ${ref} was decided for the buyer`,
+              lines: [`The buyer's bank decided the card dispute on ${item} (order ${ref}) against the sale and took the payment back.`, "Open the order to see what this means for your payout."],
+            };
+      }
       return facts.payoutDeadlineRefund
         ? {
             subject: `Order ${ref} was refunded`,
@@ -135,6 +172,38 @@ function body(kind: OrderEmailKind, facts: OrderEmailFacts): Body {
             subject: `Order ${ref} was refunded`,
             lines: [`A refund was issued on order ${ref} (${item}).`, "The money goes back to the card it came from; banks usually show it within 5–10 business days."],
           };
+    case "order_partially_refunded": {
+      const sofar = `${money(facts.refundedCents, facts.currency)} of ${money(facts.totalCents, facts.currency)}`;
+      return facts.buyer
+        ? {
+            subject: `Part of order ${ref} was refunded`,
+            lines: [`A partial refund was issued on ${item} (order ${ref}): ${sofar} has been refunded so far.`, "The money goes back to the card it came from; banks usually show it within 5–10 business days."],
+          }
+        : {
+            subject: `A partial refund was issued on order ${ref}`,
+            lines: [`A partial refund was issued to the buyer on ${item} (order ${ref}): ${sofar} has been refunded so far.`, "Open the order to see what this means for your payout."],
+          };
+    }
+    case "order_cancelled": {
+      const why = facts.cancelledBecause === "timeout" ? " because checkout wasn't completed in time" : facts.cancelledBecause === "abandoned" ? " because checkout was left before paying" : "";
+      return {
+        subject: `Order ${ref} was cancelled`,
+        lines: [
+          `Order ${ref} (${item}) was cancelled${why}.`,
+          facts.buyer ? "If a payment was taken, it is returned in full to the card it came from." : "Open the order to see where things stand.",
+        ],
+      };
+    }
+    case "dispatch_reminder": {
+      const by = day(facts.dispatchBy);
+      return {
+        subject: `Due to be dispatched: ${item}`,
+        lines: [
+          by ? `${item} (order ${ref}) is due to be dispatched by ${by}.` : `${item} (order ${ref}) is due to be dispatched.`,
+          "Once it's on its way, mark it dispatched on the order and add the tracking number.",
+        ],
+      };
+    }
     case "payout_setup_reminder": {
       const others = Math.max((facts.saleCount ?? 1) - 1, 0);
       return {

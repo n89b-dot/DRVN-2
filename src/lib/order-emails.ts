@@ -2,6 +2,7 @@ import "server-only";
 
 import { emailTransport, type EmailTransport } from "@/lib/email/send";
 import { renderOrderEmail, type OrderEmailFacts, type OrderEmailKind } from "@/lib/email/order-messages";
+import { sendAdminAlert } from "@/lib/admin/alerts";
 import { reportError } from "@/lib/monitoring";
 import { prefEnabled, type NotificationPrefKey } from "@/lib/notification-prefs";
 import { siteUrl } from "@/lib/site";
@@ -9,19 +10,31 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * The money pass's orderEmails family (report five #116, OS-W41): sends what
- * the outbox holds (20261111090000), a small batch at a time, inside its own
- * time budget. It runs after every money family has finished
+ * the outbox holds (20261111090000), one row at a time until the queue is
+ * empty or its time is up (work review #147: the time sets the batch, not a
+ * count). It runs after every money family has finished
  * (src/lib/money-worker.ts) and each provider call has its own timeout
  * (src/lib/email/resend.ts), so a provider that hangs or fails can delay only
  * these emails, never a transfer, a refund or a payout deadline.
  *
  * With no provider configured, everything waiting is skipped as 'email_off'.
+ *
+ * When our own account with the provider is at fault (a rotated or suspended
+ * key, a sending domain that lapsed, a quota: `provider: true` on the
+ * outcome), every message would fail the same way. The pass stops at the
+ * first one, that row goes back to waiting without the attempt counted, and
+ * an operator is alerted, at most once an hour. Nothing is dropped; rows held
+ * this way are kept 72 hours. A row that does fail for good (five attempts,
+ * or a message the provider refuses) raises an alert of its own, naming the
+ * order, so it is never only a row in a table.
  */
 
 type Admin = ReturnType<typeof createAdminClient>;
 
-export const ORDER_EMAIL_BATCH = 10;
-export const ORDER_EMAIL_BUDGET_MS = 20_000;
+/** A ceiling on one pass, far above what the time allows: a guard against a loop, not a rate. */
+export const ORDER_EMAIL_BATCH = 2_000;
+/** How long one pass may spend on emails when the money pass leaves it the time. */
+export const ORDER_EMAIL_BUDGET_MS = 120_000;
 /** The most one send may take, whatever the transport does; then it is retried later. */
 export const ORDER_EMAIL_SEND_TIMEOUT_MS = 10_000;
 
@@ -51,12 +64,28 @@ export const ORDER_EMAIL_PREF: Record<OrderEmailKind, NotificationPrefKey | null
   admin_action: null,
   order_refunded: null,
   payout_setup_reminder: null,
+  order_cancelled: null,
+  order_partially_refunded: null,
+  dispatch_reminder: "order_updates",
 };
 
 /** The cancel reason the day-14 refund writes (src/lib/payments/payout-deadline.ts). */
 const PAYOUT_DEADLINE_REASON = /payouts weren't set up within 14 days/i;
 
-export type OrderEmailTally = { claimed: number; sent: number; skipped: number; retrying: number; failed: number; errors: number };
+/** The reasons DRVN itself writes when it cancels an unpaid order (0007, 0012). A person's reason is never read into an email. */
+const CHECKOUT_TIMEOUT_REASON = /^checkout not completed in time$/i;
+const CHECKOUT_ABANDONED_REASON = /^checkout abandoned$/i;
+/** The reason a lost card dispute writes (src/lib/payments/settlement.ts, recordExternalRefund). */
+const CHARGEBACK_LOST_REASON = /^Card dispute lost \(/;
+/** The dispute reason a card dispute writes (apply_stripe_dispute_event, hold_stripe_dispute). */
+const CARD_DISPUTE_REASON = /^Card dispute /;
+
+/**
+ * `retrying` counts rows that will be tried again, a row held for a provider
+ * fault included, so the family reads as failing while email is not going
+ * out. `held` is 1 when the pass stopped for a provider fault.
+ */
+export type OrderEmailTally = { claimed: number; sent: number; skipped: number; retrying: number; failed: number; errors: number; held: number };
 
 type Claimed = {
   id: string;
@@ -66,13 +95,15 @@ type Claimed = {
   kind: OrderEmailKind;
   email: string;
   guest: boolean;
+  /** The recipient is the order's buyer (claim_order_emails). */
+  buyer: boolean;
   notification_prefs: unknown;
 };
 
-async function facts(admin: Admin, row: Pick<Claimed, "order_id" | "recipient_id" | "kind">): Promise<OrderEmailFacts | null> {
+async function facts(admin: Admin, row: Pick<Claimed, "order_id" | "recipient_id" | "kind" | "buyer">): Promise<OrderEmailFacts | null> {
   const orderId = row.order_id;
   const [{ data: order, error }, { data: items }, reminder] = await Promise.all([
-    admin.from("orders").select("id, total_cents, currency, dispatch_by, carrier, tracking_number, cancel_reason").eq("id", orderId).maybeSingle(),
+    admin.from("orders").select("id, total_cents, refunded_cents, currency, dispatch_by, carrier, tracking_number, cancel_reason, dispute_reason").eq("id", orderId).maybeSingle(),
     admin.from("order_items").select("title").eq("order_id", orderId).order("id").limit(20),
     row.kind === "payout_setup_reminder"
       ? admin
@@ -97,10 +128,15 @@ async function facts(admin: Admin, row: Pick<Claimed, "order_id" | "recipient_id
     carrier: order.carrier,
     trackingNumber: order.tracking_number,
     payoutDeadlineRefund: PAYOUT_DEADLINE_REASON.test(order.cancel_reason ?? ""),
+    buyer: row.buyer,
+    chargebackLost: CHARGEBACK_LOST_REASON.test(order.cancel_reason ?? ""),
+    cardDispute: CARD_DISPUTE_REASON.test(order.dispute_reason ?? ""),
+    refundedCents: order.refunded_cents ?? 0,
+    cancelledBecause: CHECKOUT_TIMEOUT_REASON.test(order.cancel_reason ?? "") ? "timeout" : CHECKOUT_ABANDONED_REASON.test(order.cancel_reason ?? "") ? "abandoned" : null,
   };
 }
 
-async function complete(admin: Admin, row: Claimed, outcome: "sent" | "retry" | "rejected" | "skipped", extra: { providerId?: string | null; error?: string; reason?: "muted" | "email_off" } = {}) {
+async function complete(admin: Admin, row: Claimed, outcome: "sent" | "retry" | "rejected" | "provider" | "skipped", extra: { providerId?: string | null; error?: string; reason?: "muted" | "email_off" } = {}) {
   const { data, error } = await admin.rpc("complete_order_email", {
     p_id: row.id,
     p_attempt: row.attempt,
@@ -115,9 +151,22 @@ async function complete(admin: Admin, row: Claimed, outcome: "sent" | "retry" | 
 
 export async function processOrderEmails(
   admin: Admin,
-  { batch = ORDER_EMAIL_BATCH, deadline = Date.now() + ORDER_EMAIL_BUDGET_MS, transport = emailTransport(), origin = siteUrl() }: { batch?: number; deadline?: number; transport?: EmailTransport | null; origin?: string } = {},
+  {
+    batch = ORDER_EMAIL_BATCH,
+    notAfter = Infinity,
+    deadline = Math.min(Date.now() + ORDER_EMAIL_BUDGET_MS, notAfter),
+    transport = emailTransport(),
+    origin = siteUrl(),
+  }: {
+    batch?: number;
+    /** When the caller's own time ends (the money pass): emails stop then, whatever is left of their budget. */
+    notAfter?: number;
+    deadline?: number;
+    transport?: EmailTransport | null;
+    origin?: string;
+  } = {},
 ): Promise<OrderEmailTally> {
-  const tally: OrderEmailTally = { claimed: 0, sent: 0, skipped: 0, retrying: 0, failed: 0, errors: 0 };
+  const tally: OrderEmailTally = { claimed: 0, sent: 0, skipped: 0, retrying: 0, failed: 0, errors: 0, held: 0 };
   if (!transport) {
     const { data, error } = await admin.rpc("skip_order_emails_email_off");
     if (error) throw new Error(`Order email skip failed: ${error.code}`);
@@ -127,7 +176,8 @@ export async function processOrderEmails(
   // One row per claim: a row is leased (and its attempt counted) only when
   // it is about to be sent, so a pass that runs out of time never leaves
   // claimed rows waiting out a lease they were never tried under.
-  while (Date.now() < deadline && tally.claimed < batch) {
+  // Until the queue is empty or the time is up. `batch` is only a ceiling.
+  drain: while (Date.now() < deadline && tally.claimed < batch) {
     const { data, error } = await admin.rpc("claim_order_emails", { p_limit: 1 });
     if (error) throw new Error(`Order email claim failed: ${error.code}`);
     const claimed = (data ?? []) as unknown as Claimed[];
@@ -153,14 +203,40 @@ export async function processOrderEmails(
           ORDER_EMAIL_SEND_TIMEOUT_MS,
           { status: "retry", reason: "send timed out or threw" },
         );
+        if (outcome.status === "retry" && outcome.provider) {
+          // Our account with the provider, not this message: every row would
+          // fail the same way. Keep this one, stop, and tell an operator.
+          await complete(admin, row, "provider", { error: outcome.reason });
+          tally.held = 1;
+          tally.retrying += 1;
+          reportError("[order-emails] the email provider refused our account; order emails are waiting", { provider: transport.name, reason: outcome.reason });
+          await sendAdminAlert({
+            kind: "order_email_provider",
+            title: "Order emails are not going out",
+            detail: `${transport.name} refused our account (${outcome.reason}). Receipts, refund and dispatch emails are waiting, not lost: they are kept for 72 hours. Check the provider's API key, the sending domain and the plan's quota.`,
+            dedupKey: `order-email-provider:${new Date().toISOString().slice(0, 13)}`,
+          });
+          break drain;
+        }
         const status =
           outcome.status === "sent"
             ? await complete(admin, row, "sent", { providerId: outcome.providerId })
             : await complete(admin, row, outcome.status, { error: outcome.reason });
         if (status === "sent") tally.sent += 1;
         else if (status === "pending") tally.retrying += 1;
-        else if (status === "failed") tally.failed += 1;
-        else if (status === "skipped") tally.skipped += 1;
+        else if (status === "failed" || status === "skipped") {
+          if (status === "failed") tally.failed += 1;
+          else tally.skipped += 1;
+          // An email that will now never be sent: said once, with its order (work review #147).
+          reportError("[order-emails] an order email was not sent", { id: row.id, orderId: row.order_id, kind: row.kind, status, reason: outcome.status === "sent" ? null : outcome.reason });
+          await sendAdminAlert({
+            kind: "order_email_failed",
+            title: status === "failed" ? "An order email failed after five attempts" : "The email provider refused an order email",
+            detail: `${row.kind} for order ${row.order_id} (outbox row ${row.id}): ${outcome.status === "sent" ? "" : outcome.reason}. The recipient was not emailed; the in-app notice stands.`,
+            orderId: row.order_id,
+            dedupKey: `order-email-failed:${row.id}`,
+          });
+        }
       } catch (error) {
         // The lease runs out and the row is claimed again; the idempotency
         // key keeps the provider from sending it twice.

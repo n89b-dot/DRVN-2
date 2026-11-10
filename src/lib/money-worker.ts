@@ -42,7 +42,11 @@ export type MoneyWorkerPass = {
  * Shared by /api/jobs/transfers (the scheduler's door) and the console's
  * "Run worker now", so the manual run is exactly the scheduled one.
  */
+/** What a pass may use of the route's 300 seconds (src/app/api/jobs/transfers/route.ts) before its last family must be done. */
+export const MONEY_PASS_BUDGET_MS = 270_000;
+
 export async function runMoneyWorkerPass(admin: Admin): Promise<MoneyWorkerPass> {
+  const passStartedAt = Date.now();
   const jobs: Record<string, () => Promise<unknown>> = {
     expiries: () => processReservationExpiries(),
     captures: () => reconcileCapturedPayments(),
@@ -121,6 +125,9 @@ export async function runMoneyWorkerPass(admin: Admin): Promise<MoneyWorkerPass>
   // inside their own time budget, their own failure and a provider timeout
   // per send: an email provider that hangs or fails can't delay a transfer,
   // a refund or a payout deadline.
-  await runFamily(["orderEmails", () => processOrderEmails(admin)]);
+  // Their time is what the pass has left, up to their own budget (work
+  // review #147): the route may run 300 seconds, and a pass that used most of
+  // it must not have its last family cut off mid-send.
+  await runFamily(["orderEmails", () => processOrderEmails(admin, { notAfter: passStartedAt + MONEY_PASS_BUDGET_MS })]);
   return { results, failed };
 }
