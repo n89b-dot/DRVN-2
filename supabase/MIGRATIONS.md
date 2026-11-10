@@ -44,7 +44,7 @@ Codex's review of #117, the two open database findings. A listing a checkout hel
 
 | File | Applied to |
 |---|---|
-| `20261110190000_copyright_counter_notice.sql` | not applied |
+| `20261110200000_copyright_counter_notice.sql` | not applied |
 
 Adds the notice state `reinstated`, `public.copyright_counter_notices` (service role only), and two admin RPCs behind the takedown's step-up: `public.record_copyright_counter_notice` and `public.reinstate_after_counter_notice` (14 days after the counter-notice arrived: the notice becomes `reinstated`, its removed listings go back to `paused`, its photos come off the blocklist; audited). Needs `20261110120000` first.
 

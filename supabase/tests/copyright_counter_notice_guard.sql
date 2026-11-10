@@ -1,4 +1,4 @@
--- 20261110190000 (report five #109, OS id N946): a valid counter-notice can
+-- 20261110200000 (report five #109, OS id N946): a valid counter-notice can
 -- reinstate what a takedown removed.
 --   C  only an admin with a fresh step-up records it, on an acted-on notice,
 --      with consent to jurisdiction, once

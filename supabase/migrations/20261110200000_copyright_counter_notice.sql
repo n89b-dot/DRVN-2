@@ -1,5 +1,5 @@
 -- ============================================================================
--- 20261110190000 — reinstate after a valid counter-notice (report five #109;
+-- 20261110200000 — reinstate after a valid counter-notice (report five #109;
 -- the reviewer's second review of #200)
 --
 -- A takedown could never be undone: notices moved only received → actioned
@@ -49,7 +49,7 @@ alter table public.copyright_counter_notices enable row level security;
 revoke all on table public.copyright_counter_notices from public, anon, authenticated;
 grant select, insert on table public.copyright_counter_notices to service_role;
 comment on table public.copyright_counter_notices is
-  'Counter-notices to copyright takedowns (20261110190000, #109). Holds the member''s contact details: never public. Admins act through the RPCs.';
+  'Counter-notices to copyright takedowns (20261110200000, #109). Holds the member''s contact details: never public. Admins act through the RPCs.';
 
 create or replace function public.record_copyright_counter_notice(
   p_notice uuid, p_member_name text, p_member_address text, p_statement text,
@@ -135,9 +135,9 @@ grant execute on function public.reinstate_after_counter_notice(uuid, text) to a
 do $$
 begin
   if has_table_privilege('authenticated', 'public.copyright_counter_notices', 'select') then
-    raise exception '20261110190000: counter-notices are readable by members';
+    raise exception '20261110200000: counter-notices are readable by members';
   end if;
-  raise notice 'PASS: 20261110190000 self-checks';
+  raise notice 'PASS: 20261110200000 self-checks';
 end $$;
 
 notify pgrst, 'reload schema';

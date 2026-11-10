@@ -120,7 +120,7 @@ function ClosedNotice({ notice }: { notice: CopyrightNoticeRow }) {
       )}
       {notice.status === "actioned" && (
         // #109: a valid counter-notice is recorded, then the content can be
-        // reinstated 14 days after it arrived (20261110190000).
+        // reinstated 14 days after it arrived (20261110200000).
         <div className="mt-3 flex flex-wrap gap-2">
           <ActionDialog
             action={adminRecordCounterNotice}

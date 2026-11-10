@@ -1817,7 +1817,7 @@ export async function adminRejectCopyrightNotice(
 }
 
 /**
- * Records a member's counter-notice to a takedown (20261110190000), as
+ * Records a member's counter-notice to a takedown (20261110200000), as
  * received. The database checks the admin's step-up and that the notice was
  * acted on, and writes the audit row.
  */
@@ -1853,7 +1853,7 @@ export async function adminRecordCounterNotice(
 
 /**
  * Reinstates a takedown's content after a valid counter-notice
- * (20261110190000): the notice is marked reinstated, the listings it removed
+ * (20261110200000): the notice is marked reinstated, the listings it removed
  * go back to paused for their sellers, and its photos come off the
  * blocklist. The database enforces the 14 days and writes the audit row.
  */
