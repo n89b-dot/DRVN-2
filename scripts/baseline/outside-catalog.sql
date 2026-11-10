@@ -1,0 +1,22 @@
+-- Everything outside public/private, as (kind, identity, detail) rows: used to diff an empty image+shim database against a full build.
+select 'schema', n.nspname, coalesce(n.nspacl::text,'') from pg_namespace n where n.nspname !~ '^pg_(toast|temp)' and n.nspname not in ('public','private')
+union all select 'extension', e.extname, e.extnamespace::regnamespace::text from pg_extension e
+union all select 'role', r.rolname, concat_ws(',', r.rolsuper, r.rolcanlogin, r.rolinherit, r.rolbypassrls, r.rolcreaterole, r.rolconfig::text) from pg_roles r where r.rolname !~ '^pg_'
+union all select 'membership', g.rolname || ' <- ' || m.rolname, a.admin_option::text from pg_auth_members a join pg_roles g on g.oid=a.roleid join pg_roles m on m.oid=a.member
+union all select 'relation ' || c.relkind::text, n.nspname || '.' || c.relname, concat_ws(' | ', coalesce(c.relacl::text,''), c.relrowsecurity::text, coalesce(c.reloptions::text,'')) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('public','private','pg_catalog','information_schema') and n.nspname !~ '^pg_(toast|temp)' and c.relkind in ('r','v','m','S','p','f')
+union all select 'index', n.nspname || '.' || c.relname, pg_get_indexdef(c.oid) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('public','private','pg_catalog','information_schema') and n.nspname !~ '^pg_(toast|temp)' and c.relkind = 'i'
+union all select 'column', n.nspname || '.' || c.relname || '.' || a.attname, format_type(a.atttypid, a.atttypmod) || ' ' || coalesce(a.attacl::text,'') from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('public','private','pg_catalog','information_schema') and n.nspname !~ '^pg_(toast|temp)' and c.relkind in ('r','v') and a.attnum>0 and not a.attisdropped
+union all select 'function', n.nspname || '.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')', md5(p.prosrc) || ' ' || coalesce(p.proacl::text,'') from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname not in ('public','private','pg_catalog','information_schema')
+union all select 'trigger', n.nspname || '.' || c.relname || '.' || t.tgname, pg_get_triggerdef(t.oid) from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where not t.tgisinternal and n.nspname not in ('public','private')
+union all select 'policy', schemaname || '.' || tablename || '.' || policyname, concat_ws(' | ', cmd, roles::text, qual, with_check) from pg_policies where schemaname not in ('public','private')
+union all select 'constraint', n.nspname || '.' || c.conname, pg_get_constraintdef(c.oid) from pg_constraint c join pg_namespace n on n.oid=c.connamespace where n.nspname not in ('public','private','pg_catalog','information_schema')
+union all select 'type', n.nspname || '.' || t.typname, t.typtype::text from pg_type t join pg_namespace n on n.oid=t.typnamespace where n.nspname not in ('public','private','pg_catalog','information_schema') and n.nspname !~ '^pg_(toast|temp)' and t.typtype in ('e','d','r')
+union all select 'default acl', d.defaclrole::regrole::text || ' in ' || coalesce(d.defaclnamespace::regnamespace::text,'*') || ' on ' || d.defaclobjtype::text, d.defaclacl::text from pg_default_acl d
+union all select 'setting', coalesce((select datname from pg_database where oid=s.setdatabase),'*') || '/' || coalesce((select rolname from pg_roles where oid=s.setrole),'*'), s.setconfig::text from pg_db_role_setting s
+union all select 'event trigger', e.evtname, e.evtevent || ' ' || e.evtfoid::regproc::text || ' ' || e.evtenabled::text from pg_event_trigger e
+union all select 'publication', p.pubname, concat_ws(',', p.puballtables, p.pubinsert, p.pubupdate, p.pubdelete, p.pubtruncate) from pg_publication p
+union all select 'publication table', p.pubname || ' ' || pr.prrelid::regclass::text, coalesce(pr.prattrs::text,'') from pg_publication_rel pr join pg_publication p on p.oid=pr.prpubid
+union all select 'database', d.datname, concat_ws(' | ', coalesce(d.datacl::text,''), pg_encoding_to_char(d.encoding), d.datcollate) from pg_database d where d.datname = current_database()
+union all select 'cast/lang/fdw', 'languages', string_agg(lanname, ',' order by lanname) from pg_language
+union all select 'comment on platform object', d.classoid::regclass::text || ' ' || d.objoid::text, 'x' from pg_description d where false
+order by 1, 2, 3;
