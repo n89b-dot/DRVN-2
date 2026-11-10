@@ -68,9 +68,28 @@ Parity with shared dev was checked at 765c7cd, before the last two migrations: t
 3. From **Project Settings → API keys**, record: project ref, project URL,
    the publishable key (`sb_publishable_…`) and a secret key (`sb_secret_…`).
    Record the database password.
-4. If the engineer's network has no IPv6, buy the IPv4 add-on or plan to run
-   step 2 from a host with IPv6: `scripts/apply-migration.mjs` connects
-   directly to `db.<ref>.supabase.co:5432`.
+4. **Two routes to the database, and which one each job uses (#114).**
+   `db.<ref>.supabase.co:5432` (the direct host) has only an IPv6 address
+   unless the project buys Supabase's IPv4 add-on. GitHub's hosted runners
+   have no IPv6, so the deploy workflow's read-only migration check cannot
+   reach the direct host. Pick one:
+   - **Session pooler (the default for staging, no cost).** Copy the host from
+     **Connect → Session pooler** (for `drvn-staging` it is
+     `aws-0-us-east-1.pooler.supabase.com`) into the target's `"pooler"` in
+     `supabase/migration-targets.json` and set `"statusRoute": "pooler"`, in
+     a reviewed PR. `--status` then connects there over IPv4 as
+     `postgres.<ref>`, with the same password, and verifies the certificate
+     (`*.pooler.supabase.com`, issued under the same pinned Supabase root) and
+     the host name exactly as it does for the direct host. Staging is set up
+     this way: on 9 Nov 2026 a TLS handshake (no password sent) confirmed the
+     certificate chain and that the pooler knows the project.
+   - **IPv4 add-on** (Project Settings → Add-ons; billed monthly). The direct
+     host then answers over IPv4, and `statusRoute` can be dropped.
+   Applies, record-only runs and dry runs always use the direct host, so the
+   engineer applying migrations needs IPv6 (most home and office networks
+   have it) or the add-on. Check with
+   `node scripts/apply-migration.mjs --target staging --status` (pooler) and
+   `... --status --route direct` (direct).
 
 ## 2. Apply the schema [ENGINEER]
 

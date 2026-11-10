@@ -16,6 +16,7 @@ The dated record that each piece of production and staging infrastructure was se
 | Supabase project (`drvn-staging` exists; production per runbook §1) (D4) | 2026-11-07, Neil (`zubstjuviwourzgrziqc`) | | `docs/staging-setup.md` |
 | Point-in-time recovery (D4; recommended on for production) | n/a: daily backups on staging | | |
 | Production added to `supabase/migration-targets.json` by a PR (B4) | n/a | | |
+| Deploy runner reaches the database for `--status`: session pooler pinned with `statusRoute` in `supabase/migration-targets.json`, or the IPv4 add-on bought (#114, `docs/staging-setup.md` §1.4) | 2026-11-09, engineer: pooler `aws-0-us-east-1.pooler.supabase.com` pinned; certificate chain and tenant checked by a TLS handshake, no login | | first green `Staging has every migration` step in `deploy.yml` |
 | Email provider, sending domain verified (DKIM, return-path, DMARC) (D-mail) | | | |
 | Stripe Connect (Express), platform profile, restricted keys (E1) | | | |
 | Stripe webhooks (`scripts/owner/stripe-webhooks.mjs`), platform and Connect (E1) | | | |
