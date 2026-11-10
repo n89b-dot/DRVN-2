@@ -39,6 +39,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 11 — new functions are closed by default (architecture plan 2, item A3)
+
+Two `alter default privileges` statements for the role that applies migrations: a function created from here on is not executable by `PUBLIC`, `anon` or `authenticated` until a migration grants it. `service_role` keeps the platform's grant in `public`. Nothing that exists changes. Guard: `supabase/tests/functions_closed_by_default_guard.sql`.
+
+| File | Applied to |
+|---|---|
+| `20261111100000_functions_closed_by_default.sql` | not applied |
+
 ## November 10 — order emails through an outbox: report five #116
 
 | File | Applied to |
@@ -92,14 +100,6 @@ Review of #196 (report five #105 follow-up). `private.photo_signable_positions()
 | File | Applied to |
 |---|---|
 | `20261110131000_drop_age_confirmation_due.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
-
-## November 10 — new functions are closed by default (architecture plan 2, item A3)
-
-Two `alter default privileges` statements for the role that applies migrations: a function created from here on is not executable by `PUBLIC`, `anon` or `authenticated` until a migration grants it. `service_role` keeps the platform's grant in `public`. Nothing that exists changes. Guard: `supabase/tests/functions_closed_by_default_guard.sql`. The file's name is provisional until its pull request is next to merge.
-
-| File | Applied to |
-|---|---|
-| `20261111000000_functions_closed_by_default.sql` | not applied |
 
 Drops `public.my_age_confirmation_due()`. Every account from before the 18+ confirmation is a test account, so nothing asks them any more: the app from the same PR no longer calls the function, has no `/confirm-age` page and no check in the request proxy. The 18+ box at sign-up, onboarding and guest checkout, the `age_confirmations` table and its rows are untouched. Apply at any time before a first deploy; an older app that still calls the function reports a failed check and lets the page load. After this the next paragraph's function no longer exists.
 

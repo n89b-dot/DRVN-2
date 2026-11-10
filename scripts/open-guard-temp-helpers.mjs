@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Architecture remediation plan 2, item A3: a new function is closed by
-// default (20261111000000), a SQL guard's own `pg_temp` helpers included, and
+// default (20261111100000), a SQL guard's own `pg_temp` helpers included, and
 // a guard calls its helpers while acting as other roles. This adds, after the
 // last top-level `create function pg_temp.…` (or procedure) of each guard in
 // supabase/tests/ that has one and lacks it, the line that opens them:

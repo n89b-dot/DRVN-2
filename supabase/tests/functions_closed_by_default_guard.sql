@@ -1,4 +1,4 @@
--- Architecture remediation plan 2, item A3 (20261111000000): a function
+-- Architecture remediation plan 2, item A3 (20261111100000): a function
 -- created with no grant or revoke statement of its own is not callable by a
 -- signed-out visitor, a signed-in member, the agent's worker, or anyone
 -- through PUBLIC, in either of our schemas, whatever kind of function it is.

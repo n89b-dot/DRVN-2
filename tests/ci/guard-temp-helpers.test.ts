@@ -1,5 +1,5 @@
 // Architecture remediation plan 2, item A3: a new database function is closed
-// by default (20261111000000). That is true of a SQL guard's own temporary
+// by default (20261111100000). That is true of a SQL guard's own temporary
 // helpers too: `create function pg_temp.as_member(…)` is no longer callable
 // once the guard has switched to another role, and the guard fails with
 // "permission denied for function as_member". Twenty-six guards did, the day
