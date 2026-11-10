@@ -170,6 +170,7 @@ describe("photos stay under what a serverless host accepts (N955, report five #1
 
   it("a bodiless 413 from the route says the same", () => {
     expect(publicPhotoFailureReason("a.jpg", 413)).toEqual({ reason: expect.stringMatching(/a\.jpg is too large to upload \(over 4 MB\)/), retryable: false });
+    expect(publicPhotoFailureReason("me.jpg", 413, undefined, "avatars").reason).toMatch(/me\.jpg is too large to upload \(over 2 MB\)/);
   });
 
   it("steps the JPEG quality down until a detailed photo fits, leaving headroom", async () => {

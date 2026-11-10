@@ -8,3 +8,9 @@
  * Dispute evidence uploads straight to Storage and keeps its own limit.
  */
 export const SERVER_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
+
+/** A profile photo's own, smaller ceiling, checked by the same route. */
+export const AVATAR_UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
+
+/** The ceiling the photo route applies to a bucket. */
+export const serverUploadMaxBytes = (bucket: string) => (bucket === "avatars" ? AVATAR_UPLOAD_MAX_BYTES : SERVER_UPLOAD_MAX_BYTES);

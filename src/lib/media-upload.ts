@@ -29,7 +29,7 @@ export type UploadImagesResult = { uploaded: UploadedImage[]; failed: UploadFail
  */
 const SERVER_NORMALIZED_BUCKETS = ["avatars", "car-images", "activity-images", "listing-images", "message-photos", "agent-chat-photos"];
 
-import { SERVER_UPLOAD_MAX_BYTES } from "@/lib/upload-limits";
+import { SERVER_UPLOAD_MAX_BYTES, serverUploadMaxBytes } from "@/lib/upload-limits";
 
 export { SERVER_UPLOAD_MAX_BYTES };
 /** The shrink aims under this, leaving headroom below the cap for the form. */
@@ -105,9 +105,9 @@ const HEIC_EVIDENCE_REASON = (name: string) =>
  * uploading. Several of its refusals have no body (413) or a generic one, and
  * a raw "Unexpected end of JSON input" told nobody anything (N64).
  */
-export function publicPhotoFailureReason(name: string, status: number, error?: string): { reason: string; retryable: boolean } {
+export function publicPhotoFailureReason(name: string, status: number, error?: string, bucket = ""): { reason: string; retryable: boolean } {
   if (status === 401) return { reason: "Sign in again to upload photos.", retryable: false };
-  if (status === 413) return { reason: tooLargeReason(name, Math.round(SERVER_UPLOAD_MAX_BYTES / (1024 * 1024))), retryable: false };
+  if (status === 413) return { reason: tooLargeReason(name, Math.round(serverUploadMaxBytes(bucket) / (1024 * 1024))), retryable: false };
   if (status === 415) return { reason: error || `${name} isn't a photo format DRVN can use. Try a JPEG, PNG or WebP.`, retryable: false };
   if (status === 422) return { reason: error || `${name} couldn't be processed. Try it as a JPEG, PNG or WebP.`, retryable: false };
   if (status === 429) return { reason: error || "Upload limit reached. Try again later.", retryable: true };
@@ -187,12 +187,12 @@ export async function uploadImages({
           headers: { "x-upload-bucket": bucket },
         });
       } catch {
-        failed.push({ file, ...publicPhotoFailureReason(file.name, 0) });
+        failed.push({ file, ...publicPhotoFailureReason(file.name, 0, undefined, bucket) });
         continue;
       }
       const result = (await response.json().catch(() => null)) as { url?: string; path?: string; error?: string } | null;
       if (!response.ok || !result?.url || !result.path) {
-        failed.push({ file, ...publicPhotoFailureReason(file.name, response.ok ? 0 : response.status, result?.error) });
+        failed.push({ file, ...publicPhotoFailureReason(file.name, response.ok ? 0 : response.status, result?.error, bucket) });
         continue;
       }
       uploaded.push({ url: result.url, path: result.path, file });

@@ -3,7 +3,7 @@ import sharp from "sharp";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { allowAction } from "@/lib/rate-limit";
-import { SERVER_UPLOAD_MAX_BYTES } from "@/lib/upload-limits";
+import { SERVER_UPLOAD_MAX_BYTES, serverUploadMaxBytes } from "@/lib/upload-limits";
 import { ensureMediaStorageOrigin } from "@/lib/media-lifecycle";
 import { AGENT_CHAT_BUCKET, chatPhotoRef } from "@/lib/agent/chat-photo-ref";
 import { signedPhotoUrl } from "@/lib/supabase/photo-signing";
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     const prefix = String(form.get("pathPrefix"));
     const file = form.get("file");
     if ((bucket === MESSAGE_BUCKET) !== (target === MESSAGE_BUCKET) || !validPrefix(bucket, prefix, user.id) || !(file instanceof File)) return new Response(null, { status: 400 });
-    if (file.size > (bucket === "avatars" ? 2 * 1024 * 1024 : SERVER_UPLOAD_MAX_BYTES)) return new Response(null, { status: 413 });
+    if (file.size > serverUploadMaxBytes(bucket)) return new Response(null, { status: 413 });
     // Always decode and re-encode. Sharp drops EXIF/XMP/GPS by default.
     const photo = sharp(Buffer.from(await file.arrayBuffer()), { limitInputPixels: 40_000_000, animated: false, failOn: "warning" });
     const meta = await photo.metadata();
