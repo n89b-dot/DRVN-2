@@ -53,3 +53,14 @@ describe("production dependency advisories (N410, B1)", () => {
     expect(atLeast("4.6.6-beta.1", "4.6.6")).toBe(false);
   });
 });
+
+describe("package.json declares the patched Next.js range (N714)", () => {
+  it("next's declared range starts at the installed major.minor.patch floor, so a fresh install can't resolve a vulnerable release", () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };
+    const declared = pkg.dependencies.next;
+    expect(declared).toMatch(/^\^\d+\.\d+\.\d+$/);
+    expect(atLeast(declared.slice(1), "16.4.3"), declared).toBe(true);
+    const lockRoot = (lock.packages[""] as { dependencies?: Record<string, string> }).dependencies;
+    expect(lockRoot?.next).toBe(declared);
+  });
+});

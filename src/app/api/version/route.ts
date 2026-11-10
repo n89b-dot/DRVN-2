@@ -33,7 +33,9 @@ function buildId(env: NodeJS.ProcessEnv): string | null {
 
 export function versionBody(env: NodeJS.ProcessEnv = process.env) {
   return {
-    sha: env.VERCEL_GIT_COMMIT_SHA ?? env.GIT_COMMIT_SHA ?? null,
+    // `||`, not `??`: a host can set VERCEL_GIT_COMMIT_SHA to "" on a
+    // command-line deploy, and an empty sha must fall through (#120).
+    sha: env.VERCEL_GIT_COMMIT_SHA || env.GIT_COMMIT_SHA || null,
     buildId: buildId(env),
     newestMigrationOnDisk: NEWEST_MIGRATION_ON_DISK,
     startedAt,
