@@ -7,11 +7,13 @@ const mocks = vi.hoisted(() => ({
   listing: vi.fn(),
   rpc: vi.fn(),
   allow: vi.fn(),
+  ageGate: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/lib/analytics", () => ({ capture: vi.fn() }));
+vi.mock("@/lib/age-gate", () => ({ requireAgeConfirmed: mocks.ageGate }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 vi.mock("@/lib/rate-limit", () => ({
   RATE_LIMITS: { makeOffer: {} },
@@ -66,6 +68,14 @@ beforeEach(() => {
   }, error: null });
   mocks.allow.mockResolvedValue(true);
   mocks.rpc.mockResolvedValue({ data: { offer_id: offerId, replayed: false, outcome: "sent" }, error: null });
+});
+
+it("N662: a member who still owes the 18+ answer makes no offer until they confirm", async () => {
+  mocks.ageGate.mockRejectedValueOnce(new Error("NEXT_REDIRECT;/confirm-age"));
+  await expect(makeOffer({}, form())).rejects.toThrow("NEXT_REDIRECT");
+  expect(mocks.ageGate).toHaveBeenCalledWith(expect.objectContaining({ id: "buyer-1" }));
+  expect(mocks.rpc).not.toHaveBeenCalled();
+  expect(mocks.allow).not.toHaveBeenCalled();
 });
 
 it("creates the offer and opening message through one atomic RPC", async () => {

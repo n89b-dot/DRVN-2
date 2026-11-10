@@ -12,12 +12,14 @@ const mocks = vi.hoisted(() => ({
   order: vi.fn(),
   insert: vi.fn(),
   redirect: vi.fn(),
+  ageGate: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("@/lib/rate-limit", () => ({ RATE_LIMITS: {}, allowAction: vi.fn(), rateLimitMessage: vi.fn() }));
 vi.mock("@/lib/analytics", () => ({ capture: vi.fn() }));
+vi.mock("@/lib/age-gate", () => ({ requireAgeConfirmed: mocks.ageGate }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 vi.mock("@/lib/suspension", () => ({ SUSPENDED_MESSAGE: "suspended", isSuspended: vi.fn().mockResolvedValue(false) }));
 vi.mock("@/lib/supabase/server", () => ({
@@ -50,6 +52,26 @@ beforeEach(() => {
   mocks.rpc.mockResolvedValue(moved());
   mocks.order.mockResolvedValue({ data: { buyer_id: "buyer-1", seller_id: "seller-1" }, error: null });
   mocks.insert.mockResolvedValue({ error: null });
+});
+
+it("N662: accepting and countering wait for the 18+ answer; declining and withdrawing never do", async () => {
+  const owes = () => mocks.ageGate.mockRejectedValueOnce(new Error("NEXT_REDIRECT;/confirm-age"));
+  owes();
+  await expect(respondToOffer({}, form({ decision: "accepted" }))).rejects.toThrow("NEXT_REDIRECT");
+  owes();
+  await expect(respondToOffer({}, form({ decision: "countered", counter_amount: "150" }))).rejects.toThrow("NEXT_REDIRECT");
+  owes();
+  await expect(counterOffer({}, form({ counter_amount: "120" }))).rejects.toThrow("NEXT_REDIRECT");
+  owes();
+  await expect(acceptCounter({}, form({}))).rejects.toThrow("NEXT_REDIRECT");
+  expect(mocks.rpc).not.toHaveBeenCalled();
+
+  // Backing out of a deal is never held: the gate is not even asked.
+  mocks.ageGate.mockClear();
+  await respondToOffer({}, form({ decision: "declined" }));
+  await withdrawOffer({}, form({}));
+  expect(mocks.ageGate).not.toHaveBeenCalled();
+  expect(mocks.rpc).toHaveBeenCalledTimes(2);
 });
 
 it("sends a seller counter as one move at the round it was made, keyed so a retry replays", async () => {

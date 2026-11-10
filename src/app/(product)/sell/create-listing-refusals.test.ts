@@ -16,6 +16,7 @@ const state = vi.hoisted(() => ({
   calls: [] as { name: string; args: Record<string, unknown> }[],
   canPublish: true,
   saveError: null as { code: string; message: string } | null,
+  owesAge: false,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -24,6 +25,11 @@ vi.mock("next/navigation", () => ({
   },
 }));
 vi.mock("@/lib/revalidate", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/age-gate", () => ({
+  requireAgeConfirmed: async () => {
+    if (state.owesAge) throw Object.assign(new Error("redirect /confirm-age"), { digest: "NEXT_REDIRECT;/confirm-age" });
+  },
+}));
 vi.mock("@/lib/analytics", () => ({ capture: vi.fn() }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 vi.mock("@/lib/payments/connect", () => ({ sellerCanPublish: async () => state.canPublish }));
@@ -57,7 +63,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-const { createListing } = await import("./actions");
+const { createListing, setListingStatus, updateListing } = await import("./actions");
 const { PAYOUTS_REQUIRED, PHOTO_REQUIRED } = await import("./listing-refusal");
 
 function form(overrides: Record<string, string> = {}) {
@@ -82,6 +88,21 @@ beforeEach(() => {
   state.calls = [];
   state.canPublish = true;
   state.saveError = null;
+  state.owesAge = false;
+});
+
+describe("N662: the 18+ confirmation holds listing a part", () => {
+  it("a member who still owes the answer creates, edits and publishes nothing until they confirm", async () => {
+    state.owesAge = true;
+    await expect(createListing({}, form())).rejects.toThrow("redirect /confirm-age");
+    const edit = form({ id: LISTING });
+    await expect(updateListing({}, edit)).rejects.toThrow("redirect /confirm-age");
+    const publish = new FormData();
+    publish.set("id", LISTING);
+    publish.set("status", "active");
+    await expect(setListingStatus(null, publish)).rejects.toThrow("redirect /confirm-age");
+    expect(names()).toEqual([]);
+  });
 });
 
 describe("createListing refusals (N72)", () => {

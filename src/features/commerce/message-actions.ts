@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAgeConfirmed } from "@/lib/age-gate";
 import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
@@ -38,6 +39,7 @@ export async function sendThreadMessage(
   formData: FormData
 ): Promise<CommerceState> {
   const { supabase, user } = await requireUser();
+  await requireAgeConfirmed(user);
 
   const offerId = String(formData.get("offer_id") ?? "") || null;
   const orderId = String(formData.get("order_id") ?? "") || null;
@@ -215,6 +217,7 @@ export async function markThreadMessagesRead(
  */
 export async function messageSeller(_prev: CommerceState, formData: FormData): Promise<CommerceState> {
   const { supabase, user } = await requireUser();
+  await requireAgeConfirmed(user);
   const listingId = String(formData.get("listing_id") ?? "");
   const messageId = String(formData.get("message_id") ?? "");
   const body = String(formData.get("body") ?? "").trim();

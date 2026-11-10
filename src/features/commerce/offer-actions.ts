@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAgeConfirmed } from "@/lib/age-gate";
 import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
@@ -32,6 +33,7 @@ async function requireUser() {
 
 export async function makeOffer(_prev: CommerceState, formData: FormData): Promise<CommerceState> {
   const { supabase, user } = await requireUser();
+  await requireAgeConfirmed(user);
   const offerId = String(formData.get("offer_id") ?? "");
   const listingId = String(formData.get("listing_id") ?? "");
   const amount = Math.round(Number(String(formData.get("amount") ?? "")) * 100);
@@ -211,6 +213,8 @@ export async function respondToOffer(
   const { supabase, user } = await requireUser();
   const offerId = String(formData.get("offer_id") ?? "");
   const decision = String(formData.get("decision") ?? "");
+  // N662: accepting or countering goes on with the deal; declining backs out of it.
+  if (decision !== "declined") await requireAgeConfirmed(user);
   const round = readRound(formData);
   if (!offerId || !["accepted", "declined", "countered"].includes(decision) || round === null) {
     return { error: "Pick accept, counter or decline." };
@@ -293,6 +297,7 @@ export async function counterOffer(
   formData: FormData
 ): Promise<CommerceState> {
   const { supabase, user } = await requireUser();
+  await requireAgeConfirmed(user);
   const offerId = String(formData.get("offer_id") ?? "");
   const round = readRound(formData);
   const amount = readAmount(formData, "counter_amount");
@@ -315,6 +320,7 @@ export async function acceptCounter(
   formData: FormData
 ): Promise<CommerceState> {
   const { supabase, user } = await requireUser();
+  await requireAgeConfirmed(user);
   const offerId = String(formData.get("offer_id") ?? "");
   const round = readRound(formData);
   if (!offerId || round === null) return { error: "Missing offer." };

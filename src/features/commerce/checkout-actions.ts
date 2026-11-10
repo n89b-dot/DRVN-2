@@ -12,6 +12,7 @@ import { guestCheckoutIdentity, isPlausibleEmail, setGuestOrders } from "@/lib/g
 import { resolveGuestBuyer, sendOrderAccessLink } from "./guest-buyer";
 import { AGE_CONFIRMATION_REQUIRED, ageConfirmedIn } from "@/lib/age-confirmation";
 import { recordAgeConfirmation } from "@/lib/age-confirmation-record";
+import { requireAgeConfirmed } from "@/lib/age-gate";
 import { admitGuestHolds, releaseGuestHolds } from "./guest-holds";
 import { freezeOrderShipping, hashDestination, planCartFulfillment, type FulfillmentPlan } from "./checkout-shipping";
 import { getPaymentProvider } from "@/lib/payments/provider";
@@ -685,6 +686,9 @@ export async function checkoutCart(
   formData: FormData
 ): Promise<CommerceState> {
   const { user } = await optionalUser();
+  // N662: a signed-in member answers before anything is reserved or charged.
+  // A guest answers on the form itself, below.
+  if (user) await requireAgeConfirmed(user);
 
   const { shipping, error: shippingError } = readShipping(formData);
   if (shippingError) return { error: shippingError };
@@ -1145,6 +1149,7 @@ export async function completeReservedOrder(
   formData: FormData
 ): Promise<CommerceState> {
   const { user } = await requireUser();
+  await requireAgeConfirmed(user);
   const admin = createAdminClient();
 
   const orderId = String(formData.get("order_id") ?? "");

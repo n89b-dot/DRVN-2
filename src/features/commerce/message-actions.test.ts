@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ read: vi.fn(), insert: vi.fn(), allow: vi.fn(), admin: vi.fn(), refresh: vi.fn(), suspended: vi.fn() }));
+const mocks = vi.hoisted(() => ({ read: vi.fn(), insert: vi.fn(), allow: vi.fn(), admin: vi.fn(), refresh: vi.fn(), suspended: vi.fn(), ageGate: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.refresh }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/lib/rate-limit", () => ({ RATE_LIMITS: { sendMessage: {} }, allowAction: mocks.allow, rateLimitMessage: () => "Too many messages." }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
+vi.mock("@/lib/age-gate", () => ({ requireAgeConfirmed: mocks.ageGate }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
   auth: { getUser: async () => ({ data: { user: { id: "buyer" } } }) },
   rpc: async () => ({ data: mocks.suspended() }),
@@ -14,7 +15,7 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
     update: () => ({ in: () => ({ is: async () => ({ error: null }) }) }),
   }),
 }) }));
-import { sendThreadMessage } from "./message-actions";
+import { messageSeller, sendThreadMessage } from "./message-actions";
 const saved = { sender_id: "buyer", recipient_id: "seller", body: "Hello", order_id: "order", offer_id: null, listing_id: "listing", attachments: [] as string[] };
 function form() { const data = new FormData(); data.set("message_id", "12345678-1234-4234-8234-123456789012"); data.set("order_id", "order"); data.set("body", "Hello"); return data; }
 beforeEach(() => {
@@ -25,6 +26,17 @@ beforeEach(() => {
         : table === "listings" ? { id: "part-1", seller_id: "seller" } : { listing_id: "listing" } }) };
     return query;
   } });
+});
+describe("N662: the 18+ confirmation holds messaging", () => {
+  it("a member who still owes the answer sends no reply and no first message until they confirm", async () => {
+    mocks.ageGate.mockRejectedValueOnce(new Error("NEXT_REDIRECT;/confirm-age"));
+    await expect(sendThreadMessage({}, form())).rejects.toThrow("NEXT_REDIRECT");
+    expect(mocks.ageGate).toHaveBeenCalledWith(expect.objectContaining({ id: "buyer" }));
+    const enquiry = new FormData(); enquiry.set("listing_id", "part-1"); enquiry.set("message_id", "12345678-1234-4234-8234-123456789012"); enquiry.set("body", "Is it still for sale?");
+    mocks.ageGate.mockRejectedValueOnce(new Error("NEXT_REDIRECT;/confirm-age"));
+    await expect(messageSeller({}, enquiry)).rejects.toThrow("NEXT_REDIRECT");
+    expect(mocks.read).not.toHaveBeenCalled(); expect(mocks.insert).not.toHaveBeenCalled(); expect(mocks.allow).not.toHaveBeenCalled();
+  });
 });
 describe("message submission recovery", () => {
   it("adopts an exact committed retry without inserting or consuming rate limit", async () => {

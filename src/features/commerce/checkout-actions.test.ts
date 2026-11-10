@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   setCart: vi.fn(),
   shipWrite: vi.fn(),
   quotesRead: vi.fn(),
+  ageGate: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -57,6 +58,7 @@ vi.mock("@/lib/checkout-key", async (importOriginal) => ({
 }));
 vi.mock("./checkout-release", () => ({ releaseCartCheckout: mocks.release }));
 vi.mock("@/lib/age-confirmation-record", () => ({ recordAgeConfirmation: mocks.recordAge }));
+vi.mock("@/lib/age-gate", () => ({ requireAgeConfirmed: mocks.ageGate }));
 vi.mock("./checkout-shipping", () => ({
   freezeOrderShipping: vi.fn(),
   hashDestination: vi.fn().mockReturnValue("destination-hash"),
@@ -279,6 +281,28 @@ function durableCartAttempt(line1 = "10 Main Street", quoteId?: string) {
     },
   };
 }
+
+it("N662: a signed-in member who still owes the 18+ answer reserves and charges nothing until they confirm", async () => {
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  const cart = checkoutForm();
+  cart.set("idempotency_key", "12345678-1234-4234-8234-123456789012");
+  mocks.ageGate.mockRejectedValueOnce(new Error("NEXT_REDIRECT;/confirm-age"));
+  await expect(checkoutCart({}, cart)).rejects.toThrow("NEXT_REDIRECT");
+  mocks.ageGate.mockRejectedValueOnce(new Error("NEXT_REDIRECT;/confirm-age"));
+  await expect(completeReservedOrder({}, checkoutForm())).rejects.toThrow("NEXT_REDIRECT");
+  expect(mocks.ageGate).toHaveBeenCalledWith(expect.objectContaining({ id: "buyer-1" }));
+  expect(mocks.attemptRead).not.toHaveBeenCalled();
+  expect(mocks.orderRead).not.toHaveBeenCalled();
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
+  expect(mocks.freeze).not.toHaveBeenCalled();
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+});
+
+it("N662: a guest is asked on the checkout form itself, not by the members' gate", async () => {
+  mocks.auth.mockResolvedValue({ data: { user: null } });
+  await checkoutCart({}, checkoutForm());
+  expect(mocks.ageGate).not.toHaveBeenCalled();
+});
 
 it("recovers the authenticated buyer's exact paid checkout before reading an empty cart", async () => {
   const { form, attempt } = durableCartAttempt();

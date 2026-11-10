@@ -38,6 +38,8 @@ vi.mock("@supabase/ssr", () => ({
 vi.mock("@/lib/env", () => ({ hasSupabaseConfig: () => true, isProduction: false, publicKey: () => "anon-key" }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 
+import { ageCookieValue } from "@/lib/age-cookie";
+
 import { AGE_CHECK_TIMEOUT_MS, AGE_COOKIE, CONSOLE_NOT_FOUND, ageCheckApplies, isConsolePath, updateSession } from "./proxy";
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
@@ -180,9 +182,31 @@ describe("earlier members are asked to confirm 18+ on their next visit (N662, re
   it("remembers an answered member in this browser, and asks the database no more", async () => {
     const response = await updateSession(request("/marketplace"));
     expect(response.headers.get("location")).toBeNull();
-    expect(response.cookies.get(AGE_COOKIE)?.value).toBe("u1");
-    await updateSession(withCookie("/marketplace", "u1"));
+    const remembered = response.cookies.get(AGE_COOKIE)!.value;
+    expect(remembered).toBe(ageCookieValue("u1"));
+    expect(remembered).not.toBe("u1");
+    await updateSession(withCookie("/marketplace", remembered));
     expect(age.calls).toBe(1);
+  });
+
+  it("N662: does not believe a cookie a member wrote by hand, or one signed for another account (work review #152)", async () => {
+    age.due = true;
+    // The bare account id: what the cookie used to hold, and what anyone can type.
+    const byHand = await updateSession(withCookie("/home", "u1"));
+    expect(new URL(byHand.headers.get("location")!).pathname).toBe("/confirm-age");
+    const borrowed = await updateSession(withCookie("/home", ageCookieValue("someone-else")!));
+    expect(new URL(borrowed.headers.get("location")!).pathname).toBe("/confirm-age");
+    const forged = await updateSession(withCookie("/home", "u1.not-our-signature"));
+    expect(new URL(forged.headers.get("location")!).pathname).toBe("/confirm-age");
+    expect(age.calls).toBe(3);
+  });
+
+  it("N662: asks on a prefetch like any other page request (work review #152)", async () => {
+    age.due = true;
+    for (const headers of [{ "next-router-prefetch": "1" }, { purpose: "prefetch" }] as Record<string, string>[]) {
+      const prefetch = new NextRequest(new URL("/home", "https://drvn.test"), { headers });
+      expect(new URL((await updateSession(prefetch)).headers.get("location")!).pathname).toBe("/confirm-age");
+    }
   });
 
   it("asks again for a different account in the same browser", async () => {
@@ -191,14 +215,12 @@ describe("earlier members are asked to confirm 18+ on their next visit (N662, re
     expect(new URL(response.headers.get("location")!).pathname).toBe("/confirm-age");
   });
 
-  it("never asks on the question itself, sign-in pages, legal pages, the API, actions or prefetches", async () => {
+  it("never asks on the question itself, sign-in pages, legal pages, the API or an action (actions check for themselves)", async () => {
     age.due = true;
     for (const path of ["/confirm-age", "/onboarding", "/terms", "/privacy", "/fees", "/protection", "/cart/complete", "/settings/payouts/return", "/notifications/open/n1", "/robots.txt", "/api/version", "/logout"]) {
       expect((await updateSession(request(path))).headers.get("location"), path).toBeNull();
     }
     expect((await updateSession(action("/settings"))).headers.get("location")).toBeNull();
-    const prefetch = new NextRequest(new URL("/home", "https://drvn.test"), { headers: { "next-router-prefetch": "1" } });
-    expect((await updateSession(prefetch)).headers.get("location")).toBeNull();
     expect(ageCheckApplies(request("/admin-verify"), false)).toBe(false);
     expect(age.calls).toBe(0);
   });
@@ -231,7 +253,7 @@ describe("earlier members are asked to confirm 18+ on their next visit (N662, re
     age.due = false;
     const home = await updateSession(request("/"));
     expect(new URL(home.headers.get("location")!).pathname).toBe("/home");
-    expect(home.cookies.get(AGE_COOKIE)?.value).toBe("u1");
+    expect(home.cookies.get(AGE_COOKIE)?.value).toBe(ageCookieValue("u1"));
   });
 
   it("asks on a client navigation (an RSC request) the same as a page load", async () => {

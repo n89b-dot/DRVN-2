@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { AGE_COOKIE, ageCookieIsFor, ageCookieValue } from "@/lib/age-cookie";
 import { hasSupabaseConfig, isProduction, publicKey } from "@/lib/env";
 import { reportError } from "@/lib/monitoring";
 import { safeRedirectPath } from "@/lib/safe-redirect";
@@ -35,8 +36,8 @@ const PRODUCT_PATTERNS = [/^\/listings\/?$/, /^\/listings\/[^/]+\/edit\/?$/];
 
 const AUTH_PAGES = ["/login", "/signup"];
 
-/** The account the 18+ answer was checked for in this browser (#110). */
-export const AGE_COOKIE = "drvn_age_checked";
+/** The account the 18+ answer was checked for in this browser (#110), signed (src/lib/age-cookie.ts). */
+export { AGE_COOKIE };
 
 /**
  * Pages a member may open before answering: signing in and out, the question
@@ -53,10 +54,15 @@ const AGE_EXEMPT = [
 /** The most the age check may add to a navigation; past it the page loads and it asks again next time. */
 export const AGE_CHECK_TIMEOUT_MS = 1_500;
 
-/** #110: a page request (not an action, a prefetch or an API call) a member should be asked on. */
+/**
+ * #110: a page request a member should be asked on. A prefetch is asked like
+ * any other page request (work review #152: the exemption for it never fired
+ * in production, and a redirected prefetch costs nothing). A Server Action is
+ * not asked here: the actions that matter check for themselves, where a
+ * request that skips the proxy cannot skip the check (src/lib/age-gate.ts).
+ */
 export function ageCheckApplies(request: NextRequest, isAuthPage: boolean): boolean {
   if (isAuthPage || request.method !== "GET" || request.headers.has("next-action")) return false;
-  if (request.headers.has("next-router-prefetch") || request.headers.get("purpose") === "prefetch") return false;
   const { pathname } = request.nextUrl;
   return !AGE_EXEMPT.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
@@ -226,7 +232,7 @@ export async function updateSession(request: NextRequest) {
   // asked on their next page request, not only at their next sign-in.
   if (user && ageCheckApplies(request, isAuthPage)) {
     const subject = typeof user.sub === "string" ? user.sub : "";
-    if (subject && request.cookies.get(AGE_COOKIE)?.value !== subject) {
+    if (subject && !ageCookieIsFor(request.cookies.get(AGE_COOKIE)?.value, subject)) {
       // A stalled database must not hang every signed-in navigation.
       const { data: due, error: dueError } = await supabase.rpc("my_age_confirmation_due").abortSignal(AbortSignal.timeout(AGE_CHECK_TIMEOUT_MS));
       if (dueError) {
@@ -239,8 +245,10 @@ export async function updateSession(request: NextRequest) {
         url.searchParams.set("next", pathname + request.nextUrl.search);
         return redirectKeepingSession(url, supabaseResponse, request);
       } else {
-        // Answered (or never owed): remembered for this account in this browser.
-        supabaseResponse.cookies.set(AGE_COOKIE, subject, { path: "/", httpOnly: true, sameSite: "lax", secure: isProduction, maxAge: 60 * 60 * 24 * 365 });
+        // Answered (or never owed): remembered for this account in this
+        // browser, under our signature so the cookie can't be written by hand.
+        const remembered = ageCookieValue(subject);
+        if (remembered) supabaseResponse.cookies.set(AGE_COOKIE, remembered, { path: "/", httpOnly: true, sameSite: "lax", secure: isProduction, maxAge: 60 * 60 * 24 * 365 });
       }
     }
   }

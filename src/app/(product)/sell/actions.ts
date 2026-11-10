@@ -1,6 +1,7 @@
 "use server";
 
 import { createHash } from "node:crypto";
+import { requireAgeConfirmed } from "@/lib/age-gate";
 import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 
@@ -274,6 +275,7 @@ async function readListingFields(formData: FormData, userId: string) {
 
 export async function createListing(_prev: SellState, formData: FormData): Promise<SellState> {
   const { supabase, user } = await requireUser();
+  await requireAgeConfirmed(user);
 
   const parsed = await readListingFields(formData, user.id);
   if ("error" in parsed) return { error: parsed.error };
@@ -449,6 +451,7 @@ async function releaseCreationClaim(
  */
 export async function updateListing(_prev: SellState, formData: FormData): Promise<SellState> {
   const { supabase, user } = await requireUser();
+  await requireAgeConfirmed(user);
 
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "Missing listing.", outcome: "rejected" };
@@ -662,6 +665,8 @@ export async function setListingStatus(
   if (status === "archived") return withdrawListing(_prev, formData);
 
   const { supabase, user } = await requireUser();
+  // N662: putting a part on sale is held; taking one off sale never is.
+  if (status === "active") await requireAgeConfirmed(user);
 
   const { data: existing } = await supabase
     .from("listings")
