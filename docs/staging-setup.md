@@ -359,6 +359,18 @@ invalid variable at once.
 
 ## 5. Stripe, test mode [OWNER account, ENGINEER configures]
 
+**Do this in a Stripe sandbox of staging's own** (in the Stripe dashboard:
+the account picker → Sandboxes → create one named for staging, for example
+"DRVN staging"), and use that sandbox's keys for everything in this section
+and in §4.3. Not the account's shared test mode, which local development
+uses, and not the sandbox kept for CI. The rule is one Stripe sandbox per
+deployment, because Stripe delivers every test event in a sandbox to every
+webhook endpoint registered in it: on 10 November 2026 each CI run was
+sending its 53 test events to the local site, which stored each one and
+opened a recovery case for every payment it had no order for (1,618 false
+cases in a day). Staging on a shared sandbox would receive the same.
+Production is live mode, which only production uses.
+
 `scripts/owner/stripe-webhooks.mjs` creates or updates both endpoints below
 (dry run by default; usage in `docs/owner/README.md`). By hand:
 
@@ -462,9 +474,12 @@ on a separate host (`docs/remediation-release-and-monitoring.md`).
 
 1. Upgrade the account to **GitHub Pro** (or make the repository public) —
    rulesets are unavailable on Free for private repositories.
-2. Add the repository secret `STRIPE_TEST_SECRET_KEY` = a Stripe test-mode
-   secret key. Without it the `stripe-integration` job fails on purpose and
-   `release-gate` can never pass.
+2. Add the repository secret `STRIPE_TEST_SECRET_KEY` = the test secret key
+   of the Stripe sandbox kept for CI (its own sandbox, not staging's and not
+   the one local development uses: §5 says why). Without it the
+   `stripe-integration` job fails on purpose and `release-gate` can never
+   pass. The variable `STRIPE_TEST_PUBLISHABLE_KEY` is the same sandbox's
+   publishable key.
 3. Apply the `protect-main` ruleset from runbook §8: pull requests required,
    **`release-gate` the only required status check**, force pushes blocked.
    `scripts/owner/branch-protection.sh` does it and verifies it
