@@ -459,3 +459,13 @@ test("an ended session sends a member's action to sign in, back to the same page
     const removed = await user.client.auth.admin.deleteUser(user.id); if (removed.error) throw removed.error;
   }
 });
+
+test("N715: a signed-out visitor gets the ordinary 404 for the console, from the proxy", async ({ page }) => {
+  for (const path of ["/admin", "/admin/payments"]) {
+    const response = await page.goto(path);
+    expect(response?.status(), path).toBe(404);
+    await expect(page).toHaveURL(new RegExp(`${path.replace("/", "\\/")}$`));
+    await expect(page).toHaveTitle("Not found - DRVN");
+    await expect(page.getByText("Nothing at this address.")).toBeVisible();
+  }
+});
