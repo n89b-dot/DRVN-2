@@ -17,6 +17,7 @@
  *    thrown: rendering, route handlers (the Stripe webhook), server actions.
  */
 
+import { commitSha } from "@/lib/commit-sha";
 import { monitoringEnvironment } from "@/lib/deployment";
 
 type Level = "fatal" | "error" | "warning" | "info";
@@ -44,12 +45,8 @@ function dsnParts(): { endpoint: string; key: string } | null {
 
 /** Best-available release/deploy identity, host-agnostic. */
 function releaseInfo(): Record<string, unknown> {
-  const release =
-    // `||`, not `??`: an empty value set by the host falls through (#120).
-    process.env.SENTRY_RELEASE ||
-    process.env.VERCEL_GIT_COMMIT_SHA ||
-    process.env.GIT_COMMIT_SHA ||
-    undefined;
+  // `||`, not `??`: an empty value set by the host falls through (#120).
+  const release = process.env.SENTRY_RELEASE || commitSha() || undefined;
   const deployment = process.env.VERCEL_DEPLOYMENT_ID || process.env.DEPLOY_ID || undefined;
   return {
     ...(release ? { release } : {}),

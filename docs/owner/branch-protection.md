@@ -3,7 +3,8 @@
 Goal: nothing reaches `main` without a pull request whose CI passed. The
 check that matters is `release-gate` (`.github/workflows/ci.yml`). It is the
 aggregate job: it fails unless `verify`, `secrets`, `secrets-full`,
-`sql-guard`, `e2e` and `stripe-integration` all ran and passed.
+`sql-guard`, `e2e` and `stripe-integration` all ran and passed. There is one
+exception, described under "Documents-only pull requests" below.
 
 Script: `scripts/owner/branch-protection.sh`. Background: runbook §8
 (`docs/production-runbook.md`).
@@ -96,6 +97,36 @@ green against an older `main` merged after another PR changed the rules it was
 tested under, and `main` went red (remediation plan A2). A PR that falls
 behind shows "This branch is out-of-date"; update it (`gh pr update-branch <n>`
 or merge `main` into it) and let its checks rerun before merging.
+
+## Documents-only pull requests
+
+Since plan 2 item A0 (November 2026), a pull request whose every changed file
+is a document skips the `e2e` job, and `release-gate` accepts the skip. It
+still runs and must pass `verify`, both secret scans, `sql-guard` and
+`stripe-integration`, so such a pull request is mergeable in about five
+minutes, not twenty to forty-five.
+
+- **What counts as a document:** any `.md` file, and files under `docs/` that
+  are text, data or images (`md`, `txt`, `log`, `json`, `jsonl`, `csv`, `html`,
+  `pdf`, `png`, `jpg`, `jpeg`, `gif`, `webp`, `svg`). Nothing under
+  `.github/workflows/` counts, and a script kept under `docs/` does not count.
+  The list is `scripts/ci-change-scope.mjs`.
+- **What decides it:** the `changes` job, from the diff between the pull
+  request's merge commit and its base. A moved file is read as a deletion plus
+  an addition, so moving code into `docs/` is still a code change.
+- **What the gate accepts:** a skipped `e2e` only when the event is a pull
+  request, the `changes` job succeeded, and it answered documents-only. A
+  skipped, failed or cancelled `e2e` in any other case keeps the gate red, as
+  does a failed `changes` job.
+- **`main` is unchanged:** a push to `main` and a manual run always run the
+  whole suite. Every commit on `main` is still proven by the browser tests, and
+  the deploy workflow reads that run.
+- **Proof:** `tests/ci/change-scope.test.ts` runs the classifier and the gate's
+  own script for both directions. The gate's per-commit record
+  (`release-gate-<sha>.json`) carries `scope: "documents-only"` or `"full"`.
+
+The required check is still `release-gate` alone, and it always reports a
+result, so nothing in the ruleset changes.
 
 ## History
 

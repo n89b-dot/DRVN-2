@@ -17,6 +17,7 @@ The dated record that each piece of production and staging infrastructure was se
 | Point-in-time recovery (D4; recommended on for production) | n/a: daily backups on staging | | |
 | Production added to `supabase/migration-targets.json` by a PR (B4) | n/a | | |
 | Deploy runner reaches the database for `--status`: session pooler pinned with `statusRoute` in `supabase/migration-targets.json`, or the IPv4 add-on bought (#114, `docs/staging-setup.md` §1.4) | 2026-11-09, engineer: pooler `aws-0-us-east-1.pooler.supabase.com` pinned; certificate chain and tenant checked by a TLS handshake, no login | | first green `Staging has every migration` step in `deploy.yml` |
+| Vehicle catalogue filled and generations seeded (`scripts/import-vehiclesdb.mjs --apply`, runbook §3a, #119) | | | the script's closing counts |
 | Email provider, sending domain verified (DKIM, return-path, DMARC) (D-mail) | | | |
 | Stripe Connect (Express), platform profile, restricted keys (E1) | | | |
 | Stripe webhooks (`scripts/owner/stripe-webhooks.mjs`), platform and Connect (E1) | | | |
@@ -25,6 +26,7 @@ The dated record that each piece of production and staging infrastructure was se
 | Sentry project with 2FA (D5) | | | |
 | Alert webhook (Slack or equivalent) (D5) | | | |
 | Uptime check on `/api/version`, paging the owner (D5) | | | |
+| Uptime check on `/api/health/workers` with the `CRON_SECRET` bearer, every 3–5 minutes, paging a phone: the primary worker monitor (runbook §9b, #104) | | | a deliberate stop that paged and recovered |
 | Worker monitor variables `DRVN_MONITOR_ENABLED`, `DRVN_MONITOR_ORIGIN`, secret `DRVN_MONITOR_SECRET` (D5) | | | |
 | First admin enrolled with MFA and confirmed (runbook §5, N666) | | | |
 
