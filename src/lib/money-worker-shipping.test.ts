@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   shipmentWrite: vi.fn(),
   workerRuns: [] as { family: string; status: string; summary?: unknown }[],
   quiet: async () => ({ completed: 0, failed: 0 }),
-  orderEmails: vi.fn(async (_admin: unknown, _options?: { notAfter?: number }) => ({ sent: 0, failed: 0, retrying: 0 })),
+  orderEmails: vi.fn<(admin: unknown, options?: { notAfter?: number }) => Promise<{ sent: number; failed: number; retrying: number }>>(async () => ({ sent: 0, failed: 0, retrying: 0 })),
 }));
 
 vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
