@@ -30,6 +30,30 @@ permissions:
   contents: read
 
 jobs:
+  # Plan 2 item A0: does this pull request change documents only? If it does,
+  # the browser suite (`e2e`, 20 to 30 minutes) is skipped and release-gate
+  # accepts the skip. Only a pull request can be documents-only: a push to main
+  # and a manual run always get the full suite, so every commit on main is
+  # still proven by the browser tests. The rules are in
+  # scripts/ci-change-scope.mjs (tests/ci/change-scope.test.ts); on any doubt
+  # or error the answer is "full".
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          # On a pull request HEAD is the merge commit; depth 2 brings its
+          # base parent (HEAD^1), which the script diffs against.
+          fetch-depth: 2
+      # The runner's own Node: the script has no dependencies, so no npm ci.
+      - name: Decide the change scope
+        id: scope
+        run: node scripts/ci-change-scope.mjs
+
   verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -355,20 +379,34 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # Each runner owns local Supabase/Auth/Storage/Mailpit and synthetic fixtures.
-  e2e:
-    outputs:
-      ran: ${{ steps.executed.outputs.ran }}
-      # Set only by the required step, after its first-attempt run passes.
-      # The diagnostic retry below cannot set it, so it can never satisfy
-      # release-gate.
-      first_attempt_passed: ${{ steps.executed.outputs.first_attempt_passed }}
+  # The browser suite, in four parts side by side (plan 2 item A0b). One job
+  # took about 20 minutes, twelve of them the suite itself on a single worker.
+  # e2e/parts.json splits the spec files into four parts of near-equal
+  # measured time; each part is this job once, with its own fresh Supabase
+  # stack and its own build, and one worker inside it because the tests share
+  # database state. Together the parts run every test of the unsplit suite
+  # exactly once (tests/ci/e2e-parts.test.ts lists both and compares). The
+  # `e2e` job below judges the four and merges their results.
+  #
+  # Skipped on a documents-only pull request (the `changes` job, plan 2 item
+  # A0). release-gate accepts that skip only when `changes` succeeded and said
+  # so; a skip for any other reason keeps the gate red.
+  e2e-parts:
+    name: e2e part ${{ matrix.part }}
+    needs: [changes]
+    if: needs.changes.outputs.docs_only != 'true'
+    strategy:
+      # A failing part must not cancel the others: each part's result is evidence.
+      fail-fast: false
+      matrix:
+        part: [1, 2, 3, 4]
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
+    timeout-minutes: 35
     env:
       PAYMENTS_MODE: stub
       PAYMENTS_ALLOW_STUB_IN_PRODUCTION: 'true'
       RELEASE_SUMMARY_DIR: release-results
+      E2E_PART: ${{ matrix.part }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -378,6 +416,11 @@ jobs:
           node-version: 22.22.0
           cache: npm
       - run: npm ci
+      # Which browsers this part needs, and whether it is the one part that
+      # runs the recovery drills: both read from e2e/parts.json.
+      - name: Plan this part
+        id: plan
+        run: node scripts/ci-e2e-parts.mjs plan "$E2E_PART"
       # RR-16: Realtime runs here, so live message and badge delivery is
       # tested by subscription (e2e/realtime-delivery.spec.ts), not by the
       # fallback refresh.
@@ -387,7 +430,9 @@ jobs:
       - name: Start isolated Supabase with captured email
         run: bash scripts/ci-supabase-start.sh logflare,vector,studio,edge-runtime,imgproxy
       - run: node scripts/prepare-ci-supabase.mjs
+      # The recovery drills run once, in one part, not four times.
       - name: Start isolated Typesense
+        if: steps.plan.outputs.operations == 'true'
         run: |
           for attempt in 1 2 3; do
             if docker pull typesense/typesense@sha256:b405d4443bdb9254fab4792b7fd9ee95d969f3b5485975917a3a3f84274eba27; then
@@ -402,11 +447,15 @@ jobs:
           done
           exit 1
       - name: Storage, deletion and search recovery drills
+        if: steps.plan.outputs.operations == 'true'
         run: npm run test:operations
       - name: Stop test search engine
-        if: always()
+        if: always() && steps.plan.outputs.operations == 'true'
         run: docker stop drvn-typesense
-      - run: npx playwright install --with-deps chromium firefox webkit
+      - name: Install this part's browsers
+        env:
+          BROWSERS: ${{ steps.plan.outputs.browsers }}
+        run: npx playwright install --with-deps $BROWSERS
       - name: Required browser regression suite
         id: executed
         env:
@@ -427,6 +476,73 @@ jobs:
         run: |
           echo "::notice::Diagnostic browser retries (up to 2). The release result is the failed first attempt above; this rerun never changes it."
           npm run test:e2e
+
+      # What this part did, for the `e2e` job to judge. Written on every
+      # outcome: a part with no result file counts as a part that did not run.
+      - name: Record this part's result
+        if: always()
+        env:
+          RAN: ${{ steps.executed.outputs.ran }}
+          FIRST_ATTEMPT_PASSED: ${{ steps.executed.outputs.first_attempt_passed }}
+        run: node scripts/ci-e2e-parts.mjs record "$E2E_PART" e2e-part
+
+      - name: Retain this part's results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-part-${{ matrix.part }}-${{ github.sha }}
+          path: |
+            e2e-part/part.json
+            release-results/browser-release-${{ github.sha }}.json
+            test-results/operations.xml
+            test-results/playwright.xml
+            test-results/playwright-diagnostic.xml
+            test-results/design/
+          if-no-files-found: error
+          retention-days: 30
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: browser-failure-details-part-${{ matrix.part }}
+          path: test-results/
+          retention-days: 3
+
+  # Judges the four parts and merges what they wrote. The rule is the one the
+  # gate has always had, now per part: every part ran and passed on its first
+  # attempt. A part that is missing, skipped, cancelled or failed fails this
+  # job. It also writes the files a single-job suite used to write, under the
+  # same artifact names (browser-release-summary-<sha>, test-results-<sha>-e2e,
+  # design-screenshots-<sha>), so their readers do not change.
+  #
+  # Runs when a part has failed, so a red run keeps its merged results; does
+  # not run on a documents-only pull request, where there is nothing to judge.
+  e2e:
+    needs: [changes, e2e-parts]
+    if: ${{ !cancelled() && needs.changes.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
+    outputs:
+      ran: ${{ steps.merge.outputs.ran }}
+      # True only when every part's required step passed on its first attempt.
+      # A diagnostic retry cannot set a part's own flag, so it can never
+      # satisfy release-gate.
+      first_attempt_passed: ${{ steps.merge.outputs.first_attempt_passed }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Fetch every part's results
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: e2e-part-*-${{ github.sha }}
+          path: ${{ runner.temp }}/e2e-parts
+      # The runner's own Node: the script has no dependencies, so no npm ci.
+      - name: Judge the parts and merge their results
+        id: merge
+        env:
+          PARTS_DIR: ${{ runner.temp }}/e2e-parts
+        run: node scripts/ci-e2e-parts.mjs merge "$PARTS_DIR" .
 
       - name: Retain candidate-indexed browser summary
         if: always()
@@ -451,13 +567,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: failure()
-        with:
-          name: browser-failure-details
-          path: test-results/
-          retention-days: 3
-
       # Screens specs save on purpose (test-results/design/), kept on green
       # runs too, so a build can be compared with its design PNGs.
       - name: Retain design screenshots
@@ -474,8 +583,9 @@ jobs:
   # Stripe test API. The suite itself refuses non-sk_test_ keys, and a missing
   # required secret fails this lane explicitly.
   stripe-integration:
-    # Keep provider verification behind the mandatory browser gate.
-    needs: [e2e]
+    # Runs beside the browser suite, not after it (plan 2 item A0): it takes
+    # about two minutes and release-gate requires both, so waiting on e2e only
+    # delayed the answer.
     outputs:
       ran: ${{ steps.gate.outputs.run }}
     runs-on: ubuntu-24.04
@@ -547,15 +657,19 @@ jobs:
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    needs: [verify, secrets, secrets-full, sql-guard, e2e, stripe-integration]
+    needs: [changes, verify, secrets, secrets-full, sql-guard, e2e-parts, e2e, stripe-integration]
     steps:
       - name: Require executed verification
         id: require
         env:
+          EVENT: ${{ github.event_name }}
+          CHANGES: ${{ needs.changes.result }}
+          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
           VERIFY: ${{ needs.verify.result }}
           SECRETS: ${{ needs.secrets.result }}
           SECRETS_FULL: ${{ needs.secrets-full.result }}
           SQL: ${{ needs.sql-guard.result }}
+          E2E_PARTS: ${{ needs.e2e-parts.result }}
           E2E: ${{ needs.e2e.result }}
           STRIPE: ${{ needs.stripe-integration.result }}
           E2E_RAN: ${{ needs.e2e.outputs.ran }}
@@ -579,13 +693,34 @@ jobs:
             jq -cn --arg name "$1" --arg value "${2:-unset}" --arg needs "$3" --argjson ok "$ok" \
               '{($name): {value: $value, needs: $needs, ok: $ok}}' >> "$RUNNER_TEMP/requirements.jsonl"
           }
+          # Plan 2 item A0. The browser suite may be skipped for exactly one
+          # reason: this is a pull request, the `changes` job succeeded, and it
+          # said the diff is documents only. Then e2e must be 'skipped', never
+          # failed or cancelled. In every other case e2e must have run and
+          # passed on its first attempt, as before.
+          scope=full
+          if [ "$EVENT" = pull_request ] && [ "$CHANGES" = success ] && [ "$DOCS_ONLY" = true ]; then
+            scope=documents-only
+          fi
+          echo "$scope" > "$RUNNER_TEMP/change-scope"
+          echo "change scope: $scope"
+          require "change scope decided" "$CHANGES" success
           require verify "$VERIFY" success
           require secrets "$SECRETS" success
           require secrets-full "$SECRETS_FULL" success
           require sql-guard "$SQL" success
-          require e2e "$E2E" success
-          require "e2e executed" "$E2E_RAN" true
-          require "e2e first attempt passed (diagnostic retries never count)" "$E2E_FIRST_ATTEMPT" true
+          if [ "$scope" = documents-only ]; then
+            require "e2e parts (documents-only pull request: skipped by design)" "$E2E_PARTS" skipped
+            require "e2e (documents-only pull request: skipped by design)" "$E2E" skipped
+          else
+            # The browser suite runs as four parts (e2e-parts); the e2e job
+            # judges them. Both are required: the parts' own result, and the
+            # judgement that each one ran and passed on its first attempt.
+            require "e2e parts (all four)" "$E2E_PARTS" success
+            require e2e "$E2E" success
+            require "e2e executed" "$E2E_RAN" true
+            require "e2e first attempt passed (diagnostic retries never count)" "$E2E_FIRST_ATTEMPT" true
+          fi
           require stripe-integration "$STRIPE" success
           require "stripe-integration executed" "$STRIPE_RAN" true
           exit "$failed"
@@ -619,14 +754,18 @@ jobs:
           if [ -s "$summary" ]; then counts=$(jq -c '.counts' "$summary"); fi
           requirements='{}'
           if [ -s "$RUNNER_TEMP/requirements.jsonl" ]; then requirements=$(jq -cs 'add' "$RUNNER_TEMP/requirements.jsonl"); fi
+          # "documents-only" means the browser suite was skipped by design
+          # (plan 2 item A0); only a pull request can carry it.
+          scope=unknown
+          if [ -s "$RUNNER_TEMP/change-scope" ]; then scope=$(cat "$RUNNER_TEMP/change-scope"); fi
           jq -n \
-            --arg sha "$SHA" --arg head_sha "$HEAD_SHA" --arg ref "$REF" --arg event "$EVENT" \
+            --arg sha "$SHA" --arg head_sha "$HEAD_SHA" --arg ref "$REF" --arg event "$EVENT" --arg scope "$scope" \
             --arg result "${RESULT:-unknown}" --argjson run_id "$RUN_ID" --argjson run_attempt "$RUN_ATTEMPT" \
             --argjson requirements "$requirements" \
             --argjson first_attempt_passed "$([ "$E2E_FIRST_ATTEMPT" = true ] && echo true || echo false)" \
             --argjson browser_counts "$counts" \
             '{sha: $sha, head_sha: $head_sha, ref: $ref, event: $event, run_id: $run_id, run_attempt: $run_attempt,
-              result: $result, requirements: $requirements, first_attempt_passed: $first_attempt_passed,
+              scope: $scope, result: $result, requirements: $requirements, first_attempt_passed: $first_attempt_passed,
               browser_counts: $browser_counts}' > "$RUNNER_TEMP/release-gate/release-gate-$SHA.json"
           cat "$RUNNER_TEMP/release-gate/release-gate-$SHA.json"
 
@@ -644,7 +783,7 @@ jobs:
   summary:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    needs: [verify, secrets, secrets-full, sql-guard, e2e, stripe-integration]
+    needs: [changes, verify, secrets, secrets-full, sql-guard, e2e-parts, e2e, stripe-integration]
     if: always()
     steps:
       - name: Coverage summary
@@ -658,7 +797,9 @@ jobs:
             echo "| Secret scan, incremental (this PR's / push's first-parent, non-merge commits) | ${{ needs.secrets.result }} |"
             echo "| Secret scan, full (all reachable commits incl. merges + tracked tree) | ${{ needs.secrets-full.result }} |"
             echo "| SQL guards (all registered suites) | ${{ needs.sql-guard.result }} |"
-            echo "| Required browser regression suite | ${{ needs.e2e.result }}; executed=${{ needs.e2e.outputs.ran }}; first attempt passed=${{ needs.e2e.outputs.first_attempt_passed || 'false' }} |"
+            echo "| Change scope (documents-only pull requests skip the browser suite) | ${{ needs.changes.result }}; documents only=${{ needs.changes.outputs.docs_only || 'false' }} |"
+            echo "| Browser suite parts (four, side by side) | ${{ needs.e2e-parts.result }} |"
+            echo "| Required browser regression suite | ${{ needs.e2e.result }}; executed=${{ needs.e2e.outputs.ran || 'false' }}; first attempt passed=${{ needs.e2e.outputs.first_attempt_passed || 'false' }} |"
             echo "| Stripe test-mode integration | ${{ needs.stripe-integration.result }}; executed=${{ needs.stripe-integration.outputs.ran }} |"
             echo "| JUnit results (one artifact per job, prefix \`test-results-${{ github.sha }}-\`) | verify, sql-guard, e2e, stripe-integration; see docs/ids.md |"
             echo "| Provider coverage | Stripe test API covers multi-seller capture and late compensation; browser checkout uses stubs. Connected payout/dispute and 3DS browser proof remain open |"

@@ -14,6 +14,8 @@ import { allowAction, rateLimitMessage, RATE_LIMITS } from "@/lib/rate-limit";
 import type { PartLinkFields } from "@/lib/mods/part-link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { canonicalPhotoUrl } from "@/lib/photo-urls";
+import { signedOwnPhotoUrl, signedPhotoUrl } from "@/lib/supabase/photo-signing";
 import { capture } from "@/lib/analytics";
 import { reportError } from "@/lib/monitoring";
 import { confirmIdentity } from "@/lib/confirm-identity";
@@ -550,7 +552,9 @@ export async function readPartLink(url: string): Promise<
   // The mod line's fields only: where the fetch landed is the agent's provenance, not part of the line.
   const { ok, fetched_url: fetchedUrl, ...part } = result;
   void fetchedUrl;
-  return { ok, part };
+  // #105: the thumbnail was just stored in a private bucket; the editor shows it signed.
+  // Their own folder only: this signs what the fetch handed back, not a guarded read (N940).
+  return { ok, part: { ...part, image_url: await signedOwnPhotoUrl(part.image_url, user.id) } };
 }
 
 /**
@@ -608,7 +612,9 @@ export async function addCarImage(carId: string, url: string): Promise<ActionSta
   const changed = await galleryChange(carId, "add", { url });
   if (changed.error) return { error: changed.error };
   await finalizeMediaUrls(supabase, [url]);
-  return { image: changed.result?.image };
+  // #105: the service role's answer is canonical; the gallery shows the photo at once.
+  const image = changed.result?.image;
+  return { image: image ? { ...image, url: await signedPhotoUrl(image.url) } : image };
 }
 
 export async function deleteCarImage(formData: FormData): Promise<ActionState> {
@@ -1078,7 +1084,10 @@ export async function updateActivityPost(
     if (previous.error) {
       reportError("[activity] prior image projection lookup failed", { postId, error: previous.error });
     } else {
-      previousImages = previous.data ?? [];
+      // Read through the signing client, so these come back signed; compared
+      // with the canonical URLs the save keeps, every kept photo looked
+      // removed and went to the deletion check (#178 review).
+      previousImages = (previous.data ?? []).map((image) => ({ url: canonicalPhotoUrl(image.url) }));
     }
 
     // A quick post's photos live in the gallery and in no block, so the
@@ -1087,7 +1096,7 @@ export async function updateActivityPost(
     // in a block aren't the editor's to drop: they are carried through.
     const { normalizeBlocks: normalizePrior } = await import("@/lib/activity-blocks");
     const priorBlockUrls = new Set(
-      normalizePrior(post.body ?? []).flatMap((b) => (b.type === "images" ? b.urls : []))
+      normalizePrior(post.body ?? []).flatMap((b) => (b.type === "images" ? b.urls.map((url) => canonicalPhotoUrl(url)) : []))
     );
     // The edit page now hands those photos to the editor as a photos block,
     // so a body that arrives WITH photos is the member's full choice

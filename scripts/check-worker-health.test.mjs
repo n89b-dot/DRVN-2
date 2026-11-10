@@ -12,6 +12,24 @@ test('fails on unavailable, malformed, stale and exhausted health', async () => 
   await assert.rejects(checkWorkerHealth('https://drvn.example', 'secret', async () => response));
  }
 });
+// Plan 2 item A5 (R-email): the app marks the digest job and family `disabled`
+// while no email provider is configured. The monitor still requires both rows
+// to be present, and does not page for them; the same rows without the mark page.
+test('a job and family the app marks disabled are present but not paged; unmarked, they page (R-email)', async () => {
+ const stale = (disabled) => ({ ...healthy,
+  jobs: healthy.jobs.map(j => j.job === 'drvn-saved-search-digests' ? { ...j, stale: !disabled, disabled: disabled || undefined, reason: 'overdue' } : j),
+  families: healthy.families.map(f => f.family === 'savedSearchDigests' ? { ...f, stale: !disabled, disabled: disabled || undefined, reason: 'failing' } : f) });
+ const marked = await checkWorkerHealth('https://drvn.example', 'secret', async () => Response.json(stale(true)));
+ assert.deepEqual(marked, { healthy: true, families: 21, jobs: 21 });
+ await assert.rejects(checkWorkerHealth('https://drvn.example', 'secret', async () => Response.json(stale(false), { status: 503 })), error => {
+  assert.equal(error.message, 'worker_health_unhealthy');
+  assert.deepEqual(error.problems.map(p => `${p.area}:${p.name}:${p.reason}`).sort(), ['family:savedSearchDigests:failing', 'job:drvn-saved-search-digests:overdue']);
+  return true;
+ });
+ // A deployment cannot hide a job by dropping it: absent is incomplete, whatever the mark.
+ const dropped = { ...stale(true), jobs: stale(true).jobs.filter(j => j.job !== 'drvn-saved-search-digests') };
+ await assert.rejects(checkWorkerHealth('https://drvn.example', 'secret', async () => Response.json(dropped)), /incomplete/);
+});
 test('never sends a bearer over remote HTTP', async () => {
  await assert.rejects(checkWorkerHealth('http://drvn.example', 'secret', async () => { throw new Error('must not fetch'); }), /HTTPS/);
 });

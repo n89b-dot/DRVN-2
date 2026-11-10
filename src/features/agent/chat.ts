@@ -234,6 +234,8 @@ export async function pollAgentReply(requestId: string): Promise<ChatState> {
 /** R81: a private chat photo is shown through a short-lived signed link. */
 async function toChatMessages(rows: StoredMessage[], resolved: Map<string, ResolvedCard>): Promise<ChatMessage[]> {
   const signed = await signChatPhotos(createAdminClient(), rows.flatMap((row) => row.images ?? []));
+  // A card's member photo (a build change's part thumbnail) is signed where
+  // the card is resolved, and only from the member's own folder (N940).
   return rows.map((row) => ({
     id: row.id,
     role: row.role as ChatMessage["role"],

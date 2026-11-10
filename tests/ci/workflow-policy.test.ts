@@ -131,18 +131,21 @@ describe("public-repository workflow hardening", () => {
 describe("release-gate", () => {
   it("keeps its exact job name (branch protection requires it) and every need", () => {
     const gate = job("release-gate");
-    expect(gate.needs).toEqual(["verify", "secrets", "secrets-full", "sql-guard", "e2e", "stripe-integration"]);
+    expect(gate.needs).toEqual(["changes", "verify", "secrets", "secrets-full", "sql-guard", "e2e-parts", "e2e", "stripe-integration"]);
     expect(gate.if).toBe("always()");
   });
 
   it("requires first-attempt browser evidence that a diagnostic retry cannot supply", () => {
-    expect(job("e2e").outputs?.first_attempt_passed).toBe("${{ steps.executed.outputs.first_attempt_passed }}");
-    // Only the required step (id: executed, retries pinned to 0) sets it,
-    // and only after the suite passed.
-    const required = step("e2e", (s) => s.id === "executed");
+    // The suite runs as four parts (plan 2 item A0b). In each, only the
+    // required step (id: executed, retries pinned to 0) sets the part's flag,
+    // and only after the suite passed; the e2e job sets the gate's flag from
+    // the four parts' recorded flags and nothing else.
+    expect(job("e2e").outputs?.first_attempt_passed).toBe("${{ steps.merge.outputs.first_attempt_passed }}");
+    expect(step("e2e-parts", named("Record this part's result")).env?.FIRST_ATTEMPT_PASSED).toBe("${{ steps.executed.outputs.first_attempt_passed }}");
+    const required = step("e2e-parts", (s) => s.id === "executed");
     expect(required.env?.E2E_DIAGNOSTIC_RETRIES).toBe("0");
     expect(required.run).toMatch(/npm run test:e2e\necho "first_attempt_passed=true" >> "\$GITHUB_OUTPUT"/);
-    const diagnostic = step("e2e", named("Optional browser retry diagnostics"));
+    const diagnostic = step("e2e-parts", named("Optional browser retry diagnostics"));
     expect(diagnostic.if).toMatch(/^failure\(\) && github\.event_name == 'workflow_dispatch'/);
     expect(diagnostic.id).toBeUndefined();
     expect(diagnostic.run).not.toContain("GITHUB_OUTPUT");
@@ -154,7 +157,7 @@ describe("release-gate", () => {
 
 describe("Supabase start (R33)", () => {
   it("both local stacks start through the bounded retry script", () => {
-    expect(step("e2e", named("Start isolated Supabase with captured email")).run).toMatch(
+    expect(step("e2e-parts", named("Start isolated Supabase with captured email")).run).toMatch(
       /^bash scripts\/ci-supabase-start\.sh /
     );
     expect(step("stripe-integration", named("Start isolated Stripe test database")).run).toMatch(

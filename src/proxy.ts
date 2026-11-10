@@ -3,10 +3,20 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { blockedMediaKeys, imageRequestObjectKey } from "@/lib/copyright/blocked-media";
 import { buildContentSecurityPolicy, reportingEndpointsHeader } from "@/lib/csp";
+import { isIndexable } from "@/lib/deployment";
+import { memberPhotoSourceRefused } from "@/lib/photo-urls";
 import { updateSession } from "@/lib/supabase/proxy";
 
 export async function proxy(request: NextRequest) {
-  if (request.nextUrl.pathname === "/_next/image") return imageGate(request);
+  // Next serves the optimiser for any path starting /_next/image (a
+  // trailing slash included), so the gate must catch every one (#196 review).
+  if (request.nextUrl.pathname.startsWith("/_next/image")) return imageGate(request);
+  // N958 (work review #156): only the deployment named production serves a
+  // sitemap. Anywhere else (staging, previews, local, CI) the sitemaps answer
+  // 404 before any page code or prerendered file is reached.
+  if (isSitemapPath(request.nextUrl.pathname) && !isIndexable()) {
+    return new NextResponse("Not found", { status: 404, headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8", "X-Robots-Tag": "noindex, nofollow" } });
+  }
   const nonce = randomBytes(24).toString("base64");
   const configured = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "https://unconfigured.invalid");
   const local = process.env.E2E_TEST_PROJECT_REF === "local-drvn-remediation" && ["localhost", "127.0.0.1"].includes(configured.hostname) && configured.port === "54321";
@@ -23,6 +33,11 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+/** The static sitemap and every catalogue sitemap (src/app/sitemap.ts, src/app/catalog/sitemap/[id]). */
+export function isSitemapPath(pathname: string): boolean {
+  return pathname === "/sitemap.xml" || pathname.startsWith("/catalog/sitemap/");
+}
+
 /**
  * Optimised images (R69-dmca): a photo a copyright takedown removed is
  * refused here, before Next.js can serve the resized copy it keeps for a
@@ -30,10 +45,27 @@ export async function proxy(request: NextRequest) {
  * no session refresh, no policy headers, as before this gate existed.
  */
 async function imageGate(request: NextRequest) {
+  // A copyright takedown first (R69-dmca): its 451 says why, whatever the
+  // spelling of the link.
   const key = imageRequestObjectKey(request.nextUrl);
   if (key && (await blockedMediaKeys()).has(key)) {
     return new NextResponse("This image was removed after a copyright notice.", {
       status: 451,
+      headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+  // #178 review: a member photo's signed link that has run out is refused
+  // before the optimiser can serve the copy it kept for the object's own
+  // (longer) Cache-Control. A member photo in its canonical (unsigned)
+  // spelling is refused too: the optimiser may still hold a copy cached
+  // before the photos went private (Codex on #178). Pure checks on the URL,
+  // decoded the way Storage reads it, so no spelling slips past (#196
+  // review): a sign route needs exactly one live token, and a source the
+  // optimiser could read differently (two url parameters) is refused too.
+  const sources = request.nextUrl.searchParams.getAll("url");
+  if (sources.length > 1 || memberPhotoSourceRefused(sources[0] ?? null)) {
+    return new NextResponse("This photo link has expired.", {
+      status: 404,
       headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" },
     });
   }
@@ -44,7 +76,14 @@ export const config = {
   matcher: [
     // Run on everything except static assets and images
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico)$).*)",
-    // …and on optimised images, for the copyright gate alone.
+    // …and on optimised images, for the copyright and photo gates alone,
+    // with or without a trailing slash or more path.
     "/_next/image",
+    "/_next/image/:path*",
+    // …and on every console path, whatever it ends in. The first pattern
+    // skips any path ending in an image extension, so /admin/users/x.png
+    // reached the console's own layout without passing the proxy's gate
+    // (work review #143, N715).
+    "/admin/:path*",
   ],
 };

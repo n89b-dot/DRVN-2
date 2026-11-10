@@ -131,3 +131,40 @@ describe("HEIC and HEIF uploads", () => {
     expect((await sharp(fixture.bytes).metadata()).format).toBe("webp");
   });
 });
+
+describe("N955: the photo route refuses what a serverless host would drop without a word (work review #158)", () => {
+  /** A real JPEG padded with trailing bytes to an exact size: decoders ignore what follows the image. */
+  async function jpegOf(bytes: number) {
+    const image = await sharp({ create: { width: 20, height: 20, channels: 3, background: "red" } }).jpeg().toBuffer();
+    return Buffer.concat([image, Buffer.alloc(bytes - image.length)]);
+  }
+  const MB = 1024 * 1024;
+
+  it("answers 413 with no body for a photo one byte over 4 MB, and publishes nothing", async () => {
+    const response = await POST(request(await jpegOf(4 * MB + 1), "listing-images"));
+    expect(response.status).toBe(413);
+    expect(await response.text()).toBe("");
+    expect(fixture.bytes.length).toBe(0);
+    expect(fixture.staged).not.toHaveBeenCalled();
+  });
+
+  it("takes a photo of exactly 4 MB", async () => {
+    expect((await POST(request(await jpegOf(4 * MB), "listing-images"))).status).toBe(200);
+    expect(fixture.staged).toHaveBeenCalledOnce();
+  });
+
+  it("holds a profile photo to its own 2 MB, whatever the general limit", async () => {
+    expect((await POST(request(await jpegOf(2 * MB + 1), "avatars"))).status).toBe(413);
+    expect((await POST(request(await jpegOf(2 * MB), "avatars"))).status).toBe(200);
+  });
+
+  it("refuses on the declared length alone, before reading a byte, and again if the body outgrows the limit", async () => {
+    const declared = new Request("http://localhost/api/media/public-photo", { method: "POST", body: "x", headers: { "content-length": String(4 * MB + 256 * 1024 + 1) } });
+    expect((await POST(declared)).status).toBe(413);
+    // No honest length: the stream is counted as it is read.
+    const oversized = request(await jpegOf(5 * MB), "listing-images");
+    expect(oversized.headers.get("content-length")).toBeNull();
+    expect((await POST(oversized)).status).toBe(413);
+    expect(fixture.bytes.length).toBe(0);
+  });
+});

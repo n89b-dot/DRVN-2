@@ -8,6 +8,7 @@ import { initialsFrom, splitLinks } from "@/components/profile/helpers";
 import { StorePanel, forSaleCount } from "@/features/store/store-panel";
 import { loadProfileView, PROFILE_UPDATES_MAX_PAGE } from "@/lib/profile-data";
 import { parsePageParam } from "@/lib/page-param";
+import { siteUrl } from "@/lib/site";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
 import { ProfileEditor } from "./profile-editor";
@@ -129,7 +130,7 @@ export default async function ProfilePage({
       <p className="mt-10">
         <span className="microlabel">Your public profile — </span>
         <Link href={`/u/${profile?.username}`} className="jumplink">
-          drvn.app/u/{profile?.username}
+          {new URL(siteUrl()).host}/u/{profile?.username}
         </Link>
       </p>
     </div>

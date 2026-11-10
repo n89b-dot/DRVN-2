@@ -5,11 +5,13 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { reportError } from "@/lib/monitoring";
 import {
   canonicalizePhotoUrlsInText,
-  canonicalPhotoUrlsInText,
-  replacePhotoUrlsInText,
+  photoFieldUrls,
+  replacePhotoFields,
   signedPhotoObject,
+  signingContextFor,
   signingWindow,
   storageOrigin,
+  type SigningContext,
 } from "@/lib/photo-urls";
 
 /**
@@ -20,18 +22,28 @@ import {
  *  - on the way in (every PostgREST request), any signed photo URL in the
  *    body is turned back into its canonical spelling, so the database only
  *    ever stores and compares canonical URLs, whoever wrote them;
- *  - on the way out (`sign: true`), every canonical photo URL in a
- *    response is replaced by a signed URL. The rows were returned under the
+ *  - on the way out (`sign: true`), the canonical photo URLs at the places
+ *    the database guards for that table or RPC (src/lib/photo-urls.ts,
+ *    PHOTO_POSITIONS; N940) are replaced by signed URLs. The rows were returned under the
  *    reader's own row policies (or, for the console, after the admin gate),
  *    so this is the visibility check the page already made, applied once.
  *
  * Signed URLs are minted in batches per bucket and reused for the rest of the
- * hour-long signing window in this process, so one photo keeps one URL for
- * the hour (the image optimiser and browsers can cache it), and each lasts to
- * the end of the next window.
+ * hour-long signing window, so one photo keeps one URL for the hour (the
+ * image optimiser and browsers can cache it), and each lasts to the end of
+ * the next window. "One URL" holds across server instances (#117): a
+ * process memo sits in front of a shared one in the database
+ * (20261110100000, `photo_signatures_read` / `_offer`), where the first
+ * instance to sign a photo in a window wins and every other reads its URL.
+ * If the shared memo is unreachable, the instance signs on its own, as before.
+ *
+ * A photo that can't be signed keeps its canonical URL, which the storage
+ * layer refuses. That is reported here, and `Media` shows the no-photo plate
+ * for it instead of a broken image (src/components/ui/primitives.tsx).
  */
 
-type Signed = { window: number; url: string };
+/** `localUntil`: a link only this process holds (the shared memo was down); used until then, then the shared memo is asked again. */
+type Signed = { window: number; url: string; localUntil?: number };
 
 const MAX_MEMO = 20_000;
 const memo = new Map<string, Signed>();
@@ -42,7 +54,9 @@ function signingClient() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) throw new Error("Photo signing needs the Supabase URL and secret key");
-    signer = createSupabaseClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+    // Bounded like the admin client: a stalled Storage or memo call must not hang a render.
+    const timed: typeof fetch = (input, init) => fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(10_000) });
+    signer = createSupabaseClient(url, key, { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: timed } });
   }
   return signer;
 }
@@ -66,7 +80,7 @@ export async function signedPhotoUrls(
   const missing = new Map<string, { path: string; url: string }[]>();
   for (const url of new Set(urls)) {
     const cached = fixedExpiresIn ? undefined : memo.get(url);
-    if (cached && cached.window === window) {
+    if (cached && cached.window === window && (cached.localUntil === undefined || Date.now() < cached.localUntil)) {
       out.set(url, cached.url);
       continue;
     }
@@ -77,29 +91,116 @@ export async function signedPhotoUrls(
   if (!missing.size) return out;
 
   if (memo.size > MAX_MEMO) {
-    for (const [key, value] of memo) if (value.window !== window) memo.delete(key);
+    // The live window, not the export's -1, or one export page would empty the memo.
+    for (const [key, value] of memo) if (value.window !== windowed.window) memo.delete(key);
     if (memo.size > MAX_MEMO) memo.clear();
   }
+
+  const keep = (url: string, signed: string) => {
+    out.set(url, signed);
+    if (!fixedExpiresIn) memo.set(url, { window, url: signed });
+  };
+  const urlByObject = new Map<string, string>();
+  for (const [bucket, objects] of missing) for (const o of objects) urlByObject.set(`${bucket}/${o.path}`, o.url);
+
+  // The shared memo first: another instance may already have signed these.
+  if (!fixedExpiresIn) {
+    const known = await sharedSignatures("photo_signatures_read", window, [...missing].flatMap(([bucket, objects]) => objects.map((o) => ({ bucket, path: o.path }))));
+    for (const row of known ?? []) {
+      const url = urlByObject.get(`${row.bucket}/${row.path}`);
+      if (url) keep(url, row.signed_url);
+    }
+  }
+
+  const minted: { bucket: string; path: string; signed_url: string }[] = [];
   await Promise.all(
-    [...missing].map(async ([bucket, objects]) => {
+    [...missing].map(async ([bucket, all]) => {
+      const objects = all.filter((o) => !out.has(o.url));
+      if (!objects.length) return;
       try {
         const { data, error } = await signingClient()
           .storage.from(bucket)
           .createSignedUrls(objects.map((o) => o.path), expiresIn);
         if (error) throw error;
         const byPath = new Map((data ?? []).filter((d) => d.signedUrl && !d.error).map((d) => [d.path, d.signedUrl]));
+        const refused = objects.filter((o) => !byPath.has(o.path));
+        if (refused.length) reportError("[photos] storage would not sign some photos", { bucket, count: refused.length });
         for (const object of objects) {
           const signed = byPath.get(object.path);
-          if (!signed) continue;
-          out.set(object.url, signed);
-          if (!fixedExpiresIn) memo.set(object.url, { window, url: signed });
+          if (signed) minted.push({ bucket, path: object.path, signed_url: signed });
         }
       } catch (error) {
         reportError("[photos] signing failed", { bucket, count: objects.length, error });
       }
     })
   );
+  if (!minted.length) return out;
+  if (fixedExpiresIn) {
+    for (const m of minted) out.set(urlByObject.get(`${m.bucket}/${m.path}`)!, m.signed_url);
+    return out;
+  }
+  // Offer what this instance minted; where another instance won the race, its URL is the one shown.
+  const offered = await sharedSignatures("photo_signatures_offer", window, minted);
+  if (!offered) {
+    // Not stored in the shared memo: remembered here only until the shared
+    // memo is tried again (#196 review), so an outage doesn't mean signing
+    // afresh on every render, and once it's back this process adopts the
+    // shared link rather than keeping its own for the rest of the window.
+    const localUntil = Math.max(sharedRetryAt, Date.now() + 1);
+    for (const m of minted) {
+      const url = urlByObject.get(`${m.bucket}/${m.path}`)!;
+      out.set(url, m.signed_url);
+      memo.set(url, { window, url: m.signed_url, localUntil });
+    }
+    return out;
+  }
+  const winners = new Map(offered.map((row) => [`${row.bucket}/${row.path}`, row.signed_url]));
+  for (const m of minted) {
+    const key = `${m.bucket}/${m.path}`;
+    keep(urlByObject.get(key)!, winners.get(key) ?? m.signed_url);
+  }
   return out;
+}
+
+type SharedRow = { bucket: string; path: string; signed_url: string };
+/** A shared-memo call that takes longer than this is given up for this response. */
+export const SHARED_BUDGET_MS = 1_500;
+/** After a failure, a short pause before the next call (a missing function, an outage), not a long one. */
+const SHARED_RETRY_MS = 30_000;
+/** Failures are reported at most this often, with how many there were since the last report. */
+const SHARED_REPORT_MS = 10 * 60_000;
+let sharedRetryAt = 0;
+let sharedReportedAt = 0;
+let sharedFailures = 0;
+
+/**
+ * The shared memo's read or offer. Null when it can't be asked or failed
+ * (this response signs on its own, and remembers nothing); otherwise its rows.
+ */
+async function sharedSignatures(
+  fn: "photo_signatures_read" | "photo_signatures_offer",
+  window: number,
+  objects: readonly { bucket: string; path: string; signed_url?: string }[],
+): Promise<SharedRow[] | null> {
+  if (!objects.length) return [];
+  if (Date.now() < sharedRetryAt) return null;
+  try {
+    const args = fn === "photo_signatures_read" ? { p_window: window, p_objects: objects } : { p_window: window, p_signed: objects };
+    type Call = { abortSignal: (signal: AbortSignal) => PromiseLike<{ data: SharedRow[] | null; error: unknown }> };
+    const call = (signingClient() as unknown as { rpc: (f: string, a: unknown) => Call }).rpc(fn, args);
+    const { data, error } = await call.abortSignal(AbortSignal.timeout(SHARED_BUDGET_MS));
+    if (error) throw error;
+    return data ?? [];
+  } catch (error) {
+    sharedRetryAt = Date.now() + SHARED_RETRY_MS;
+    sharedFailures += 1;
+    if (Date.now() - sharedReportedAt >= SHARED_REPORT_MS) {
+      reportError("[photos] shared signing memo failed; signing per response", { fn, failures: sharedFailures, error });
+      sharedReportedAt = Date.now();
+      sharedFailures = 0;
+    }
+    return null;
+  }
 }
 
 /** One signed photo URL; anything that isn't a member photo comes back as it was. */
@@ -108,20 +209,40 @@ export async function signedPhotoUrl<T extends string | null | undefined>(url: T
   return ((await signedPhotoUrls([url])).get(url) ?? url) as T;
 }
 
-/** Every canonical photo URL inside a text (a JSON body) signed, in one batch per bucket. */
-export async function signPhotoUrlsInText(text: string): Promise<string> {
-  const urls = canonicalPhotoUrlsInText(text);
-  if (!urls.length) return text;
-  return replacePhotoUrlsInText(text, await signedPhotoUrls(urls));
+/**
+ * One signed photo URL for a member's own object: a URL outside `ownerId`'s
+ * folder comes back as it was, unsigned, which Storage refuses. For an action
+ * that signs what it was handed rather than what a guarded read returned.
+ */
+export async function signedOwnPhotoUrl<T extends string | null | undefined>(url: T, ownerId: string): Promise<T> {
+  if (!url || signedPhotoObject(url)?.path.split("/")[0] !== ownerId) return url;
+  return signedPhotoUrl(url);
 }
 
-/** Every canonical photo URL in a value (rows, nested objects) signed. */
-export async function signPhotosIn<T>(value: T): Promise<T> {
-  if (value == null) return value;
-  const text = JSON.stringify(value);
-  const signed = await signPhotoUrlsInText(text);
-  return signed === text ? value : (JSON.parse(signed) as T);
+/**
+ * The photo fields of a JSON answer signed, in one batch per bucket. Only
+ * whole values at the places the database guards, for this answer's table or
+ * RPC (src/lib/photo-urls.ts, PHOTO_POSITIONS): a photo URL written into
+ * prose, a profile link, a JSON column or any other member-written field
+ * stays canonical, which the storage layer refuses (#178 and #196 reviews).
+ * Text that isn't JSON, or an answer with no known context, is left as it is.
+ */
+export async function signPhotoUrlsInText(text: string, context: SigningContext | null): Promise<string> {
+  if (!context || !text.includes("/storage/v1/object/public/")) return text;
+  if (!(await photoSigningReady())) return text;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return text;
+  }
+  const urls = photoFieldUrls(parsed, context);
+  if (!urls.length) return text;
+  return JSON.stringify(replacePhotoFields(parsed, context, await signedPhotoUrls(urls)));
 }
+
+/** Thrown by an export page read while the signer may not sign; the export job is retried. */
+export const EXPORT_NOT_READY = "Photo signing is not ready, so this export page was not written; the job will be tried again";
 
 /** How long a photo link in a member's data export opens for: the export's own download life. */
 export const EXPORT_PHOTO_LINK_SECONDS = 7 * 24 * 60 * 60;
@@ -130,14 +251,109 @@ export const EXPORT_PHOTO_LINK_SECONDS = 7 * 24 * 60 * 60;
  * A member's own photos in their data export (N455): the stored canonical
  * URL no longer opens, so each becomes a link that opens for seven days. The
  * rows were selected for the requesting member only, by the export's own
- * ownership filters.
+ * ownership filters, from `context` (the section's table and projection).
+ * Only guarded photo places are linked, and only objects in the member's own
+ * folder: another member's photo URL the member wrote into a comment, or
+ * another member's photo on a row the export carries, is not (#178 review).
  */
-export async function signPhotosForExport<T>(value: T, nowMs = Date.now()): Promise<T> {
-  if (value == null) return value;
-  const text = JSON.stringify(value);
-  const urls = canonicalPhotoUrlsInText(text);
+export async function signPhotosForExport<T>(value: T, ownerId: string, context: SigningContext | null, nowMs = Date.now()): Promise<T> {
+  if (value == null || !context) return value;
+  // An export page is stored for good: one written while signing is off would
+  // carry links that never open, and the export would still finish as a
+  // success. The job fails here instead, and its next attempt reads the page again.
+  if (!(await photoSigningReady())) throw new Error(EXPORT_NOT_READY);
+  // The member's own objects only: their folder is the path's first segment.
+  const urls = photoFieldUrls(value, context).filter((url) => signedPhotoObject(url)?.path.split("/")[0] === ownerId);
   if (!urls.length) return value;
-  return JSON.parse(replacePhotoUrlsInText(text, await signedPhotoUrls(urls, nowMs, EXPORT_PHOTO_LINK_SECONDS))) as T;
+  return replacePhotoFields(value, context, await signedPhotoUrls(urls, nowMs, EXPORT_PHOTO_LINK_SECONDS));
+}
+
+/** A "the guards are there" answer is used without asking again for this long. */
+const READY_FRESH_MS = 5 * 60_000;
+/** A "they aren't" answer is asked again after this long. */
+const NOT_READY_FOR_MS = 30_000;
+/** After a check that could not be made, the next waits this long, doubling each time up to the last. */
+const READY_RETRY_MS = [2_000, 4_000, 8_000, 16_000, 30_000];
+/** PostgREST's and Postgres's "there is no such function": the migration is not applied, which is an answer. */
+const NO_SUCH_FUNCTION = new Set(["PGRST202", "42883"]);
+
+/**
+ * `answer` is the last thing the database said (null: it has never answered
+ * this instance). `askAfter`: no new question before then. `failures`: checks
+ * in a row that could not be made.
+ */
+let readiness: { answer: boolean | null; askAfter: number; failures: number } = { answer: null, askAfter: 0, failures: 0 };
+let readyAsk: Promise<void> | null = null;
+
+/** One question to the database, shared by every caller waiting on it. Never rejects. */
+function askReadiness(): Promise<void> {
+  readyAsk ??= (async () => {
+    let answer: boolean | null = null;
+    let failure: unknown;
+    try {
+      type Call = { abortSignal: (signal: AbortSignal) => PromiseLike<{ data: unknown; error: unknown }> };
+      const call = (signingClient() as unknown as { rpc: (f: string) => Call }).rpc("photo_signing_ready");
+      const { data, error } = await call.abortSignal(AbortSignal.timeout(SHARED_BUDGET_MS));
+      if (error && NO_SUCH_FUNCTION.has(String((error as { code?: unknown }).code))) answer = false;
+      else if (error) throw error;
+      else answer = data === true;
+    } catch (error) {
+      failure = error ?? new Error("the readiness check failed");
+    }
+    const now = Date.now();
+    if (answer === null) {
+      // No answer (a timeout, an outage): what the database last said stands.
+      // A slow check must not blank every photo on the instance (work review #146).
+      const failures = readiness.failures + 1;
+      readiness = { answer: readiness.answer, askAfter: now + READY_RETRY_MS[Math.min(failures, READY_RETRY_MS.length) - 1], failures };
+      reportBounded("ready-check-failed", "[photos] could not check the database's photo guards; the last answer stands", { lastAnswer: readiness.answer, failures, error: failure });
+      return;
+    }
+    readiness = { answer, askAfter: now + (answer ? READY_FRESH_MS : NOT_READY_FOR_MS), failures: 0 };
+    if (!answer) reportBounded("not-ready", "[photos] the database's photo guards are missing (20261110190000); signing nothing", {});
+  })().finally(() => { readyAsk = null; });
+  return readyAsk;
+}
+
+/**
+ * Whether the database guards every place the signer signs (N940,
+ * public.photo_signing_ready, 20261110190000). Until it says so, nothing is
+ * signed at the boundary or in an export: code deployed ahead of its
+ * migration fails safe (photos show the no-photo plate) rather than signing
+ * places nothing has checked.
+ *
+ * Only an answer from the database changes what this returns (N1062, work
+ * review #146). "Yes" is used for five minutes; after that it is still used,
+ * at once, while the database is asked again behind the response. "No" (or no
+ * such function) is asked again after thirty seconds. A check that could not
+ * be made, a timeout or an outage, leaves the last answer standing and is
+ * tried again after two seconds, doubling to thirty. An instance the database
+ * has never answered signs nothing.
+ * (deploy.yml's migration-status step also stops a deploy whose migrations
+ * are behind, but this does not depend on it.)
+ */
+export async function photoSigningReady(): Promise<boolean> {
+  const saidYes = () => readiness.answer === true;
+  if (Date.now() < readiness.askAfter) return saidYes();
+  if (saidYes()) {
+    void askReadiness();
+    return true;
+  }
+  await askReadiness();
+  return saidYes();
+}
+
+/** Each reason is reported at most once per ten minutes, with how many times it happened since. */
+const REPORT_EVERY_MS = 10 * 60_000;
+const reported = new Map<string, { at: number; since: number }>();
+function reportBounded(reason: string, message: string, detail: Record<string, unknown>) {
+  const seen = reported.get(reason);
+  if (seen && Date.now() - seen.at < REPORT_EVERY_MS) {
+    seen.since += 1;
+    return;
+  }
+  reportError(message, { reason, since: seen?.since ?? 0, ...detail });
+  reported.set(reason, { at: Date.now(), since: 0 });
 }
 
 function requestUrl(input: RequestInfo | URL): string {
@@ -156,8 +372,24 @@ export function photoFetch(base: typeof fetch, options: { sign: boolean }): type
     const response = await base(input, outbound);
     if (!options.sign || !response.ok || response.body == null || [204, 205, 304].includes(response.status)) return response;
     if (!(response.headers.get("content-type") ?? "").includes("json")) return response;
+    // The table or RPC this answers, in the public schema only (another
+    // schema's same-named table isn't the one the guards cover).
+    const headers0 = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+    const profile = headers0.get("accept-profile") ?? headers0.get("content-profile");
+    if (profile && profile !== "public") {
+      reportBounded("non-public-profile", "[photos] a read of another schema came back unsigned", { profile });
+      return response;
+    }
+    const found = signingContextFor(requestUrl(input));
+    if (!("context" in found)) {
+      // A read the signer can't place stays unsigned; that is safe, but a
+      // page may lose its photos, so it is said (once per ten minutes).
+      if (found.reason !== "not-rest") reportBounded(found.reason, "[photos] a read the signer can't place came back unsigned", { reason: found.reason });
+      return response;
+    }
+    const context = found.context;
     const text = await response.text();
-    const signed = await signPhotoUrlsInText(text);
+    const signed = await signPhotoUrlsInText(text, context);
     const headers = new Headers(response.headers);
     headers.delete("content-length");
     headers.delete("content-encoding");
