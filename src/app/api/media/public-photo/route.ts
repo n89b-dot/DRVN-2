@@ -6,6 +6,7 @@ import { allowAction } from "@/lib/rate-limit";
 import { SERVER_UPLOAD_MAX_BYTES, serverUploadMaxBytes } from "@/lib/upload-limits";
 import { ensureMediaStorageOrigin } from "@/lib/media-lifecycle";
 import { AGENT_CHAT_BUCKET, chatPhotoRef } from "@/lib/agent/chat-photo-ref";
+import { SIGNED_PHOTO_BUCKETS } from "@/lib/photo-urls";
 import { signedPhotoUrl } from "@/lib/supabase/photo-signing";
 
 const BUCKETS = new Set(["avatars", "car-images", "activity-images", "listing-images"]);
@@ -102,8 +103,13 @@ export async function POST(request: Request) {
     const staged = await admin.from("staged_uploads").insert({ owner_id: user.id, bucket, path, url });
     if (staged.error) throw new Error("Staging unavailable");
     // Paths are a fresh UUID per upload and never overwritten (upsert: false),
-    // so browsers and the CDN may keep the object for a year.
-    const result = await admin.storage.from(bucket).upload(path, normalized, { contentType: "image/webp", upsert: false, cacheControl: "31536000" });
+    // so a public avatar may be kept for a year. A member photo is private
+    // (N455) and read through a signed link that lives at most two hours; the
+    // image optimiser keeps its copy for the larger of its own TTL and this
+    // header, so a year here kept resized copies a year after the link died
+    // (#178 review). An hour matches the signing window.
+    const cacheControl = (SIGNED_PHOTO_BUCKETS as readonly string[]).includes(bucket) ? "3600" : "31536000";
+    const result = await admin.storage.from(bucket).upload(path, normalized, { contentType: "image/webp", upsert: false, cacheControl });
     if (result.error) throw new Error("Storage unavailable");
     // N455: car, listing and post photos are private objects. The ledger and
     // the database keep the canonical URL; the browser gets a signed one to

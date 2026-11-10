@@ -1,11 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import { useCallback, useRef, useState } from "react";
 
 import { cx } from "@/lib/format";
 
 import { MEDIA_SIZES } from "./primitives";
+import { PhotoImage } from "./photo-image";
 
 /**
  * BeforeAfter — the two-image comparison plate (`.ba`). A clip-path reveal
@@ -59,9 +59,9 @@ export function BeforeAfter({
       }}
     >
       {/* Resized through next/image rather than the full-size originals. */}
-      <Image src={afterUrl} alt={afterLabel} fill sizes={MEDIA_SIZES.feature} className="ba__img" draggable={false} />
+      <PhotoImage src={afterUrl} alt={afterLabel} fill sizes={MEDIA_SIZES.feature} className="ba__img" draggable={false} />
       <div className="ba__before" style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}>
-        <Image src={beforeUrl} alt={beforeLabel} fill sizes={MEDIA_SIZES.feature} className="ba__img" draggable={false} />
+        <PhotoImage src={beforeUrl} alt={beforeLabel} fill sizes={MEDIA_SIZES.feature} className="ba__img" draggable={false} />
       </div>
       <span className="ba__tag ba__tag--before" style={{ opacity: position < 12 ? 0 : 1 }}>
         {beforeLabel}

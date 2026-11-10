@@ -138,6 +138,12 @@ describe("--status over the session pooler (N951, report five #114)", () => {
     expect(unpinned.code).toBe(1);
     expect(unpinned.err.join("\n")).toMatch(/no pooler host/);
     expect(unpinned.configs).toEqual([]);
+    for (const extra of [["--record-only"], ["--dry-run"], ["--record-only", "--apply", "--confirm", "abc"]]) {
+      const refused = await run2(["--target", "fixture-dev", "--route", "pooler", ...extra, "supabase/migrations/x.sql"], pooled);
+      expect(refused.code, extra.join(" ")).toBe(1);
+      expect(refused.err.join("\n")).toMatch(/--route pooler is for --status only/);
+      expect(refused.configs).toEqual([]);
+    }
     const bogus = await run2(["--target", "fixture-dev", "--status", "--route", "sideways"], pooled);
     expect(bogus.code).toBe(1);
     expect(bogus.configs).toEqual([]);
