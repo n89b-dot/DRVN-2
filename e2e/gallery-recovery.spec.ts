@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { cleanupFixtureUser, fixtureAdmin } from "./fixtures";
 
-test("gallery order retries converge and a failed description save keeps the draft", async ({ page }) => {
+test("gallery order retries converge and a failed description save keeps the draft (N940)", async ({ page }) => {
   test.setTimeout(120_000);
   const admin = fixtureAdmin();
   const email = `e2e-gallery-${randomUUID()}@drvn.test`, password = `Gallery-${randomUUID()}!`;
@@ -35,7 +35,7 @@ test("gallery order retries converge and a failed description save keeps the dra
     await gallery.getByRole("button", { name: "Move photo 1 later" }).click();
     await expect.poll(async () => (await admin.from("car_images").select("id").eq("car_id", car.data.id).order("position")).data?.map(row => row.id)).toEqual([...ids].reverse());
     await page.reload();
-    await expect(gallery.locator(".thumb").first().getByRole("img")).toHaveAttribute("alt", "Original photo 1");
+    await expect(gallery.locator(".thumb").first().getByRole("img")).toHaveAccessibleName("Original photo 1");
     await gallery.getByRole("button", { name: "Edit description for photo 1" }).click();
     const description = gallery.getByRole("textbox", { name: "Photo description" });
     await description.fill("Retained description draft");
@@ -46,7 +46,7 @@ test("gallery order retries converge and a failed description save keeps the dra
     await gallery.getByRole("button", { name: /Save/ }).click();
     await expect(description).toHaveCount(0);
     await page.reload();
-    await expect(gallery.locator(".thumb").first().getByRole("img")).toHaveAttribute("alt", "Retained description draft");
+    await expect(gallery.locator(".thumb").first().getByRole("img")).toHaveAccessibleName("Retained description draft");
 
     // The object upload and the gallery attachment are separate boundaries.
     // Lose only the Server Action response after its database commit: Retry
