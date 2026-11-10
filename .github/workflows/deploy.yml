@@ -130,12 +130,45 @@ jobs:
           STATUS: ${{ job.status }}
           ADMIN_ALERT_WEBHOOK_URL: ${{ secrets.ADMIN_ALERT_WEBHOOK_URL }}
 
+  # Work review #139: a job that names an environment which does not exist
+  # makes GitHub create it, empty and unprotected, and run. So this job, which
+  # names no environment and runs main's own script, checks first that
+  # "production" exists, has required reviewers and restricts what may deploy
+  # to it. The production job cannot start until it passes.
+  production-guard:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.22.0
+      - name: The production environment is guarded
+        run: node scripts/check-branch-protection.mjs --environment production "$GITHUB_REPOSITORY"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Tell the alert channel
+        if: failure()
+        run: |
+          node scripts/deploy.mjs alert "DRVN production deploy of $TAG REFUSED before it started. The production environment is not guarded (see the run)."
+        env:
+          TAG: ${{ inputs.tag }}
+          ADMIN_ALERT_WEBHOOK_URL: ${{ secrets.ADMIN_ALERT_WEBHOOK_URL }}
+
   production:
     if: github.event_name == 'workflow_dispatch'
+    needs: production-guard
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     # The owner gives this environment required reviewers in GitHub, so a
     # production deploy waits for a person's approval as well as the tag.
+    # production-guard has just checked that it does.
     environment: production
     permissions:
       contents: read

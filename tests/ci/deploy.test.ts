@@ -94,9 +94,11 @@ describe("the deploy workflow (N634, N528)", () => {
   });
 
   it("N634: tells the alert channel on every outcome", () => {
-    for (const job of Object.values(deploy.jobs)) {
+    for (const [name, job] of Object.entries(deploy.jobs)) {
       const alert = job.steps.at(-1)!;
-      expect(alert.if).toBe("always()");
+      // The two deploy jobs report every outcome. The guard before production reports only a refusal:
+      // when it passes, the production job that follows reports the deploy itself.
+      expect(alert.if, name).toBe(name === "production-guard" ? "failure()" : "always()");
       expect(alert.run).toContain("scripts/deploy.mjs alert");
     }
   });
