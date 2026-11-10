@@ -9,7 +9,7 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * The money pass's orderEmails family (report five #116, OS-W41): sends what
- * the outbox holds (20261110140000), a small batch at a time, inside its own
+ * the outbox holds (20261111090000), a small batch at a time, inside its own
  * time budget. It runs after every money family has finished
  * (src/lib/money-worker.ts) and each provider call has its own timeout
  * (src/lib/email/resend.ts), so a provider that hangs or fails can delay only

@@ -1,4 +1,4 @@
--- 20261110140000 (report five #116, OS-W41): order emails through an outbox.
+-- 20261111090000 (report five #116, OS-W41): order emails through an outbox.
 --   Q  an order notice queues one row for its own recipient; a second insert
 --      of the same notice changes nothing
 --   W  never wider: a notice for A about an order A isn't party to, or with

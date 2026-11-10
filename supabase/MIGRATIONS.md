@@ -43,7 +43,7 @@ TLS. Details: "Recording without running" below.
 
 | File | Applied to |
 |---|---|
-| `20261110140000_order_email_outbox.sql` | not applied |
+| `20261111090000_order_email_outbox.sql` | not applied |
 
 `public.order_email_outbox`, filled by a trigger on `public.notifications` for the order kinds (the notice's own recipient, an exact `/orders/<uuid>` href, a party to the order), drained by the money pass's new last family `orderEmails` through `claim_order_emails` / `complete_order_email`. Also `skip_order_emails_email_off`, `raise_payout_setup_reminders` (one a day per seller on days 3, 7 and 12 of any unpaid sale, recorded in the new `public.payout_setup_reminders`, run by `payoutDeadlines`), a deletion-request trigger that skips the member's pending rows, and `private.scheduled_job_inventory()` restated from `20261108100000` with `orderEmails`. Apply with the app from the same PR: the app's family calls these functions, and an older app ignores the table (rows just wait, then are skipped as stale).
 

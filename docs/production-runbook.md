@@ -1080,7 +1080,7 @@ a provider that is set but misconfigured stays in it.
 dispatched, delivered, auto-confirmed, dispute opened and decided, refunded,
 DRVN support's updates, and the day 3/7/12 payout-setup reminders) queues one
 row in `public.order_email_outbox` in the same transaction
-(20261110140000). The row holds the recipient's user id and the order id
+(20261111090000). The row holds the recipient's user id and the order id
 only. The money pass drains it last (`orderEmails`, `src/lib/order-emails.ts`),
 10 at a time within 20 seconds, with a 10-second limit per send. Retries back
 off 10, 20, 40 and 80 minutes, then fail. Rows older than 24 hours are

@@ -1,5 +1,5 @@
 -- ============================================================================
--- 20261110140000 — order emails through an outbox (report five #116, OS-W41)
+-- 20261111090000 — order emails through an outbox (report five #116, OS-W41)
 --
 -- DRVN sent no email of its own: a seller wasn't told by email that a part
 -- sold, a buyer got no receipt, and the dispatch deadline and the day-14
@@ -70,7 +70,7 @@ revoke all on table public.order_email_outbox from public, anon, authenticated;
 grant all on table public.order_email_outbox to service_role;
 
 comment on table public.order_email_outbox is
-  'Order emails waiting to be sent (20261110140000, #116): user id and order id only; the address is read at send. Service role only.';
+  'Order emails waiting to be sent (20261111090000, #116): user id and order id only; the address is read at send. Service role only.';
 
 -- ---------------------------------------------------------------------------
 -- The notice is the trigger
@@ -303,7 +303,7 @@ alter table public.payout_setup_reminders enable row level security;
 revoke all on table public.payout_setup_reminders from public, anon, authenticated;
 grant all on table public.payout_setup_reminders to service_role;
 comment on table public.payout_setup_reminders is
-  'One payout-setup reminder per seller per day (20261110140000, #116). Service role only.';
+  'One payout-setup reminder per seller per day (20261111090000, #116). Service role only.';
 
 create or replace function public.raise_payout_setup_reminders()
 returns integer
@@ -402,9 +402,9 @@ begin
      or has_function_privilege('authenticated', 'public.claim_order_emails(integer)', 'execute')
      or has_function_privilege('anon', 'public.claim_order_emails(integer)', 'execute')
      or has_table_privilege('authenticated', 'public.payout_setup_reminders', 'select') then
-    raise exception '20261110140000: the order email outbox is reachable by a member';
+    raise exception '20261111090000: the order email outbox is reachable by a member';
   end if;
-  raise notice 'PASS: 20261110140000 self-checks';
+  raise notice 'PASS: 20261111090000 self-checks';
 end $$;
 
 notify pgrst, 'reload schema';
