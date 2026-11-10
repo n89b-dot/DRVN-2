@@ -388,7 +388,9 @@ If the confirmed factor is ever removed (a lost phone: the recovery steps in
 operator repeats steps 2–4 for the new factor. Members confirmed by the
 migration itself were those with exactly one verified authenticator on file
 when it ran (`mfa_confirmed_by` says so); anyone else is pending until
-confirmed. The console is at `/admin`; it 404s for everyone else.
+confirmed. The console is at `/admin`; it 404s for everyone else. Sign in
+first, then open `/admin`: since N715 a signed-out visit gets the ordinary
+"Not found" page straight from the proxy, with no sign-in redirect.
 
 ## 5b. Money reconciliation & recovery (run these when things go wrong)
 
@@ -426,6 +428,20 @@ Every money queue is durable and visible in **Admin → Payments**:
   where id = 'dispute-evidence';` must be `false`; fetching a stored evidence
   URL unauthenticated must 400/403. (0027 self-checks assert this at apply
   time.)
+
+## 5c0. Deleted photos and cached copies (N717)
+
+Removing a member photo deletes the storage object; nothing purges copies by
+hand. That is enough, because since N455 every member photo is a private
+object reached through a signed link that lives at most two hours. The image
+optimiser's copy is keyed by that link: new uploads carry an hour's
+Cache-Control, and the proxy refuses an expired or unsigned member-photo
+source before the optimiser can answer (#196). Supabase's Smart CDN drops
+its own cached copy when an object is deleted. A copyright takedown is
+refused at `/_next/image` straight away (451). So a deleted photo stays
+reachable for at most about two hours, and only to someone who already held
+its live link. Photos uploaded before 10 Nov 2026 carry a year's
+Cache-Control on their object, but the proxy's expiry check covers them too.
 
 ## 5c. Old photos that still carry metadata (one-off, N627)
 
@@ -670,6 +686,54 @@ closed in the restore record (the table below).
 - [ ] A dispute, a refund, and a payout have each been exercised once in live
       mode with a real card and a Connect test seller before public launch.
 
+## 7a. Rolling back a hosted deploy (#122)
+
+Roll back by deploying an earlier release through the Deploy workflow, never
+from the host's dashboard. A dashboard rollback or promote serves a build that
+skipped the release gate, the migration check and the version check, and the
+next workflow deploy silently replaces it.
+
+**Production.** Actions → Deploy → Run workflow, with the previous good
+release tag (`rc-YYYYMMDD[-n]`, `git tag -l 'rc-*' --sort=-creatordate`). The
+job checks that the tag is an annotated release tag on `main`, that its
+`release-gate` passed and that production has every migration that tag
+carries. An older tag carries fewer files, so this passes. The job then waits
+for the `production` environment's reviewer, deploys, waits until
+`/api/version` reports the tag's commit, and tells the alert channel.
+
+**The first release has nothing to roll back to.** Until a second `rc-` tag
+exists there is no earlier release to dispatch. If the first production
+deploy is bad, fix forward (a PR, a new `rc-` tag, a dispatch), or take the
+site down while you do. In the host's project settings, pause the production
+deployment, or point the domain at a maintenance page. Pausing serves nothing,
+so the scheduled jobs and Stripe's webhooks stop reaching the app too. Stripe
+retries webhooks for three days, and the jobs catch up on their next run.
+
+**How long it takes.** About 10–15 minutes from dispatch to the old release
+serving: a minute or two to approve the `production` environment's reviewer
+(longer if they aren't at hand), then the gate check and migration check
+(under a minute), the build on the runner (about 5–8 minutes), the deploy
+(1–2 minutes) and the version check (seconds once it's serving). Plan
+for the reviewer: a rollback needs them as much as a release does.
+
+**Staging.** Staging deploys every green `main`, so roll it back by merging a
+revert of the bad change. The revert passes the release gate, and the next
+push deploys it.
+
+**The schema does not roll back.** Migrations are applied before their PR
+merges and are forward-only, so for the length of a CI run the previous code
+already runs on the new schema, and after a rollback the older code keeps
+running on it. That is why every migration must be safe for the code before
+it (add columns and functions; drop or rename only in a later release, once
+nothing reads the old shape). If a migration itself is the problem, fix
+forward with a new migration through the runner. Restoring a backup (§6) is
+the last resort, because it loses every order, payment and message since the
+backup.
+
+**After any rollback:** confirm `/api/version` reports the commit you meant,
+check Admin → Settings → Background jobs and `/api/health/workers`, and
+write down in the release packet which tag was rolled back and why.
+
 ## 8. Protect `main` (blocked on GitHub plan — do this once available)
 
 The repository is private on the GitHub Free plan, where branch protection and
@@ -756,11 +820,38 @@ recorded and nothing is sent, and the route logs and returns `provider: null`.
 way. To run any of them by hand:
 `curl -X POST https://<domain>/api/jobs/<name> -H "Authorization: Bearer $CRON_SECRET"`.
 
-## 9b. Independent worker monitor (GitHub Actions)
+## 9b. Independent worker monitor
 
-`.github/workflows/worker-monitor.yml` runs `node scripts/check-worker-health.mjs`
-every 15 minutes (GitHub may delay or skip scheduled runs under load) and on
-manual dispatch. It calls `GET <origin>/api/health/workers` and fails the run when any worker
+**The primary monitor is an outside uptime service, not GitHub (#104).** The
+GitHub workflow below is scheduled every 15 minutes, but GitHub delays and
+drops scheduled runs on a quiet repository: between 2 and 9 November 2026 it
+ran 30 times instead of 672, three or four a day, with gaps of up to eight
+hours. At that cadence a stalled payout worker could go unnoticed for most of
+a day. The workflow stays as a second line.
+
+**Primary: an uptime service that pages a phone** (the same account as the
+`/api/version` uptime check, OS id N533; any service that sends a custom
+header and calls a phone, such as Better Stack or UptimeRobot's paid tier):
+
+| Setting | Value |
+|---|---|
+| Check | `GET https://<origin>/api/health/workers` with header `Authorization: Bearer <CRON_SECRET>` |
+| Interval | every 3 minutes (5 at most) |
+| Healthy | HTTP 200 (the body is `{"healthy": true, …}`). Any 503 is unhealthy and its body names the job or queue; 404 means the bearer is wrong |
+| Confirm | alert after 2 consecutive failures, so about 6–10 minutes; one recovery notice when it passes again |
+| Pages | the operator's phone (call or push), plus the alert channel |
+| Heartbeat | the service's own: if it cannot reach the site at all, that is a failure and it pages. No separate dead-man switch is needed for this mode |
+| Maintenance | pause the check in the service during planned work, and resume it afterwards |
+
+Put the secret only in the service's header field, never in the URL. Rotating
+`CRON_SECRET` means updating the service, `job_config` and
+`DRVN_MONITOR_SECRET` together. Record the check in
+`docs/release-evidence/infrastructure.md` once a deliberate stop (below) has
+paged and recovered.
+
+**Second line: GitHub Actions.** `.github/workflows/worker-monitor.yml` runs
+`node scripts/check-worker-health.mjs` on a `*/15` schedule, which in practice
+means every few hours (above), and on manual dispatch. It calls `GET <origin>/api/health/workers` and fails the run when any worker
 family is stale, missing or failing, or a queue is overdue. GitHub sends
 failure notifications for scheduled runs to the account that last changed the
 workflow's `cron` line — make sure that is the operator. It is skipped entirely until
@@ -1037,3 +1128,14 @@ One member's agent is at `/admin/agent/members/<id>`: their limits with
 versions, tasks, record and approvals. Their chat opens only for a report about
 them or a dispute they're party to, with the case id and a reason, and is
 audited (`agent.chat_opened`) before a line is shown.
+
+### 13f. Agent records written before 8 November 2026 (#107)
+
+Until PR #158 the card-number redactor could corrupt about 0.3% of UUIDs it
+passed over, leaving text like `70e95888-a[card number removed]b5e67f70ec`
+in agent rows. New rows are safe. Before promoting any database that held agent
+activity from before 8 November, run `supabase/audits/agent_mangled_ids.sql`
+(read-only). Shared dev counted 0 on 9 November 2026; staging and production
+were created after the fix, or hold no agent rows. A non-zero count needs a
+backfill decision, because the original id can't be recovered from the row
+alone.

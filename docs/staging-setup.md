@@ -327,6 +327,12 @@ alert outbox; a `disabled` row means the variable was not set when raised.
 
 ## 10. Independent monitor [OWNER sets repo settings]
 
+The **primary** monitor is an outside uptime service calling
+`/api/health/workers` every 3–5 minutes with the `CRON_SECRET` bearer and
+paging a phone (runbook §9b, #104). GitHub runs the scheduled workflow below
+only every few hours on a quiet repository, so it is the second line.
+
+
 GitHub → repository → Settings → Secrets and variables → Actions:
 
 - variable `DRVN_MONITOR_ENABLED` = `true`
