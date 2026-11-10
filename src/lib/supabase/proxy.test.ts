@@ -35,7 +35,15 @@ vi.mock("@supabase/ssr", () => ({
     }),
   }),
 }));
-vi.mock("@/lib/env", () => ({ hasSupabaseConfig: () => true, isProduction: false, publicKey: () => "anon-key" }));
+// Work review #143: whether the Supabase configuration is present, and whether this is a production build.
+const deployment = vi.hoisted(() => ({ configured: true, production: false }));
+vi.mock("@/lib/env", () => ({
+  hasSupabaseConfig: () => deployment.configured,
+  get isProduction() {
+    return deployment.production;
+  },
+  publicKey: () => "anon-key",
+}));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 
 import { AGE_CHECK_TIMEOUT_MS, AGE_COOKIE, CONSOLE_NOT_FOUND, ageCheckApplies, isConsolePath, updateSession } from "./proxy";
@@ -250,6 +258,39 @@ describe("earlier members are asked to confirm 18+ on their next visit (N662, re
 describe("the proxy turns signed-out visitors away from the console (N715)", () => {
   beforeEach(() => {
     scenario = { claims: null, refresh: false };
+    deployment.configured = true;
+    deployment.production = false;
+  });
+
+  const consoleAnswer = async (path: string) => {
+    const response = await updateSession(request(path));
+    const rewrite = response.headers.get("x-middleware-rewrite");
+    return { response, notFound: rewrite ? new URL(rewrite).pathname === CONSOLE_NOT_FOUND : false };
+  };
+
+  it("N715: answers not-found when the session check itself fails, keeping the cookies written before it (work review #143)", async () => {
+    scenario = { claims: null, refresh: true, throws: true };
+    for (const path of ["/admin", "/admin/payments", "/admin/users/x.png"]) {
+      const { response, notFound } = await consoleAnswer(path);
+      expect(notFound, path).toBe(true);
+      expect(response.headers.get("location"), path).toBeNull();
+      expectRotatedCookies(response);
+    }
+    // Everything else on that exit is as it was: a product route goes to sign-in, a public page loads.
+    expect(new URL((await updateSession(request("/orders"))).headers.get("location")!).pathname).toBe("/login");
+    expect((await consoleAnswer("/marketplace")).notFound).toBe(false);
+    expect((await consoleAnswer("/admin-verify")).notFound).toBe(false);
+  });
+
+  it("N715: answers not-found when Supabase is not configured, in production and in development (work review #143)", async () => {
+    deployment.configured = false;
+    for (const production of [true, false]) {
+      deployment.production = production;
+      for (const path of ["/admin", "/admin/payments"]) {
+        expect((await consoleAnswer(path)).notFound, `${path} production=${production}`).toBe(true);
+      }
+      expect((await consoleAnswer("/marketplace")).notFound).toBe(false);
+    }
   });
 
   it("rewrites signed-out /admin and its pages to the not-found page, keeping cookie removals", async () => {
