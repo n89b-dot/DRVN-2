@@ -43,7 +43,7 @@ TLS. Details: "Recording without running" below.
 
 | File | Applied to |
 |---|---|
-| `20261110210000_admin_open_operations.sql` | not applied |
+| `20261110210000_admin_open_operations.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
 
 Work review #155. Adds `public.admin_open_operations(p_limit)`, service role only: the newest admin operations whose "requested" audit row has no "completed" or "reconciled" row after it, each with the phases recorded since and the operation's newest audit id. The audit page's "open operations" list calls it once; the app used to walk the audit log for them, page by page, on every load. Also `admin_audit_log_requested_idx`, a partial index on the requested rows. Additive: it changes no table and no existing function. **Apply before the app from the same PR deploys:** without the function the audit page fails to load (it throws rather than show an empty list of open operations).
 
