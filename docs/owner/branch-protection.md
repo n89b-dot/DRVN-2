@@ -21,13 +21,16 @@ Script: `scripts/owner/branch-protection.sh`. Background: runbook §8
    where rulesets and branch protection are unavailable (GitHub answers
    `403 Upgrade to GitHub Pro or make this repository public`). Upgrade the
    account to GitHub Pro, or make the repository public. About 5 minutes.
-2. **Stripe test keys for CI.** Settings → Secrets and variables → Actions →
-   new repository secret `STRIPE_TEST_SECRET_KEY` = a Stripe **test-mode**
+2. **Stripe test keys for CI.** These are the keys of the Stripe sandbox kept
+   for CI alone (Stripe dashboard: account picker → Sandboxes; one sandbox per
+   deployment, `docs/staging-setup.md` §5 says why), so that check runs' test
+   payments reach no other deployment. Settings → Secrets and variables →
+   Actions → new repository secret `STRIPE_TEST_SECRET_KEY` = that sandbox's
    secret key (`sk_test_…`). Without it `stripe-integration` fails on purpose
    and `release-gate` can never pass, so every PR would be blocked. On the
    Variables tab of the same page, new repository variable
-   `STRIPE_TEST_PUBLISHABLE_KEY` = the **test-mode** publishable key
-   (`pk_test_…`) of the same Stripe account. It is not a secret (it ships in
+   `STRIPE_TEST_PUBLISHABLE_KEY` = the publishable key (`pk_test_…`) of the
+   same sandbox. It is not a secret (it ships in
    every page of the site). Without it `e2e-launch` fails on purpose, naming
    the variable.
 3. **GitHub CLI.** `gh auth login` as an account with admin rights on the
@@ -136,11 +139,12 @@ or merge `main` into it) and let its checks rerun before merging.
 ## Documents-only pull requests
 
 Since plan 2 item A0 (November 2026), a pull request whose every changed file
-is a document skips the two browser jobs, `e2e` and `e2e-launch`, and
-`release-gate` accepts those skips. It
-still runs and must pass `verify`, both secret scans, `sql-guard` and
-`stripe-integration`, so such a pull request is mergeable in about five
-minutes, not twenty to forty-five.
+is a document skips the two browser jobs, `e2e` and `e2e-launch`, and (since
+plan 2 finding F1) the Stripe test-mode job `stripe-integration`, and
+`release-gate` accepts those skips. A change to documents cannot affect
+Stripe, and each run of that job creates 49 test events on the CI sandbox. It
+still runs and must pass `verify`, both secret scans and `sql-guard`, so such
+a pull request is mergeable in about five minutes, not twenty to forty-five.
 
 - **What counts as a document:** any `.md` file, and files under `docs/` that
   are text, data or images (`md`, `txt`, `log`, `json`, `jsonl`, `csv`, `html`,

@@ -110,14 +110,14 @@ export function PayoutsSection({
           </div>
         )}
         <div className="sheet__row items-baseline">
-          <span>{ledger.truncated ? `Net, latest ${LEDGER_FETCH_CAP} sales` : "Lifetime net"}</span>
+          <span>{ledger.truncated ? `Net, every unpaid sale and the latest ${LEDGER_FETCH_CAP} paid` : "Lifetime net"}</span>
           <b>{compactMoney(lifetimeCents)}</b>
         </div>
       </div>
       {ledger.truncated && (
         <p className="field__hint mt-2 max-w-[62ch]">
-          These totals cover your latest {LEDGER_FETCH_CAP} sales only. Older sales keep their
-          breakdown on each order.
+          Held, clearing and available cover every sale not yet paid. Paid out covers your latest{" "}
+          {LEDGER_FETCH_CAP} paid sales; older ones keep their breakdown on each order.
         </p>
       )}
 

@@ -203,7 +203,7 @@ describe("the workflow wires the scope to the browser suite only (plan 2 A0)", (
     expect(changes.steps[0].uses).toMatch(/^actions\/checkout@[0-9a-f]{40}$/);
   });
 
-  it("only the browser lanes are conditional on it, the launch lane among them (N1078), and the Stripe lane no longer waits on e2e", () => {
+  it("the browser lanes and the Stripe lane are conditional on it, the launch lane among them (N1078), and the Stripe lane does not wait on e2e", () => {
     // The suite's four parts (plan 2 item A0b) and the job that judges them.
     expect(ci.jobs["e2e-parts"].needs).toEqual(["changes"]);
     expect(ci.jobs["e2e-parts"].if).toBe("needs.changes.outputs.docs_only != 'true'");
@@ -212,8 +212,11 @@ describe("the workflow wires the scope to the browser suite only (plan 2 A0)", (
     // The launch-configuration lane (plan 2 item A4).
     expect(ci.jobs["e2e-launch"].needs).toEqual(["changes"]);
     expect(ci.jobs["e2e-launch"].if).toBe("needs.changes.outputs.docs_only != 'true'");
-    expect(ci.jobs["stripe-integration"].needs).toBeUndefined();
-    for (const name of ["verify", "secrets", "secrets-full", "sql-guard", "stripe-integration"]) {
+    // The Stripe test-mode lane (plan 2 finding F1): a documents-only change cannot affect Stripe, and each
+    // run of the lane sends 49 test events to everything that listens on the account.
+    expect(ci.jobs["stripe-integration"].needs).toEqual(["changes"]);
+    expect(ci.jobs["stripe-integration"].if).toBe("needs.changes.outputs.docs_only != 'true'");
+    for (const name of ["verify", "secrets", "secrets-full", "sql-guard"]) {
       expect(ci.jobs[name].if, `${name} runs on every change`).toBeUndefined();
     }
   });
@@ -235,9 +238,10 @@ describe.skipIf(!hasJq)("release-gate with a change scope (plan 2 A0)", () => {
     LAUNCH: "success", LAUNCH_RAN: "true", LAUNCH_PASSED: "true",
     STRIPE: "success", STRIPE_RAN: "true",
   };
-  // What GitHub hands the gate when the browser lanes were skipped: no result but 'skipped', no outputs.
-  const skipped = { E2E_PARTS: "skipped", E2E: "skipped", E2E_RAN: "", E2E_FIRST_ATTEMPT: "", LAUNCH: "skipped", LAUNCH_RAN: "", LAUNCH_PASSED: "" };
+  // What GitHub hands the gate when the browser lanes and the Stripe lane were skipped: no result but 'skipped', no outputs.
+  const skipped = { E2E_PARTS: "skipped", E2E: "skipped", E2E_RAN: "", E2E_FIRST_ATTEMPT: "", LAUNCH: "skipped", LAUNCH_RAN: "", LAUNCH_PASSED: "", STRIPE: "skipped", STRIPE_RAN: "" };
   const launchSkipped = { LAUNCH: "skipped", LAUNCH_RAN: "", LAUNCH_PASSED: "" };
+  const stripeSkipped = { STRIPE: "skipped", STRIPE_RAN: "" };
   const docsOnly = { ...green, DOCS_ONLY: "true", ...skipped };
 
   let n = 0;
@@ -260,6 +264,20 @@ describe.skipIf(!hasJq)("release-gate with a change scope (plan 2 A0)", () => {
     expect(result).toMatchObject({ status: 0, scope: "documents-only" });
     expect(result.out).toContain("ok: e2e (documents-only pull request: skipped by design)");
     expect(result.out).toContain("ok: e2e-launch (documents-only pull request: skipped by design)");
+    expect(result.out).toContain("ok: stripe-integration (documents-only pull request: skipped by design)");
+  });
+
+  it("the Stripe lane is skipped only on a documents-only pull request, and required everywhere else (plan 2 F1)", () => {
+    // Skipped by design in the one scope…
+    expect(gate(docsOnly)).toMatchObject({ status: 0, scope: "documents-only" });
+    // …and nowhere else: a code change, a push to main, a manual run.
+    expect(gate({ ...green, ...stripeSkipped })).toMatchObject({ status: 1, scope: "full" });
+    expect(gate({ ...green, EVENT: "push", ...stripeSkipped })).toMatchObject({ status: 1, scope: "full" });
+    expect(gate({ ...green, EVENT: "workflow_dispatch", ...stripeSkipped })).toMatchObject({ status: 1, scope: "full" });
+    // On a documents-only pull request it must have been skipped, not run: a lane that ran there was not held back.
+    expect(gate({ ...docsOnly, STRIPE: "success", STRIPE_RAN: "true" }).status).toBe(1);
+    expect(gate({ ...docsOnly, STRIPE: "failure", STRIPE_RAN: "false" }).status).toBe(1);
+    expect(gate({ ...docsOnly, STRIPE: "cancelled" }).status).toBe(1);
   });
 
   it.each([
@@ -289,7 +307,12 @@ describe.skipIf(!hasJq)("release-gate with a change scope (plan 2 A0)", () => {
     ["a documents-only pull request whose e2e was cancelled", { ...docsOnly, E2E: "cancelled" }],
     ["a documents-only pull request whose verify failed", { ...docsOnly, VERIFY: "failure" }],
     ["a documents-only pull request whose SQL guards failed", { ...docsOnly, SQL: "failure" }],
-    ["a documents-only pull request whose Stripe lane did not run", { ...docsOnly, STRIPE: "failure", STRIPE_RAN: "false" }],
+    ["a documents-only pull request whose Stripe lane failed instead of being skipped", { ...docsOnly, STRIPE: "failure", STRIPE_RAN: "false" }],
+    ["a code change whose Stripe lane was skipped", { ...green, ...stripeSkipped }],
+    ["a code change whose Stripe lane failed", { ...green, STRIPE: "failure", STRIPE_RAN: "true" }],
+    ["a code change whose Stripe lane was cancelled", { ...green, STRIPE: "cancelled", STRIPE_RAN: "" }],
+    ["a Stripe lane that reports success without having run", { ...green, STRIPE_RAN: "" }],
+    ["a Stripe lane that could not run for want of its key", { ...green, STRIPE: "failure", STRIPE_RAN: "false" }],
     ["a documents-only pull request whose secret scan failed", { ...docsOnly, SECRETS_FULL: "failure" }],
     ["an answer that is not exactly 'true'", { ...docsOnly, DOCS_ONLY: "True" }],
   ])("refuses %s", (_, env) => {
