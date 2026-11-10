@@ -6,7 +6,12 @@
 # check the generated types, without touching shared dev or staging.
 #
 #   bash scripts/disposable-db.sh start [port]   # default 55440; rebuilds if it exists
+#   bash scripts/disposable-db.sh start <port> <file.sql>…   # the image, the shim, then only these files
 #   bash scripts/disposable-db.sh stop  [port]
+#
+# The second form is how a baseline is proven (plan 2 item A6): one database
+# from every migration file, another from the baseline alone, then
+# scripts/baseline/compare.sh.
 #
 # It listens on 127.0.0.1 only and holds nothing worth keeping. Needs Docker
 # (on the Mac: `colima start` first) and psql.
@@ -38,7 +43,9 @@ case "$action" in
     until psql -h 127.0.0.1 -p "$port" -U supabase_admin -d postgres -X -tAc "select 1" >/dev/null 2>&1; do sleep 1; done
     psql -h 127.0.0.1 -p "$port" -U supabase_admin -d postgres -X -q -v ON_ERROR_STOP=1 -f "$root/supabase/tests/ci_shim.sql" 2>&1 | grep -v 'already exists, skipping' || true
     count=0
-    for file in "$root"/supabase/migrations/*.sql; do
+    if [ $# -gt 2 ]; then files=("${@:3}"); what="${#files[@]} given file(s)"; else files=("$root"/supabase/migrations/*.sql); what="migrations"; fi
+    for file in "${files[@]}"; do
+      [ -f "$file" ] || { echo "No such file: $file" >&2; exit 1; }
       if ! output=$(psql -h 127.0.0.1 -p "$port" -U supabase_admin -d postgres -X -q -v ON_ERROR_STOP=1 -f "$file" 2>&1); then
         echo "$output" >&2
         echo "Failed applying $file" >&2
@@ -46,7 +53,7 @@ case "$action" in
       fi
       count=$((count + 1))
     done
-    echo "Built $name on 127.0.0.1:$port from $count migrations."
+    echo "Built $name on 127.0.0.1:$port from $count $what."
     echo "  schema:  DRVN_SCHEMA_DATABASE_URL=postgresql://supabase_admin:postgres@127.0.0.1:$port/postgres npm run db:schema"
     echo "  guards:  PGHOST=127.0.0.1 PGPORT=$port PGPASSWORD=postgres bash scripts/test-sql-guards.sh   (after the schema: guards leave rows behind)"
     ;;

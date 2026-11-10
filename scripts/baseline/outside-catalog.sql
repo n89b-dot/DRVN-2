@@ -1,4 +1,6 @@
--- Everything outside public/private, as (kind, identity, detail) rows: used to diff an empty image+shim database against a full build.
+-- Everything outside public/private, as (kind, identity, detail) rows: used to diff an empty image+shim database against a full build,
+-- and a build from the migration files against a build from the baseline (scripts/baseline/compare.sh, comparison 2).
+-- Storage buckets, scheduled jobs and role comments are here so that the snapshot is not the only thing that looks at them.
 select 'schema', n.nspname, coalesce(n.nspacl::text,'') from pg_namespace n where n.nspname !~ '^pg_(toast|temp)' and n.nspname not in ('public','private')
 union all select 'extension', e.extname, e.extnamespace::regnamespace::text from pg_extension e
 union all select 'role', r.rolname, concat_ws(',', r.rolsuper, r.rolcanlogin, r.rolinherit, r.rolbypassrls, r.rolcreaterole, r.rolconfig::text) from pg_roles r where r.rolname !~ '^pg_'
@@ -18,5 +20,8 @@ union all select 'publication', p.pubname, concat_ws(',', p.puballtables, p.pubi
 union all select 'publication table', p.pubname || ' ' || pr.prrelid::regclass::text, coalesce(pr.prattrs::text,'') from pg_publication_rel pr join pg_publication p on p.oid=pr.prpubid
 union all select 'database', d.datname, concat_ws(' | ', coalesce(d.datacl::text,''), pg_encoding_to_char(d.encoding), d.datcollate) from pg_database d where d.datname = current_database()
 union all select 'cast/lang/fdw', 'languages', string_agg(lanname, ',' order by lanname) from pg_language
+union all select 'role comment', r.rolname, shobj_description(r.oid, 'pg_authid') from pg_roles r where shobj_description(r.oid, 'pg_authid') is not null and r.rolname !~ '^pg_'
+union all select 'storage bucket', x.id, x.detail from (select (xpath('/row/id/text()', r))[1]::text as id, (xpath('/row/detail/text()', r))[1]::text as detail from unnest(case when to_regclass('storage.buckets') is null then array[]::xml[] else xpath('/table/row', query_to_xml('select id, concat_ws('' | '', name, public, file_size_limit, allowed_mime_types::text) as detail from storage.buckets', false, false, '')) end) r) x
+union all select 'scheduled job', x.name, x.detail from (select (xpath('/row/jobname/text()', r))[1]::text as name, (xpath('/row/detail/text()', r))[1]::text as detail from unnest(case when to_regclass('cron.job') is null then array[]::xml[] else xpath('/table/row', query_to_xml('select jobname, concat_ws('' | '', schedule, command, active) as detail from cron.job', false, false, '')) end) r) x
 union all select 'comment on platform object', d.classoid::regclass::text || ' ' || d.objoid::text, 'x' from pg_description d where false
 order by 1, 2, 3;
