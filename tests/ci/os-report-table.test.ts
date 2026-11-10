@@ -22,13 +22,21 @@ const ITEM = "(?:N\\d+|R\\d+(?:-[A-Za-z0-9]+)*|R-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)
 const OS_ID = new RegExp(`^(?:new|${ITEM})$`);
 const FINDING = /^#\d+$/;
 const STATE = new RegExp(`^(?:fixed|open|by design|accepted|after launch|(?:same as|not the same as|waiting on) ${ITEM})$`);
-const PULL_REQUESTS = /^#\d+(?:, #\d+)*$/;
+// Separated by commas, with or without a space after each: the OS's own rule, no stricter.
+const PULL_REQUESTS = /^#\d+(?:, ?#\d+)*$/;
 const FOR = new Set(["engineer", "you", "counsel", "decide"]);
 
-/** Whether the OS reads a table from this path: a docs/ file named as a report or review, not a plan. */
+/**
+ * The Intelligence OS's own pattern for a file it reads as a report, copied
+ * from the OS so the two can be compared: a docs/ file, not under
+ * docs/plans/, whose name contains readiness, review, audit, report or
+ * findings.
+ */
+export const OS_REPORT_FILE = /^docs\/(?!plans\/)(?:.*\/)?[^/]*(readiness|review|audit|report|findings)[^/]*\.md$/i;
+
+/** Whether the OS reads a table from this path. */
 export function isReportFile(file: string): boolean {
-  const relative = file.split(path.sep).join("/");
-  return relative.startsWith("docs/") && !relative.startsWith("docs/plans/") && /report|review/i.test(path.basename(relative)) && relative.endsWith(".md");
+  return OS_REPORT_FILE.test(file.split(path.sep).join("/"));
 }
 
 /** A table row's cells, trimmed; `\|` inside a cell is a literal bar. */
@@ -47,7 +55,7 @@ export function osTableProblems(markdown: string, file = "the file"): string[] {
   const headings = lines.flatMap((line, index) => (line.trim() === HEADING ? [index] : []));
   if (!headings.length) return [];
   const problems: string[] = [];
-  if (!isReportFile(file)) problems.push(`${file}: the OS reads this table only from a docs/ file whose name contains "report" or "review", outside docs/plans/`);
+  if (!isReportFile(file)) problems.push(`${file}: the OS reads this table only from a docs/ file whose name contains readiness, review, audit, report or findings, outside docs/plans/`);
   if (headings.length > 1) problems.push(`${file}: "${HEADING}" appears ${headings.length} times; a file carries at most one such table`);
 
   // The table is the first run of lines starting with "|" after the heading, before the next heading.
@@ -79,7 +87,7 @@ export function osTableProblems(markdown: string, file = "the file"): string[] {
     if (!STATE.test(state)) {
       problems.push(`${row}: State "${state}" is not one of fixed, open, same as <id>, not the same as <id>, by design, accepted, waiting on <id>, after launch (an <id> is one N or R id)`);
     }
-    if (pullRequests && !PULL_REQUESTS.test(pullRequests)) problems.push(`${row}: Pull request is blank, "#N", or several separated by ", " (got "${pullRequests}")`);
+    if (pullRequests && !PULL_REQUESTS.test(pullRequests)) problems.push(`${row}: Pull request is blank, "#N", or several separated by commas (got "${pullRequests}")`);
     if (forWhom ? !FOR.has(forWhom) : isNew) problems.push(`${row}: For is one of engineer, you, counsel, decide, and is required when OS id is "new" (got "${forWhom}")`);
     if (isNew && !note) problems.push(`${row}: Note is the one-line title of a "new" item and cannot be blank`);
     if (FINDING.test(finding)) {
@@ -154,8 +162,12 @@ describe("the table the Intelligence OS reads from a report", () => {
   });
 
   it("refuses a Pull request cell that is not #N or several separated by commas", () => {
-    for (const cell of ["200", "PR #200", "#200 #201", "#200,#201", "#200 and #201", "n89b-dot/DRVN-2#200"]) {
+    for (const cell of ["200", "PR #200", "#200 #201", "#200;#201", "#200 and #201", "#200,", "#200,  #201", "n89b-dot/DRVN-2#200"]) {
       expect(withRow(`| new | #124 | fixed | ${cell} | engineer | Title |`).some((p) => p.includes("Pull request is")), cell).toBe(true);
+    }
+    // A comma with or without a space after it: what the OS accepts, this accepts.
+    for (const cell of ["#200", "#200, #201", "#200,#201", "#188, #190,#195"]) {
+      expect(withRow(`| new | #124 | fixed | ${cell} | engineer | Title |`), cell).toEqual([]);
     }
   });
 
@@ -178,10 +190,13 @@ describe("the table the Intelligence OS reads from a report", () => {
   it("refuses two tables in one file, a heading with no table, and a table in a file the OS does not read", () => {
     expect(osTableProblems(`${good(ROWS)}\n\n${HEADING}\n`, FILE).some((p) => p.includes("appears 2 times"))).toBe(true);
     expect(osTableProblems(`# A review\n\n${HEADING}\n\nNo table here.\n\n## Method\n`, FILE)).toEqual([`${FILE}: no table follows "${HEADING}"`]);
-    for (const file of ["docs/plans/2026-11-a-review.md", "docs/production-runbook.md", "README-review.md"]) {
+    for (const file of ["docs/plans/2026-11-a-review.md", "docs/plans/sub/readiness.md", "docs/production-runbook.md", "README-review.md", "docs/review-evidence/notes.md", "docs/a-report.txt"]) {
       expect(osTableProblems(good(ROWS), file).some((p) => p.includes("reads this table only from")), file).toBe(true);
     }
-    expect(isReportFile("docs/work-review-2026-11-10.md")).toBe(true);
-    expect(isReportFile("docs/review-evidence/2026-11-08-codex-post-merge-review.md")).toBe(true);
+    // The OS's five words, in the file's own name, at any depth outside docs/plans/.
+    for (const file of ["docs/work-review-2026-11-10.md", "docs/production-readiness-2026-11-09.md", "docs/Section-Audit-Oct.md", "docs/site/a-report.md", "docs/review-evidence/2026-11-08-codex-post-merge-review.md", "docs/security-findings.md"]) {
+      expect(isReportFile(file), file).toBe(true);
+      expect(osTableProblems(good(ROWS), file), file).toEqual([]);
+    }
   });
 });
