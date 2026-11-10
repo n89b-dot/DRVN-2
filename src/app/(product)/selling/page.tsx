@@ -15,6 +15,7 @@ import { formatPrice } from "@/lib/payments/fee";
 import { getSellerLedger } from "@/lib/payments/ledger";
 import { getPayoutSetupState } from "@/lib/payments/connect";
 import { PAYOUT_SETUP_DEADLINE_DAYS } from "@/lib/payments/payout-readiness";
+import { liveViewTotal } from "@/lib/seller-page-reads";
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { reportError } from "@/lib/monitoring";
@@ -36,7 +37,7 @@ export default async function SellingPage() {
   const user = await getViewer();
   if (!user) redirect("/login");
 
-  const [offersCount, tallyRes, questionsRes, toShipRes, ledgerRead, payoutSetup, soonestRes, viewRes, recentRes] = await Promise.all([
+  const [offersCount, tallyRes, questionsRes, toShipRes, ledgerRead, payoutSetup, soonestRes, viewTotal, recentRes] = await Promise.all([
     loadOffersNeedingAttention(supabase, user.id),
     supabase.rpc("seller_register_tally", { p_seller: user.id }),
     supabase.rpc("seller_open_questions", { p_seller: user.id }),
@@ -58,7 +59,8 @@ export default async function SellingPage() {
       .order("expires_at", { ascending: true })
       .limit(1)
       .maybeSingle(),
-    supabase.from("listings").select("view_count").eq("seller_id", user.id).eq("status", "active"),
+    // Every live listing, not the first 1,000 (N718).
+    liveViewTotal(supabase, user.id),
     // The parts themselves, so the hub isn't four numbers about stock the
     // seller never sees: the most recent working listings, cover first.
     supabase
@@ -74,7 +76,8 @@ export default async function SellingPage() {
   // the reason to act on it.
   const soonestOffer = offersCount > 0 ? soonestRes.data : null;
   // Eyes on your parts: how many times the parts you have live were opened.
-  const views = (viewRes.data ?? []).reduce((sum, l) => sum + (l.view_count ?? 0), 0);
+  if (viewTotal === null) reportError("[selling] live view total failed to load", {});
+  const views = viewTotal ?? 0;
   if (tallyRes.error) reportError("[selling] seller_register_tally failed", tallyRes.error);
   const tally = Array.isArray(tallyRes.data) ? tallyRes.data[0] : tallyRes.data;
   const openQuestions = questionsRes.data ?? 0;

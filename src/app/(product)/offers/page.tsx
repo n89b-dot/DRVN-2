@@ -14,6 +14,7 @@ import {
 } from "@/components/ui";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { reportError } from "@/lib/monitoring";
+import { offersWithUnread } from "@/lib/seller-page-reads";
 
 import { OfferListRow, type OfferListItem } from "./offer-list-row";
 
@@ -180,7 +181,7 @@ export default async function OffersPage({
 
   // Everything left depends only on the rows above, so it's one round:
   // covers, counterparty names, unread flags.
-  const [{ data: images }, { data: people }, { data: unreadRows }] =
+  const [{ data: images }, { data: people }, unread] =
     await Promise.all([
       listingIds.length
         ? supabase
@@ -195,14 +196,8 @@ export default async function OffersPage({
             .select("id, display_name, username")
             .in("id", counterpartyIds)
         : Promise.resolve({ data: [] }),
-      offerIds.length
-        ? supabase
-            .from("messages")
-            .select("offer_id")
-            .in("offer_id", offerIds)
-            .eq("recipient_id", user.id)
-            .is("read_at", null)
-        : Promise.resolve({ data: [] }),
+      // Every unread message on these offers, not the first 1,000 (N718).
+      offersWithUnread(supabase, offerIds, user.id),
     ]);
 
   const coverByListing = new Map<string, string>();
@@ -210,9 +205,8 @@ export default async function OffersPage({
     if (!coverByListing.has(image.listing_id))
       coverByListing.set(image.listing_id, image.url);
   }
-  const unreadOffers = new Set(
-    (unreadRows ?? []).map((m) => m.offer_id).filter(Boolean),
-  );
+  if (unread === null) reportError("[offers] unread flags failed to load", {});
+  const unreadOffers = unread ?? new Set<string>();
 
   const nameFor = (pid: string | null) => {
     if (!pid) return "DRVN member";
