@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { conditionLabel, formatPrice } from "@/lib/marketplace/taxonomy";
+import { ogImageSource } from "@/lib/media-url";
 import { vehicleLabel } from "@/lib/vehicles/label";
 
 /**
@@ -91,4 +92,33 @@ export function listingShareDescription(listing: ShareListing, sourceCar: ShareS
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+/**
+ * What a listing's share card shows (work review #132, N1048). The card is
+ * an image DRVN generates at /listings/<id>/opengraph-image, so the link a
+ * chat or a search engine keeps is ours and does not run out. The listing's
+ * own photo is a signed link that stops working within two hours; it used to
+ * be the share image itself, and a pasted listing lost its picture when the
+ * preview was fetched again.
+ *
+ * The photo is drawn only for a listing a visitor can open (on sale or sold),
+ * and only from a signed link to our own storage (ogImageSource): the card
+ * renderer fetches it from our server.
+ */
+export type ListingShareCard = { title: string; price: string; sold: boolean; photo: string | null };
+
+export function listingShareCard(
+  listing: { title: string | null; price_cents: number; status: string } | null,
+  firstPhotoUrl: string | null | undefined,
+): ListingShareCard {
+  if (!listing) return { title: "A part on DRVN", price: "", sold: false, photo: null };
+  const open = listing.status === "active" || listing.status === "sold";
+  const title = (listing.title ?? "").replace(/\s+/g, " ").trim();
+  return {
+    title: title ? (title.length > 90 ? `${title.slice(0, 89)}…` : title) : "A part on DRVN",
+    price: open ? formatPrice(listing.price_cents) : "",
+    sold: listing.status === "sold",
+    photo: open ? ogImageSource(firstPhotoUrl) : null,
+  };
 }
