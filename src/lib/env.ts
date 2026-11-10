@@ -151,8 +151,8 @@ export function clientAddressSource(env: EnvLike = process.env): ClientAddressSo
  * loopback, or when it holds a live Stripe key. Any of those with the
  * variable set, to any value, fails boot. Returns the reason, or null.
  */
-export function stubOverrideProblem(env: EnvLike = process.env): string | null {
-  if (env.PAYMENTS_ALLOW_STUB_IN_PRODUCTION === undefined) return null;
+/** Why this looks like a hosted deployment (empty: it doesn't). */
+export function hostedReasons(env: EnvLike = process.env): string[] {
   const reasons: string[] = [];
   if (env.VERCEL === "1") reasons.push(`a Vercel deployment${env.VERCEL_ENV ? ` (${env.VERCEL_ENV})` : ""}`);
   try {
@@ -163,6 +163,12 @@ export function stubOverrideProblem(env: EnvLike = process.env): string | null {
     // No canonical URL is not, by itself, a hosted deployment.
   }
   if (/^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY ?? "")) reasons.push("a live Stripe key");
+  return reasons;
+}
+
+export function stubOverrideProblem(env: EnvLike = process.env): string | null {
+  if (env.PAYMENTS_ALLOW_STUB_IN_PRODUCTION === undefined) return null;
+  const reasons = hostedReasons(env);
   if (!reasons.length) return null;
   return `PAYMENTS_ALLOW_STUB_IN_PRODUCTION is set on ${reasons.join(", ")}. It is for CI and local rehearsals only and must be absent from every hosted environment (N540): remove the variable from the host's environment.`;
 }
@@ -211,6 +217,17 @@ export function validatePaymentsEnv(env: EnvLike = process.env): {
   const production = env.NODE_ENV === "production";
   const warnings: string[] = [];
 
+  // N962: every hosted production boot that passes the payment rules (a
+  // hosted deployment can't run the stub, N540) needs the database keys.
+  // They are otherwise read at first use, so a missing secret key surfaced
+  // as an error on the first page that needed it.
+  if (env.NODE_ENV === "production" && hostedReasons(env).length) {
+    const missingKeys = [URL_KEYS, PUBLIC_KEYS, SECRET_KEYS].filter((names) => !names.some((name) => env[name])).map((names) => names.join(" or "));
+    if (missingKeys.length) {
+      throw new PaymentsConfigError(`A hosted production deployment is missing its database configuration: ${missingKeys.join(", ")}.`);
+    }
+  }
+
   if (mode === "stripe" && production) {
     const missing: string[] = [];
     if (!env.STRIPE_WEBHOOK_SECRET) missing.push("STRIPE_WEBHOOK_SECRET");
@@ -228,6 +245,8 @@ export function validatePaymentsEnv(env: EnvLike = process.env): {
     const invalid: string[] = [];
     if (!env.CRON_SECRET || env.CRON_SECRET.length < 32) invalid.push("CRON_SECRET (at least 32 characters)");
     if (!env.GUEST_RECEIPT_SECRET || env.GUEST_RECEIPT_SECRET.length < 32) invalid.push("GUEST_RECEIPT_SECRET (at least 32 characters)");
+    // Two jobs, two secrets: one leaked value must not open both (#115 review).
+    if (env.CRON_SECRET && env.CRON_SECRET === env.GUEST_RECEIPT_SECRET) invalid.push("GUEST_RECEIPT_SECRET (must differ from CRON_SECRET)");
     if (env.ACCOUNT_EMAIL_DIGEST_KEY && env.ACCOUNT_EMAIL_DIGEST_KEY.length < 32) invalid.push("ACCOUNT_EMAIL_DIGEST_KEY (at least 32 characters when set)");
     for (const name of ["NEXT_PUBLIC_SITE_URL", "ADMIN_ALERT_WEBHOOK_URL", "SENTRY_DSN"]) {
       try {
