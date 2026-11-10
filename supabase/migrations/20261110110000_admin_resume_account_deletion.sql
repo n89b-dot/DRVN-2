@@ -22,6 +22,13 @@
 --
 -- Service role only; the console calls it through auditedAction, which
 -- asserts the actor is a full admin first and journals the operation.
+--
+-- public.release_refused_deletion_resume closes that journal entry when the
+-- real call was refused (a hold that committed between the dry run and the
+-- real call, a transient error): only if the job is not queued or running,
+-- which is the proof the resume did not apply. Without it the entry stayed
+-- "requested" and every later resume for the member was refused as awaiting
+-- reconciliation.
 -- Idempotent (create or replace).
 -- ============================================================================
 
@@ -94,9 +101,54 @@ end $$;
 revoke all on function public.admin_resume_account_deletion(uuid, boolean) from public, anon, authenticated;
 grant execute on function public.admin_resume_account_deletion(uuid, boolean) to service_role;
 
+create or replace function public.release_refused_deletion_resume(p_actor uuid, p_operation uuid, p_detail text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_req public.admin_audit_log;
+  v_job text;
+begin
+  perform public.assert_admin_actor(p_actor);
+  select * into v_req from public.admin_audit_log a
+   where a.metadata->>'operationId' = p_operation::text
+     and a.metadata->>'phase' = 'requested'
+     and a.action = 'deletion.resume'
+     and a.actor_id = p_actor
+   order by a.id limit 1;
+  if not found then
+    raise exception 'No such deletion resume from this admin' using errcode = 'P0002';
+  end if;
+  perform pg_advisory_xact_lock(private.account_deletion_lock_key(v_req.subject_id));
+  if exists (select 1 from public.admin_audit_log a
+              where a.metadata->>'operationId' = p_operation::text
+                and a.metadata->>'phase' in ('completed', 'reconciled')) then
+    return jsonb_build_object('released', false, 'status', 'already_resolved');
+  end if;
+  select j.status into v_job from public.remediation_jobs j
+   where j.dedup_key = 'delete:' || v_req.subject_id::text and j.kind = 'delete_account';
+  -- Queued or running: the resume may have applied. Keep it for an operator.
+  if v_job in ('pending', 'processing') then
+    return jsonb_build_object('released', false, 'status', 'job_queued', 'job_status', v_job);
+  end if;
+  insert into public.admin_audit_log(actor_id, action, subject_type, subject_id, order_id, reason, metadata)
+  values (p_actor, 'operation.reconcile', v_req.subject_type, v_req.subject_id, null,
+    left(coalesce(nullif(trim(p_detail), ''), 'Resume refused'), 4000),
+    jsonb_build_object('operationId', p_operation::text, 'phase', 'reconciled', 'outcome', 'not_applied',
+      'reconciles', v_req.action,
+      'evidence', jsonb_build_object('source', 'refusal', 'detail', left(coalesce(p_detail, ''), 1000),
+        'jobStatus', v_job, 'observedAt', now())));
+  return jsonb_build_object('released', true, 'status', 'resolved', 'job_status', v_job);
+end $$;
+revoke all on function public.release_refused_deletion_resume(uuid, uuid, text) from public, anon, authenticated;
+grant execute on function public.release_refused_deletion_resume(uuid, uuid, text) to service_role;
+
 do $$
 begin
-  if has_function_privilege('authenticated', 'public.admin_resume_account_deletion(uuid, boolean)', 'execute')
+  if has_function_privilege('authenticated', 'public.release_refused_deletion_resume(uuid, uuid, text)', 'execute')
+     or has_function_privilege('authenticated', 'public.admin_resume_account_deletion(uuid, boolean)', 'execute')
      or has_function_privilege('anon', 'public.admin_resume_account_deletion(uuid, boolean)', 'execute') then
     raise exception '20261110110000: a member can resume deletions';
   end if;

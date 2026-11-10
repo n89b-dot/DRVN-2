@@ -4,6 +4,11 @@
 --      chargeback is open; once it settles, a dry run changes nothing and the
 --      real call puts the job back in the queue
 --   F  a job the worker gave up on: queued again with attempts reset
+--   H  a failed job on a scrubbed case with a hold still open: queued, the
+--      hold reported, the case left scrubbed (the worker's hold gate decides
+--      and keeps the ban)
+--   L  a refused resume closes its journal entry, so the next resume is
+--      admitted; one whose job is queued is kept for an operator
 --   R  refused, in words: a member's own financial hold, a retained-identity
 --      case, a job already queued, a completed deletion, no request
 --   P  nobody but the service role can call it
@@ -23,7 +28,11 @@ declare
   buyer uuid := gen_random_uuid();
   nobody uuid := gen_random_uuid();
   sale uuid := gen_random_uuid();
-  late_job uuid; failed_job uuid;
+  scrubbed uuid := gen_random_uuid();
+  scrubbed_sale uuid := gen_random_uuid();
+  admin_actor uuid := gen_random_uuid();
+  late_job uuid; failed_job uuid; scrubbed_job uuid;
+  op jsonb;
   r jsonb;
   msg text;
   fails text[] := '{}';
@@ -33,7 +42,9 @@ begin
   insert into auth.users (id, email, raw_user_meta_data) values
     (late, 'n944-late@drvn.test', '{}'), (failed, 'n944-failed@drvn.test', '{}'), (retained, 'n944-retained@drvn.test', '{}'),
     (held, 'n944-held@drvn.test', '{}'), (queued, 'n944-queued@drvn.test', '{}'),
-    (done, 'n944-done@drvn.test', '{}'), (buyer, 'n944-buyer@drvn.test', '{}');
+    (done, 'n944-done@drvn.test', '{}'), (buyer, 'n944-buyer@drvn.test', '{}'),
+    (scrubbed, 'n944-scrubbed@drvn.test', '{}'), (admin_actor, 'n944-admin@drvn.test', '{}');
+  insert into public.admin_users (user_id, role, note) values (admin_actor, 'admin', 'guard');
 
   -- A: a scrubbed seller whose case finished, then a chargeback on their sale.
   insert into public.orders (id, buyer_id, seller_id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, currency, completed_at)
@@ -85,6 +96,42 @@ begin
     fails := fails || format('FAIL F1: a failed deletion job was not queued again with its attempts reset (%s) (N944)', r);
   end if;
 
+  -- H: a failed job on a scrubbed case whose sale has an open chargeback.
+  insert into public.orders (id, buyer_id, seller_id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, currency, completed_at)
+  values (scrubbed_sale, buyer, scrubbed, 'completed', 5000, 0, 500, 5000, 'USD', now() - interval '1 day');
+  insert into public.remediation_jobs (kind, dedup_key, payload, status, attempts, last_error)
+  values ('delete_account', 'delete:' || scrubbed, jsonb_build_object('user_id', scrubbed), 'failed', 10, 'Storage drain failed')
+  returning id into scrubbed_job;
+  insert into public.account_deletion_requests (user_id, job_id, outcome, next_action, responsible_owner, scrubbed_at)
+  values (scrubbed, scrubbed_job, 'cleanup_pending', 'Automated cleanup is in progress.', 'privacy worker', now());
+  insert into public.stripe_dispute_journal (dispute_id, payment_reference, amount_cents, currency, state, last_event_id, last_event_created, order_ids)
+  values ('dp_n944_h', 'pi_n944_h', 5000, 'usd', 'open', 'evt_n944_h', 1, array[scrubbed_sale]);
+  r := public.admin_resume_account_deletion(scrubbed, false);
+  if r->>'shape' is distinct from 'failed_job' or not (r->>'still_held')::boolean
+     or (select status from public.remediation_jobs where id = scrubbed_job) <> 'pending'
+     or (select scrubbed_at from public.account_deletion_requests where user_id = scrubbed) is null then
+    fails := fails || format('FAIL H1: a failed job on a scrubbed, held case was not queued with its hold reported and its scrub kept (%s) (N944)', r);
+  end if;
+
+  -- L: a refused resume is released; a queued one is kept.
+  update public.remediation_jobs set status = 'failed' where id = scrubbed_job;
+  op := public.begin_admin_external_operation(admin_actor, 'deletion.resume', 'user', scrubbed::text, null, 'Guard resume', '{}');
+  r := public.release_refused_deletion_resume(admin_actor, (op->>'operationId')::uuid, 'The order that holds this deletion is still open');
+  if not (r->>'released')::boolean
+     or (public.begin_admin_external_operation(admin_actor, 'deletion.resume', 'user', scrubbed::text, null, 'Second try', '{}')->>'reused')::boolean then
+    fails := fails || format('FAIL L1: a refused resume left the next one blocked (%s) (N944)', r);
+  end if;
+  op := public.begin_admin_external_operation(admin_actor, 'deletion.resume', 'user', failed::text, null, 'Guard resume', '{}');
+  r := public.release_refused_deletion_resume(admin_actor, (op->>'operationId')::uuid, 'timeout');
+  if (r->>'released')::boolean or r->>'status' is distinct from 'job_queued' then
+    fails := fails || format('FAIL L2: a resume whose job is queued was released (%s) (N944)', r);
+  end if;
+  begin
+    perform public.release_refused_deletion_resume(buyer, (op->>'operationId')::uuid, 'not an admin');
+    fails := fails || 'FAIL L3: a non-admin released a resume (N944)'::text;
+  exception when others then null;
+  end;
+
   -- R: everything else is refused and left as it was.
   insert into public.remediation_jobs (kind, dedup_key, payload, status, completed_at) values
     ('delete_account', 'delete:' || retained, jsonb_build_object('user_id', retained), 'completed', now()),
@@ -117,7 +164,8 @@ begin
   -- P: service role only.
   if has_function_privilege('authenticated', 'public.admin_resume_account_deletion(uuid, boolean)', 'execute')
      or has_function_privilege('anon', 'public.admin_resume_account_deletion(uuid, boolean)', 'execute')
-     or not has_function_privilege('service_role', 'public.admin_resume_account_deletion(uuid, boolean)', 'execute') then
+     or not has_function_privilege('service_role', 'public.admin_resume_account_deletion(uuid, boolean)', 'execute')
+     or has_function_privilege('authenticated', 'public.release_refused_deletion_resume(uuid, uuid, text)', 'execute') then
     fails := fails || 'FAIL P1: resuming a deletion is not service-role only (N944)'::text;
   end if;
 

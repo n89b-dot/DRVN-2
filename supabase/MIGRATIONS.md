@@ -38,7 +38,7 @@ TLS. Details: "Recording without running" below.
 |---|---|
 | `20261110110000_admin_resume_account_deletion.sql` | not applied |
 
-Adds `public.admin_resume_account_deletion(p_user, p_dry_run)`, service role only, which the console's **Resume deletion** (`deletion.resume`) calls through `auditedAction`. It puts a failed deletion job, or a late-hold case whose hold has settled, back in the worker's queue under the deletion lock, and refuses every other state. Additive. The control appears with the app from the same PR; applied first, the function waits unused.
+Adds `public.admin_resume_account_deletion(p_user, p_dry_run)`, service role only, which the console's **Resume deletion** (`deletion.resume`) calls through `auditedAction`. It puts a failed deletion job, or a late-hold case whose hold has settled, back in the worker's queue under the deletion lock, and refuses every other state. Additive. Also `public.release_refused_deletion_resume(p_actor, p_operation, p_detail)`, service role only, which closes a refused resume's journal entry when the job is not queued, so the next resume isn't blocked as awaiting reconciliation. The control appears with the app from the same PR; applied first, the function waits unused.
 
 ## November 8 — deletion: late holds after the scrub, other members' notifications, the tombstone race, old retained cases: N418 (not applied anywhere)
 

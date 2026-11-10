@@ -8764,6 +8764,10 @@ export type Database = {
         Args: { p_actor: string; p_detail: string; p_operation: string }
         Returns: Json
       }
+      release_refused_deletion_resume: {
+        Args: { p_actor: string; p_detail: string; p_operation: string }
+        Returns: Json
+      }
       release_seller_carry_payout: {
         Args: {
           p_attempts: number
