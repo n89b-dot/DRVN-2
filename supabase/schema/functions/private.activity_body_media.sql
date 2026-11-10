@@ -8,15 +8,18 @@ CREATE OR REPLACE FUNCTION private.activity_body_media(p_body jsonb)
 AS $function$
   select coalesce(array_agg(distinct u) filter (where u is not null and u <> ''), '{}')
     from (
-      select jsonb_array_elements_text(case when jsonb_typeof(b -> 'urls') = 'array' then b -> 'urls' else '[]'::jsonb end) as u
+      select e #>> '{}' as u
         from jsonb_array_elements(case when jsonb_typeof(p_body) = 'array' then p_body else '[]'::jsonb end) b
-       where b ->> 'type' = 'images'
+        cross join lateral jsonb_array_elements(case when jsonb_typeof(b) = 'object' and jsonb_typeof(b -> 'urls') = 'array' then b -> 'urls' else '[]'::jsonb end) e
+       where jsonb_typeof(b) = 'object' and b ->> 'type' = 'images' and jsonb_typeof(e) = 'string'
       union all
-      select b ->> 'beforeUrl' from jsonb_array_elements(case when jsonb_typeof(p_body) = 'array' then p_body else '[]'::jsonb end) b
-       where b ->> 'type' = 'before_after'
+      select b ->> 'beforeUrl'
+        from jsonb_array_elements(case when jsonb_typeof(p_body) = 'array' then p_body else '[]'::jsonb end) b
+       where jsonb_typeof(b) = 'object' and b ->> 'type' = 'before_after' and jsonb_typeof(b -> 'beforeUrl') = 'string'
       union all
-      select b ->> 'afterUrl' from jsonb_array_elements(case when jsonb_typeof(p_body) = 'array' then p_body else '[]'::jsonb end) b
-       where b ->> 'type' = 'before_after'
+      select b ->> 'afterUrl'
+        from jsonb_array_elements(case when jsonb_typeof(p_body) = 'array' then p_body else '[]'::jsonb end) b
+       where jsonb_typeof(b) = 'object' and b ->> 'type' = 'before_after' and jsonb_typeof(b -> 'afterUrl') = 'string'
     ) s;
 $function$;
 

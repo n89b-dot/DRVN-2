@@ -32,7 +32,7 @@ alter table public.saved_search_email_digests add constraint saved_search_email_
 alter table public.saved_search_email_digests add constraint saved_search_email_digests_once_a_day UNIQUE (saved_search_id, digest_day);
 alter table public.saved_search_email_digests add constraint saved_search_email_digests_pkey PRIMARY KEY (id);
 alter table public.saved_search_email_digests add constraint saved_search_email_digests_saved_search_id_fkey FOREIGN KEY (saved_search_id) REFERENCES public.saved_searches(id) ON DELETE CASCADE;
-alter table public.saved_search_email_digests add constraint saved_search_email_digests_skip_reason CHECK ((status = 'skipped'::text) = (skip_reason IS NOT NULL) AND (skip_reason IS NULL OR (skip_reason = ANY (ARRAY['opted_out'::text, 'alert_off'::text, 'no_address'::text, 'account_closed'::text, 'expired'::text, 'carried'::text]))));
+alter table public.saved_search_email_digests add constraint saved_search_email_digests_skip_reason CHECK ((status = 'skipped'::text) = (skip_reason IS NOT NULL) AND (skip_reason IS NULL OR (skip_reason = ANY (ARRAY['opted_out'::text, 'alert_off'::text, 'no_address'::text, 'account_closed'::text, 'expired'::text, 'carried'::text, 'listings_removed'::text]))));
 alter table public.saved_search_email_digests add constraint saved_search_email_digests_status CHECK (status = ANY (ARRAY['pending'::text, 'sending'::text, 'sent'::text, 'skipped'::text, 'failed'::text]));
 alter table public.saved_search_email_digests add constraint saved_search_email_digests_window CHECK (window_end > window_start);
 

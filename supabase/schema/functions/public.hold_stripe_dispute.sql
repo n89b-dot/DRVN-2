@@ -35,3 +35,36 @@ begin
 end $function$;
 
 grant execute on function public.hold_stripe_dispute(p_dispute text, p_detail text) to service_role;
+
+CREATE OR REPLACE FUNCTION public.hold_stripe_dispute(p_dispute text, p_event text, p_created bigint, p_detail text)
+ RETURNS text
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  v_result text;
+  v_case public.payment_recoveries%rowtype;
+begin
+  v_result := public.hold_stripe_dispute(p_dispute, p_detail);
+  perform private.note_held_dispute_event(p_dispute, p_event, p_created);
+  -- Held again after its case was closed (work review #148): the two-argument
+  -- function only touches last_seen_at on a case that exists, so the
+  -- chargeback would be held with no open case and nothing in the console.
+  update public.payment_recoveries r
+     set status = 'open', resolved_at = null, resolved_by = null, resolution_note = null, last_seen_at = now(),
+         detail = left(p_detail || ' (This case was closed as ' || r.status || ' and opened again when a later Stripe event held the chargeback.)', 2000)
+   where r.recovery_key = 'stripe:dispute:' || p_dispute and r.status <> 'open'
+  returning * into v_case;
+  if found then
+    insert into public.admin_alert_outbox(kind, title, detail, order_id, amount_cents, payload, dedup_key)
+    values ('recovery_case_opened', 'Card dispute held for review again', left(p_detail, 2000), v_case.order_id, v_case.amount_cents,
+            jsonb_build_object('recovery_id', v_case.id, 'dispute_id', p_dispute, 'event_id', p_event),
+            'stripe-dispute:' || p_dispute || ':held-again:' || coalesce(p_event, 'no-event'))
+    on conflict (dedup_key) do nothing;
+  end if;
+  return v_result;
+end;
+$function$;
+
+grant execute on function public.hold_stripe_dispute(p_dispute text, p_event text, p_created bigint, p_detail text) to service_role;

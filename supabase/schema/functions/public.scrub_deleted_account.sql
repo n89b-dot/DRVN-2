@@ -124,38 +124,12 @@ begin
   delete from public.activity_comments where author_id = p_user;
   get diagnostics n = row_count; v_counts := v_counts || jsonb_build_object('comments', n);
 
-  -- N418: what they wrote, as other members' notifications copied it. The
-  -- social and message triggers put the actor's name in the title and the
-  -- first 140 characters of a comment, review, question or message in the
-  -- body. The row and its link stay, except a link to the member's own
-  -- profile, which names their retired handle. Order, offer, dispute,
-  -- receipt and refund notifications carry only text DRVN writes, and lose
-  -- only the actor.
-  update public.notifications nt
-     set title = case
-           when nt.kind ~ '^(order|offer|dispute|receipt|refund)_' then nt.title
-           when nt.kind = 'follow' then left_drvn || ' followed you'
-           when nt.kind = 'car_follow' then left_drvn || ' is following your build'
-           when nt.kind in ('save', 'listing_save') then left_drvn || ' saved this'
-           when nt.kind = 'comment' then left_drvn || ' commented on your update'
-           when nt.kind = 'reaction' then left_drvn || ' reacted to your update'
-           when nt.kind = 'review' then left_drvn || ' left you a review'
-           when nt.kind = 'question' then left_drvn || ' wrote about your part'
-           when nt.kind = 'message' then 'Message from a member who has since left DRVN'
-           else left_drvn
-         end,
-         body = case
-           when nt.kind ~ '^(order|offer|dispute|receipt|refund)_' then nt.body
-           when nt.body is null then null
-           else '(removed)'
-         end,
-         href = case
-           when nt.target_id = p_user or (v_username is not null and nt.href = '/u/' || v_username) then null
-           else nt.href
-         end,
-         actor_id = null
-   where nt.actor_id = p_user;
-  get diagnostics n = row_count; v_counts := v_counts || jsonb_build_object('notifications_sent', n);
+  -- N418 and 20261110220000: what they wrote, as other members'
+  -- notifications copied it, found by actor and by the offer or order the
+  -- notice is about (private.scrub_member_notices, below).
+  v_counts := v_counts || private.scrub_member_notices(p_user, v_username);
+  -- Their listing titles in other members' saved-search emails (N1069, work review #153).
+  v_counts := v_counts || private.scrub_member_digest_items(p_user);
 
   -- Their own social record, none of it a transaction key.
   delete from public.notifications where user_id = p_user;

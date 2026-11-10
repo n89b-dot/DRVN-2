@@ -12,10 +12,19 @@ create table public.stripe_dispute_journal (
   lease_id uuid,
   lease_expires_at timestamp with time zone,
   created_at timestamp with time zone default now() not null,
-  updated_at timestamp with time zone default now() not null
+  updated_at timestamp with time zone default now() not null,
+  held_event_id text,
+  held_event_created bigint,
+  held_from_state text,
+  retry_until timestamp with time zone
 );
 
 alter table public.stripe_dispute_journal enable row level security;
+
+-- Comments
+comment on column public.stripe_dispute_journal.held_event_id is 'The newest Stripe event seen since the entry was held for review (20261110230000): what Retry replays.';
+comment on column public.stripe_dispute_journal.held_from_state is 'The state the entry was in when it was held (20261110230000). A settled one is never retried.';
+comment on column public.stripe_dispute_journal.retry_until is 'Until when one replay of held_event_id may reopen this held entry (20261110230000). Set by an admin''s Retry, cleared by the replay or by a new hold.';
 
 -- Constraints
 alter table public.stripe_dispute_journal add constraint account_deletion_hold_watch TRIGGER DEFERRABLE INITIALLY DEFERRED;

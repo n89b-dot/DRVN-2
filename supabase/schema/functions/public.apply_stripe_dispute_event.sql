@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION public.apply_stripe_dispute_event(p_dispute text, p_i
  SET search_path TO 'public', 'pg_temp'
 AS $function$
 declare entry public.stripe_dispute_journal%rowtype; ids uuid[]; total bigint;
- valid boolean; order_row public.orders%rowtype; prior_exists boolean;
+ valid boolean; order_row public.orders%rowtype; prior_exists boolean; retried boolean:=false;
 begin
  if p_closed is null then raise exception 'Missing dispute event phase'; end if;
  if p_closed and (p_status in ('won','warning_closed','lost')) is distinct from true then return 'retry'; end if;
@@ -16,16 +16,36 @@ begin
  select * into entry from public.stripe_dispute_journal where dispute_id=p_dispute for update;
  prior_exists:=found;
  if prior_exists then
-  if entry.payment_reference<>p_intent or entry.amount_cents<>p_amount or entry.currency<>p_currency then return public.hold_stripe_dispute(p_dispute,'Provider dispute identity, amount or currency changed. Reconcile against the original journal.'); end if;
-  if entry.state='recovery' then return 'recovery_recorded'; end if;
+  if entry.payment_reference<>p_intent or entry.amount_cents<>p_amount or entry.currency<>p_currency then return public.hold_stripe_dispute(p_dispute,p_event,p_created,'Provider dispute identity, amount or currency changed. Reconcile against the original journal.'); end if;
+  -- 20261110230000: a later event while held is remembered, so Retry
+  -- replays the newest Stripe knows.
+  if entry.state='recovery' then
+   -- Only an entry known to have been held from 'open'. One held before
+   -- this migration has no held_from_state: what it was held from is
+   -- unknown, and unknown is not retryable (review of #208).
+   if entry.retry_until is not null and entry.retry_until>now() and p_event=entry.held_event_id
+      and entry.held_from_state='open' then
+    -- An admin's Retry allowed this one replay (work review #148). The
+    -- reopen and everything below are this one transaction: it ends
+    -- settled, open, or held again, never reopened with nothing replayed.
+    update public.stripe_dispute_journal set state='open',retry_until=null,lease_id=null,lease_expires_at=null,updated_at=now()
+     where dispute_id=p_dispute returning * into entry;
+    retried:=true;
+   else
+    perform private.note_held_dispute_event(p_dispute,p_event,p_created); return 'recovery_recorded';
+   end if;
+  end if;
   if not p_closed and entry.state<>'open' then return 'committed'; end if;
   if p_closed and entry.state in ('won','warning_closed','lost') then
    if entry.state=p_status then return 'committed'; end if;
-   return public.hold_stripe_dispute(p_dispute,'Conflicting terminal provider dispute outcomes require review.');
+   return public.hold_stripe_dispute(p_dispute,p_event,p_created,'Conflicting terminal provider dispute outcomes require review.');
   end if;
-  if entry.state='loss_pending' and p_closed and p_status<>'lost' then return public.hold_stripe_dispute(p_dispute,'Conflicting terminal outcome during chargeback booking.'); end if;
+  if entry.state='loss_pending' and p_closed and p_status<>'lost' then return public.hold_stripe_dispute(p_dispute,p_event,p_created,'Conflicting terminal outcome during chargeback booking.'); end if;
   if entry.state='loss_pending' and entry.lease_expires_at>now() then return 'retry'; end if;
-  if not p_closed and p_created<=entry.last_event_created then return 'committed'; end if;
+  -- Not newer than the last event applied: nothing to do, except on a
+  -- replay, whose event (often the very one that held it) must be checked
+  -- against the basket below before anything is called done.
+  if not p_closed and p_created<=entry.last_event_created and not retried then return 'committed'; end if;
  end if;
  select array_agg(distinct p.order_id order by p.order_id),sum(p.amount_cents),
  bool_and(lower(p.currency)=p_currency and p.status in ('succeeded','partially_refunded','refunded'))
@@ -39,19 +59,19 @@ begin
   values(p_dispute,p_intent,p_amount,p_currency,'open',p_event,p_created,ids)
   returning * into entry;
  end if;
- if cardinality(ids)>50 then return public.hold_stripe_dispute(p_dispute,'Dispute basket exceeds the bounded automatic-processing limit.'); end if;
+ if cardinality(ids)>50 then return public.hold_stripe_dispute(p_dispute,p_event,p_created,'Dispute basket exceeds the bounded automatic-processing limit.'); end if;
  if ids is distinct from entry.order_ids or total<>p_amount or valid is distinct from true then
-  return public.hold_stripe_dispute(p_dispute,'The dispute does not exactly match the frozen payment basket and currency. Allocate the provider amount before booking any refund.');
+  return public.hold_stripe_dispute(p_dispute,p_event,p_created,'The dispute does not exactly match the frozen payment basket and currency. Allocate the provider amount before booking any refund.');
  end if;
  perform id from public.orders where id=any(ids) order by id for update;
  if (select sum(total_cents) from public.orders where id=any(ids))<>p_amount or exists(select 1 from public.orders o where o.id=any(ids) and lower(o.currency)<>p_currency) then
-  return public.hold_stripe_dispute(p_dispute,'Order and provider dispute currencies differ.');
+  return public.hold_stripe_dispute(p_dispute,p_event,p_created,'Order and provider dispute currencies differ.');
  end if;
  if p_closed and p_status not in ('won','warning_closed','lost') then return 'retry'; end if;
  -- Won/closed-before-created is journaled without inventing a prior hold.
  if p_closed and p_status in ('won','warning_closed') then
   if exists(select 1 from public.orders o where o.id=any(ids) and o.status='disputed' and o.stripe_dispute_id=p_dispute and o.dispute_reason not like '% — '||p_dispute) then
-   return public.hold_stripe_dispute(p_dispute,'A newer in-app dispute owns an order; provider closure cannot resolve it.');
+   return public.hold_stripe_dispute(p_dispute,p_event,p_created,'A newer in-app dispute owns an order; provider closure cannot resolve it.');
   end if;
   update public.orders set status=coalesce(pre_dispute_status,'paid'),dispute_resolved_at=now()
    where id=any(ids) and status='disputed' and stripe_dispute_id=p_dispute
@@ -63,7 +83,7 @@ begin
   (o.status='disputed' and o.stripe_dispute_id is distinct from p_dispute)
   or (o.status not in ('paid','shipped','delivered','completed','disputed') and entry.state<>'loss_pending')
   or (p_status='lost' and p_closed and o.refunded_cents>0 and entry.state<>'loss_pending')
- )) then return public.hold_stripe_dispute(p_dispute,'Existing order/dispute/refund state prevents safe automatic chargeback allocation.'); end if;
+ )) then return public.hold_stripe_dispute(p_dispute,p_event,p_created,'Existing order/dispute/refund state prevents safe automatic chargeback allocation.'); end if;
  for order_row in select * from public.orders where id=any(ids) loop
   if order_row.status<>'disputed' and entry.state<>'loss_pending' then
    update public.orders set status='disputed',pre_dispute_status=order_row.status,
