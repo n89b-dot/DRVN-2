@@ -251,7 +251,7 @@ export function AgentChat({
                   key={card.id}
                   eyebrow="On DRVN now"
                   title={card.query}
-                  meta={`${card.capped ? "Over 1,000" : card.count.toLocaleString()} for sale · see them in Marketplace`}
+                  meta={`${card.capped ? "1,000+" : card.count.toLocaleString()} for sale · see them in Marketplace`}
                   href={card.href}
                 />
               ) : card.kind === "listing_draft" ? (
