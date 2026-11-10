@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 
-import { blockedMediaKeys, imageRequestObjectKey } from "@/lib/copyright/blocked-media";
+import { imageRequestObjectKey, mediaIsBlocked } from "@/lib/copyright/blocked-media";
 import { buildContentSecurityPolicy, reportingEndpointsHeader } from "@/lib/csp";
 import { isIndexable } from "@/lib/deployment";
 import { memberPhotoSourceRefused } from "@/lib/photo-urls";
@@ -48,7 +48,17 @@ async function imageGate(request: NextRequest) {
   // A copyright takedown first (R69-dmca): its 451 says why, whatever the
   // spelling of the link.
   const key = imageRequestObjectKey(request.nextUrl);
-  if (key && (await blockedMediaKeys()).has(key)) {
+  const blocked = key ? await mediaIsBlocked(key) : false;
+  // Unknown (the database could not be asked, and this instance has no
+  // earlier answer for this photo): refuse it for now rather than serve one
+  // a takedown may have removed (N718).
+  if (blocked === null) {
+    return new NextResponse("Photos are briefly unavailable. Try again in a moment.", {
+      status: 503,
+      headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8", "Retry-After": "15" },
+    });
+  }
+  if (blocked) {
     return new NextResponse("This image was removed after a copyright notice.", {
       status: 451,
       headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" },
