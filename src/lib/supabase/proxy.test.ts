@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 type Scenario = { claims: Record<string, unknown> | null; refresh: boolean; throws?: boolean };
 let scenario: Scenario = { claims: null, refresh: false };
 // #110: whether the signed-in member still owes the 18+ answer (my_age_confirmation_due).
-const age = { due: false as boolean, error: null as unknown, calls: 0 };
+const age = { due: false as boolean, error: null as unknown, calls: 0, signal: null as AbortSignal | null };
 
 const ROTATED = [
   { name: "sb-test-auth-token.0", value: "rotated-chunk-0", options: { path: "/", httpOnly: true, sameSite: "lax" as const, maxAge: 3600 } },
@@ -26,16 +26,19 @@ vi.mock("@supabase/ssr", () => ({
         return { data: scenario.claims ? { claims: scenario.claims } : null };
       },
     },
-    rpc: async () => {
-      age.calls += 1;
-      return { data: age.error ? null : age.due, error: age.error };
-    },
+    rpc: () => ({
+      abortSignal: async (signal: AbortSignal) => {
+        age.calls += 1;
+        age.signal = signal;
+        return { data: age.error ? null : age.due, error: age.error };
+      },
+    }),
   }),
 }));
 vi.mock("@/lib/env", () => ({ hasSupabaseConfig: () => true, isProduction: false, publicKey: () => "anon-key" }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 
-import { AGE_COOKIE, CONSOLE_NOT_FOUND, ageCheckApplies, isConsolePath, updateSession } from "./proxy";
+import { AGE_CHECK_TIMEOUT_MS, AGE_COOKIE, CONSOLE_NOT_FOUND, ageCheckApplies, isConsolePath, updateSession } from "./proxy";
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
 
@@ -190,7 +193,7 @@ describe("earlier members are asked to confirm 18+ on their next visit (N662, re
 
   it("never asks on the question itself, sign-in pages, legal pages, the API, actions or prefetches", async () => {
     age.due = true;
-    for (const path of ["/confirm-age", "/onboarding", "/terms", "/privacy", "/api/version", "/logout"]) {
+    for (const path of ["/confirm-age", "/onboarding", "/terms", "/privacy", "/fees", "/protection", "/cart/complete", "/settings/payouts/return", "/notifications/open/n1", "/robots.txt", "/api/version", "/logout"]) {
       expect((await updateSession(request(path))).headers.get("location"), path).toBeNull();
     }
     expect((await updateSession(action("/settings"))).headers.get("location")).toBeNull();
@@ -205,6 +208,36 @@ describe("earlier members are asked to confirm 18+ on their next visit (N662, re
     const response = await updateSession(request("/home"));
     expect(response.headers.get("location")).toBeNull();
     expect(response.cookies.get(AGE_COOKIE)).toBeUndefined();
+  });
+
+  it("gives the database 1.5 seconds, so a stalled one can't hang a navigation", async () => {
+    await updateSession(request("/home"));
+    expect(age.signal).toBeInstanceOf(AbortSignal);
+    expect(AGE_CHECK_TIMEOUT_MS).toBe(1500);
+  });
+
+  it("keeps rotated session cookies on the age redirect", async () => {
+    age.due = true;
+    scenario = { claims: { sub: "u1" }, refresh: true };
+    const response = await updateSession(request("/garage"));
+    expect(new URL(response.headers.get("location")!).pathname).toBe("/confirm-age");
+    expect(response.cookies.get("sb-test-auth-token.0")?.value).toBe("rotated-chunk-0");
+    expect(response.cookies.get("sb-test-auth-token.2")?.value).toBe("");
+  });
+
+  it("asks on / before sending a member to /home, and remembers the answer on that redirect", async () => {
+    age.due = true;
+    expect(new URL((await updateSession(request("/"))).headers.get("location")!).searchParams.get("next")).toBe("/");
+    age.due = false;
+    const home = await updateSession(request("/"));
+    expect(new URL(home.headers.get("location")!).pathname).toBe("/home");
+    expect(home.cookies.get(AGE_COOKIE)?.value).toBe("u1");
+  });
+
+  it("asks on a client navigation (an RSC request) the same as a page load", async () => {
+    age.due = true;
+    const rsc = new NextRequest(new URL("/garage", "https://drvn.test"), { headers: { rsc: "1" } });
+    expect(new URL((await updateSession(rsc)).headers.get("location")!).pathname).toBe("/confirm-age");
   });
 
   it("asks nobody signed out", async () => {

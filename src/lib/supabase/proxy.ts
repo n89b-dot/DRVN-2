@@ -38,8 +38,20 @@ const AUTH_PAGES = ["/login", "/signup"];
 /** The account the 18+ answer was checked for in this browser (#110). */
 export const AGE_COOKIE = "drvn_age_checked";
 
-/** Pages a member may open before answering: signing in and out, the question itself, the legal pages. */
-const AGE_EXEMPT = ["/confirm-age", "/onboarding", "/callback", "/confirm", "/logout", "/login", "/signup", "/account-deletion", "/admin-verify", "/email-change", "/terms", "/privacy", "/copyright", "/api", "/docs"];
+/**
+ * Pages a member may open before answering: signing in and out, the question
+ * itself, the legal and policy pages, and GET handlers that finish something
+ * already under way (a checkout's return, Stripe's payout set-up return, a
+ * notification's open link) or serve a machine (robots, sitemap).
+ */
+const AGE_EXEMPT = [
+  "/confirm-age", "/onboarding", "/callback", "/confirm", "/logout", "/login", "/signup", "/account-deletion", "/admin-verify", "/email-change",
+  "/terms", "/privacy", "/copyright", "/fees", "/protection",
+  "/cart/complete", "/settings/payouts/return", "/notifications/open",
+  "/robots.txt", "/sitemap.xml", "/api", "/docs",
+];
+/** The most the age check may add to a navigation; past it the page loads and it asks again next time. */
+export const AGE_CHECK_TIMEOUT_MS = 1_500;
 
 /** #110: a page request (not an action, a prefetch or an API call) a member should be asked on. */
 export function ageCheckApplies(request: NextRequest, isAuthPage: boolean): boolean {
@@ -215,7 +227,8 @@ export async function updateSession(request: NextRequest) {
   if (user && ageCheckApplies(request, isAuthPage)) {
     const subject = typeof user.sub === "string" ? user.sub : "";
     if (subject && request.cookies.get(AGE_COOKIE)?.value !== subject) {
-      const { data: due, error: dueError } = await supabase.rpc("my_age_confirmation_due");
+      // A stalled database must not hang every signed-in navigation.
+      const { data: due, error: dueError } = await supabase.rpc("my_age_confirmation_due").abortSignal(AbortSignal.timeout(AGE_CHECK_TIMEOUT_MS));
       if (dueError) {
         // Unknown: let the page load and ask again on the next request.
         reportError("[proxy] age confirmation check failed", dueError);

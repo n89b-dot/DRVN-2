@@ -36,7 +36,7 @@ TLS. Details: "Recording without running" below.
 
 | File | Applied to |
 |---|---|
-| `20261110130000_age_confirmation_due.sql` | not applied |
+| `20261110130000_age_confirmation_due.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
 
 Adds `public.my_age_confirmation_due()` for signed-in members. The request proxy calls it once per browser on a member's next page request, and sends a member who joined before the 18+ confirmation, with a handle and no record, to `/confirm-age`. **Apply before deploying the app from the same PR.** Until it exists the proxy reports a failed check on every signed-in page request and lets the page load.
 
