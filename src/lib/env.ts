@@ -89,6 +89,84 @@ export function publicKey(): string | undefined {
 export const isProduction = process.env.NODE_ENV === "production";
 
 // ---------------------------------------------------------------------------
+// Key shapes (work review #140): the right kind of key in the right variable
+// ---------------------------------------------------------------------------
+
+type SupabaseKeyKind = "publishable" | "secret" | "unknown";
+
+/** The `role` claim of a legacy JWT key, read without verifying it; null when the value isn't one. */
+function jwtRole(value: string): string | null {
+  const parts = value.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload: unknown = JSON.parse(atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "=")));
+    const role = (payload as { role?: unknown } | null)?.role;
+    return typeof role === "string" ? role : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Which kind of Supabase key a value is, by its shape: `sb_publishable_…` / `sb_secret_…`, or a legacy JWT's role. */
+export function supabaseKeyKind(value: string): SupabaseKeyKind {
+  if (value.startsWith("sb_publishable_")) return "publishable";
+  if (value.startsWith("sb_secret_")) return "secret";
+  const role = jwtRole(value);
+  if (role === "anon") return "publishable";
+  if (role === "service_role") return "secret";
+  return "unknown";
+}
+
+/** Values no browser may ever be sent: a Supabase secret key, a Stripe secret or restricted key, a webhook signing secret. */
+function looksSecret(value: string): boolean {
+  return supabaseKeyKind(value) === "secret" || /^(sk|rk)_(live|test)_/.test(value) || /^whsec_/.test(value);
+}
+
+/**
+ * What is wrong with the database configuration's shape, in words that name
+ * the variable and never print a value (work review #140). Presence is
+ * checked by the caller; this checks kind:
+ *  - a secret-shaped value in any `NEXT_PUBLIC_` variable, which the build
+ *    would ship to every browser;
+ *  - the public key variable holding anything but a publishable (or legacy
+ *    anon) key, and the secret variable anything but a secret (or legacy
+ *    service_role) key, so a swapped pair fails here and not as row-level
+ *    security errors on the first admin read;
+ *  - a Supabase URL that is not a bare https origin.
+ */
+export function databaseKeyProblems(env: EnvLike = process.env): string[] {
+  const problems: string[] = [];
+  const leaked = new Set<string>();
+  for (const [name, value] of Object.entries(env)) {
+    if (name.startsWith("NEXT_PUBLIC_") && value && looksSecret(value)) {
+      leaked.add(name);
+      problems.push(`${name} holds a secret key, and every NEXT_PUBLIC_ value is sent to browsers: move it to its server-only variable and rotate it`);
+    }
+  }
+  const publicName = PUBLIC_KEYS.find((name) => env[name]);
+  if (publicName && !leaked.has(publicName) && supabaseKeyKind(env[publicName]!) !== "publishable") {
+    problems.push(`${publicName} is not a Supabase publishable (or legacy anon) key`);
+  }
+  const secretName = SECRET_KEYS.find((name) => env[name]);
+  if (secretName) {
+    const kind = supabaseKeyKind(env[secretName]!);
+    if (kind === "publishable") problems.push(`${secretName} holds a publishable key, not the secret (or legacy service_role) key`);
+    else if (kind !== "secret") problems.push(`${secretName} is not a Supabase secret (or legacy service_role) key`);
+  }
+  const url = env.NEXT_PUBLIC_SUPABASE_URL;
+  if (url) {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) throw new Error("not a bare https origin");
+    } catch {
+      problems.push("NEXT_PUBLIC_SUPABASE_URL is not a bare https origin (https://<project>.supabase.co)");
+    }
+  }
+  return problems;
+}
+
+// ---------------------------------------------------------------------------
 // Payments mode — explicit, and fail-closed in production
 // ---------------------------------------------------------------------------
 
@@ -102,6 +180,7 @@ export class PaymentsConfigError extends Error {
 }
 
 import { MODEL_PRICES } from "./ai/config";
+import { hostedReasons } from "./deployment";
 
 type EnvLike = Record<string, string | undefined>;
 
@@ -141,6 +220,40 @@ export function clientAddressSource(env: EnvLike = process.env): ClientAddressSo
   return null;
 }
 
+// What counts as hosted is read in one place, src/lib/deployment.ts (work
+// review #144, N1060); this file asks its broad question, "could this be
+// reachable by the public?".
+export { hostedReasons };
+
+/**
+ * The isolated loopback stack in Stripe test mode: CI's launch-configuration
+ * browser lane (plan 2 item A4, playwright.launch.config.ts). `next start`
+ * runs with NODE_ENV=production and Stripe mode demands an https site URL,
+ * which a loopback server does not have. True only when the stack's own
+ * marker is set, the site and the database are both plain-http loopback
+ * (the database on the local stack's port), the Stripe key is a test key,
+ * nothing says the deployment is hosted (`hostedReasons`, read in
+ * src/lib/deployment.ts) and the deployment has not named itself. It relaxes
+ * the site URL's https rule and nothing else.
+ */
+export function isolatedStripeTestStack(env: EnvLike = process.env): boolean {
+  if (env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation") return false;
+  if (!/^sk_test_/.test(env.STRIPE_SECRET_KEY ?? "")) return false;
+  if (hostedReasons(env).length) return false;
+  // A deployment that names itself (src/lib/deployment.ts: every hosted
+  // project sets DRVN_DEPLOY_ENV) is never the isolated stack, whatever else
+  // its environment says.
+  if (env.DRVN_DEPLOY_ENV) return false;
+  try {
+    const site = new URL(env.NEXT_PUBLIC_SITE_URL || "");
+    const database = new URL(env.NEXT_PUBLIC_SUPABASE_URL || "");
+    const loopback = (url: URL) => url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname);
+    return loopback(site) && loopback(database) && database.port === "54321";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * N540: the sandbox override must never be present on a hosted deployment,
  * whatever the payment mode. It exists only so `next start` (which runs with
@@ -151,21 +264,6 @@ export function clientAddressSource(env: EnvLike = process.env): ClientAddressSo
  * loopback, or when it holds a live Stripe key. Any of those with the
  * variable set, to any value, fails boot. Returns the reason, or null.
  */
-/** Why this looks like a hosted deployment (empty: it doesn't). */
-export function hostedReasons(env: EnvLike = process.env): string[] {
-  const reasons: string[] = [];
-  if (env.VERCEL === "1") reasons.push(`a Vercel deployment${env.VERCEL_ENV ? ` (${env.VERCEL_ENV})` : ""}`);
-  try {
-    const site = new URL(env.NEXT_PUBLIC_SITE_URL || "");
-    const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(site.hostname) || site.hostname.endsWith(".localhost");
-    if (site.protocol === "https:" && !loopback) reasons.push(`a public site URL (${site.origin})`);
-  } catch {
-    // No canonical URL is not, by itself, a hosted deployment.
-  }
-  if (/^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY ?? "")) reasons.push("a live Stripe key");
-  return reasons;
-}
-
 export function stubOverrideProblem(env: EnvLike = process.env): string | null {
   if (env.PAYMENTS_ALLOW_STUB_IN_PRODUCTION === undefined) return null;
   const reasons = hostedReasons(env);
@@ -226,6 +324,11 @@ export function validatePaymentsEnv(env: EnvLike = process.env): {
     if (missingKeys.length) {
       throw new PaymentsConfigError(`A hosted production deployment is missing its database configuration: ${missingKeys.join(", ")}.`);
     }
+    // Work review #140: present is not enough; each must be the right kind.
+    const wrongKind = databaseKeyProblems(env);
+    if (wrongKind.length) {
+      throw new PaymentsConfigError(`A hosted production deployment's database configuration is wrong: ${wrongKind.join("; ")}.`);
+    }
   }
 
   if (mode === "stripe" && production) {
@@ -251,7 +354,8 @@ export function validatePaymentsEnv(env: EnvLike = process.env): {
     for (const name of ["NEXT_PUBLIC_SITE_URL", "ADMIN_ALERT_WEBHOOK_URL", "SENTRY_DSN"]) {
       try {
         const value = new URL(env[name] || "");
-        if (value.protocol !== "https:") throw new Error("HTTPS required");
+        const loopbackLane = name === "NEXT_PUBLIC_SITE_URL" && isolatedStripeTestStack(env);
+        if (value.protocol !== "https:" && !loopbackLane) throw new Error("HTTPS required");
         if (name === "SENTRY_DSN" && (!value.username || !/^\/\d+$/.test(value.pathname))) throw new Error("Invalid DSN");
         if (name === "NEXT_PUBLIC_SITE_URL" && (value.username || value.password || value.pathname !== "/" || value.search || value.hash)) throw new Error("Canonical origin required");
       } catch { invalid.push(name); }

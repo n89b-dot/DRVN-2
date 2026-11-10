@@ -6,7 +6,9 @@ import type { Database } from "@/lib/database.types";
 import type { TurnCard } from "@/lib/ai/run";
 import { LOW_CONFIDENCE_THRESHOLD } from "@/lib/mods/parse";
 import { signChatPhotos } from "@/lib/agent/chat-photos";
+import { signedPhotoObject } from "@/lib/photo-urls";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { signedPhotoUrls } from "@/lib/supabase/photo-signing";
 import { safeProductLink, type SafeLink } from "@/lib/mods/safe-link";
 
 /** A result card ready to draw: what the agent pointed at, read as the member. */
@@ -144,6 +146,11 @@ async function resolveBuildChanges(supabase: SupabaseClient<Database>, cards: Tu
   ]);
   const carOf = new Map((cars ?? []).map((car) => [car.id, car]));
   const modOf = new Map((mods ?? []).map((mod) => [mod.id, mod]));
+  // The thumbnail comes from the model's card, not from a guarded column, so
+  // it is signed only when it is the member's own upload (N940); anything
+  // else stays as written, and a member photo in it stays canonical.
+  const own = drafts.flatMap((draft) => (draft.image_url && signedPhotoObject(draft.image_url)?.path.split("/")[0] === user.id ? [draft.image_url] : []));
+  const signed = own.length ? await signedPhotoUrls(own) : new Map<string, string>();
   return drafts.flatMap((draft) => {
     const car = carOf.get(draft.car);
     if (!car) return [];
@@ -158,7 +165,7 @@ async function resolveBuildChanges(supabase: SupabaseClient<Database>, cards: Tu
         carName: car.name,
         part: [draft.brand, draft.product].filter(Boolean).join(" "),
         replaces,
-        image: draft.image_url,
+        image: draft.image_url ? (signed.get(draft.image_url) ?? draft.image_url) : draft.image_url,
         link,
         linkLeftOff: Boolean(draft.product_url) && !link,
         applied,

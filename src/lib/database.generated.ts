@@ -6815,6 +6815,10 @@ export type Database = {
         Args: { p_from: string; p_to: string }
         Returns: Json
       }
+      admin_resume_account_deletion: {
+        Args: { p_dry_run?: boolean; p_user: string }
+        Returns: Json
+      }
       admin_retry_seller_carry_payout: { Args: { p_id: string }; Returns: Json }
       admin_retry_transfer_intent: { Args: { p_order: string }; Returns: Json }
       admin_role: { Args: never; Returns: string }
@@ -8279,7 +8283,6 @@ export type Database = {
         Returns: string
       }
       my_account_deletion_status: { Args: never; Returns: Json }
-      my_age_confirmation_due: { Args: never; Returns: boolean }
       my_car_vin: { Args: { p_car: string }; Returns: string }
       my_deal_listing_ids: { Args: never; Returns: string[] }
       my_default_offer_floor: { Args: never; Returns: number }
@@ -8444,6 +8447,7 @@ export type Database = {
           signed_url: string
         }[]
       }
+      photo_signing_ready: { Args: never; Returns: boolean }
       pickup_mint_pass: {
         Args: {
           p_buyer_id: string
@@ -8774,6 +8778,10 @@ export type Database = {
         Returns: boolean
       }
       release_refused_admin_refund: {
+        Args: { p_actor: string; p_detail: string; p_operation: string }
+        Returns: Json
+      }
+      release_refused_deletion_resume: {
         Args: { p_actor: string; p_detail: string; p_operation: string }
         Returns: Json
       }

@@ -78,10 +78,19 @@ begin
     get stacked diagnostics msg = message_text;
     if msg not like '%copyright notice%' then fails := fails || format('FAIL L2: the refusal did not say why (%s) (N946)', msg); end if;
   end;
+  -- Only the takedown's own refusal passes (42501, naming the copyright
+  -- notice). Any other error is a failure, not a pass (work review #157:
+  -- `when others then null` passed on anything, a typo included).
   begin
     update public.listings set status = 'active' where id = gone;
     fails := fails || 'FAIL L3: a listing a takedown removed was put back on sale (N946)'::text;
-  exception when others then null; -- refused, by this guard or an earlier one
+  exception
+    when insufficient_privilege then
+      get stacked diagnostics msg = message_text;
+      if msg not like '%copyright notice%' then fails := fails || format('FAIL L3b: the refusal did not say why (%s) (N946)', msg); end if;
+    when others then
+      get stacked diagnostics msg = message_text;
+      fails := fails || format('FAIL L3c: putting it back on sale failed for another reason (%s: %s) (N946)', sqlstate, msg);
   end;
 
   -- ---------- R: a reference that raced the takedown is purged by the blocklist row ----------

@@ -98,6 +98,14 @@ node scripts/apply-migration.mjs --target production supabase/migrations/*.sql
 node scripts/apply-migration.mjs --target production --apply --confirm <code> supabase/migrations/*.sql
 ```
 
+`--status` reads one table and changes nothing, so it does not need the
+owner's password. When the env file carries `SUPABASE_DB_READER_USER` and
+`SUPABASE_DB_READER_PASSWORD`, `--status` signs in with that read-only login
+and ignores any owner password in the file. The deploy workflow does this
+with `deploy_reader` (`docs/staging-setup.md` §11.4) and holds no owner
+password. The runner refuses a login given as read-only that could write.
+Every other mode still signs in as the owner.
+
 Each file runs in one transaction with its row in
 `supabase_migrations.schema_migrations`; a failing self-check raises, rolls
 back that file (and its row) and stops the run. Rerunning the same command
@@ -171,7 +179,22 @@ name and both hashes together; then re-run the script on each project. A
 release that renames a make or model onto an existing name aborts the run on
 a unique index and changes nothing; resolve the clash first. Licence: CC BY
 4.0 (`LICENSE` at the pinned commit; GitHub detects none).
-Record the run in `docs/release-evidence/infrastructure.md`.
+
+The seed joins the curated list to the catalogue, so a curated make or model
+the catalogue lacks is dropped without an error. Both runs say what happened
+(work review #141): the dry run prints how many curated generations will find
+a catalogue model after the import and lists each curated model that will
+not, with its generations; the apply prints the same for the catalogue as it
+then stands. Neither changes the exit code. On a database filled only from
+the pinned release (staging, 10 November 2026 dry run), 175 of 194 curated
+generations match: VehiclesDB files the Golf GTI and Golf R under Golf, so the
+curated rows for `Golf GTI`, `GTI` and `Golf R` (19 generations) have no model
+to attach to. A car entered as a Golf still resolves its generation. Shared
+dev matches all 194, because its catalogue also holds models from the
+earlier vPIC seed.
+
+Record the run in `docs/release-evidence/infrastructure.md`: the closing
+counts and the coverage line, with any misses.
 
 ## 4. Wire the app
 
@@ -194,6 +217,7 @@ if any is missing or invalid.
 | `SENTRY_DSN` | required (live) | must be an `https:` DSN with a key and a numeric project path (`https://<key>@<host>/<project id>`) |
 | `ADMIN_ALERT_WEBHOOK_URL` | required (live), `https:` | operator alerts (Slack-compatible body). Outside live-money mode it may be unset; alerts then accumulate as `disabled` outbox rows in Admin → Payments |
 | `NEXT_PUBLIC_SITE_URL` | required (live), `https:` | the canonical origin only — no path, query, fragment or credentials. Unset, links fall back to `https://` + Vercel's `VERCEL_PROJECT_PRODUCTION_URL` (set by the platform), then `http://localhost:3000` |
+| `DRVN_DEPLOY_ENV` | required (hosted) | `production` on the production project, `staging` on staging. Only `production` is indexable by search engines; any other value but those two refuses boot, and so does a hosted deploy without it (`src/lib/deployment.ts`). Fixed at build, like `NEXT_PUBLIC_*` (the build reads it through `vercel pull`, so it must not be marked Sensitive), and the build fails on the same shapes. Sitemaps are served only where it is `production`; everywhere else they answer 404. After each deploy the workflow checks the served `/robots.txt`, `X-Robots-Tag` and sitemaps against the deployment it meant to ship (`scripts/deploy.mjs version <origin> <sha> staging|production`) and fails the deploy if they disagree |
 | `CRON_SECRET` | required (live), ≥ 32 chars | bearer for every `/api/jobs/*` route and `/api/health/workers`; the same value goes in `job_config.transfer_worker_secret` and the monitor's `DRVN_MONITOR_SECRET` |
 | `GUEST_RECEIPT_SECRET` | required (live), ≥ 32 chars | signs guest receipt and checkout-identity cookies and keys the hashed network identity used for guest abuse limits. Any production build without it throws on the first guest checkout or anonymous rate-limit check. Rotating it invalidates outstanding guest receipts |
 | `ACCOUNT_EMAIL_DIGEST_KEY` | optional (recommended before launch), ≥ 32 chars | keys the HMAC kept in place of a deleted account's email (N16, `account_deletion_requests.email_digest`). Unset, a key derived from `GUEST_RECEIPT_SECRET` is used and recorded as `derived-v1`, so rotating that secret changes later digests; each digest records which key made it. Never rotate it once set |
@@ -443,6 +467,125 @@ reachable for at most about two hours, and only to someone who already held
 its live link. Photos uploaded before 10 Nov 2026 carry a year's
 Cache-Control on their object, but the proxy's expiry check covers them too.
 
+## 5d. Account deletions: every state and the safe action (#106, #108)
+
+Admin → People → "Account deletions not finished" lists every case that isn't
+complete, oldest first, with its state, why it waits, the next step and, when
+the worker gave up, its last error. The member sees the same state in Settings
+or at `/account-deletion/<reference>`. **Every state in the table has a safe
+action in the console. Three situations do not, and are set out after it
+under "What the console cannot finish":** a failed job whose Stripe customer
+belongs to someone else, a request with no job behind it, and a chargeback
+held for an operator.
+
+| State in the console | What it means | Safe action |
+|---|---|---|
+| **Cleaning up** | The worker is removing data. It usually finishes within a day; a long storage drain runs over several passes | None. If it has said "Cleaning up" for more than a day, check Admin → Settings → Background jobs (`deletions` family) |
+| **Cleaning up**, with "The worker gave up after 10 tries: …" | The job failed ten times. The error says why: a Stripe customer whose metadata names someone else ("Customer ownership requires operator review"), Storage or Auth failing, or a lost lease | Fix the cause first, then **Resume deletion**. It comes back here if the cause remains. A customer mismatch cannot be fixed from the console: see "What the console cannot finish", 1 |
+| **On hold: money still moving** | Before anything was deleted, the member has an open order, return, refund, payout or bank chargeback. Their sign-in is kept so they can settle it | None. The member settles it, and the worker rechecks every hour. A chargeback is the bank's to decide; it resumes on its own afterwards |
+| **Needs an operator**, "Late hold after scrub" | A return, refund, payout or chargeback opened **after** the member's personal data was removed. The account stays disabled and is never restored (ruled 8 Nov 2026), so nobody can settle it as the member | Settle the money without them, by the normal rules: refund the buyer from the order page; recover a seller-side chargeback loss from held funds, or write it off (Admin → Payments, recovery case). If the case's job is still in the queue, it finishes by itself once the hold is gone. If **Resume deletion** shows, the job had already finished: press it after the money has settled. While anything still holds the case it refuses, saying so |
+| **Needs an operator**, "Transaction records kept" | Finished. Personal data is removed. Order and payment keys are kept until the retention date shown (six years), because the law needs the transaction record | None. What happens when the retention period ends is not yet ruled (`policy_decisions_pending`) |
+
+**Resume deletion** (`deletion.resume`) is audited like every other console
+action and needs a reason. The database decides, under the deletion lock
+(`admin_resume_account_deletion`, 20261110110000). It acts only on a failed
+job, or on a late hold whose order has settled, and refuses everything else in
+words. The next pass runs every hold check again, and a member whose data is
+already removed is never let back in.
+
+### What the console cannot finish
+
+Three situations need more than the console (work review #154). The first
+two need SQL, run in the dashboard's SQL editor by the operator, one member
+at a time, with the member's id in place of `<member id>`. Read the first
+query's answer before running the second statement, and write what you did
+and why on the member's case. The third has no safe SQL at all.
+
+**1. A failed job whose Stripe customer belongs to someone else.** The
+console shows "The worker gave up after 10 tries: Customer ownership requires
+operator review". The job holds a Stripe customer id whose `user_id` metadata
+is not this member, so the worker refuses to delete it, every time. Open that
+customer in Stripe first.
+
+- If it is this member's customer and only its metadata is wrong or missing,
+  set its `user_id` metadata to the member's id in Stripe, then **Resume
+  deletion**. No SQL.
+- If it is someone else's customer, never delete it. Take it off this job, so
+  the worker stops asking Stripe about it:
+
+  ```sql
+  -- What the job holds now.
+  select id, status, attempts, last_error, payload
+    from public.remediation_jobs
+   where kind = 'delete_account' and dedup_key = 'delete:<member id>';
+
+  -- Only for a failed job, and only once Stripe shows the customer is not this member's.
+  update public.remediation_jobs
+     set payload = payload || jsonb_build_object('stripe_customer_id', null)
+   where kind = 'delete_account' and dedup_key = 'delete:<member id>' and status = 'failed';
+  ```
+
+  The key is set to null, not removed: with the key missing the worker reads
+  the id from the member's profile again and fails the same way. Then
+  **Resume deletion**. Last, search Stripe's customers for metadata
+  `user_id` equal to the member's id; if the member has a customer of their
+  own, delete it there, which removes their saved cards.
+
+**2. A deletion request with no job behind it.** The case is listed, never
+moves, shows no job state, and **Resume deletion** answers "This deletion has
+no job to resume". The worker only ever picks up a job, so nothing will
+happen to this request until one exists.
+
+  ```sql
+  -- A request whose "job" column comes back empty has none.
+  select r.user_id, r.outcome, r.blocker_code, r.scrubbed_at, j.id as job, j.status
+    from public.account_deletion_requests r
+    left join public.remediation_jobs j
+      on j.kind = 'delete_account' and j.dedup_key = 'delete:' || r.user_id::text
+   where r.user_id = '<member id>';
+
+  -- Only when job is empty and outcome is not 'completed': make the job the
+  -- request should have had, and point the request at it.
+  with made as (
+    insert into public.remediation_jobs (kind, dedup_key, payload)
+    values ('delete_account', 'delete:<member id>', jsonb_build_object('user_id', '<member id>'::uuid))
+    on conflict (dedup_key) do nothing
+    returning id
+  )
+  update public.account_deletion_requests r
+     set job_id = made.id
+    from made
+   where r.user_id = '<member id>';
+  ```
+
+  The job is created queued, so the worker takes it on its next pass and runs
+  every hold check before it removes anything. Nothing else needs doing; if
+  the case then shows a hold or a failure, treat it by its row in the table.
+
+**3. A chargeback held for an operator** (the journal state `recovery`). A bank
+chargeback that doesn't match its payment basket exactly is frozen for review:
+the orders go to `disputed`, a recovery case opens (Admin → Payments,
+"Card dispute requires reconciliation"), and the seller's payout and any
+deletion of either party wait. **Closing the recovery case does not lift the
+freeze**, because the journal still says `recovery`. Until the console's
+Retry for a held chargeback ships
+([#208](https://github.com/n89b-dot/DRVN-2/pull/208)), such a case **blocks
+Resume deletion for both parties, with no console way out and no safe SQL**:
+the journal's state drives payouts and refunds, and a hand edit can pay a
+seller for a sale the bank reversed. The safe action meanwhile is: read the
+dispute's final status in Stripe, record it on the recovery case's note, and
+leave the case open. Do not edit `stripe_dispute_journal` by hand. Writing
+off a chargeback the bank kept is a separate control
+([#207](https://github.com/n89b-dot/DRVN-2/pull/207)), set aside until after
+launch; DRVN absorbs that loss, counted from the bank's decision (decisions
+D1 and D4 of `docs/plans/2026-11-work-review-remediation-plan.md`).
+
+If a **Resume deletion** is refused after the console offered it (a hold that
+committed in between, or a passing error), the refusal closes its own journal
+entry (`release_refused_deletion_resume`), so the next try is not blocked as
+"awaiting reconciliation". If the job was already queued when it failed, the
+entry is kept for reconciliation as usual.
+
 ## 5c. Old photos that still carry metadata (one-off, N627)
 
 Message photos sent before 20261005100000 went into `message-photos` straight
@@ -471,6 +614,86 @@ it won't re-encode) are listed for a person to look at. Dispute evidence is
 never touched (kept as uploaded); public buckets use
 `scripts/public-media-backfill.mjs`. Not scheduled: new uploads can't carry
 metadata, so there is nothing for a repeat run to find.
+
+## 5e. A copyright counter-notice, handled by hand (decision D2)
+
+The console can take content down after a copyright notice. It cannot yet put
+it back: the control for that
+([#209](https://github.com/n89b-dot/DRVN-2/pull/209)) is set aside until
+after launch (decision D2 of
+`docs/plans/2026-11-work-review-remediation-plan.md`). Until it returns, a
+counter-notice is handled by hand, as below. This is the procedure of the US
+DMCA (17 U.S.C. §512(g)); counsel confirms it for the entity and its market
+before the first real one (owner item F4), and decides anything this section
+calls a judgement.
+
+1. **Receive it and keep it.** A counter-notice comes to the copyright
+   agent's address. It should give the member's name, address and phone
+   number; say what was removed and where it was; state, under penalty of
+   perjury, that it was removed by mistake or misidentification; consent to
+   the jurisdiction of the federal court for their address; and be signed.
+   Whether it is valid is counsel's call, not the operator's. File the
+   message itself with the copyright agent's records and open a line in the
+   takedown log (below) the day it arrives. The database has nowhere for it:
+   do not write it into the notice.
+2. **Send it to the person who complained**, promptly, with a line saying the
+   content will be restored in ten business days unless they tell the
+   copyright agent they have filed a court action to stop it. Log the date
+   sent.
+3. **Wait ten business days from the day the counter-notice arrived, and no
+   more than fourteen.** Business days, not calendar days: count them on a
+   calendar and write the two dates in the log. If, in that time, the
+   complainant says they have filed a court action, stop here and hand it to
+   counsel; nothing is restored.
+4. **Restore it: the member lists the part again.** Tell the member they may
+   list it again and add its photos again. Nothing in the product stops
+   them: a takedown blocks the stored files it removed, not the member and
+   not the picture, and a photo uploaded again is a new file. The same goes
+   for a garage photo or a post: the member adds it again.
+   - The original listing stays removed, and its photos are gone. A takedown
+     deletes the files; they cannot be brought back.
+   - **Do not** change the notice (`copyright_notices.status` or its
+     `takedown` record), delete rows from `copyright_blocked_media`, or set
+     the removed listing's status with SQL. The database refuses to put back
+     a listing an acted-on notice holds, by design. And the blocklist is
+     kept by file, not by notice, so removing one notice's row can unblock a
+     file that a second notice still covers (work review #150).
+5. **Finish the line in the takedown log**, so the whole event can be read
+   from it later.
+6. **A second notice about the restored content**, after the complainant has
+   gone to court or otherwise, goes to counsel before anything is taken down
+   again.
+
+**The takedown log.** No code stands behind this procedure, so the log is
+the audit record. **It does not exist yet**, and no admin screen holds it.
+The owner creates it when the copyright agent is registered (owner item F4):
+one private spreadsheet named "DRVN takedown log", in the business's own
+document storage beside the copyright inbox, backed up with the business's
+other records (the restore procedure in §6 reads from it). Never in this
+repository, which is public, and never in the database. **Until it exists**,
+the line is written as an email from the copyright agent's address to
+itself, subject `Takedown log: <notice id>`, replied to as each step
+happens, so the dates are stamped by the mail system and stay in one thread;
+copy those threads into the spreadsheet when it is made. One line per
+counter-notice, filled in as the steps happen, never rewritten afterwards:
+
+| What | Where it comes from |
+|---|---|
+| The notice it answers | the notice's id, from its page in Admin (the id in the address) |
+| Who sent the counter-notice | the member's handle and account id, and the address it came from |
+| When it arrived | the date and time on the message, with the time zone |
+| Who recorded it | the operator's name |
+| Who judged it valid, and when | counsel's name and the date of their answer |
+| When it was sent to the complainant | the date and time, and the address it went to |
+| The two dates of the wait | the tenth and the fourteenth business day after it arrived |
+| Whether a court action was notified | yes or no, with the date and the message if yes |
+| When the member was told they may list again | the date and time |
+| What came back | the new listing's id, or the garage photo or post the member added again |
+
+What the set-aside control will add when it returns: a record of the
+counter-notice in the database, the waiting period counted in business days
+from a checked date, the original listing restored with its photos, and a
+blocklist kept by file and notice.
 
 ## 6. Backups, and the rehearsed restore
 
@@ -730,6 +953,30 @@ forward with a new migration through the runner. Restoring a backup (§6) is
 the last resort, because it loses every order, payment and message since the
 backup.
 
+**What a rollback does not bring back (work review #142).** Two things about
+a rollback are today's, not the old release's, and one is the reverse:
+
+- **The host's settings are today's.** The job builds the old code with the
+  environment variables the host holds now (`vercel pull` reads them at
+  build time). A release that went bad because of a settings change (a
+  rotated key, a wrong origin, a switched flag) is still bad after a
+  rollback. Put the setting right in the host's project settings, then
+  dispatch the tag again so the build picks it up. The same holds the other
+  way: an old release reads a variable that has since been removed as
+  unset, and ignores one added since.
+- **The workflow is today's.** A dispatch runs `.github/workflows/deploy.yml`
+  from `main`, so the steps, their order and the secrets they read are the
+  current ones.
+- **The scripts the steps run are the old tag's.** The job checks out the
+  tag, so `scripts/deploy.mjs` (the gate, migration and version checks),
+  `scripts/apply-migration.mjs --status`, `scripts/release-candidate.mjs`
+  and the allow-list of databases in `supabase/migration-targets.json` are
+  the versions that release shipped with. A check fixed or tightened since
+  that tag is not in force during the rollback, and a tag from before a
+  database or its pooler host was added to the allow-list cannot check it:
+  the migration step fails and nothing is deployed. If that happens, roll
+  back to a newer tag that has the entry, or fix forward.
+
 **After any rollback:** confirm `/api/version` reports the commit you meant,
 check Admin → Settings → Background jobs and `/api/health/workers`, and
 write down in the release packet which tag was rolled back and why.
@@ -769,9 +1016,15 @@ the JSON above leaves out, `non_fast_forward` (block force pushes) and
 also verifies the result (`docs/owner/branch-protection.md`).
 
 Require `release-gate` alone: it is the aggregate check, and it fails unless
-`verify`, `secrets`, `secrets-full`, `sql-guard`, `e2e` and
+`verify`, `secrets`, `secrets-full`, `sql-guard`, `e2e`, `e2e-launch` and
 `stripe-integration` all ran and passed (updated 1 October 2026 — e2e no
-longer self-skips; it runs on a local stack in CI). `secrets` scans only the
+longer self-skips; it runs on a local stack in CI; `e2e-launch`, added
+November 2026, is the browser lane for the launch configuration and needs the
+Actions variable `STRIPE_TEST_PUBLISHABLE_KEY`). One exception since
+November 2026: a pull request that changes documents only skips the two
+browser jobs, and the gate accepts those skips and no other; a push to `main` always runs
+everything (`docs/owner/branch-protection.md`, "Documents-only pull
+requests"). `secrets` scans only the
 commits a PR or push adds (first-parent, no merges); `secrets-full` is the
 full-history lane — every reachable commit, merges included, plus the tracked
 tree — and is what fails a key committed and later deleted (added 3 October
@@ -815,6 +1068,12 @@ are kept 90 days. Sending goes
 through `src/lib/email/send.ts`, selected by `EMAIL_PROVIDER` and sent from
 `EMAIL_FROM`. No provider is chosen yet (R-email): until one is, digests are
 recorded and nothing is sent, and the route logs and returns `provider: null`.
+While `EMAIL_PROVIDER` is unset, `/api/health/workers` lists the job
+`drvn-saved-search-digests` and its family `savedSearchDigests` with
+`disabled: true` and does not judge them, as it does the `search` and
+`analytics` families without their providers: a job with nothing to send
+cannot page anyone. Setting `EMAIL_PROVIDER` puts both back in the check, and
+a provider that is set but misconfigured stays in it.
 
 `/api/jobs/media-gc` and `/api/jobs/listing-imports` are scheduled the same
 way. To run any of them by hand:
@@ -1135,7 +1394,14 @@ Until PR #158 the card-number redactor could corrupt about 0.3% of UUIDs it
 passed over, leaving text like `70e95888-a[card number removed]b5e67f70ec`
 in agent rows. New rows are safe. Before promoting any database that held agent
 activity from before 8 November, run `supabase/audits/agent_mangled_ids.sql`
-(read-only). Shared dev counted 0 on 9 November 2026; staging and production
-were created after the fix, or hold no agent rows. A non-zero count needs a
-backfill decision, because the original id can't be recovered from the row
-alone.
+(read-only). A non-zero count needs a backfill decision, because the original
+id can't be recovered from the row alone.
+
+The audit counts a marker with a hex digit or a dash touching it on either
+side. Its first version (9 November) asked for one on both sides and missed
+an id whose removed digits ran to its first or last character, about one
+mangled id in five (work review #145). The corrected audit counted 0 in every
+agent table on shared dev and on staging on 10 November 2026; neither holds
+any `agent_events` or `agent_messages` rows. Staging is not exempt by date: it
+was created on 7 November, a day before the fix merged. Production does not
+exist yet and will be created after the fix.

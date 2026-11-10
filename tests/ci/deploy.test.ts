@@ -10,7 +10,7 @@ import path from "node:path";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
-import { alertPayload, gateVerdict, missingMigrations, validReleaseTag, versionMatches } from "../../scripts/deploy.mjs";
+import { alertPayload, describeAttempt, gateVerdict, indexingProblems, missingMigrations, stillHead, validReleaseTag, versionMatches, waitForVersion } from "../../scripts/deploy.mjs";
 
 type Step = { name?: string; uses?: string; run?: string; if?: string; env?: Record<string, string>; with?: Record<string, unknown> };
 type Job = { if?: string; environment?: string; permissions?: Record<string, string>; steps: Step[] };
@@ -78,10 +78,27 @@ describe("the deploy workflow (N634, N528)", () => {
     }
   });
 
+  it("N634: holds no database owner's password; each migration check signs in with the read-only login (work review #138)", () => {
+    const raw = fs.readFileSync(path.join(root, ".github/workflows/deploy.yml"), "utf8");
+    // Neither the secret's name nor the env-file line that would carry an owner password.
+    expect(raw).not.toMatch(/SUPABASE_DB_PASSWORD/);
+    expect(raw).not.toMatch(/_DB_PASSWORD/);
+    for (const [name, secret] of [["staging", "STAGING_SUPABASE_READER_PASSWORD"], ["production", "PRODUCTION_SUPABASE_READER_PASSWORD"]] as const) {
+      const step = deploy.jobs[name].steps[indexOf(deploy.jobs[name], runs(`--target ${name} --env-file`))];
+      expect(step.env?.SUPABASE_DB_READER_PASSWORD).toBe(`\${{ secrets.${secret} }}`);
+      expect(step.run).toContain("SUPABASE_DB_READER_USER=deploy_reader");
+      expect(step.run).toContain("--status");
+      // The file with the login is removed before the next command runs.
+      expect(step.run).toMatch(/--status > "\$RUNNER_TEMP\/status\.json"\n\s*rm -f "\$RUNNER_TEMP\/target\.env"/);
+    }
+  });
+
   it("N634: tells the alert channel on every outcome", () => {
-    for (const job of Object.values(deploy.jobs)) {
+    for (const [name, job] of Object.entries(deploy.jobs)) {
       const alert = job.steps.at(-1)!;
-      expect(alert.if).toBe("always()");
+      // The two deploy jobs report every outcome. The guard before production reports only a refusal:
+      // when it passes, the production job that follows reports the deploy itself.
+      expect(alert.if, name).toBe(name === "production-guard" ? "failure()" : "always()");
       expect(alert.run).toContain("scripts/deploy.mjs alert");
     }
   });
@@ -124,5 +141,145 @@ describe("the deploy decisions (N528)", () => {
   it("N634: the alert is plain text, bounded", () => {
     expect(alertPayload("deployed")).toEqual({ text: "deployed" });
     expect(alertPayload("x".repeat(5000)).text).toHaveLength(3000);
+  });
+});
+
+describe("the version step says what it got (N952, report five #115)", () => {
+  const SHA = "aee656d9aee656d9aee656d9aee656d9aee656d9";
+
+  it("describes a status and body, trimmed, or a network error", () => {
+    expect(describeAttempt({ status: 500, text: "Internal\n  Server Error" })).toBe("HTTP 500: Internal Server Error");
+    expect(describeAttempt({ status: 200, text: "" })).toBe("HTTP 200: (empty body)");
+    expect(describeAttempt({ status: 502, text: "x".repeat(400) })).toMatch(/^HTTP 502: x{300}…$/);
+    expect(describeAttempt({ error: "ENOTFOUND" })).toBe("no answer (ENOTFOUND)");
+  });
+
+  it("prints each new answer once and names the last one when it gives up", async () => {
+    const answers = [
+      { status: 500, body: "A server error occurred" },
+      { status: 500, body: "A server error occurred" },
+      { status: 200, body: JSON.stringify({ sha: "0000000000" }) },
+    ];
+    let clock = 0;
+    let call = 0;
+    const lines: string[] = [];
+    const fetchImpl = async () => {
+      const answer = answers[Math.min(call++, answers.length - 1)];
+      return new Response(answer.body, { status: answer.status });
+    };
+    await expect(
+      waitForVersion("https://staging.example", SHA, {
+        timeoutMinutes: 1,
+        intervalSeconds: 20,
+        fetchImpl: fetchImpl as typeof fetch,
+        log: (line: string) => lines.push(line),
+        wait: async (ms: number) => { clock += ms; },
+        now: () => clock,
+      }),
+    ).rejects.toThrow(/still reports 0000000000, not aee656d9.*Last answer: HTTP 200: \{"sha":"0000000000"\}.*refused to boot/);
+    expect(lines).toEqual([
+      "https://staging.example/api/version: HTTP 500: A server error occurred",
+      'https://staging.example/api/version: HTTP 200: {"sha":"0000000000"}',
+    ]);
+  });
+
+  it("returns as soon as the deployment names the commit", async () => {
+    const lines: string[] = [];
+    await waitForVersion("https://staging.example", SHA, {
+      fetchImpl: (async () => new Response(JSON.stringify({ sha: SHA }), { status: 200 })) as typeof fetch,
+      log: (line: string) => lines.push(line),
+      wait: async () => {},
+    });
+    expect(lines).toEqual([`https://staging.example reports ${SHA}`]);
+  });
+});
+
+describe("a superseded staging run deploys nothing (N634, Codex on #175)", () => {
+  it("asks whether its commit is still main's head just before the build, and gates the deploy and version check on it", () => {
+    const staging = deploy.jobs.staging;
+    const head = indexOf(staging, runs("scripts/deploy.mjs current"));
+    const ship = indexOf(staging, runs("vercel@65.2.0 deploy --prebuilt --prod"));
+    const version = indexOf(staging, runs("scripts/deploy.mjs version"));
+    expect(head).toBeLessThan(ship);
+    expect(staging.steps[head].run).toContain('>> "$GITHUB_OUTPUT"');
+    expect(staging.steps[ship].if).toBe("steps.head.outputs.current == 'true'");
+    expect(staging.steps[version].if).toBe("steps.head.outputs.current == 'true'");
+    // A superseded run ends "success" having deployed nothing: the alert says that, not "deploy: success".
+    const alert = staging.steps.at(-1)!;
+    expect(alert.env?.CURRENT).toBe("${{ steps.head.outputs.current }}");
+    expect(alert.run).toMatch(/if \[ "\$STATUS" = "success" \] && \[ "\$CURRENT" != "true" \]; then\s+node scripts\/deploy\.mjs alert "[^"]*superseded[^"]*deployed nothing"\s+else\s+node scripts\/deploy\.mjs alert "DRVN staging deploy of \$\{GITHUB_SHA::7\}: \$STATUS"/);
+  });
+
+  it("only main's exact head counts as current", () => {
+    const sha = "aee656d9aee656d9aee656d9aee656d9aee656d9";
+    expect(stillHead(sha, sha)).toBe(true);
+    expect(stillHead("b".repeat(40), sha)).toBe(false);
+    expect(stillHead(undefined, sha)).toBe(false);
+    expect(stillHead("", "")).toBe(false);
+  });
+});
+
+describe("N958: a deploy checks what the served site tells search engines (work review #156, N1072)", () => {
+  it("each job names its deployment to the version check, so the served site is held to it", () => {
+    for (const name of ["staging", "production"] as const) {
+      const step = deploy.jobs[name].steps[indexOf(deploy.jobs[name], runs("scripts/deploy.mjs version"))];
+      expect(step.run, name).toMatch(new RegExp(`scripts/deploy\\.mjs version "\\$ORIGIN" "\\$(GITHUB_)?SHA" ${name}$`));
+      // After the deploy, before the alert: a deployment that fails it is reported as failed.
+      const ship = indexOf(deploy.jobs[name], runs("vercel@65.2.0 deploy --prebuilt --prod"));
+      expect(indexOf(deploy.jobs[name], runs("scripts/deploy.mjs version"))).toBeGreaterThan(ship);
+    }
+  });
+
+  const STAGING_ROBOTS = "User-Agent: *\nDisallow: /\n";
+  const PRODUCTION_ROBOTS = "User-Agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\n\nHost: https://drvn.app\nSitemap: https://drvn.app/sitemap.xml\nSitemap: https://drvn.app/catalog/sitemap/index.xml\n";
+  const hidden = {
+    robots: { status: 200, text: STAGING_ROBOTS },
+    pages: [{ path: "/", status: 200, tag: "noindex, nofollow" }, { path: "/api/version", status: 200, tag: "noindex, nofollow" }],
+    sitemaps: [{ path: "/sitemap.xml", status: 404 }, { path: "/catalog/sitemap/index.xml", status: 404 }],
+  };
+  const open = {
+    robots: { status: 200, text: PRODUCTION_ROBOTS },
+    pages: [{ path: "/", status: 200, tag: null }, { path: "/api/version", status: 200, tag: null }],
+    sitemaps: [{ path: "/sitemap.xml", status: 200 }],
+  };
+
+  it("passes a staging site that is hidden and a production site that is open", () => {
+    expect(indexingProblems("staging", hidden)).toEqual([]);
+    expect(indexingProblems("production", open)).toEqual([]);
+  });
+
+  it("fails a staging deploy that would be crawled, naming each way", () => {
+    // Built as production by mistake: everything about it is open.
+    expect(indexingProblems("staging", open)).toEqual([
+      "/robots.txt does not disallow the whole site: staging would be crawled",
+      "/robots.txt names a sitemap: staging would hand its pages to search engines",
+      '/ was served without "X-Robots-Tag: noindex" (got no header)',
+      '/api/version was served without "X-Robots-Tag: noindex" (got no header)',
+      "/sitemap.xml answered 200, not 404: staging serves a sitemap",
+    ]);
+    // Each fault alone.
+    expect(indexingProblems("staging", { ...hidden, pages: [{ path: "/", status: 200, tag: "nofollow" }] })).toEqual(['/ was served without "X-Robots-Tag: noindex" (got "nofollow")']);
+    expect(indexingProblems("staging", { ...hidden, sitemaps: [{ path: "/sitemap.xml", status: 200 }] })).toHaveLength(1);
+    expect(indexingProblems("staging", { ...hidden, robots: { status: 200, text: "User-Agent: *\nDisallow: /admin\n" } })).toEqual(["/robots.txt does not disallow the whole site: staging would be crawled"]);
+    expect(indexingProblems("staging", { ...hidden, robots: { status: 200, text: `${STAGING_ROBOTS}Allow: /\n` } })).toHaveLength(1);
+  });
+
+  it("fails a production deploy that is hidden from search", () => {
+    expect(indexingProblems("production", hidden)).toEqual([
+      "/robots.txt disallows the whole site: production is hidden from search",
+      "/robots.txt names no sitemap",
+      '/ was served with "X-Robots-Tag: noindex, nofollow": production is hidden from search',
+      '/api/version was served with "X-Robots-Tag: noindex, nofollow": production is hidden from search',
+      "/sitemap.xml answered 404, not 200",
+      "/catalog/sitemap/index.xml answered 404, not 200",
+    ]);
+    // A path rule such as "Disallow: /api/" is not the whole-site refusal.
+    expect(indexingProblems("production", open)).toEqual([]);
+  });
+
+  it("fails when robots.txt is not served at all, and on a name that is not a deployment", () => {
+    expect(indexingProblems("staging", { ...hidden, robots: { status: 500, text: "" } })).toEqual(["/robots.txt answered 500, not 200"]);
+    expect(indexingProblems("production", { ...open, robots: { status: 404, text: "" } })).toEqual(["/robots.txt answered 404, not 200"]);
+    expect(indexingProblems("preview", hidden)).toEqual(['"preview" is not a deployment name (staging or production)']);
   });
 });

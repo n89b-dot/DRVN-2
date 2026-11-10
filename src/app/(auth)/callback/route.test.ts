@@ -4,10 +4,7 @@ const mocks = vi.hoisted(() => ({
   exchangeCodeForSession: vi.fn(),
   getUser: vi.fn(),
   profile: vi.fn(),
-  needsAge: vi.fn(),
 }));
-
-vi.mock("@/lib/age-confirmation-record", () => ({ needsReturningAgeConfirmation: mocks.needsAge }));
 
 vi.mock("@/lib/site", () => ({ siteUrl: () => "https://drvn.example" }));
 vi.mock("@/lib/supabase/server", () => ({
@@ -26,7 +23,6 @@ beforeEach(() => {
   mocks.exchangeCodeForSession.mockResolvedValue({ error: null });
   mocks.getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
   mocks.profile.mockReturnValue({ data: { username: "kaito" }, error: null });
-  mocks.needsAge.mockResolvedValue(false);
 });
 
 // Readiness N44: an abandoned Google sign-in is not an expired emailed link.
@@ -69,19 +65,14 @@ describe("successful OAuth returns", () => {
   });
 });
 
-// N686: a member from before the 18+ confirmation answers it once on the way in.
-describe("an earlier member signing in with Google (N686)", () => {
-  it("N686: goes to /confirm-age first, keeping the destination", async () => {
-    mocks.needsAge.mockResolvedValue(true);
-    expect(await callback("code=abc&next=%2Flistings%2Fabc")).toBe("https://drvn.example/confirm-age?next=%2Flistings%2Fabc");
-    expect(await callback("code=abc")).toBe("https://drvn.example/confirm-age");
-    expect(mocks.needsAge).toHaveBeenCalledWith({ id: "u1" });
-  });
-
-  it("N686: an account with no handle still goes to onboarding, which asks there", async () => {
-    mocks.needsAge.mockResolvedValue(true);
+// N686, N662: accounts from before the 18+ confirmation are test accounts
+// and are not asked (Neil's ruling, 10 November 2026).
+describe("a Google sign-in asks no 18+ question of an existing account (N686, N662)", () => {
+  it("N686: a member with a handle goes straight to the destination; one without goes to onboarding, which asks", async () => {
+    expect(await callback("code=abc&next=%2Flistings%2Fabc")).toBe("https://drvn.example/listings/abc");
+    expect(await callback("code=abc")).toBe("https://drvn.example/home");
     mocks.profile.mockReturnValue({ data: { username: null }, error: null });
-    expect(await callback("code=abc")).not.toMatch(/confirm-age/);
+    expect(await callback("code=abc")).toMatch(/\/onboarding/);
   });
 });
 

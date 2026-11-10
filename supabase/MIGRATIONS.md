@@ -23,7 +23,14 @@ recorded file is skipped, and a destructive baseline (0001) is refused on a
 database with any table in `public`. Details: "Applying without Docker or
 psql" below.
 
-**Staging stays level with shared dev** (R-staging-behind). A migration PR is applied to shared dev *and* staging before it merges, by the same session, with both cells filled. `tests/ci/migrations-md.test.ts` lets a row name `shared-dev` without `staging` (or say `not applied`) only while the file is less than two days old by its timestamp. A session that cannot reach staging lists the file in `supabase/migrations-staging-pending.json` with the reason, and the next session with the credential applies it and removes the entry.
+**Working rules for a migration pull request** (in force from 10 November 2026; `docs/plans/2026-11-work-review-remediation-plan.md`, workstream 1, from the work review's findings #125, #126 and #128):
+
+- **Approved, then applied (R2).** A migration is applied to shared dev or staging only after the reviewing session has approved its pull request. The order is: review approves, apply with the runner to shared dev, then staging, fill both cells, then merge. Three migrations were applied to both databases before review on 9 November; a database ahead of `main` cannot be reviewed back.
+- **Dated when next to merge (R3).** Give a migration file its timestamp when its pull request is next to merge, not when it is written. A timestamp chosen early fixes the merge order in advance and forces a rename when another pull request merges first.
+- **An applied file is never edited.** Once a file has been applied to any database, its bytes are final, merged or not. A further change is a new migration.
+- **At most three in review (R1).** No more than three pull requests that carry a migration are in review at once, across every session.
+
+**Staging stays level with shared dev** (R-staging-behind). A migration PR is applied to shared dev *and* staging after its review is approved (R2 above) and before it merges, by the same session, with both cells filled. `tests/ci/migrations-md.test.ts` lets a row name `shared-dev` without `staging` (or say `not applied`) only while the file is less than two days old by its timestamp. A session that cannot reach staging lists the file in `supabase/migrations-staging-pending.json` with the reason, and the next session with the credential applies it and removes the entry.
 
 **A merged migration is never renamed** (#97). Apply order on every target is merge order, so filename order must stay the same as merge order. A pull request may only add migration files, each with a timestamp later than every file already on `main`, and may never rename or remove a file `main` has. If `main` gains a later file before yours merges, rename yours (it is not merged yet) to a timestamp after it. `tests/ci/migration-order.test.ts` fails a PR that breaks either rule, naming the file. Find what a merge added with `git diff --diff-filter=A`, never by name.
 
@@ -31,6 +38,30 @@ psql" below.
 history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
+
+## November 10 — photo signing signs only what the database guards: N940 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110190000_photo_signing_rules.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
+
+Review of #196 (report five #105 follow-up). `private.photo_signable_positions()` lists the only places the app signs a member photo (seven photo columns, a post body's image blocks, four RPC answer paths); `src/lib/photo-urls.ts` `PHOTO_POSITIONS` must equal it. New triggers `photo_owner_folder_guard` (`private.guard_photo_owner_folder` / `_body`) refuse, for every writer, a photo at a listed place that names an object in a signed bucket outside the row owner's folder, the owner resolved from the row's car, listing, post or order (the seller, for `order_item_snapshot_images`, guarded for the first time). `private.activity_body_media` is restated to strings only, the exact shape the signer walks. Applying it moves rows that already break the rule into `private.photo_refs_quarantined` (whole rows kept): gallery, pin and snapshot rows are deleted, a cover or part thumbnail is cleared, a post body loses only the offending photos; the NOTICE says how many. With more than ten to move it refuses unless the apply sets `drvn.photo_quarantine_confirm` to the total. A reference whose owner can't be resolved (an order whose seller was deleted) is never moved, only counted as `owner_unknown`. `private.restore_quarantined_photo_ref(id)` puts one back where the rule now holds (a stripped photo goes back into the post's current body, refused if the post was edited since). Quarantined rows last 90 days: `private.prune_cron_history()` is restated from `20261110100000` with that one delete added (job unchanged), and a trigger on `account_deletion_requests.scrubbed_at` removes a scrubbed member's rows, so `scrub_deleted_account` is not restated. The cars trigger also fires on `owner_id`. New `public.photo_signing_ready()` (service role): the app signs nothing until it returns true. Apply after `20261110120000` (#200) where both are pending; it touches none of that file's functions. **Apply before the app from the same PR deploys** (plan 1 step 2.7): until this is applied that app signs nothing at the boundary (every member photo shows the no-photo plate) and an account export fails and is retried rather than being written with links that cannot open. Once the database has said the guards are there, a check that times out leaves that answer standing (work review #146, N1062).
+
+## November 10 — the earlier-member 18+ check is removed (Neil's ruling, 10 November)
+
+| File | Applied to |
+|---|---|
+| `20261110131000_drop_age_confirmation_due.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
+
+Drops `public.my_age_confirmation_due()`. Every account from before the 18+ confirmation is a test account, so nothing asks them any more: the app from the same PR no longer calls the function, has no `/confirm-age` page and no check in the request proxy. The 18+ box at sign-up, onboarding and guest checkout, the `age_confirmations` table and its rows are untouched. Apply at any time before a first deploy; an older app that still calls the function reports a failed check and lets the page load. After this the next paragraph's function no longer exists.
+
+## November 10 — an operator resumes a stuck account deletion: report five #106/#108 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110110000_admin_resume_account_deletion.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
+
+Adds `public.admin_resume_account_deletion(p_user, p_dry_run)`, service role only, which the console's **Resume deletion** (`deletion.resume`) calls through `auditedAction`. It puts a failed deletion job, or a late-hold case whose hold has settled, back in the worker's queue under the deletion lock, and refuses every other state. Additive. Also `public.release_refused_deletion_resume(p_actor, p_operation, p_detail)`, service role only, which closes a refused resume's journal entry when the job is not queued, so the next resume isn't blocked as awaiting reconciliation. The control appears with the app from the same PR; applied first, the function waits unused.
 
 ## November 10 — earlier members asked to confirm 18+ on their next visit: report five #110 (not applied anywhere)
 
