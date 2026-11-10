@@ -204,3 +204,43 @@ describe("the database keys are checked at boot (N962, report five #123)", () =>
     expect(() => validatePaymentsEnv(legacy)).not.toThrow();
   });
 });
+
+// Plan 2 item A4 (R-unproven): the launch configuration (Stripe, not the stub)
+// has to boot under `next start` on the isolated loopback stack, or it can
+// never run in a browser before a host exists. Only the site URL's https rule
+// is relaxed, and only there, with a test key.
+describe("Stripe test mode boots on the isolated loopback stack, and nowhere else (R-unproven)", () => {
+  const LANE = {
+    ...LIVE,
+    STRIPE_SECRET_KEY: "sk_test_x",
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_x",
+    NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3000",
+    NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+    E2E_TEST_PROJECT_REF: "local-drvn-remediation",
+  };
+
+  it("boots in Stripe mode over http on the loopback stack with a test key", () => {
+    expect(validatePaymentsEnv(LANE).mode).toBe("stripe");
+    expect(validatePaymentsEnv({ ...LANE, NEXT_PUBLIC_SITE_URL: "http://localhost:3000" }).mode).toBe("stripe");
+  });
+
+  it.each([
+    ["without the isolated-stack marker", { E2E_TEST_PROJECT_REF: undefined }],
+    ["with another project's marker", { E2E_TEST_PROJECT_REF: "zubstjuviwourzgrziqc" }],
+    ["with a live key", { STRIPE_SECRET_KEY: "sk_live_x" }],
+    ["with a restricted live key", { STRIPE_SECRET_KEY: "rk_live_x" }],
+    ["on Vercel", { VERCEL: "1" }],
+    ["with an http site URL that is not loopback", { NEXT_PUBLIC_SITE_URL: "http://drvn.example" }],
+    ["with a hosted database", { NEXT_PUBLIC_SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co" }],
+    ["with the local database on another port", { NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:5432" }],
+  ])("still refuses an http site URL %s", (_, change) => {
+    expect(() => validatePaymentsEnv({ ...LANE, ...change })).toThrow(/NEXT_PUBLIC_SITE_URL/);
+  });
+
+  it("relaxes nothing else: the other live-money requirements still apply on the loopback stack", () => {
+    expect(() => validatePaymentsEnv({ ...LANE, STRIPE_WEBHOOK_SECRET: undefined })).toThrow(/STRIPE_WEBHOOK_SECRET/);
+    expect(() => validatePaymentsEnv({ ...LANE, SENTRY_DSN: "http://k@sentry.example/1" })).toThrow(/SENTRY_DSN/);
+    expect(() => validatePaymentsEnv({ ...LANE, ADMIN_ALERT_WEBHOOK_URL: "http://127.0.0.1:9/hook" })).toThrow(/ADMIN_ALERT_WEBHOOK_URL/);
+    expect(() => validatePaymentsEnv({ ...LANE, CRON_SECRET: "short" })).toThrow(/CRON_SECRET/);
+  });
+});

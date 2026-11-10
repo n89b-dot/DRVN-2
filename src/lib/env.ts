@@ -166,6 +166,30 @@ export function hostedReasons(env: EnvLike = process.env): string[] {
   return reasons;
 }
 
+/**
+ * The isolated loopback stack in Stripe test mode: CI's launch-configuration
+ * browser lane (plan 2 item A4, playwright.launch.config.ts). `next start`
+ * runs with NODE_ENV=production and Stripe mode demands an https site URL,
+ * which a loopback server does not have. True only when the stack's own
+ * marker is set, the site and the database are both plain-http loopback
+ * (the database on the local stack's port), the Stripe key is a test key, and
+ * nothing says the deployment is hosted. It relaxes the site URL's https rule
+ * and nothing else.
+ */
+export function isolatedStripeTestStack(env: EnvLike = process.env): boolean {
+  if (env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation") return false;
+  if (!/^sk_test_/.test(env.STRIPE_SECRET_KEY ?? "")) return false;
+  if (hostedReasons(env).length) return false;
+  try {
+    const site = new URL(env.NEXT_PUBLIC_SITE_URL || "");
+    const database = new URL(env.NEXT_PUBLIC_SUPABASE_URL || "");
+    const loopback = (url: URL) => url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname);
+    return loopback(site) && loopback(database) && database.port === "54321";
+  } catch {
+    return false;
+  }
+}
+
 export function stubOverrideProblem(env: EnvLike = process.env): string | null {
   if (env.PAYMENTS_ALLOW_STUB_IN_PRODUCTION === undefined) return null;
   const reasons = hostedReasons(env);
@@ -251,7 +275,8 @@ export function validatePaymentsEnv(env: EnvLike = process.env): {
     for (const name of ["NEXT_PUBLIC_SITE_URL", "ADMIN_ALERT_WEBHOOK_URL", "SENTRY_DSN"]) {
       try {
         const value = new URL(env[name] || "");
-        if (value.protocol !== "https:") throw new Error("HTTPS required");
+        const loopbackLane = name === "NEXT_PUBLIC_SITE_URL" && isolatedStripeTestStack(env);
+        if (value.protocol !== "https:" && !loopbackLane) throw new Error("HTTPS required");
         if (name === "SENTRY_DSN" && (!value.username || !/^\/\d+$/.test(value.pathname))) throw new Error("Invalid DSN");
         if (name === "NEXT_PUBLIC_SITE_URL" && (value.username || value.password || value.pathname !== "/" || value.search || value.hash)) throw new Error("Canonical origin required");
       } catch { invalid.push(name); }
