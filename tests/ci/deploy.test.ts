@@ -143,6 +143,16 @@ describe("the deploy decisions (N528)", () => {
 });
 
 describe("N958: a deploy checks what the served site tells search engines (work review #156, N1072)", () => {
+  it("each job names its deployment to the version check, so the served site is held to it", () => {
+    for (const name of ["staging", "production"] as const) {
+      const step = deploy.jobs[name].steps[indexOf(deploy.jobs[name], runs("scripts/deploy.mjs version"))];
+      expect(step.run, name).toMatch(new RegExp(`scripts/deploy\\.mjs version "\\$ORIGIN" "\\$(GITHUB_)?SHA" ${name}$`));
+      // After the deploy, before the alert: a deployment that fails it is reported as failed.
+      const ship = indexOf(deploy.jobs[name], runs("vercel@65.2.0 deploy --prebuilt --prod"));
+      expect(indexOf(deploy.jobs[name], runs("scripts/deploy.mjs version"))).toBeGreaterThan(ship);
+    }
+  });
+
   const STAGING_ROBOTS = "User-Agent: *\nDisallow: /\n";
   const PRODUCTION_ROBOTS = "User-Agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\n\nHost: https://drvn.app\nSitemap: https://drvn.app/sitemap.xml\nSitemap: https://drvn.app/catalog/sitemap/index.xml\n";
   const hidden = {

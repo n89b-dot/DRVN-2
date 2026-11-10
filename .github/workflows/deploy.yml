@@ -21,6 +21,13 @@
 # DRVN_DEPLOY_STAGING, DRVN_STAGING_ORIGIN, DRVN_PRODUCTION_ORIGIN,
 # DRVN_STAGING_SUPABASE_URL, DRVN_PRODUCTION_SUPABASE_URL.
 #
+# Each hosted project names itself with DRVN_DEPLOY_ENV ("staging" or
+# "production") in the host's own settings (docs/staging-setup.md §4), which
+# decides at build whether the site may be indexed. The last check of each job
+# asks the served site: staging must disallow every crawler, send noindex and
+# serve no sitemap; production must be open. A staging site that would be
+# indexed, or a production site hidden from search, fails the deploy.
+#
 # The migration check only reads one table, so it signs in as deploy_reader, a
 # read-only database login (docs/staging-setup.md §11.4), and this workflow
 # holds no database owner's password. The runner refuses that login if it
@@ -94,7 +101,7 @@ jobs:
           npx --yes vercel@65.2.0 deploy --prebuilt --prod --env GIT_COMMIT_SHA="$GITHUB_SHA" --token="$VERCEL_TOKEN"
 
       - name: Staging reports this commit
-        run: node scripts/deploy.mjs version "$ORIGIN" "$GITHUB_SHA"
+        run: node scripts/deploy.mjs version "$ORIGIN" "$GITHUB_SHA" staging
         env:
           ORIGIN: ${{ vars.DRVN_STAGING_ORIGIN }}
 
@@ -182,7 +189,7 @@ jobs:
           npx --yes vercel@65.2.0 deploy --prebuilt --prod --env GIT_COMMIT_SHA="$SHA" --token="$VERCEL_TOKEN"
 
       - name: Production reports the tagged commit
-        run: node scripts/deploy.mjs version "$ORIGIN" "$SHA"
+        run: node scripts/deploy.mjs version "$ORIGIN" "$SHA" production
         env:
           ORIGIN: ${{ vars.DRVN_PRODUCTION_ORIGIN }}
           SHA: ${{ steps.tag.outputs.sha }}

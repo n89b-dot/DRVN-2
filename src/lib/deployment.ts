@@ -15,6 +15,66 @@
  */
 type EnvLike = Record<string, string | undefined>;
 
+/**
+ * The signs that a build or a server is a hosted deployment, read from the
+ * environment in this one place (work review #144, N1060). The app asks two
+ * different questions of them, and they used to be answered by two separate
+ * readings of the environment, in src/lib/env.ts and here:
+ *
+ *  - `hostedReasons`: could this be reachable by the public? Any one sign is
+ *    enough. Used to refuse the sandbox payment override (N540) and to
+ *    demand the database keys at boot (N962): both must err towards "yes".
+ *  - `isHostedProductionDeploy`: is this the host building or running a
+ *    production-mode deployment? Only the host's own word counts. Used to
+ *    demand the deployment's name below. It cannot be the broad question:
+ *    CI's build sets a public-looking site URL as a placeholder
+ *    (.github/workflows/ci.yml) and must build with no name, hidden from
+ *    search like every other unnamed build.
+ */
+export type HostedSigns = {
+  /** The host says so: VERCEL=1, set on every Vercel build and function. */
+  vercel: boolean;
+  /** The host's own environment name ("production", "preview", "development"), when it gives one. */
+  vercelEnv: string | null;
+  /** The canonical site origin, when it is https and not loopback. */
+  publicSiteOrigin: string | null;
+  /** A live Stripe secret or restricted key is present. */
+  liveStripeKey: boolean;
+};
+
+export function hostedSigns(env: EnvLike = process.env): HostedSigns {
+  let publicSiteOrigin: string | null = null;
+  try {
+    const site = new URL(env.NEXT_PUBLIC_SITE_URL || "");
+    const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(site.hostname) || site.hostname.endsWith(".localhost");
+    if (site.protocol === "https:" && !loopback) publicSiteOrigin = site.origin;
+  } catch {
+    // No canonical URL is not, by itself, a sign of a hosted deployment.
+  }
+  return {
+    vercel: env.VERCEL === "1",
+    vercelEnv: env.VERCEL_ENV || null,
+    publicSiteOrigin,
+    liveStripeKey: /^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY ?? ""),
+  };
+}
+
+/** Why this looks like a hosted deployment, in words (empty: it doesn't). Any one sign counts. */
+export function hostedReasons(env: EnvLike = process.env): string[] {
+  const signs = hostedSigns(env);
+  const reasons: string[] = [];
+  if (signs.vercel) reasons.push(`a Vercel deployment${signs.vercelEnv ? ` (${signs.vercelEnv})` : ""}`);
+  if (signs.publicSiteOrigin) reasons.push(`a public site URL (${signs.publicSiteOrigin})`);
+  if (signs.liveStripeKey) reasons.push("a live Stripe key");
+  return reasons;
+}
+
+/** True when the host itself says this is a production-mode deployment (staging and production both are: each is its own project). */
+export function isHostedProductionDeploy(env: EnvLike = process.env): boolean {
+  const signs = hostedSigns(env);
+  return signs.vercel && signs.vercelEnv === "production";
+}
+
 export const DEPLOY_ENVS = ["production", "staging"] as const;
 export type DeployEnv = (typeof DEPLOY_ENVS)[number];
 
@@ -52,7 +112,7 @@ export function deployEnvProblem(env: EnvLike = process.env): string | null {
   if (value !== undefined && value !== "" && !deployEnv(env)) {
     return `DRVN_DEPLOY_ENV must be "production" or "staging", got "${value}".`;
   }
-  if (env.VERCEL === "1" && env.VERCEL_ENV === "production" && !deployEnv(env)) {
+  if (isHostedProductionDeploy(env) && !deployEnv(env)) {
     return 'DRVN_DEPLOY_ENV is not set on a hosted deployment. Set it to "staging" or "production" in the host\'s environment settings (docs/staging-setup.md).';
   }
   return null;

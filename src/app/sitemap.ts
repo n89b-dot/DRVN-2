@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 
+import { isIndexable } from "@/lib/deployment";
 import { CATEGORIES } from "@/lib/marketplace/taxonomy";
 import { siteUrl } from "@/lib/site";
 
@@ -14,6 +15,10 @@ import { siteUrl } from "@/lib/site";
 export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // N958 (work review #156): a deployment not named production lists
+  // nothing. The request proxy also answers /sitemap.xml with 404 there
+  // (src/proxy.ts), so this is the second layer, for the prerendered file.
+  if (!isIndexable()) return [];
   const base = siteUrl();
 
   const staticEntries: MetadataRoute.Sitemap = [
