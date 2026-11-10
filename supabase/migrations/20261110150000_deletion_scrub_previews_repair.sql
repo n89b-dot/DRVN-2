@@ -10,7 +10,16 @@
 --    name, with the first 140 characters of what they wrote, and with links
 --    to their retired handle. A one-time repair below rewrites them the same
 --    way, and clears any link to a retired handle (private.username_tombstones).
--- 2. Offer notices kept the seller's own words. notify_on_offer_response puts
+-- 2. Offer and order notices kept the leaver's own words (Codex, then the
+--    reviewer's pass on #206). Many offer notices are written with no actor
+--    (expiry, the agent's notices, a withdrawn listing), so a scrub by actor
+--    never found them; order_disputed quotes the buyer's dispute text and
+--    order_cancelled / order_refunded a cancel reason a party can write.
+--    private.scrub_member_notices finds them by the offer or order they are
+--    about and replaces the leaver's words with a line that still reads.
+--    Bodies with none of the leaver's words stay.
+--
+-- Was: 2. Offer notices kept the seller's own words. notify_on_offer_response puts
 --    the listing's title, which the seller wrote, in offer_declined and
 --    offer_countered bodies; the scrub kept offer bodies as "DRVN's text" and
 --    cleared actor_id, so no later scrub could find them. The scrub now clears
@@ -18,12 +27,129 @@
 --    rewritten: an offer notice with no actor whose offer's buyer or seller is
 --    a scrubbed account.
 --
--- Restated, from its latest definition with only the offer-body branch added:
+-- The retired-link clearing is a scan of public.notifications: fine at
+-- today's size, and the repair does it in batches of 5,000 regardless.
+--
+-- Restated, from its latest definition, with the notifications block moved
+-- into private.scrub_member_notices (nothing else changed):
 --   public.scrub_deleted_account  from 20261108180000_deletion_late_holds_and_previews.sql
 -- The repair is idempotent and prints what it changed.
 -- ============================================================================
 
 begin;
+
+-- ---------------------------------------------------------------------------
+-- The leaver's words in other members' notifications. One place, used by the
+-- scrub and by the repair.
+--
+--   1. Notices the member is the actor of: the social and message triggers
+--      put their name in the title and the first 140 characters of what they
+--      wrote in the body. The title becomes a neutral line and the body
+--      "(removed)"; a link to their own profile goes. Order, offer, dispute,
+--      receipt and refund notices keep DRVN's title and lose only the actor.
+--   2. Offer notices about a listing the member sold, whoever the actor (many
+--      are written with none: offer_expired, offer_agent_recommends_accept,
+--      offer_agent_out_of_rounds, offer_agent_deal_reached, which links to
+--      /orders/<id>/checkout, and offer_listing_withdrawn): the body is or
+--      quotes the listing's title, which the seller wrote. It becomes a line
+--      that still reads ("A listing by a member who has since left DRVN"),
+--      keeping any amount after it. A body with none of the leaver's words
+--      stays: offer_new's amount, or the recipient's own title in
+--      offer_withdrawn and offer_counter_accepted when the buyer leaves.
+--   3. Order notices quoting the member's free text: order_disputed's body is
+--      the buyer's dispute_reason; order_cancelled and order_refunded carry
+--      cancel_reason, which a party can write. Each becomes a line saying
+--      what was removed and pointing to the order. DRVN's own reasons
+--      (checkout timeouts, the payout-setup refund) and payment failures
+--      stay.
+-- ---------------------------------------------------------------------------
+create or replace function private.scrub_member_notices(p_user uuid, p_username text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  left_drvn constant text := 'A member who has since left DRVN';
+  a_listing constant text := 'A listing by a member who has since left DRVN';
+  v_actor integer;
+  v_offer integer;
+  v_order integer;
+begin
+  update public.notifications nt
+     set title = case
+           when nt.kind ~ '^(order|offer|dispute|receipt|refund)_' then nt.title
+           when nt.kind = 'follow' then left_drvn || ' followed you'
+           when nt.kind = 'car_follow' then left_drvn || ' is following your build'
+           when nt.kind in ('save', 'listing_save') then left_drvn || ' saved this'
+           when nt.kind = 'comment' then left_drvn || ' commented on your update'
+           when nt.kind = 'reaction' then left_drvn || ' reacted to your update'
+           when nt.kind = 'review' then left_drvn || ' left you a review'
+           when nt.kind = 'question' then left_drvn || ' wrote about your part'
+           when nt.kind = 'message' then 'Message from a member who has since left DRVN'
+           else left_drvn
+         end,
+         body = case
+           -- Offer and order bodies are decided by linkage below.
+           when nt.kind ~ '^(order|offer|dispute|receipt|refund)_' then nt.body
+           when nt.body is null then null
+           else '(removed)'
+         end,
+         href = case
+           when nt.target_id = p_user or (p_username is not null and nt.href = '/u/' || p_username) then null
+           else nt.href
+         end,
+         actor_id = null
+   where nt.actor_id = p_user;
+  get diagnostics v_actor = row_count;
+
+  -- 2. Offers on the member's listings, as their buyers were told.
+  with linked as (
+    select o.buyer_id, '/offers/' || o.id as href from public.offers o
+      join public.listings l on l.id = o.listing_id
+     where l.seller_id = p_user and o.buyer_id <> p_user
+    union all
+    select x.buyer_id, '/orders/' || x.id || suffix from public.orders x
+      join public.offers o on o.id = x.origin_offer_id
+      join public.listings l on l.id = o.listing_id
+      cross join (values (''), ('/checkout')) as v(suffix)
+     where l.seller_id = p_user and x.buyer_id <> p_user
+  )
+  update public.notifications nt
+     set body = case nt.kind
+           when 'offer_listing_withdrawn' then 'Your offer on a listing by a member who has since left DRVN has ended. Nothing was charged.'
+           when 'offer_agent_out_of_rounds' then a_listing || coalesce(substring(nt.body from ' · \$[0-9,.]+ over your max$'), '')
+           else a_listing
+         end
+    from linked
+   where nt.user_id = linked.buyer_id and nt.href = linked.href
+     and nt.kind ~ '^offer_' and nt.body is not null
+     and nt.body not like a_listing || '%' and nt.body not like 'Your offer on a listing by a member who has since left DRVN%';
+  get diagnostics v_offer = row_count;
+
+  -- 3. Order notices quoting what the member wrote, as the other party got them.
+  update public.notifications nt
+     set body = case nt.kind
+           when 'order_disputed' then 'The description of the problem was removed because the member who wrote it left DRVN. See the order for details.'
+           else 'The reason was removed because a member on this order left DRVN. See the order for details.'
+         end
+    from public.orders x
+   where p_user in (x.buyer_id, x.seller_id)
+     and nt.user_id in (x.buyer_id, x.seller_id) and nt.user_id <> p_user
+     and nt.href = '/orders/' || x.id
+     and nt.body is not null
+     and (
+       (nt.kind = 'order_disputed' and coalesce(x.disputed_by, x.buyer_id) = p_user)
+       or (nt.kind in ('order_cancelled', 'order_refunded')
+           and nt.body not in ('checkout not completed in time', 'checkout abandoned')
+           and nt.body !~* 'payouts weren''t set up within 14 days')
+     )
+     and nt.body not like 'The % was removed because %';
+  get diagnostics v_order = row_count;
+
+  return jsonb_build_object('notifications_sent', v_actor, 'offer_notice_bodies', v_offer, 'order_notice_bodies', v_order);
+end $$;
+revoke all on function private.scrub_member_notices(uuid, text) from public, anon, authenticated;
 
 create or replace function public.scrub_deleted_account(p_user uuid, p_email_digest text, p_digest_key text)
 returns jsonb
@@ -149,41 +275,10 @@ begin
   delete from public.activity_comments where author_id = p_user;
   get diagnostics n = row_count; v_counts := v_counts || jsonb_build_object('comments', n);
 
-  -- N418: what they wrote, as other members' notifications copied it. The
-  -- social and message triggers put the actor's name in the title and the
-  -- first 140 characters of a comment, review, question or message in the
-  -- body. The row and its link stay, except a link to the member's own
-  -- profile, which names their retired handle. Order, offer, dispute,
-  -- receipt and refund notifications carry only text DRVN writes, and lose
-  -- only the actor.
-  update public.notifications nt
-     set title = case
-           when nt.kind ~ '^(order|offer|dispute|receipt|refund)_' then nt.title
-           when nt.kind = 'follow' then left_drvn || ' followed you'
-           when nt.kind = 'car_follow' then left_drvn || ' is following your build'
-           when nt.kind in ('save', 'listing_save') then left_drvn || ' saved this'
-           when nt.kind = 'comment' then left_drvn || ' commented on your update'
-           when nt.kind = 'reaction' then left_drvn || ' reacted to your update'
-           when nt.kind = 'review' then left_drvn || ' left you a review'
-           when nt.kind = 'question' then left_drvn || ' wrote about your part'
-           when nt.kind = 'message' then 'Message from a member who has since left DRVN'
-           else left_drvn
-         end,
-         body = case
-           -- 20261110150000 (Codex on #181): an offer notice's body is the
-           -- listing's title, which the seller wrote; it goes too.
-           when nt.kind ~ '^offer_' then null
-           when nt.kind ~ '^(order|dispute|receipt|refund)_' then nt.body
-           when nt.body is null then null
-           else '(removed)'
-         end,
-         href = case
-           when nt.target_id = p_user or (v_username is not null and nt.href = '/u/' || v_username) then null
-           else nt.href
-         end,
-         actor_id = null
-   where nt.actor_id = p_user;
-  get diagnostics n = row_count; v_counts := v_counts || jsonb_build_object('notifications_sent', n);
+  -- N418 and 20261110150000: what they wrote, as other members'
+  -- notifications copied it, found by actor and by the offer or order the
+  -- notice is about (private.scrub_member_notices, below).
+  v_counts := v_counts || private.scrub_member_notices(p_user, v_username);
 
   -- Their own social record, none of it a transaction key.
   delete from public.notifications where user_id = p_user;
@@ -225,80 +320,60 @@ grant execute on function public.scrub_deleted_account(uuid, text, text) to serv
 -- ---------------------------------------------------------------------------
 -- One-time repair
 -- ---------------------------------------------------------------------------
-create or replace function private.repair_scrubbed_previews()
+create or replace function private.repair_scrubbed_previews(p_batch integer default 5000)
 returns jsonb
 language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
 declare
-  left_drvn constant text := 'A member who has since left DRVN';
+  v_counts jsonb;
   v_actor integer := 0;
-  v_links integer := 0;
   v_offers integer := 0;
+  v_orders integer := 0;
+  v_links integer := 0;
   n integer;
   r record;
 begin
-  -- 1. Notifications an already-scrubbed member is still the actor of.
+  -- 1. Every already-scrubbed member, through the same rules as the scrub.
+  --    Each member's notices are found through indexed keys (actor, the
+  --    recipient of an offer or order of theirs), one member at a time.
   for r in
     select d.user_id from public.account_deletion_requests d
      where d.scrubbed_at is not null and d.user_id is not null
   loop
-    update public.notifications nt
-       set title = case
-             when nt.kind ~ '^(order|offer|dispute|receipt|refund)_' then nt.title
-             when nt.kind = 'follow' then left_drvn || ' followed you'
-             when nt.kind = 'car_follow' then left_drvn || ' is following your build'
-             when nt.kind in ('save', 'listing_save') then left_drvn || ' saved this'
-             when nt.kind = 'comment' then left_drvn || ' commented on your update'
-             when nt.kind = 'reaction' then left_drvn || ' reacted to your update'
-             when nt.kind = 'review' then left_drvn || ' left you a review'
-             when nt.kind = 'question' then left_drvn || ' wrote about your part'
-             when nt.kind = 'message' then 'Message from a member who has since left DRVN'
-             else left_drvn
-           end,
-           body = case
-             when nt.kind ~ '^offer_' then null
-             when nt.kind ~ '^(order|dispute|receipt|refund)_' then nt.body
-             when nt.body is null then null
-             else '(removed)'
-           end,
-           href = case when nt.target_id = r.user_id then null else nt.href end,
-           actor_id = null
-     where nt.actor_id = r.user_id;
-    get diagnostics n = row_count; v_actor := v_actor + n;
+    v_counts := private.scrub_member_notices(r.user_id, null);
+    v_actor := v_actor + (v_counts->>'notifications_sent')::integer;
+    v_offers := v_offers + (v_counts->>'offer_notice_bodies')::integer;
+    v_orders := v_orders + (v_counts->>'order_notice_bodies')::integer;
   end loop;
 
-  -- Links to a retired handle lead nowhere and name the member who left.
-  update public.notifications nt
-     set href = null
-   where nt.href ~ '^/u/[a-z0-9_]{3,30}$'
-     and exists (select 1 from private.username_tombstones t where '/u/' || t.username = nt.href);
-  get diagnostics v_links = row_count;
+  -- 2. Links to a retired handle lead nowhere and name the member who left.
+  --    A scan of notifications, so in batches; one batch is enough today.
+  loop
+    update public.notifications nt
+       set href = null
+     where nt.id in (
+       select x.id from public.notifications x
+        where x.href ~ '^/u/[a-z0-9_]{3,30}$'
+          and exists (select 1 from private.username_tombstones t where '/u/' || t.username = x.href)
+        limit greatest(coalesce(p_batch, 5000), 1));
+    get diagnostics n = row_count;
+    v_links := v_links + n;
+    exit when n = 0;
+  end loop;
 
-  -- 2. Offer notices already rewritten without their actor: the title's
-  --    source is gone, so the body (the listing's title) goes too.
-  update public.notifications nt
-     set body = null
-   where nt.kind ~ '^offer_' and nt.actor_id is null and nt.body is not null
-     and nt.href ~ '^/offers/[0-9a-f-]{36}$'
-     and exists (
-       select 1 from public.offers o
-         join public.listings l on l.id = o.listing_id
-         join public.account_deletion_requests d on d.user_id in (o.buyer_id, l.seller_id) and d.scrubbed_at is not null
-        where o.id = substr(nt.href, 9)::uuid);
-  get diagnostics v_offers = row_count;
-
-  return jsonb_build_object('actor_rows', v_actor, 'retired_links', v_links, 'offer_bodies', v_offers);
+  return jsonb_build_object('actor_rows', v_actor, 'offer_bodies', v_offers, 'order_bodies', v_orders, 'retired_links', v_links);
 end $$;
-revoke all on function private.repair_scrubbed_previews() from public, anon, authenticated;
+drop function if exists private.repair_scrubbed_previews();
+revoke all on function private.repair_scrubbed_previews(integer) from public, anon, authenticated;
 
 do $$
 declare
   r jsonb := private.repair_scrubbed_previews();
 begin
-  raise notice '20261110150000 repair: % notifications of already-scrubbed members rewritten, % links to retired handles cleared, % offer notice bodies cleared',
-    r->>'actor_rows', r->>'retired_links', r->>'offer_bodies';
+  raise notice '20261110150000 repair: % notifications of already-scrubbed members rewritten, % offer and % order notice bodies made neutral, % links to retired handles cleared',
+    r->>'actor_rows', r->>'offer_bodies', r->>'order_bodies', r->>'retired_links';
 end $$;
 
 commit;

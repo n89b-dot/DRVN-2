@@ -38,7 +38,7 @@ TLS. Details: "Recording without running" below.
 |---|---|
 | `20261110150000_deletion_scrub_previews_repair.sql` | not applied |
 
-Restates `public.scrub_deleted_account` (from `20261108180000`) so an offer notice's body, the listing title the seller wrote, goes too. Adds `private.repair_scrubbed_previews()` and runs it once: it rewrites notifications that members scrubbed before `20261108180000` are still the actor of, clears links to retired handles, and clears offer bodies already left without an actor. The counts are printed as a NOTICE when applied; record them here. Idempotent.
+Adds `private.scrub_member_notices(p_user, p_username)`: a leaver's words leave other members' notifications, found by actor and by the offer or order a notice is about (actor-less offer notices, `offer_agent_deal_reached` on `/orders/<id>/checkout`, `order_disputed`'s dispute text, a party's cancel reason). They are replaced by a line that still reads; bodies with none of the leaver's words stay. Restates `public.scrub_deleted_account` (from `20261108180000`) to call it, nothing else changed. Adds `private.repair_scrubbed_previews(p_batch)` and runs it once: the same rules for members scrubbed before `20261108180000`, and links to retired handles cleared in batches. The counts are printed as a NOTICE when applied; record them here. Idempotent.
 
 ## November 8 — deletion: late holds after the scrub, other members' notifications, the tombstone race, old retained cases: N418 (not applied anywhere)
 
