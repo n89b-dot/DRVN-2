@@ -48,6 +48,7 @@ All artifacts are keyed by the commit sha and kept 30 days.
 | `test-results-<sha>-verify` | verify | `test-results/vitest.xml` (JUnit, `npm test`) |
 | `test-results-<sha>-sql-guard` | sql-guard | `test-results/sql-guards.xml` (JUnit: one `<testcase>` per guard, named by the file's basename without `.sql`; a failure's body is the guard's `FAIL` lines verbatim) |
 | `test-results-<sha>-e2e` | e2e | `test-results/operations.xml` (JUnit, `test:operations`), `test-results/playwright.xml` (JUnit, Playwright) |
+| `test-results-<sha>-e2e-launch` | e2e-launch | `test-results/playwright-launch.xml` (JUnit, the launch-configuration browser lane, `test:e2e:launch`) |
 | `test-results-<sha>-stripe-integration` | stripe-integration | `test-results/stripe.xml` (JUnit, `test:stripe`) |
 | `browser-release-summary-<sha>` | e2e | `browser-release-<sha>.json`, the browser suite's counts |
 | `release-gate-<sha>` | release-gate | `release-gate-<sha>.json`: the gate's result and each requirement's outcome, written even when the gate fails. `scope` is `full`, or `documents-only` on a pull request that changed documents only and so skipped the browser suite (`docs/owner/branch-protection.md`); a run on `main` is always `full` |

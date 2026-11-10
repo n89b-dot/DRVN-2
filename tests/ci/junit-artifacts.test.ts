@@ -20,6 +20,7 @@ const LANES: Record<string, string[]> = {
   verify: ["test-results/vitest.xml"],
   "sql-guard": ["test-results/sql-guards.xml"],
   e2e: ["test-results/operations.xml", "test-results/playwright.xml"],
+  "e2e-launch": ["test-results/playwright-launch.xml"],
   "stripe-integration": ["test-results/stripe.xml"],
 };
 

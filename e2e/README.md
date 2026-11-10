@@ -77,6 +77,55 @@ by `realtime-delivery.spec.ts`, which waits less than the 20-second fallback
 refresh so polling can't pass it. (Until 1 October 2026 this section said E2E
 wasn't in CI; it has been since September.)
 
+### The launch-configuration lane
+
+A second, small browser lane runs the settings DRVN launches with, which the
+main suite does not: Stripe in test mode, the public data cache on, the agent
+off and DRVN Shipping off. Its specs are in `e2e-launch/`, its config is
+`playwright.launch.config.ts`, and its environment is built from the recorded
+launch configuration (`docs/release-evidence/launch-configuration.json`), so a
+variable left over from the main suite cannot leak in. The CI job is
+`e2e-launch`; `release-gate` requires it on every change that is not
+documents-only.
+
+What it checks:
+
+- the sell form offers no DRVN Shipping, and the agent is nowhere a member can
+  see even with every beta step opened in the database;
+- a signed-out visitor's second read comes from the shared copy: a row changed
+  underneath the app is not shown;
+- a seller's edit shows to visitors at once;
+- a guest reaches Stripe's own card form, pays with Stripe's test Visa, and the
+  order is settled only when the webhook arrives; a second delivery of the same
+  event answers `duplicate`;
+- after that sale the label, label-refund and cost-carrying tables are empty.
+
+Two things it does that need saying. **The card is presented through Stripe's
+API, not typed into Stripe's form.** The lane checks the form has mounted and
+offers card payment, then confirms the same payment intent with `pm_card_visa`
+and visits the address Stripe sends a buyer back to. Stripe changes what its
+form shows from visit to visit (Link, bank and Klarna options come and go) and
+asks integrators not to automate it. **Stripe cannot call a loopback server**,
+so the lane reads the payment's event from Stripe's API and posts it to the
+app's webhook route itself, signed with the secret the app was started with
+(`e2e-launch/stripe-forward.ts`). The app verifies the signature as usual.
+
+It needs the Actions secret `STRIPE_TEST_SECRET_KEY` and the Actions variable
+`STRIPE_TEST_PUBLISHABLE_KEY` (the `pk_test_…` key of the same Stripe account),
+and fails by name if either is missing. It refuses any key that is not a test
+key.
+
+To run it locally, start the isolated stack and give it the two test keys:
+
+```bash
+STRIPE_SECRET_KEY=sk_test_… NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_… npm run test:e2e:launch
+```
+
+It builds into `.next-launch/` and serves on `http://localhost:3000`. Use
+`localhost`, not `127.0.0.1`: under `next start` the app's own redirects are
+built on `localhost`, so a guest returning from Stripe to `127.0.0.1` would
+lose the cookie that holds their order.
+
 Run local Supabase CLI commands as `npx --yes supabase@2.116.0 …` (the
 version CI pins). The globally installed CLI (2.98.2 as of October 2026)
 cannot parse `supabase/config.toml` — it predates the `local_smtp` section

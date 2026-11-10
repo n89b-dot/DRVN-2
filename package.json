@@ -15,6 +15,7 @@
     "docs:components": "UPDATE_DOCS=1 vitest run src/lib/docs/registry-docs.test.ts",
     "docs:implementation": "UPDATE_DOCS=1 vitest run src/lib/docs/implementation-docs.test.ts",
     "test:e2e": "playwright test",
+    "test:e2e:launch": "playwright test -c playwright.launch.config.ts",
     "test:stripe": "vitest run --config vitest.stripe.config.ts",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build",

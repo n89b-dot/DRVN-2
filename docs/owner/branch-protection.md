@@ -3,7 +3,10 @@
 Goal: nothing reaches `main` without a pull request whose CI passed. The
 check that matters is `release-gate` (`.github/workflows/ci.yml`). It is the
 aggregate job: it fails unless `verify`, `secrets`, `secrets-full`,
-`sql-guard`, `e2e` and `stripe-integration` all ran and passed. There is one
+`sql-guard`, `e2e`, `e2e-launch` and `stripe-integration` all ran and passed.
+(`e2e-launch` is the launch-configuration browser lane, plan 2 item A4; it
+needs the Actions variable `STRIPE_TEST_PUBLISHABLE_KEY` beside the secret in
+step 2 below.) There is one
 exception, described under "Documents-only pull requests" below.
 
 Script: `scripts/owner/branch-protection.sh`. Background: runbook §8
@@ -15,10 +18,15 @@ Script: `scripts/owner/branch-protection.sh`. Background: runbook §8
    where rulesets and branch protection are unavailable (GitHub answers
    `403 Upgrade to GitHub Pro or make this repository public`). Upgrade the
    account to GitHub Pro, or make the repository public. About 5 minutes.
-2. **Stripe test key for CI.** Settings → Secrets and variables → Actions →
+2. **Stripe test keys for CI.** Settings → Secrets and variables → Actions →
    new repository secret `STRIPE_TEST_SECRET_KEY` = a Stripe **test-mode**
    secret key (`sk_test_…`). Without it `stripe-integration` fails on purpose
-   and `release-gate` can never pass, so every PR would be blocked.
+   and `release-gate` can never pass, so every PR would be blocked. On the
+   Variables tab of the same page, new repository variable
+   `STRIPE_TEST_PUBLISHABLE_KEY` = the **test-mode** publishable key
+   (`pk_test_…`) of the same Stripe account. It is not a secret (it ships in
+   every page of the site). Without it `e2e-launch` fails on purpose, naming
+   the variable.
 3. **GitHub CLI.** `gh auth login` as an account with admin rights on the
    repository.
 4. Make sure `release-gate` has run at least once on a PR (it has). GitHub
@@ -101,7 +109,8 @@ or merge `main` into it) and let its checks rerun before merging.
 ## Documents-only pull requests
 
 Since plan 2 item A0 (November 2026), a pull request whose every changed file
-is a document skips the `e2e` job, and `release-gate` accepts the skip. It
+is a document skips the two browser jobs, `e2e` and `e2e-launch`, and
+`release-gate` accepts those skips. It
 still runs and must pass `verify`, both secret scans, `sql-guard` and
 `stripe-integration`, so such a pull request is mergeable in about five
 minutes, not twenty to forty-five.
@@ -114,10 +123,10 @@ minutes, not twenty to forty-five.
 - **What decides it:** the `changes` job, from the diff between the pull
   request's merge commit and its base. A moved file is read as a deletion plus
   an addition, so moving code into `docs/` is still a code change.
-- **What the gate accepts:** a skipped `e2e` only when the event is a pull
-  request, the `changes` job succeeded, and it answered documents-only. A
-  skipped, failed or cancelled `e2e` in any other case keeps the gate red, as
-  does a failed `changes` job.
+- **What the gate accepts:** a skipped `e2e` and a skipped `e2e-launch` only
+  when the event is a pull request, the `changes` job succeeded, and it
+  answered documents-only. A skipped, failed or cancelled browser job in any
+  other case keeps the gate red, as does a failed `changes` job.
 - **`main` is unchanged:** a push to `main` and a manual run always run the
   whole suite. Every commit on `main` is still proven by the browser tests, and
   the deploy workflow reads that run.
