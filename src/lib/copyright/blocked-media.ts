@@ -15,12 +15,21 @@ import { reportError } from "@/lib/monitoring";
  * the proxy refuses `/_next/image` for any object in
  * public.copyright_blocked_media (20261107231002), cached copy or not.
  *
- * The list is small and changes only when an admin acts, so each proxy
- * instance keeps it for 15 seconds: image requests share one small read in
- * that time. The proxy is bundled apart from the app (and on Vercel runs
- * apart from it), so the admin action can't reach this copy: a takedown is
- * refused here within 15 seconds. A failed read keeps the last good list (or
- * none) and serves the image: a database blip mustn't blank every photo.
+ * The database is asked about the one object a request names: a lookup by
+ * the table's primary key (N718, work review #155). It used to read the
+ * whole list into each instance every 15 seconds, which stopped at
+ * PostgREST's 1,000 rows, and, once paged, grew with every takedown ever
+ * made and was paid again by every cold instance.
+ *
+ * An answer is remembered per object for 15 seconds, so the requests for one
+ * photo (each width, each viewer) share one lookup, and requests in flight
+ * for the same object share the one question. The proxy is bundled apart
+ * from the app (and on Vercel runs apart from it), so the admin action can't
+ * reach this copy: a takedown is refused here within 15 seconds. A failed
+ * lookup keeps the last answer for that object: a database blip mustn't
+ * blank a photo this instance has already checked. With no answer yet the
+ * result is null, "unknown", and the proxy refuses that photo until a lookup
+ * succeeds: "not blocked" would serve a taken-down photo.
  *
  * Server code only (it reads with the service key). It builds its own client
  * rather than importing `@/lib/supabase/admin`, whose `server-only` marker is
@@ -28,45 +37,71 @@ import { reportError } from "@/lib/monitoring";
  */
 
 export const BLOCKED_MEDIA_TTL_MS = 15_000;
+/** How many objects' answers an instance remembers; the oldest go first. */
+export const BLOCKED_MEDIA_REMEMBERED = 5_000;
 
-let cached: { keys: Set<string>; at: number } | null = null;
-let loading: Promise<Set<string>> | null = null;
+const answers = new Map<string, { blocked: boolean; at: number }>();
+const asking = new Map<string, Promise<boolean | null>>();
 
-async function load(): Promise<Set<string>> {
-  const { url, serviceRoleKey } = requireServerEnv();
-  const admin = createClient<Database>(url, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: { fetch: (input, init) => fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(3000) }) },
-  });
-  const { data, error } = await admin.from("copyright_blocked_media").select("object_key").limit(10_000);
-  if (error) throw error;
-  return new Set((data ?? []).map((row) => row.object_key));
-}
-
-export async function blockedMediaKeys(now: number = Date.now()): Promise<Set<string>> {
-  if (cached && now - cached.at < BLOCKED_MEDIA_TTL_MS) return cached.keys;
-  loading ??= load()
-    .then((keys) => {
-      // Aged from the caller's clock, the same one the check above reads: a
-      // read that resolved late must not make the list look fresher than it
-      // is (and the tests' clock is the caller's).
-      cached = { keys, at: now };
-      return keys;
-    })
-    .catch((error) => {
-      reportError("[copyright] blocked media list unavailable", { error });
-      // Try again on the next request rather than in a minute.
-      return cached?.keys ?? new Set<string>();
-    })
-    .finally(() => {
-      loading = null;
+let client: ReturnType<typeof createClient<Database>> | null = null;
+function admin() {
+  if (!client) {
+    const { url, serviceRoleKey } = requireServerEnv();
+    client = createClient<Database>(url, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { fetch: (input, init) => fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(3000) }) },
     });
-  return loading;
+  }
+  return client;
 }
 
-/** Drops this module's copy (tests; a fresh read on the next request). */
+async function lookUp(key: string): Promise<boolean> {
+  const { data, error } = await admin().from("copyright_blocked_media").select("object_key").eq("object_key", key).maybeSingle();
+  if (error) throw error;
+  return data !== null;
+}
+
+/**
+ * Whether a takedown blocks this storage object ('<bucket>/<path>'): true,
+ * false, or null when the database could not be asked and this instance has
+ * no earlier answer for it.
+ */
+export async function mediaIsBlocked(key: string, now: number = Date.now()): Promise<boolean | null> {
+  const known = answers.get(key);
+  if (known && now - known.at < BLOCKED_MEDIA_TTL_MS) return known.blocked;
+  let ask = asking.get(key);
+  if (!ask) {
+    ask = lookUp(key)
+      .then((blocked) => {
+        // Aged from the caller's clock, the same one the check above reads: a
+        // lookup that resolved late must not make the answer look fresher
+        // than it is (and the tests' clock is the caller's).
+        answers.delete(key);
+        answers.set(key, { blocked, at: now });
+        if (answers.size > BLOCKED_MEDIA_REMEMBERED) {
+          for (const oldest of answers.keys()) {
+            answers.delete(oldest);
+            if (answers.size <= BLOCKED_MEDIA_REMEMBERED) break;
+          }
+        }
+        return blocked;
+      })
+      .catch((error) => {
+        reportError("[copyright] blocked media lookup unavailable", { error });
+        // The last answer stands; it is asked again on the next request.
+        return answers.get(key)?.blocked ?? null;
+      })
+      .finally(() => {
+        asking.delete(key);
+      });
+    asking.set(key, ask);
+  }
+  return ask;
+}
+
+/** Drops this module's answers (tests; a fresh lookup on the next request). */
 export function forgetBlockedMedia(): void {
-  cached = null;
+  answers.clear();
 }
 
 /**

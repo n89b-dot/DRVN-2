@@ -76,7 +76,10 @@ export default async function AdminPaymentsPage({
       </form>
 
       <section aria-label="Recovery cases" className="mb-8">
-        <span className="microlabel">Recovery cases ({openRecoveries.length} open)</span>
+        <span className="microlabel">
+          Recovery cases ({ops.openRecoveryTotal} open
+          {!q && openRecoveries.length < ops.openRecoveryTotal ? `, newest ${openRecoveries.length} shown` : ""})
+        </span>
         {openRecoveries.length ? (
           <div className="rowlist">
             {openRecoveries.map((r) => (

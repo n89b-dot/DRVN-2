@@ -1381,6 +1381,8 @@ export type StuckCarryPayout = Pick<
 
 export type PaymentsOps = {
   recoveries: (PaymentRecovery & { orderTitle: string })[];
+  /** Every open recovery case, counted in the database (N718); the list shows the newest 200. */
+  openRecoveryTotal: number;
   stuckIntents: (TransferIntent & { seller: PartyRef | null; orderTitle: string })[];
   /** Seller credit payouts needing an operator's retry or cancel (readiness 21). */
   stuckCarryPayouts: StuckCarryPayout[];
@@ -1405,12 +1407,22 @@ export type PaymentsOps = {
 
 export async function getPaymentsOps(opts: { query?: string } = {}): Promise<PaymentsOps> {
   const a = await admin();
-  const [recoveries, intents, events, refundOps, alerts, carryPayouts] = await Promise.all([
+  // N718: open cases are read on their own (with their exact count), and the
+  // recently closed ones apart. Reading the 100 newest of any status and
+  // filtering here hid every open case older than the 100th recovery.
+  const [recoveries, closedRecoveries, intents, events, refundOps, alerts, carryPayouts] = await Promise.all([
+    a
+      .from("payment_recoveries")
+      .select("*", { count: "exact" })
+      .eq("status", "open")
+      .order("created_at", { ascending: false })
+      .limit(200),
     a
       .from("payment_recoveries")
       .select("*")
+      .neq("status", "open")
       .order("created_at", { ascending: false })
-      .limit(100),
+      .limit(25),
     a
       .from("transfer_intents")
       .select("*")
@@ -1453,13 +1465,14 @@ export async function getPaymentsOps(opts: { query?: string } = {}): Promise<Pay
   // Each panel is a queue an operator acts on; an unread one must not look
   // empty.
   unlessFailed("payment recoveries", recoveries.error);
+  unlessFailed("closed payment recoveries", closedRecoveries.error);
   unlessFailed("transfer intents", intents.error);
   unlessFailed("webhook events", events.error);
   unlessFailed("refund operations", refundOps.error);
   unlessFailed("the admin alert backlog", alerts.error);
   unlessFailed("stuck seller credit payouts", carryPayouts.error);
 
-  const recoveryRows = recoveries.data ?? [];
+  const recoveryRows = [...(recoveries.data ?? []), ...(closedRecoveries.data ?? [])];
   const intentRows = intents.data ?? [];
   const refundOpRows = refundOps.data ?? [];
   const carryRows = carryPayouts.data ?? [];
@@ -1510,6 +1523,7 @@ export async function getPaymentsOps(opts: { query?: string } = {}): Promise<Pay
 
   return {
     recoveries: filteredRecoveries,
+    openRecoveryTotal: recoveries.count ?? (recoveries.data ?? []).length,
     stuckIntents: filteredIntents,
     stuckCarryPayouts,
     refundOps: refundOpRows
@@ -1954,36 +1968,21 @@ export type OpenOperation = {
 
 export async function getOpenOperations(limit = 50): Promise<OpenOperation[]> {
   const a = await admin();
-  const { data: requested, error } = await a
-    .from("admin_audit_log")
-    .select("id, action, subject_type, subject_id, order_id, reason, created_at, actor_id, metadata")
-    .eq("metadata->>phase", "requested")
-    .order("created_at", { ascending: false })
-    .limit(200);
+  // N718: one query in the database (admin_open_operations, 20261110210000)
+  // finds the newest requests with no closing row, however many closed ones
+  // are newer. The app used to walk the audit log for them, a page of
+  // requests and then every later row of those operations, on each load.
+  type Requested = {
+    id: number; action: string; subject_type: AdminAuditLogEntry["subject_type"]; subject_id: string; order_id: string | null;
+    reason: string; created_at: string; actor_id: string; operation_id: string; phases: string[]; seen_through: number;
+  };
+  const { data, error } = await a.rpc("admin_open_operations", { p_limit: limit });
   if (error) throw new Error(`Could not load pending operations: ${error.message}`);
-  const opId = (m: unknown) =>
-    m && typeof m === "object" && "operationId" in m ? String((m as { operationId: unknown }).operationId) : null;
-  const ids = (requested ?? []).map((r) => opId(r.metadata)).filter((id): id is string => Boolean(id));
-  if (!ids.length) return [];
-  const { data: later, error: laterError } = await a
-    .from("admin_audit_log")
-    .select("id, metadata")
-    .in("metadata->>operationId", ids)
-    .neq("metadata->>phase", "requested");
-  if (laterError) throw new Error(`Could not load pending operations: ${laterError.message}`);
-  const phases = new Map<string, Set<string>>();
-  const latest = new Map<string, number>();
-  for (const row of later ?? []) {
-    const id = opId(row.metadata);
-    const phase = (row.metadata as { phase?: string } | null)?.phase;
-    if (!id || !phase) continue;
-    phases.set(id, (phases.get(id) ?? new Set()).add(phase));
-    latest.set(id, Math.max(latest.get(id) ?? 0, row.id));
-  }
-  const open = (requested ?? [])
-    .map((r) => ({ r, id: opId(r.metadata) }))
-    .filter(({ id }) => id && !phases.get(id)?.has("completed") && !phases.get(id)?.has("reconciled"))
-    .slice(0, limit);
+  if (!Array.isArray(data)) throw new Error("Could not load pending operations: an answer that is not a list");
+  const open = (data as unknown as Requested[]).map((r) => ({ r, id: r.operation_id }));
+  const phases = new Map(open.map(({ r }) => [r.operation_id, new Set(r.phases ?? [])]));
+  const latest = new Map(open.map(({ r }) => [r.operation_id, Number(r.seen_through)]));
+  if (!open.length) return [];
 
   // Refund records created by these requests (same rule as the database's
   // reconciliation: this admin's refunds on the order since the request).

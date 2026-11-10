@@ -169,7 +169,12 @@ export const priceComparables = defineCapability({
   },
 });
 
-/** The most a count says exactly; past it, "over 1,000". */
+/**
+ * The most a count says exactly; at it, "1,000+". N718: PostgREST answers at
+ * most 1,000 rows, so asking the capped search for 1,001 to tell "over" from
+ * "exactly" never worked: it can return 1,000 at most. A full answer now
+ * means 1,000 or more.
+ */
 const COUNT_CAP = 1000;
 
 /**
@@ -213,12 +218,12 @@ export const browseMarketplace = defineCapability({
       p_brand: state.brand,
       p_min_cents: state.min ? Math.round(Number(state.min) * 100) : undefined,
       p_max_cents: state.max ? Math.round(Number(state.max) * 100) : undefined,
-      p_cap: COUNT_CAP + 1,
+      p_cap: COUNT_CAP,
     });
     if (error) throw new CapabilityError("failed", "Search is unavailable", error);
     const found = (data ?? []).length;
     const filters = Object.fromEntries(Object.entries(state).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
-    return { count: Math.min(found, COUNT_CAP), capped: found > COUNT_CAP, href: marketplaceHref(state), filters };
+    return { count: Math.min(found, COUNT_CAP), capped: found >= COUNT_CAP, href: marketplaceHref(state), filters };
   },
 });
 

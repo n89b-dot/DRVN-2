@@ -54,13 +54,16 @@ async function recommendListingsByRule(
 
   const [{ data: garage }, { data: mySaves }] = await Promise.all([
     admin.from("cars").select("make, model").eq("owner_id", userId),
-    // Newest first: rule 2 slices this list to CANDIDATE_CAP, and a stable
-    // most-recent sample beats whatever order Postgres happens to return.
+    // The member's newest saved listings: rule 2 uses CANDIDATE_CAP of them,
+    // so that is all that is asked for (N718: it read every save of every
+    // kind, which stops at 1,000 rows, and then kept the listings among them).
     admin
       .from("saves")
       .select("target_type, target_id")
       .eq("user_id", userId)
-      .order("created_at", { ascending: false }),
+      .eq("target_type", "listing")
+      .order("created_at", { ascending: false })
+      .limit(CANDIDATE_CAP),
   ]);
 
   // Rule 1 — platform match via source car metadata. Resolve which source
