@@ -180,6 +180,7 @@ export class PaymentsConfigError extends Error {
 }
 
 import { MODEL_PRICES } from "./ai/config";
+import { hostedReasons } from "./deployment";
 
 type EnvLike = Record<string, string | undefined>;
 
@@ -219,6 +220,11 @@ export function clientAddressSource(env: EnvLike = process.env): ClientAddressSo
   return null;
 }
 
+// What counts as hosted is read in one place, src/lib/deployment.ts (work
+// review #144, N1060); this file asks its broad question, "could this be
+// reachable by the public?".
+export { hostedReasons };
+
 /**
  * N540: the sandbox override must never be present on a hosted deployment,
  * whatever the payment mode. It exists only so `next start` (which runs with
@@ -229,21 +235,6 @@ export function clientAddressSource(env: EnvLike = process.env): ClientAddressSo
  * loopback, or when it holds a live Stripe key. Any of those with the
  * variable set, to any value, fails boot. Returns the reason, or null.
  */
-/** Why this looks like a hosted deployment (empty: it doesn't). */
-export function hostedReasons(env: EnvLike = process.env): string[] {
-  const reasons: string[] = [];
-  if (env.VERCEL === "1") reasons.push(`a Vercel deployment${env.VERCEL_ENV ? ` (${env.VERCEL_ENV})` : ""}`);
-  try {
-    const site = new URL(env.NEXT_PUBLIC_SITE_URL || "");
-    const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(site.hostname) || site.hostname.endsWith(".localhost");
-    if (site.protocol === "https:" && !loopback) reasons.push(`a public site URL (${site.origin})`);
-  } catch {
-    // No canonical URL is not, by itself, a hosted deployment.
-  }
-  if (/^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY ?? "")) reasons.push("a live Stripe key");
-  return reasons;
-}
-
 export function stubOverrideProblem(env: EnvLike = process.env): string | null {
   if (env.PAYMENTS_ALLOW_STUB_IN_PRODUCTION === undefined) return null;
   const reasons = hostedReasons(env);

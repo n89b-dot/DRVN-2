@@ -113,10 +113,10 @@ Status words: **merged** (on `main`, CI green) · **in review** (PR up, waiting 
 | Step | Findings | Ids | PR | Merge commit | Status |
 |---|---|---|---|---|---|
 | 0 / 3.4 Codex reviews waived | `#129` | N725 | #214 | `029c29e` | merged 10 Nov: every owed row waived by Neil's ruling; `tests/ci/codex-queue.test.ts` accepts `waived` and refuses `owed` |
-| 1 Working rules written down | `#125` to `#128`, `#163` | | #221 | | in review, approved: R1 to R3 in `supabase/MIGRATIONS.md`, R5 and R6 in the pull-request template |
-| 2.1 Deletion runbook and Resume | `#126`, `#154`, `#157` | N944, N734 | #198 | | inherited 10 Nov; fix written, not pushed until its turn: the D6 named exception in `tests/ci/migration-order.test.ts`, the guard that passed on any error (and the same block in #200's takedown guard), the three situations the console cannot finish |
-| 2.2 18+ for earlier members | `#152` | N662, N686 | #201 merged as written (`58b4ad7`); #217 closed unmerged; #222 | | **removed by ruling (Neil, 10 November 2026)**; #222 in review, approved; migration `20261110131000` not applied |
-| 2.3 Upload size | `#158` | N955 | #203 | | inherited; fix written, not pushed until its turn: a second shrink method and tests of the server's 413 |
+| 1 Working rules written down | `#125` to `#128`, `#163` | N1038, N1039, N1040, N1042, N1079 | #221 | `5ada2e0` | merged 10 Nov: R1 to R3 in `supabase/MIGRATIONS.md`, R5 and R6 in the pull-request template |
+| 2.1 Deletion runbook and Resume | `#125`, `#126`, `#154`, `#157` | N944, N734, N1038, N1039, N1070, N1073 | #198 | | approved 10 Nov, in batch 2 (#230): the D6 named exception in `tests/ci/migration-order.test.ts`, two guards that no longer pass on any error, runbook §5d "What the console cannot finish". Its migration `20261110110000` was already on both databases. **Follow-up owed:** `public.admin_resume_account_deletion` takes no actor and does not call `assert_admin_actor` in SQL (service role only today, and the app checks the admin); add the check in a new migration with the next deletion change |
+| 2.2 18+ for earlier members | `#152` | N662, N686, N1068 | #201 merged as written (`58b4ad7`); #217 closed unmerged; #222 | | **removed by ruling (Neil, 10 November 2026)**; #222 approved, last member of batch 2 (#230); migration `20261110131000` applied to shared dev then staging immediately before that batch merges |
+| 2.3 Upload size | `#158` | N955, N1074 | #203; avatar follow-up to come | | #203 approved 10 Nov, in batch 2 (#230): a second shrink method and tests of the server's 413; resolves N955. **N1074 stays open** until the profile photo upload shrinks too (written, goes up when #203 lands) |
 | 2.4 Staging out of search | `#156` | N958, N961 | #188 | | inherited, not started |
 | 2.5 Set-up order | `#156` | N952 | #190 | | inherited, not started |
 | 2.6 Protection watch, and its follow-up | `#156`, `#139` | N949, N950 | #195 | | inherited, not started (the orchestrator merges #195) |
@@ -125,14 +125,14 @@ Status words: **merged** (on `main`, CI green) · **in review** (PR up, waiting 
 | 2.9 A deleted member's words | `#153` | | #206 | | inherited, not started |
 | 2.10 Chargeback retry | `#148` | N944 | #208 | | inherited, not started |
 | 2.11 Order emails | `#147` | | #204 | | inherited, not started |
-| 2.12 Chargeback write-off | `#149` | N944 | #207 | | set aside until after launch (decision D1): a draft since 10 Nov, with what it needs when it returns |
-| 2.13 Copyright counter-notice | `#150` | | #209 | | set aside until after launch (decision D2): a draft since 10 Nov; the by-hand procedure is runbook §5e |
+| 2.12 Chargeback write-off | `#149` | N944, N1065 | #207 | | set aside until after launch (decision D1): a draft since 10 Nov, with what it needs when it returns |
+| 2.13 Copyright counter-notice | `#150` | N1066 | #209; #225 | `76a209a` (#225, in batch 1) | set aside until after launch (decision D2): a draft since 10 Nov; the by-hand procedure is runbook §5e, merged 10 Nov |
 | Duplicate test fix | `#124` | | #211 | | closed: the fix merged with #200 |
 | 3.1 Photos on `main` | `#132`, `#135`, `#136`, `#137` | | | | not started (after step 2.7 merges) |
-| 3.2 The deploy path | `#138`, `#140`, `#142`, `#143`, `#144` | N715, N962, N957, N714, N634 | #218, #219 | | in review, both approved. #218: admin gate on every console path, key kinds at boot, one commit-sha rule, patched ranges, rollback caveats. #219: `--status` signs in with a read-only login (the orchestrator merges it). The single definition of "hosted" (`#144`) is done in #188 |
-| 3.3 Data set-up | `#141`, `#145` | N667, N943 | #220 | | in review, approved. Staging import approved to run from merged code |
+| 3.2 The deploy path | `#138`, `#140`, `#142`, `#143`, `#144` | N1054, N1056, N1058, N1059, N1060; N715, N962, N957, N714, N634 | #218, #219 | `76a209a` (batch 1, #228) | merged 10 Nov: admin gate on every console path, key kinds at boot, one commit-sha rule that prefers the workflow's sha, patched ranges, rollback caveats, and `--status` through a read-only login. **N1060 (`#144`) stays open** until #188 gives the single definition of "hosted" |
+| 3.3 Data set-up | `#141`, `#145` | N667, N1061, N943 | #220; this evidence PR | `76a209a` (batch 1, #228) | merged 10 Nov. Staging import run 10 Nov 16:16 UTC from merged code: 315 makes, 5,541 models, 175 of 194 curated generations; recorded in `docs/release-evidence/infrastructure.md` |
 | Fixed-date sweep | `#124`, `#163` | | none needed | | done 10 Nov: every unit test under `src` passes with the clock 400 days and five years ahead |
-| The table the OS reads | plan step 4.8 | | #223 | | in review, approved: format in `docs/ids.md`, check in `tests/ci/os-report-table.test.ts` |
+| The table the OS reads | plan step 4.8 | | #223 | `76a209a` (batch 1, #228) | merged 10 Nov: format in `docs/ids.md`, check in `tests/ci/os-report-table.test.ts`, on the OS's own file pattern |
 
 ## Plan 1: needs Neil
 
@@ -143,6 +143,8 @@ Status words: **merged** (on `main`, CI green) · **in review** (PR up, waiting 
 - **Step 3.3, the three Volkswagen trims:** on a database filled only from the pinned VehiclesDB release, the curated generations for `Golf GTI`, `GTI` and `Golf R` (19 of 194) have no catalogue model to attach to, because VehiclesDB files them under `Golf`. Nothing was added to the catalogue. A GTI is entered as a Golf and resolves its generation. Revisit with real use.
 - **Step 3.2, the deploy's read-only login:** `deploy_reader` was not created on staging. It is five statements in the owner's set-up guide and has no secret to live in until the GitHub environments exist; it swaps two secrets on his list for two, adding none.
 - **Finding `#157`, one more guard than the plan names:** the takedown guard that merged with #200 had the same `when others then null` as #198's; both are fixed in #198's pull request, because it is one finding.
+- **How changes land, from 10 November 16:00 UTC (the orchestrating session's decision):** approved pull requests merge in batches. A batch branch is cut from `main`, each member's approved head is merged with `--no-ff` (never rebased or squashed, so GitHub marks the member merged), the checks run once on the combination, and the orchestrating session verifies the batch holds exactly what it approved. At most one member with a migration to apply, merged last, applied to shared dev then staging once the batch is green and immediately before the merge. Batch 1 was #228 (`76a209a`): #225, #218, #220, #223, #219, and plan 2's #216 and #224. Batch 2 is #230.
+- **Rule R4, as clarified on 10 November:** merge when the pull request is level with `main` and every check is green on its head; do not wait for `main`'s own run of the previous merge, which tests the same tree. If any run on `main` completes red, stop merging and tell the orchestrating session.
 - **Needs Neil, format:** every line under "Plan 1: needs Neil" is a bullet of the form `- **short name:** one sentence`, which is the shape the Intelligence OS reads. The section is empty when nothing needs him.
 
 ---
