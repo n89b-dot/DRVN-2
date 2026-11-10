@@ -23,7 +23,14 @@ recorded file is skipped, and a destructive baseline (0001) is refused on a
 database with any table in `public`. Details: "Applying without Docker or
 psql" below.
 
-**Staging stays level with shared dev** (R-staging-behind). A migration PR is applied to shared dev *and* staging before it merges, by the same session, with both cells filled. `tests/ci/migrations-md.test.ts` lets a row name `shared-dev` without `staging` (or say `not applied`) only while the file is less than two days old by its timestamp. A session that cannot reach staging lists the file in `supabase/migrations-staging-pending.json` with the reason, and the next session with the credential applies it and removes the entry.
+**Working rules for a migration pull request** (in force from 10 November 2026; `docs/plans/2026-11-work-review-remediation-plan.md`, workstream 1, from the work review's findings #125, #126 and #128):
+
+- **Approved, then applied (R2).** A migration is applied to shared dev or staging only after the reviewing session has approved its pull request. The order is: review approves, apply with the runner to shared dev, then staging, fill both cells, then merge. Three migrations were applied to both databases before review on 9 November; a database ahead of `main` cannot be reviewed back.
+- **Dated when next to merge (R3).** Give a migration file its timestamp when its pull request is next to merge, not when it is written. A timestamp chosen early fixes the merge order in advance and forces a rename when another pull request merges first.
+- **An applied file is never edited.** Once a file has been applied to any database, its bytes are final, merged or not. A further change is a new migration.
+- **At most three in review (R1).** No more than three pull requests that carry a migration are in review at once, across every session.
+
+**Staging stays level with shared dev** (R-staging-behind). A migration PR is applied to shared dev *and* staging after its review is approved (R2 above) and before it merges, by the same session, with both cells filled. `tests/ci/migrations-md.test.ts` lets a row name `shared-dev` without `staging` (or say `not applied`) only while the file is less than two days old by its timestamp. A session that cannot reach staging lists the file in `supabase/migrations-staging-pending.json` with the reason, and the next session with the credential applies it and removes the entry.
 
 **A merged migration is never renamed** (#97). Apply order on every target is merge order, so filename order must stay the same as merge order. A pull request may only add migration files, each with a timestamp later than every file already on `main`, and may never rename or remove a file `main` has. If `main` gains a later file before yours merges, rename yours (it is not merged yet) to a timestamp after it. `tests/ci/migration-order.test.ts` fails a PR that breaks either rule, naming the file. Find what a merge added with `git diff --diff-filter=A`, never by name.
 
@@ -39,6 +46,46 @@ TLS. Details: "Recording without running" below.
 | `20261110150000_deletion_scrub_previews_repair.sql` | not applied |
 
 Adds `private.scrub_member_notices(p_user, p_username)`: a leaver's words leave other members' notifications, found by actor and by the offer or order a notice is about (actor-less offer notices, `offer_agent_deal_reached` on `/orders/<id>/checkout`, `order_disputed`'s dispute text, a party's cancel reason). They are replaced by a line that still reads; bodies with none of the leaver's words stay. Restates `public.scrub_deleted_account` (from `20261108180000`) to call it, nothing else changed. Adds `private.repair_scrubbed_previews(p_batch)` and runs it once: the same rules for members scrubbed before `20261108180000`, and links to retired handles cleared in batches. The counts are printed as a NOTICE when applied; record them here. Idempotent.
+
+## November 10 — the earlier-member 18+ check is removed (Neil's ruling, 10 November)
+
+| File | Applied to |
+|---|---|
+| `20261110131000_drop_age_confirmation_due.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
+
+Drops `public.my_age_confirmation_due()`. Every account from before the 18+ confirmation is a test account, so nothing asks them any more: the app from the same PR no longer calls the function, has no `/confirm-age` page and no check in the request proxy. The 18+ box at sign-up, onboarding and guest checkout, the `age_confirmations` table and its rows are untouched. Apply at any time before a first deploy; an older app that still calls the function reports a failed check and lets the page load. After this the next paragraph's function no longer exists.
+
+## November 10 — an operator resumes a stuck account deletion: report five #106/#108 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110110000_admin_resume_account_deletion.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
+
+Adds `public.admin_resume_account_deletion(p_user, p_dry_run)`, service role only, which the console's **Resume deletion** (`deletion.resume`) calls through `auditedAction`. It puts a failed deletion job, or a late-hold case whose hold has settled, back in the worker's queue under the deletion lock, and refuses every other state. Additive. Also `public.release_refused_deletion_resume(p_actor, p_operation, p_detail)`, service role only, which closes a refused resume's journal entry when the job is not queued, so the next resume isn't blocked as awaiting reconciliation. The control appears with the app from the same PR; applied first, the function waits unused.
+
+## November 10 — earlier members asked to confirm 18+ on their next visit: report five #110 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110130000_age_confirmation_due.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
+
+Adds `public.my_age_confirmation_due()` for signed-in members. The request proxy calls it once per browser on a member's next page request, and sends a member who joined before the 18+ confirmation, with a handle and no record, to `/confirm-age`. **Apply before deploying the app from the same PR.** Until it exists the proxy reports a failed check on every signed-in page request and lets the page load.
+
+## November 10 — a takedown stays taken down: report five #109 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110120000_copyright_takedown_holds.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
+
+Codex's review of #117, the two open database findings. A listing a checkout held at takedown (`keptListingStatus`) can never become `active` again: a failed or released checkout removes it instead, and a sale still completes. `private.member_media_ref_ok` (now `volatile`) takes the object's lock and refuses a blocklisted object. A new row in `copyright_blocked_media` takes the same lock and purges every reference to the object again. Applying it also removes, once, any held listing already back on sale. Order does not matter: no app change depends on it. After review: the blocklist binds every writer (`private.media_url_blocked`, checked first in the restated `private.guard_member_media_ref` and `private.guard_member_post_body_media`; the owner checks stay member-only); the purge runs once per statement in key order and strips post bodies too (`private.strip_media_from_body`); a listing a takedown removed can't be restored or re-published (refused with the reason).
+
+## November 10 — one signed photo URL per window across instances: report five #117 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110100000_photo_signatures_shared.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
+
+Adds `private.photo_signatures` and the service-role functions `photo_signatures_read` and `photo_signatures_offer` (offers insert in key order, so concurrent instances never deadlock, and skip paths the table would refuse), the shared memo that makes every app instance show one signed URL per member photo per hour-long window (`src/lib/supabase/photo-signing.ts`). It also restates `private.prune_cron_history()` (from `20261107191000`, the job's command unchanged) to drop rows older than two hours daily, and adds a trigger that removes a member's rows when their deletion scrub records `scrubbed_at`. Order does not matter: while the functions are missing, the app signs per response, as before, and reports it at most every ten minutes.
 
 ## November 8 — deletion: late holds after the scrub, other members' notifications, the tombstone race, old retained cases: N418 (not applied anywhere)
 

@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,6 +10,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Scenario = { claims: Record<string, unknown> | null; refresh: boolean; throws?: boolean };
 let scenario: Scenario = { claims: null, refresh: false };
+// N662: what the removed age check would be told, and whether anything asks (nothing may).
+const age = { due: false as boolean, error: null as unknown, calls: 0, signal: null as AbortSignal | null };
 
 const ROTATED = [
   { name: "sb-test-auth-token.0", value: "rotated-chunk-0", options: { path: "/", httpOnly: true, sameSite: "lax" as const, maxAge: 3600 } },
@@ -24,9 +29,24 @@ vi.mock("@supabase/ssr", () => ({
         return { data: scenario.claims ? { claims: scenario.claims } : null };
       },
     },
+    rpc: () => ({
+      abortSignal: async (signal: AbortSignal) => {
+        age.calls += 1;
+        age.signal = signal;
+        return { data: age.error ? null : age.due, error: age.error };
+      },
+    }),
   }),
 }));
-vi.mock("@/lib/env", () => ({ hasSupabaseConfig: () => true, isProduction: false, publicKey: () => "anon-key" }));
+// Work review #143: whether the Supabase configuration is present, and whether this is a production build.
+const deployment = vi.hoisted(() => ({ configured: true, production: false }));
+vi.mock("@/lib/env", () => ({
+  hasSupabaseConfig: () => deployment.configured,
+  get isProduction() {
+    return deployment.production;
+  },
+  publicKey: () => "anon-key",
+}));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 
 import { CONSOLE_NOT_FOUND, isConsolePath, updateSession } from "./proxy";
@@ -147,9 +167,68 @@ describe("updateSession signs out a Server Action into a sign-in, not a failed c
   });
 });
 
+// N662: accounts from before the 18+ confirmation are test accounts and are
+// not asked (Neil's ruling, 10 November 2026). The proxy makes no age check.
+describe("the proxy asks no 18+ question on a page request (N662)", () => {
+  beforeEach(() => {
+    scenario = { claims: { sub: "u1" }, refresh: false };
+    age.due = true;
+    age.error = null;
+    age.calls = 0;
+  });
+
+  it("N662: a signed-in member's page loads with no database call, no redirect and no remember-cookie, whatever the database would answer", async () => {
+    for (const path of ["/marketplace", "/garage?tab=mods", "/home", "/settings"]) {
+      const response = await updateSession(request(path));
+      expect(response.headers.get("location"), path).toBeNull();
+      expect(response.cookies.get("drvn_age_checked"), path).toBeUndefined();
+    }
+    const home = await updateSession(request("/"));
+    expect(new URL(home.headers.get("location")!).pathname).toBe("/home");
+    expect(age.calls).toBe(0);
+  });
+
+  it("N662: the earlier-member question has no page of its own any more", () => {
+    expect(fs.existsSync(path.resolve(__dirname, "../../app/(auth)/confirm-age"))).toBe(false);
+  });
+});
+
 describe("the proxy turns signed-out visitors away from the console (N715)", () => {
   beforeEach(() => {
     scenario = { claims: null, refresh: false };
+    deployment.configured = true;
+    deployment.production = false;
+  });
+
+  const consoleAnswer = async (path: string) => {
+    const response = await updateSession(request(path));
+    const rewrite = response.headers.get("x-middleware-rewrite");
+    return { response, notFound: rewrite ? new URL(rewrite).pathname === CONSOLE_NOT_FOUND : false };
+  };
+
+  it("N715: answers not-found when the session check itself fails, keeping the cookies written before it (work review #143)", async () => {
+    scenario = { claims: null, refresh: true, throws: true };
+    for (const path of ["/admin", "/admin/payments", "/admin/users/x.png"]) {
+      const { response, notFound } = await consoleAnswer(path);
+      expect(notFound, path).toBe(true);
+      expect(response.headers.get("location"), path).toBeNull();
+      expectRotatedCookies(response);
+    }
+    // Everything else on that exit is as it was: a product route goes to sign-in, a public page loads.
+    expect(new URL((await updateSession(request("/orders"))).headers.get("location")!).pathname).toBe("/login");
+    expect((await consoleAnswer("/marketplace")).notFound).toBe(false);
+    expect((await consoleAnswer("/admin-verify")).notFound).toBe(false);
+  });
+
+  it("N715: answers not-found when Supabase is not configured, in production and in development (work review #143)", async () => {
+    deployment.configured = false;
+    for (const production of [true, false]) {
+      deployment.production = production;
+      for (const path of ["/admin", "/admin/payments"]) {
+        expect((await consoleAnswer(path)).notFound, `${path} production=${production}`).toBe(true);
+      }
+      expect((await consoleAnswer("/marketplace")).notFound).toBe(false);
+    }
   });
 
   it("rewrites signed-out /admin and its pages to the not-found page, keeping cookie removals", async () => {

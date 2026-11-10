@@ -1,3 +1,6 @@
+// Next's own matcher check. Its docs call it unstable_doesProxyMatch; the
+// installed 16.4.3 exports it under the name it had before the rename.
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 import { NextRequest, NextResponse } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -78,7 +81,10 @@ describe("Content Security Policy header (N25)", () => {
 // a photo a copyright takedown removed is refused before the cache answers.
 describe("copyright image gate", () => {
   const OWNER = "8f6c2a52-3d1e-4b8a-9c3f-2b1d4e5f6a7b";
-  const source = (file: string) => `https://project.supabase.co/storage/v1/object/public/listing-images/${OWNER}/${file}`;
+  // Signed, as every page sends a member photo since N455 (an unsigned one is
+  // refused before the blocklist; see the N940 tests below).
+  const liveToken = ["e30", Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 })).toString("base64url"), "sig"].join(".");
+  const source = (file: string) => `https://project.supabase.co/storage/v1/object/sign/listing-images/${OWNER}/${file}?token=${liveToken}`;
   const imageRequest = (file: string) =>
     new NextRequest(`https://drvn.example/_next/image?url=${encodeURIComponent(source(file))}&w=640&q=75`);
 
@@ -107,5 +113,89 @@ describe("copyright image gate", () => {
     blocked.keys.mockClear();
     await proxy(new NextRequest("https://drvn.example/_next/image?url=%2Fhero.png&w=640&q=75"));
     expect(blocked.keys).not.toHaveBeenCalled();
+  });
+});
+
+describe("an expired member-photo link is refused before the optimiser's cache (N940, #178 review)", () => {
+  const OWNER = "8f6c2a52-3d1e-4b8a-9c3f-2b1d4e5f6a7b";
+  const token = (exp: number | undefined) =>
+    ["e30", Buffer.from(JSON.stringify(exp === undefined ? { url: "x" } : { url: "x", exp })).toString("base64url"), "sig"].join(".");
+  const signedRequest = (exp: number | undefined) =>
+    new NextRequest(
+      `https://drvn.example/_next/image?url=${encodeURIComponent(`https://project.supabase.co/storage/v1/object/sign/car-images/${OWNER}/a.webp?token=${token(exp)}`)}&w=640&q=75`,
+    );
+
+  it("refuses an expired, unreadable or expiry-less token with a 404 and nothing cacheable", async () => {
+    blocked.keys.mockResolvedValue(new Set());
+    for (const exp of [Math.floor(Date.now() / 1000) - 60, undefined]) {
+      const response = await proxy(signedRequest(exp));
+      expect(response.status).toBe(404);
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
+    }
+  });
+
+  it("passes a live token through", async () => {
+    blocked.keys.mockResolvedValue(new Set());
+    const response = await proxy(signedRequest(Math.floor(Date.now() / 1000) + 3600));
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+  });
+});
+
+describe("the image gate refuses unsigned member photos and nothing else (N940, Codex on #178)", () => {
+  const OWNER = "8f6c2a52-3d1e-4b8a-9c3f-2b1d4e5f6a7b";
+  const gate = (url: string) => proxy(new NextRequest(`https://drvn.example/_next/image?url=${encodeURIComponent(url)}&w=640&q=75`));
+
+  it("refuses a member photo's canonical URL, which an old cached copy could still answer", async () => {
+    blocked.keys.mockResolvedValue(new Set());
+    const response = await gate(`https://project.supabase.co/storage/v1/object/public/car-images/${OWNER}/a.webp`);
+    expect(response.status).toBe(404);
+  });
+
+  it("passes avatars, brand assets and other hosts, with no extra call", async () => {
+    blocked.keys.mockResolvedValue(new Set());
+    session.update.mockClear();
+    for (const url of [`https://project.supabase.co/storage/v1/object/public/avatars/${OWNER}/me.webp`, "/landing/hero.webp", "https://images.example/x.jpg"]) {
+      const response = await gate(url);
+      expect(response.headers.get("x-middleware-next"), url).toBe("1");
+    }
+    expect(session.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("gate order and the optimiser's other spellings (N940, #196 review)", () => {
+  const OWNER = "8f6c2a52-3d1e-4b8a-9c3f-2b1d4e5f6a7b";
+  it("a taken-down photo is 451 even when requested unsigned", async () => {
+    blocked.keys.mockResolvedValue(new Set([`car-images/${OWNER}/gone.webp`]));
+    const response = await proxy(new NextRequest(`https://drvn.example/_next/image?url=${encodeURIComponent(`https://project.supabase.co/storage/v1/object/public/car-images/${OWNER}/gone.webp`)}&w=640&q=75`));
+    expect(response.status).toBe(451);
+  });
+
+  it("gates /_next/image/ with a trailing slash too", async () => {
+    blocked.keys.mockResolvedValue(new Set([`car-images/${OWNER}/gone.webp`]));
+    const response = await proxy(new NextRequest(`https://drvn.example/_next/image/?url=${encodeURIComponent(`https://project.supabase.co/storage/v1/object/public/car-images/${OWNER}/gone.webp`)}&w=640&q=75`));
+    expect(response.status).toBe(451);
+    expect(config.matcher).toContain("/_next/image/:path*");
+  });
+});
+
+describe("N715: the proxy's matcher runs on every console path (work review #143)", () => {
+  const runs = (url: string) => unstable_doesMiddlewareMatch({ config, url });
+
+  it("runs on the console whatever the path ends in, an image extension included", () => {
+    for (const url of ["/admin", "/admin/", "/admin/users", "/admin/users/x.png", "/admin/cases/photo.JPG", "/admin/a/b/c.webp", "/admin/logo.svg"]) {
+      expect(runs(url), url).toBe(true);
+    }
+  });
+
+  it("still runs on pages, actions' own URLs and optimised images", () => {
+    for (const url of ["/", "/home", "/listings/123", "/admin-verify", "/api/version", "/_next/image", "/_next/image/"]) {
+      expect(runs(url), url).toBe(true);
+    }
+  });
+
+  it("still skips static assets and public image files outside the console", () => {
+    for (const url of ["/_next/static/chunks/main.js", "/favicon.ico", "/logo.png", "/brand/mark.svg", "/administrator.png"]) {
+      expect(runs(url), url).toBe(false);
+    }
   });
 });

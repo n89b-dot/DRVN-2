@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { clientAddressSource, resolvePaymentsMode, stubOverrideProblem, validatePaymentsEnv, PaymentsConfigError } from "./env";
+import { clientAddressSource, databaseKeyProblems, resolvePaymentsMode, stubOverrideProblem, supabaseKeyKind, validatePaymentsEnv, PaymentsConfigError } from "./env";
 
 /**
  * The fail-closed matrix. The one behavior these exist to pin down forever:
@@ -20,6 +20,9 @@ const LIVE = {
   NEXT_PUBLIC_SITE_URL: "https://drvn.example",
   CRON_SECRET: "test-cron-secret-at-least-32-characters",
   GUEST_RECEIPT_SECRET: "test-receipt-secret-at-least-32-characters",
+  NEXT_PUBLIC_SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co",
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_x",
+  SUPABASE_SECRET_KEY: "sb_secret_x",
 };
 
 describe("resolvePaymentsMode", () => {
@@ -173,3 +176,99 @@ describe("the sandbox payment override is never on a hosted deployment (N540)", 
   });
 });
 
+describe("the database keys are checked at boot (N962, report five #123)", () => {
+  it("live-money production refuses to boot without the Supabase URL, public key or secret key", () => {
+    for (const name of ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SECRET_KEY"]) {
+      const env = { ...LIVE, [name]: undefined };
+      expect(() => validatePaymentsEnv(env), name).toThrow(new RegExp(name));
+    }
+  });
+
+  it("a hosted deployment can't boot in stub mode at all, and in Stripe mode is checked for the keys outside the live-money block", () => {
+    const hostedStub = { NODE_ENV: "production", VERCEL: "1", PAYMENTS_MODE: "stub", NEXT_PUBLIC_SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_x" };
+    expect(() => validatePaymentsEnv(hostedStub)).toThrow(PaymentsConfigError);
+    expect(() => validatePaymentsEnv({ ...LIVE, VERCEL: "1", SUPABASE_SECRET_KEY: undefined })).toThrow(/hosted production deployment is missing its database configuration: SUPABASE_SECRET_KEY/);
+  });
+
+  it("never fires in CI's or a local production build (loopback, no Vercel, no live key)", () => {
+    const local = { NODE_ENV: "production", PAYMENTS_MODE: "stub", PAYMENTS_ALLOW_STUB_IN_PRODUCTION: "true", NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3000" };
+    expect(() => validatePaymentsEnv(local)).not.toThrow();
+  });
+
+  it("refuses a guest receipt secret equal to the cron secret", () => {
+    expect(() => validatePaymentsEnv({ ...LIVE, GUEST_RECEIPT_SECRET: LIVE.CRON_SECRET })).toThrow(/GUEST_RECEIPT_SECRET \(must differ from CRON_SECRET\)/);
+  });
+
+  it("accepts either generation of key", () => {
+    const legacy = { ...LIVE, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: undefined, SUPABASE_SECRET_KEY: undefined, NEXT_PUBLIC_SUPABASE_ANON_KEY: legacyKey("anon"), SUPABASE_SERVICE_ROLE_KEY: legacyKey("service_role") };
+    expect(() => validatePaymentsEnv(legacy)).not.toThrow();
+  });
+});
+
+/** A legacy Supabase key: a JWT whose payload names the role. Unsigned here; only its shape is read. */
+function legacyKey(role: string): string {
+  const part = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  return `${part({ alg: "HS256", typ: "JWT" })}.${part({ iss: "supabase", ref: "abcdefghijklmnopqrst", role })}.signature`;
+}
+
+describe("N962: each database key is the right kind, and no secret sits in a public variable (work review #140)", () => {
+  const HOSTED = { ...LIVE, VERCEL: "1" };
+
+  it("tells the two kinds of key apart, in both generations", () => {
+    expect(supabaseKeyKind("sb_publishable_abc")).toBe("publishable");
+    expect(supabaseKeyKind("sb_secret_abc")).toBe("secret");
+    expect(supabaseKeyKind(legacyKey("anon"))).toBe("publishable");
+    expect(supabaseKeyKind(legacyKey("service_role"))).toBe("secret");
+    expect(supabaseKeyKind(legacyKey("authenticated"))).toBe("unknown");
+    expect(supabaseKeyKind("anon")).toBe("unknown");
+    expect(supabaseKeyKind("a.b.c")).toBe("unknown");
+  });
+
+  it("a correctly configured hosted production boots, in both generations", () => {
+    expect(databaseKeyProblems(HOSTED)).toEqual([]);
+    expect(() => validatePaymentsEnv(HOSTED)).not.toThrow();
+  });
+
+  it("refuses a secret key in the public key variable, new or legacy, and never prints it", () => {
+    for (const secret of ["sb_secret_do_not_print", legacyKey("service_role")]) {
+      const env = { ...HOSTED, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: secret };
+      expect(() => validatePaymentsEnv(env)).toThrow(/NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY holds a secret key, and every NEXT_PUBLIC_ value is sent to browsers/);
+      try {
+        validatePaymentsEnv(env);
+      } catch (error) {
+        expect((error as Error).message).not.toContain(secret);
+        expect(error).toBeInstanceOf(PaymentsConfigError);
+      }
+    }
+    const legacyName = { ...HOSTED, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: undefined, NEXT_PUBLIC_SUPABASE_ANON_KEY: legacyKey("service_role") };
+    expect(() => validatePaymentsEnv(legacyName)).toThrow(/NEXT_PUBLIC_SUPABASE_ANON_KEY holds a secret key/);
+  });
+
+  it("refuses any secret-shaped value in any NEXT_PUBLIC_ variable", () => {
+    expect(databaseKeyProblems({ ...HOSTED, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "sk_live_x" })).toEqual([expect.stringMatching(/^NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY holds a secret key/)]);
+    expect(databaseKeyProblems({ ...HOSTED, NEXT_PUBLIC_SOMETHING_NEW: "whsec_x" })).toEqual([expect.stringMatching(/^NEXT_PUBLIC_SOMETHING_NEW holds a secret key/)]);
+    expect(databaseKeyProblems({ ...HOSTED, NEXT_PUBLIC_OTHER: "rk_test_x" })).toHaveLength(1);
+    // Publishable values are what these variables are for.
+    expect(databaseKeyProblems({ ...HOSTED, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_x" })).toEqual([]);
+  });
+
+  it("refuses a publishable key, or something that is no key at all, in the secret variable", () => {
+    expect(() => validatePaymentsEnv({ ...HOSTED, SUPABASE_SECRET_KEY: "sb_publishable_x" })).toThrow(/SUPABASE_SECRET_KEY holds a publishable key, not the secret/);
+    expect(() => validatePaymentsEnv({ ...HOSTED, SUPABASE_SECRET_KEY: undefined, SUPABASE_SERVICE_ROLE_KEY: legacyKey("anon") })).toThrow(/SUPABASE_SERVICE_ROLE_KEY holds a publishable key/);
+    expect(() => validatePaymentsEnv({ ...HOSTED, SUPABASE_SECRET_KEY: "postgres-password" })).toThrow(/SUPABASE_SECRET_KEY is not a Supabase secret/);
+    expect(() => validatePaymentsEnv({ ...HOSTED, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "the-project-ref" })).toThrow(/NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY is not a Supabase publishable/);
+  });
+
+  it("refuses a Supabase URL that is not a bare https origin", () => {
+    for (const url of ["http://abcdefghijklmnopqrst.supabase.co", "https://abcdefghijklmnopqrst.supabase.co/rest/v1", "abcdefghijklmnopqrst", "https://user:pass@abcdefghijklmnopqrst.supabase.co"]) {
+      expect(() => validatePaymentsEnv({ ...HOSTED, NEXT_PUBLIC_SUPABASE_URL: url }), url).toThrow(/NEXT_PUBLIC_SUPABASE_URL is not a bare https origin/);
+    }
+  });
+
+  it("names every problem at once, and checks nothing off a hosted deployment", () => {
+    const both = { ...HOSTED, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_secret_x", SUPABASE_SECRET_KEY: "sb_publishable_x" };
+    expect(databaseKeyProblems(both)).toHaveLength(2);
+    const local = { NODE_ENV: "production", PAYMENTS_MODE: "stub", PAYMENTS_ALLOW_STUB_IN_PRODUCTION: "true", NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3000", NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321", NEXT_PUBLIC_SUPABASE_ANON_KEY: "anything", SUPABASE_SERVICE_ROLE_KEY: "anything" };
+    expect(() => validatePaymentsEnv(local)).not.toThrow();
+  });
+});
