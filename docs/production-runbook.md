@@ -369,6 +369,20 @@ confirmed. The console is at `/admin`; it 404s for everyone else.
 
 Every money queue is durable and visible in **Admin → Payments**:
 
+**A chargeback held for review** (#108, 20261110170000). A bank chargeback
+that doesn't match its payment basket is held: its orders are disputed, a
+recovery case opens ("Card dispute requires reconciliation") and the seller's
+payout and any deletion of either party wait. Its case has **Retry** in place
+of Close case, audited and needing a reason. Correct what didn't match first
+(a payment record, an order total), then press it. It reopens the chargeback
+and replays the Stripe event that held it (or the newest since) through the
+normal handling. If it still doesn't match, it's held again. Once Stripe's
+outcome is applied, the case closes by itself. Retry refuses, in words, a
+chargeback that was already won, closed or lost before a conflicting event
+held it, one held while a loss was being booked, and one with no stored event
+to replay. Those stay for the owner; the write-off after 90 days is a
+separate control, still to come. Never edit `stripe_dispute_journal` by hand.
+
 - **Refund operations** (`refund_operations`, 0026): anything not `completed`
   appears here. The worker pass (`/api/jobs/transfers`) resumes abandoned
   operations automatically (`resumeIncompleteRefunds`) — reconciling against
@@ -1012,14 +1026,3 @@ One member's agent is at `/admin/agent/members/<id>`: their limits with
 versions, tasks, record and approvals. Their chat opens only for a report about
 them or a dispute they're party to, with the case id and a reason, and is
 audited (`agent.chat_opened`) before a line is shown.
-
-### 13f. Agent records written before 8 November 2026 (#107)
-
-Until PR #158 the card-number redactor could corrupt about 0.3% of UUIDs it
-passed over, leaving text like `70e95888-a[card number removed]b5e67f70ec`
-in agent rows. New rows are safe. Before promoting any database that held agent
-activity from before 8 November, run `supabase/audits/agent_mangled_ids.sql`
-(read-only). Shared dev counted 0 on 9 November 2026; staging and production
-were created after the fix, or hold no agent rows. A non-zero count needs a
-backfill decision, because the original id can't be recovered from the row
-alone.

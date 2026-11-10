@@ -36,8 +36,14 @@ export class RefusedOperationError extends Error {
   }
 }
 
-/** External actions whose refusals the database can check against records. */
-const RELEASABLE_ON_REFUSAL = new Set(["order.force_refund"]);
+/** External actions whose refusals the database can check against records,
+ *  and the function that checks and closes each one. */
+const RELEASABLE_ON_REFUSAL = new Map<string, "release_refused_admin_refund" | "release_refused_dispute_retry">([
+  ["order.force_refund", "release_refused_admin_refund"],
+  // A refused chargeback retry is released while the chargeback is still
+  // held for review (20261110170000).
+  ["recovery.retry_dispute", "release_refused_dispute_retry"],
+]);
 
 export async function writeAudit(admin: Admin, entry: AuditEntry): Promise<void> {
   const { error } = await admin.from("admin_audit_log").insert({
@@ -98,10 +104,11 @@ export async function auditedAction<T>(
   if (reused && entry.action !== "recovery.replace_refund") throw new Error(`Operation ${operationId} is awaiting reconciliation. Resume its existing provider operation; do not create another.`);
   let result: T;
   try { result = await mutate(); } catch (error) {
-    if (error instanceof RefusedOperationError && RELEASABLE_ON_REFUSAL.has(entry.action)) {
+    const releaser = RELEASABLE_ON_REFUSAL.get(entry.action);
+    if (error instanceof RefusedOperationError && releaser) {
       // A proven refusal leaves nothing to reconcile: close the request so the
-      // next attempt isn't blocked — if the refund records agree.
-      const { data: release, error: releaseError } = await admin.rpc("release_refused_admin_refund", {
+      // next attempt isn't blocked — if the records agree.
+      const { data: release, error: releaseError } = await admin.rpc(releaser, {
         p_actor: entry.actorId, p_operation: operationId, p_detail: error.message,
       });
       if (!releaseError && (release as { released?: boolean } | null)?.released) throw error;

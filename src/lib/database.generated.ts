@@ -6395,6 +6395,9 @@ export type Database = {
           created_at: string
           currency: string
           dispute_id: string
+          held_event_created: number | null
+          held_event_id: string | null
+          held_from_state: string | null
           last_event_created: number
           last_event_id: string
           lease_expires_at: string | null
@@ -6409,6 +6412,9 @@ export type Database = {
           created_at?: string
           currency: string
           dispute_id: string
+          held_event_created?: number | null
+          held_event_id?: string | null
+          held_from_state?: string | null
           last_event_created: number
           last_event_id: string
           lease_expires_at?: string | null
@@ -6423,6 +6429,9 @@ export type Database = {
           created_at?: string
           currency?: string
           dispute_id?: string
+          held_event_created?: number | null
+          held_event_id?: string | null
+          held_from_state?: string | null
           last_event_created?: number
           last_event_id?: string
           lease_expires_at?: string | null
@@ -6813,6 +6822,10 @@ export type Database = {
       }
       admin_order_money_window: {
         Args: { p_from: string; p_to: string }
+        Returns: Json
+      }
+      admin_retry_dispute_recovery: {
+        Args: { p_actor: string; p_dispute: string; p_dry_run?: boolean }
         Returns: Json
       }
       admin_retry_seller_carry_payout: { Args: { p_id: string }; Returns: Json }
@@ -7751,10 +7764,20 @@ export type Database = {
         }
         Returns: string
       }
-      hold_stripe_dispute: {
-        Args: { p_detail: string; p_dispute: string }
-        Returns: string
-      }
+      hold_stripe_dispute:
+        | {
+            Args: { p_detail: string; p_dispute: string }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_created: number
+              p_detail: string
+              p_dispute: string
+              p_event: string
+            }
+            Returns: string
+          }
       identifier_matches_listing: {
         Args: { p_compact: string; p_id: string }
         Returns: boolean
@@ -8757,6 +8780,10 @@ export type Database = {
         Returns: boolean
       }
       release_refused_admin_refund: {
+        Args: { p_actor: string; p_detail: string; p_operation: string }
+        Returns: Json
+      }
+      release_refused_dispute_retry: {
         Args: { p_actor: string; p_detail: string; p_operation: string }
         Returns: Json
       }

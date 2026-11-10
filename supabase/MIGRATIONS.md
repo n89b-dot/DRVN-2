@@ -32,6 +32,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 10 — Retry a chargeback held for review: N944 (report five #108, part A)
+
+| File | Applied to |
+|---|---|
+| `20261110170000_chargeback_retry.sql` | not applied |
+
+Adds `held_event_id`, `held_event_created` and `held_from_state` to `public.stripe_dispute_journal` (a trigger fills `held_from_state` on entering `recovery`), `private.note_held_dispute_event`, a four-argument `public.hold_stripe_dispute` that records the event, a trigger that closes a held chargeback's recovery case when the journal reaches won, warning closed or lost, `public.admin_retry_dispute_recovery(p_dispute, p_actor, p_dry_run)` and `public.release_refused_dispute_retry`, all service role only. Restates `public.apply_stripe_dispute_event` (from `20261107130000`) with only its hold calls given the event and the held branch remembering a later one. No new journal state. Apply with the app from the same PR.
+
 ## November 8 — deletion: late holds after the scrub, other members' notifications, the tombstone race, old retained cases: N418 (not applied anywhere)
 
 | File | Applied to |
