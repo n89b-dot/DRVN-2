@@ -285,7 +285,7 @@ Stated plainly, so nothing is assumed.
 5. **Whether hosted Supabase lets the migration role change default privileges** is A3's question and is open. It decides item 10.
 6. **`pg_dump`'s output order between two databases whose objects were created in a different order** has not been measured. Check 4 in section 5 sorts the statements to avoid depending on it.
 7. **The generated types and the 157 guards against a baseline** have not been run. Both read the same catalog the snapshot does, so a pass is expected.
-8. **Local and CI builds were not compared with each other.** The snapshot was generated on this Mac (arm64) and will be checked in CI (amd64). Postgres's printed definitions do not depend on the processor and all sorting is done outside the database, but the first CI run of A1 is the proof.
+8. ~~Local and CI builds were not compared with each other.~~ **Verified after this draft was first sent.** The snapshot generated on this Mac (arm64) was checked against CI's own database (amd64, the pinned image) by a manually started run on the A1 branch: run 42839710828, `sql-guard` step "Schema snapshot matches migrations", which printed `supabase/schema/ matches the database (1098 files; 525 functions, 140 tables, 143 policies, 273 triggers, 21 scheduled jobs)`.
 9. **Dormant behaviour that depends on a row.** The agent's master switch and the settlement settings are carried. If some function reads a row that only exists on shared dev because someone inserted it by hand, the guards would not show it. The row comparison in step 4 is what would.
 
 ---
