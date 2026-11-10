@@ -4,6 +4,11 @@
 // table that it reads exactly. This check makes a malformed table fail here,
 // before the OS meets it.
 //
+// One file outside the reports carries the table too: the remediation record
+// (docs/plans/2026-11-remediation-record.md), where the OS reads both plans
+// step by step. There a row may be a step: a progress marker for the ids it
+// names (State "step"), never a second item. "The record's table" below.
+//
 // A file is checked only if it has the heading. With no such file on the
 // branch, the repository check passes and the rules are still exercised by
 // the cases below.
@@ -21,6 +26,12 @@ export const HEADER = "| OS id | Finding | State | Pull request | For | Note |";
 const ITEM = "(?:N\\d+|R\\d+(?:-[A-Za-z0-9]+)*|R-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)";
 const OS_ID = new RegExp(`^(?:new|${ITEM})$`);
 const FINDING = /^#\d+$/;
+/** In the record: a plan and a step or key, as in #1-2.7 or #1-AL1. */
+const STEP_FINDING = /^#\d-[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*$/;
+const ITEMS = new RegExp(`^${ITEM}(?: ${ITEM})*$`);
+
+/** The one file under docs/plans/ whose table the OS reads: both remediation plans, step by step. */
+export const RECORD_FILE = "docs/plans/2026-11-remediation-record.md";
 const STATE = new RegExp(`^(?:fixed|open|by design|accepted|after launch|(?:same as|not the same as|waiting on) ${ITEM})$`);
 // Separated by commas, with or without a space after each: the OS's own rule, no stricter.
 const PULL_REQUESTS = /^#\d+(?:, ?#\d+)*$/;
@@ -55,7 +66,8 @@ export function osTableProblems(markdown: string, file = "the file"): string[] {
   const headings = lines.flatMap((line, index) => (line.trim() === HEADING ? [index] : []));
   if (!headings.length) return [];
   const problems: string[] = [];
-  if (!isReportFile(file)) problems.push(`${file}: the OS reads this table only from a docs/ file whose name contains readiness, review, audit, report or findings, outside docs/plans/`);
+  const record = file.split(path.sep).join("/") === RECORD_FILE;
+  if (!record && !isReportFile(file)) problems.push(`${file}: the OS reads this table only from a docs/ file whose name contains readiness, review, audit, report or findings, outside docs/plans/`);
   if (headings.length > 1) problems.push(`${file}: "${HEADING}" appears ${headings.length} times; a file carries at most one such table`);
 
   // The table is the first run of lines starting with "|" after the heading, before the next heading.
@@ -82,19 +94,32 @@ export function osTableProblems(markdown: string, file = "the file"): string[] {
     }
     const [osId, finding, state, pullRequests, forWhom, note] = cell;
     const isNew = osId === "new";
-    if (!OS_ID.test(osId)) problems.push(`${row}: OS id "${osId}" is not an existing id (N123, R-slug, R12) or "new"`);
-    if (finding ? !FINDING.test(finding) : isNew) problems.push(`${row}: Finding is "#" and digits, and is required when OS id is "new" (got "${finding}")`);
-    if (!STATE.test(state)) {
+    const isStep = state === "step";
+    const severalIds = ITEMS.test(osId) && osId.includes(" ");
+    if (record && (isStep || severalIds)) {
+      // A step: a progress marker for the ids it names, never a second item.
+      if (!isStep) problems.push(`${row}: an OS id cell with more than one id is allowed only with State "step" (got "${state}")`);
+      if (!ITEMS.test(osId)) problems.push(`${row}: State "step" needs one or more existing ids in OS id, separated by single spaces (got "${osId}")`);
+      if (!STEP_FINDING.test(finding)) problems.push(`${row}: a step's Finding is the plan and the step, as in "#1-2.7" (got "${finding}")`);
+    } else {
+      if (!OS_ID.test(osId)) problems.push(`${row}: OS id "${osId}" is not an existing id (N123, R-slug, R12) or "new"`);
+      const findingOk = FINDING.test(finding) || (record && STEP_FINDING.test(finding));
+      if (finding ? !findingOk : isNew) problems.push(`${row}: Finding is "#" and digits, and is required when OS id is "new" (got "${finding}")`);
+    }
+    if (isStep && !record) problems.push(`${row}: State "step" is read only from ${RECORD_FILE}`);
+    if (!isStep && !STATE.test(state)) {
       problems.push(`${row}: State "${state}" is not one of fixed, open, same as <id>, not the same as <id>, by design, accepted, waiting on <id>, after launch (an <id> is one N or R id)`);
     }
     if (pullRequests && !PULL_REQUESTS.test(pullRequests)) problems.push(`${row}: Pull request is blank, "#N", or several separated by commas (got "${pullRequests}")`);
     if (forWhom ? !FOR.has(forWhom) : isNew) problems.push(`${row}: For is one of engineer, you, counsel, decide, and is required when OS id is "new" (got "${forWhom}")`);
     if (isNew && !note) problems.push(`${row}: Note is the one-line title of a "new" item and cannot be blank`);
-    if (FINDING.test(finding)) {
+    if (FINDING.test(finding) || (record && STEP_FINDING.test(finding))) {
       if (findings.has(finding)) problems.push(`${row}: Finding ${finding} is already on row ${findings.get(finding)}`);
       else findings.set(finding, offset + 1);
     }
   }
+  // The record has no findings written up in prose: its rows are the plans' steps.
+  if (record) return problems;
 
   // Rows and prose agree: every entry that starts a line "**#NNN " has a row, and every row's Finding has an entry.
   const prose = new Set([...markdown.matchAll(/^\*\*(#\d+) /gm)].map((m) => m[1]));
@@ -198,5 +223,77 @@ describe("the table the Intelligence OS reads from a report", () => {
       expect(isReportFile(file), file).toBe(true);
       expect(osTableProblems(good(ROWS), file), file).toEqual([]);
     }
+  });
+});
+
+/** The record: no prose entries, rows that are steps or new items. */
+const recordWith = (rows: string[]) => ["# Remediation record", "", HEADING, "", "One table for both plans.", "", HEADER, "|---|---|---|---|---|---|", ...rows, ""].join("\n");
+const STEP = "| N940 N1062 | #1-2.7 | step | #210, #237 | engineer | Photo signing rules |";
+const inRecord = (...rows: string[]) => osTableProblems(recordWith(rows), RECORD_FILE);
+
+describe("the record's table: both remediation plans, step by step (plan 1 step 4.8)", () => {
+  it("accepts steps, one id or several, and new items keyed by plan and step, with no prose to match", () => {
+    expect(
+      inRecord(
+        STEP,
+        "| N718 | #1-2.8 | step | #199 | engineer | 1,000-row limits |",
+        "| N1048 N1051 N1052 N1053 | #1-3.1 | step |  |  |  |",
+        "| new | #1-AL1 | after launch |  | engineer | The ledger reads every unpaid sale |",
+        "| new | #1-H2 | open |  | you | Measure image latency once staging is hosted |",
+        "| new | #2-A6 | fixed | #240 | engineer | One baseline |",
+      ),
+    ).toEqual([]);
+  });
+
+  it("refuses a step that names no existing id, or names them any way but single spaces", () => {
+    for (const ids of ["new", "", "N940, N1062", "N940  N1062", "N940 new", "n940 N1062", "#210"]) {
+      expect(inRecord(`| ${ids} | #1-2.7 | step | #210 | engineer | Title |`).some((p) => p.includes("needs one or more existing ids")), `"${ids}"`).toBe(true);
+    }
+  });
+
+  it("refuses a step whose Finding is not a plan and a step", () => {
+    for (const finding of ["#131", "", "1-2.7", "#1", "#12-2.7", "#1-2.7.", "#1-", "#1 2.7", "step 2.7"]) {
+      expect(inRecord(`| N940 N1062 | ${finding} | step | #210 | engineer | Title |`).some((p) => p.includes("a step's Finding is the plan and the step")), `"${finding}"`).toBe(true);
+    }
+  });
+
+  it("refuses several ids in one cell unless the row is a step", () => {
+    for (const state of ["open", "fixed", "after launch", "same as N940"]) {
+      expect(inRecord(`| N940 N1062 | #1-2.7 | ${state} | #210 | engineer | Title |`), state).toEqual([expect.stringContaining('more than one id is allowed only with State "step"')]);
+    }
+  });
+
+  it("keeps a report's rules for a new row, and for the same step written twice", () => {
+    expect(inRecord("| new | #1-AL1 | after launch |  |  | Title |").some((p) => p.includes("For is one of"))).toBe(true);
+    expect(inRecord("| new |  | open |  | you | Title |").some((p) => p.includes("Finding is"))).toBe(true);
+    expect(inRecord("| new | AL1 | open |  | you | Title |").some((p) => p.includes("Finding is"))).toBe(true);
+    expect(inRecord("| new | #1-AL1 | open |  | you |  |").some((p) => p.includes("Note is the one-line title"))).toBe(true);
+    expect(inRecord("| new | #1-AL1 | done |  | you | Title |").some((p) => p.includes("State"))).toBe(true);
+    expect(inRecord(STEP, STEP).some((p) => p.includes("Finding #1-2.7 is already on row 1"))).toBe(true);
+  });
+
+  it("reads a step, or a plan-and-step Finding, from the record only", () => {
+    expect(osTableProblems(good([STEP, ...ROWS]), FILE).some((p) => p.includes(`State "step" is read only from ${RECORD_FILE}`))).toBe(true);
+    expect(withRow("| new | #1-2.7 | open |  | engineer | Title |").some((p) => p.includes("Finding is"))).toBe(true);
+    // Any other file under docs/plans/ is still not one the OS reads.
+    expect(osTableProblems(recordWith([STEP]), "docs/plans/another-record.md").some((p) => p.includes("reads this table only from"))).toBe(true);
+  });
+
+  it("the record on this branch has one row for every step of plan 1", () => {
+    const text = fs.readFileSync(path.join(root, RECORD_FILE), "utf8");
+    expect(osTableProblems(text, RECORD_FILE)).toEqual([]);
+    const findings = new Set([...text.matchAll(/^\|[^|]*\| (#\d-[A-Za-z0-9.]+) \|/gm)].map((m) => m[1]));
+    const steps = ["1", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "2.9", "2.10", "2.11", "2.12", "2.13", "3.1", "3.2", "3.3", "3.4", "4.8"];
+    expect(steps.filter((step) => !findings.has(`#1-${step}`))).toEqual([]);
+  });
+
+  it("N718: plan 1 step 2.8 is in the record as a step that names it, so the OS reads its progress from one row", () => {
+    const text = fs.readFileSync(path.join(root, RECORD_FILE), "utf8");
+    const row = text.split("\n").find((line) => /^\|[^|]*\| #1-2\.8 \|/.test(line));
+    expect(row, "no row for #1-2.8").toBeDefined();
+    const [osId, finding, state, pullRequests] = row!.split("|").slice(1).map((cell) => cell.trim());
+    expect(osId.split(" ")).toContain("N718");
+    expect([finding, state]).toEqual(["#1-2.8", "step"]);
+    expect(pullRequests).toContain("#199");
   });
 });

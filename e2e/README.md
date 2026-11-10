@@ -144,7 +144,8 @@ app's webhook route itself, signed with the secret the app was started with
 (`e2e-launch/stripe-forward.ts`). The app verifies the signature as usual.
 
 It needs the Actions secret `STRIPE_TEST_SECRET_KEY` and the Actions variable
-`STRIPE_TEST_PUBLISHABLE_KEY` (the `pk_test_…` key of the same Stripe account),
+`STRIPE_TEST_PUBLISHABLE_KEY` (both from the Stripe sandbox kept for CI: one
+sandbox per deployment, `docs/staging-setup.md` §5),
 and fails by name if either is missing. It refuses any key that is not a test
 key.
 

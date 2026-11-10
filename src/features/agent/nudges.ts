@@ -27,11 +27,14 @@ export async function loadPriceNudges(supabase: SupabaseClient<Database>, ownerI
     .limit(10);
   if (!listings?.length) return [];
   const ids = listings.map((listing) => listing.id);
-  const [{ data: offers }, { data: images }] = await Promise.all([
-    supabase.from("offers").select("listing_id").in("listing_id", ids),
+  // N718: whether each listing has any offer, one row per listing. Reading
+  // every offer on ten listings could pass PostgREST's 1,000 rows and miss
+  // one, suggesting a price drop on a listing that has offers.
+  const [offerRows, { data: images }] = await Promise.all([
+    Promise.all(ids.map((id) => supabase.from("offers").select("listing_id").eq("listing_id", id).limit(1))),
     supabase.from("listing_images").select("listing_id, url, position").in("listing_id", ids).order("position"),
   ]);
-  const offered = new Set((offers ?? []).map((offer) => offer.listing_id));
+  const offered = new Set(offerRows.flatMap(({ data }) => (data ?? []).map((offer) => offer.listing_id)));
   const cover = new Map<string, string>();
   for (const image of images ?? []) if (!cover.has(image.listing_id)) cover.set(image.listing_id, image.url);
 
