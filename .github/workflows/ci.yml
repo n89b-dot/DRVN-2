@@ -622,6 +622,14 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
+
+      # The two keys must be the test pair of one Stripe account, or every
+      # spec would fail somewhere inside Stripe's form. Asked of Stripe
+      # directly, before anything is installed or built: a payment the secret
+      # key creates must be readable with the publishable key.
+      - name: Stripe test keys are a pair
+        run: node e2e-launch/check-stripe-pair.mjs
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22.22.0

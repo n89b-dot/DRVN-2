@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+import { checkStripePair } from "../../e2e-launch/check-stripe-pair.mjs";
 import { applyLaunchEnvironment, launchEnvironment, readLaunchRecord } from "../../e2e-launch/launch-environment";
 import { resolveAiConfig } from "../../src/lib/ai/config";
 import { isolatedStripeTestStack, resolvePaymentsMode, validatePaymentsEnv } from "../../src/lib/env";
@@ -40,7 +41,7 @@ function laneEnv(base: Record<string, string | undefined>) {
   return env;
 }
 
-describe("the launch lane's environment is the recorded launch configuration (R-unproven)", () => {
+describe("the launch lane's environment is the recorded launch configuration (N1078)", () => {
   it("removes every variable the record says is absent, whatever the runner or .env.test.local set", () => {
     // The main suite's own settings, all of which the launch does not have.
     const main = runner({
@@ -100,7 +101,7 @@ describe("the launch lane's environment is the recorded launch configuration (R-
   });
 });
 
-describe("the launch lane can only reach Stripe in test mode (R-unproven)", () => {
+describe("the launch lane can only reach Stripe in test mode (N1078)", () => {
   it.each([
     ["no secret key", { STRIPE_SECRET_KEY: undefined }, /needs STRIPE_SECRET_KEY/],
     ["no publishable key", { NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: undefined }, /needs NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY/],
@@ -123,7 +124,67 @@ describe("the launch lane can only reach Stripe in test mode (R-unproven)", () =
   });
 });
 
-describe("CI runs the launch lane and the release gate requires it (R-unproven)", () => {
+describe("the lane's two Stripe keys must be one account's test pair (N1078)", () => {
+  type Call = { url: string; method: string; key: string };
+  /** A stand-in for Stripe: one account's secret key creates an intent only that account's publishable key can read. */
+  function stripe(options: { secretOk?: boolean; publishableAccount?: "same" | "other" | "unknown"; livemode?: boolean } = {}) {
+    const calls: Call[] = [];
+    const answer = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    const fake = async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const key = String((init?.headers as Record<string, string>).authorization).replace("Bearer ", "");
+      calls.push({ url, method: init?.method ?? "GET", key });
+      if (url.endsWith("/cancel")) return answer(200, { id: "pi_1", status: "canceled" });
+      if (init?.method === "POST") {
+        if (options.secretOk === false) return answer(401, { error: { code: "api_key_invalid" } });
+        return answer(200, { id: "pi_1", client_secret: "pi_1_secret_x", livemode: options.livemode ?? false });
+      }
+      if (options.publishableAccount === "unknown") return answer(401, { error: { code: "api_key_invalid" } });
+      if (options.publishableAccount === "other") return answer(404, { error: { code: "resource_missing" } });
+      return answer(200, { id: "pi_1" });
+    };
+    return { calls, fetch: fake as unknown as typeof fetch };
+  }
+  const keys = { secret: "sk_test_a", publishable: "pk_test_a" };
+
+  it("accepts a pair: the publishable key reads the payment the secret key created, which is then cancelled", async () => {
+    const { calls, fetch } = stripe();
+    expect(await checkStripePair({ ...keys, fetch })).toEqual({ ok: true });
+    expect(calls.map((c) => `${c.method} ${c.key}`)).toEqual(["POST sk_test_a", "GET pk_test_a", "POST sk_test_a"]);
+    expect(calls[1].url).toContain("pi_1?client_secret=pi_1_secret_x");
+    expect(calls[2].url).toMatch(/pi_1\/cancel$/);
+  });
+
+  it("refuses keys from two different Stripe accounts, and says that is the reason", async () => {
+    const { calls, fetch } = stripe({ publishableAccount: "other" });
+    const result = await checkStripePair({ ...keys, fetch });
+    expect(result).toMatchObject({ ok: false });
+    expect((result as { reason: string }).reason).toMatch(/different Stripe accounts/);
+    // The probe payment is cancelled even when the check fails.
+    expect(calls.at(-1)?.url).toMatch(/cancel$/);
+  });
+
+  it.each([
+    ["a publishable key Stripe does not know", stripe({ publishableAccount: "unknown" }), keys, /does not recognise the publishable key/],
+    ["a secret key Stripe refuses", stripe({ secretOk: false }), keys, /refused the secret key/],
+    ["a secret key that is somehow live", stripe({ livemode: true }), keys, /not in test mode/],
+  ])("refuses %s", async (_, fake, pair, reason) => {
+    expect(((await checkStripePair({ ...pair, fetch: fake.fetch })) as { reason: string }).reason).toMatch(reason);
+  });
+
+  it.each([
+    ["a live secret key", { secret: "sk_live_a", publishable: "pk_test_a" }],
+    ["a live publishable key", { secret: "sk_test_a", publishable: "pk_live_a" }],
+    ["no secret key", { secret: undefined, publishable: "pk_test_a" }],
+    ["no publishable key", { secret: "sk_test_a", publishable: "" }],
+  ])("never calls Stripe with %s", async (_, pair) => {
+    const { calls, fetch } = stripe();
+    expect(await checkStripePair({ ...pair, fetch })).toMatchObject({ ok: false });
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("CI runs the launch lane and the release gate requires it (N1078)", () => {
   type Step = { id?: string; name?: string; if?: string; run?: string; uses?: string; env?: Record<string, string>; with?: Record<string, unknown> };
   type Job = { if?: string; needs?: string[]; outputs?: Record<string, string>; env?: Record<string, string>; steps: Step[] };
   const ci = yaml.load(fs.readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf8")) as { jobs: Record<string, Job> };
@@ -149,6 +210,14 @@ describe("CI runs the launch lane and the release gate requires it (R-unproven)"
     expect(lane.steps[0].run).toContain("STRIPE_TEST_PUBLISHABLE_KEY Actions variable");
     expect(lane.steps[0].run).toContain("STRIPE_TEST_SECRET_KEY Actions secret");
     expect(lane.steps[0].run).toMatch(/exit 1\s*$/);
+  });
+
+  it("asks Stripe whether the keys are a pair before installing or building anything", () => {
+    const names = lane.steps.map((s) => s.name ?? s.uses ?? s.run);
+    const pair = lane.steps.findIndex((s) => s.name === "Stripe test keys are a pair");
+    expect(lane.steps[pair].run).toBe("node e2e-launch/check-stripe-pair.mjs");
+    expect(pair).toBeGreaterThan(names.findIndex((n) => String(n).startsWith("actions/checkout@")));
+    expect(pair).toBeLessThan(names.indexOf("npm ci"));
   });
 
   it("runs the launch config, and says it passed only after the specs did", () => {

@@ -63,7 +63,7 @@ async function expectStripeFormMounted(page: Page) {
   await expect(page.getByRole("button", { name: /pay \$/i })).toBeEnabled();
 }
 
-test.describe.serial("launch configuration (R-unproven)", () => {
+test.describe.serial("launch configuration (N1078)", () => {
   test.afterAll(async () => {
     const admin = await serviceClient();
     await admin.from("agent_beta_steps").update({ open: false }).in("step", AGENT_STEPS);
