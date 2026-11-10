@@ -56,19 +56,37 @@ exist builds fine, then answers every request with an error.
 6. §11: GitHub environments, secrets and variables; then
    `DRVN_DEPLOY_STAGING = true`. The first deploy runs on the next green push
    to `main`.
-7. §7 (scheduler), §10 (monitor), §12 (first admin), §13 (evidence), once
-   staging answers `/api/version` with the commit.
+7. **Come back once staging answers `/api/version` with the commit**, and do
+   the "after the first deploy" half of §5.3 (a test event to each webhook),
+   §8 (a test error reaches Sentry) and §9 (a test alert reaches the channel;
+   it needs the §12 admin to see the outbox).
+8. §7 (scheduler), §10 (monitor), §12 (first admin), §13 (evidence).
 
 ### What the app refuses to boot without
 
-Checked together at server start (`src/instrumentation.ts`,
-`validatePaymentsEnv` in `src/lib/env.ts`), so one failed boot lists every
-problem at once in the host's function logs. On staging (production build,
-Stripe mode):
+Checked at server start (`src/instrumentation.ts`), in stages. Each stage
+stops the boot with its own message in the host's function logs, so fix what
+it names, redeploy, and read the next one:
+
+1. `DRVN_DEPLOY_ENV` (a plain `Error`: "DRVN_DEPLOY_ENV …"). The build checks
+   it too.
+2. The payment mode (`PaymentsConfigError`): `PAYMENTS_MODE` must be `stripe`
+   or `stub` when set, Stripe mode needs `STRIPE_SECRET_KEY`, and
+   `PAYMENTS_ALLOW_STUB_IN_PRODUCTION` must be absent on a hosted deployment.
+3. The database keys, on any hosted production deployment
+   (`PaymentsConfigError`: "missing its database configuration: …").
+4. Live-money configuration (`PaymentsConfigError`): first every **missing**
+   variable together ("missing required configuration: …"), then every
+   **invalid** one together ("configuration is invalid: …").
+5. The agent, only if `AGENTS_BETA=on`.
+
+On staging (production build, Stripe mode) that means:
 
 | Variable | Rule |
 |---|---|
+| `PAYMENTS_MODE` | `stripe` (if set, `stripe` or `stub`; nothing else) |
 | `STRIPE_SECRET_KEY` | set (`sk_test_…` on staging) |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or `…_ANON_KEY`), `SUPABASE_SECRET_KEY` (or `SUPABASE_SERVICE_ROLE_KEY`) | all set |
 | `STRIPE_WEBHOOK_SECRET`, `STRIPE_CONNECT_WEBHOOK_SECRET` | both set (§5.1, §5.2) |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | set |
 | `SENTRY_DSN` | an `https://<key>@<host>/<number>` DSN (§8) |
@@ -79,9 +97,6 @@ Stripe mode):
 | `DRVN_DEPLOY_ENV` | `staging` or `production` |
 | `PAYMENTS_ALLOW_STUB_IN_PRODUCTION` | **absent** |
 | `AGENT_MODEL`, `AGENT_WORKER_DATABASE_URL` | valid, if `AGENTS_BETA=on` |
-
-The Supabase URL and keys are read on first use, not at boot. A missing one
-fails the first page that needs the database.
 
 If the deploy workflow's "Staging reports this commit" step prints
 `HTTP 500` on every poll, the app is refusing to boot: open the host's
@@ -293,7 +308,8 @@ invalid variable at once.
    `payment_intent.requires_action`, `charge.refunded`, `refund.created`,
    `refund.updated`, `refund.failed`, `charge.dispute.created`,
    `charge.dispute.closed`, `account.updated`. Copy the signing secret into
-   `STRIPE_WEBHOOK_SECRET` and redeploy.
+   `STRIPE_WEBHOOK_SECRET` (§4.3). Before the first deploy that is all; if
+   staging is already deployed, re-run the Deploy workflow after changing it.
 2. Connect → enable Connect in test mode, **Express** accounts, platform
    profile and branding filled in [OWNER: platform business details]. Sellers
    onboard from `/payouts`; they return to `/settings/payouts/return`, which
@@ -301,10 +317,10 @@ invalid variable at once.
    Then add a **second** webhook endpoint, "events on connected accounts",
    at the same URL `https://<staging-origin>/api/stripe/webhook`, with the
    single event `account.updated`. Copy its signing secret into
-   `STRIPE_CONNECT_WEBHOOK_SECRET` and redeploy. This is how a seller's
-   payout status reaches DRVN after onboarding.
-3. Send a test event from the dashboard and confirm a `200` in the endpoint's
-   log.
+   `STRIPE_CONNECT_WEBHOOK_SECRET` (§4.3), as for the first. This is how a
+   seller's payout status reaches DRVN after onboarding.
+3. **After the first deploy** (step 7 of the order above): send a test event
+   to each endpoint from the dashboard and confirm a `200` in its log.
 
 ## 6. EasyPost, test mode [OWNER account, ENGINEER configures]
 
@@ -344,14 +360,17 @@ their first 03:17 / 03:37 UTC run. Trigger one by hand to confirm:
 Create a project (platform: Node/Next.js). Copy its DSN into `SENTRY_DSN`.
 Reporting is server-side only (`src/lib/monitoring.ts`); there is no browser
 SDK or replay to configure. Optionally set `SENTRY_RELEASE` (defaults to the
-commit SHA). Trigger a test error and confirm it arrives.
+commit SHA). **After the first deploy** (step 7 of the order): trigger a
+test error and confirm it arrives, tagged `staging`.
 
 ## 9. Operator alerts [OWNER]
 
 Create a Slack incoming webhook (or any HTTPS endpoint accepting a JSON body
 with a Slack-compatible `text`) in a channel the operator watches. Put it in
-`ADMIN_ALERT_WEBHOOK_URL`. Confirm a delivery: Admin → Payments shows the
-alert outbox; a `disabled` row means the variable was not set when raised.
+`ADMIN_ALERT_WEBHOOK_URL`. **After the first deploy and the §12 admin**
+(step 7 of the order): confirm a delivery. Admin → Payments shows the alert
+outbox; a `disabled` row means the variable was not set when the alert was
+raised.
 
 ## 10. Independent monitor [OWNER sets repo settings]
 
