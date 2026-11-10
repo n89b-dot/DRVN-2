@@ -134,11 +134,14 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #185 | 2026-11-09 | R-password: browser fixtures take a random password per account; seed-password doc records… | waived | — | waived (ruling, 10 Nov) |
 | #186 | 2026-11-10 | docs(readiness): report five, 9 November 2026 | skipped | — | docs only (ruling, 7 Nov) |
 | #187 | 2026-11-10 | OS-W40 N957: /api/version and monitoring treat an empty commit sha as unset (re… | waived | — | waived (ruling, 10 Nov) |
+| #188 | 2026-11-10 | OS-W40 N958 N961 N1060: staging stays out of search engines and is checked after every deploy… (batch 3, #235) | waived | — | waived (ruling, 10 Nov) |
 | #189 | 2026-11-10 | OS-W40 N951: the deploy's migration check reaches staging through the session pooler | waived | — | waived (ruling, 10 Nov) |
+| #190 | 2026-11-10 | OS-W40 N952 N960 N964: the staging set-up order can produce a working first deploy… (batch 3, #235) | waived | — | waived (ruling, 10 Nov) |
 | #191 | 2026-11-10 | OS-W40 N667: an ordered, pinned step fills the vehicle catalogue on a new datab… | waived | — | waived (ruling, 10 Nov) |
 | #192 | 2026-11-10 | OS-W40 N959 N962 N963 R-monitor: boot checks the database keys, a hosted rollba… | waived | — | waived (ruling, 10 Nov) |
 | #193 | 2026-11-10 | N714: package.json declares the patched Next.js range | waived | — | waived (ruling, 10 Nov) |
 | #194 | 2026-11-10 | N715: the proxy also gates the admin console | waived | — | waived (ruling, 10 Nov) |
+| #195 | 2026-11-10 | OS-W42 N949 N950 N1055: main's protection is watched, including how its head merged… (batch 3, #235) | waived | — | waived (ruling, 10 Nov) |
 | #196 | 2026-11-10 | OS-W41 N954: member photo links are stable across servers, and a refused link s… | waived | — | waived (ruling, 10 Nov) |
 | #197 | 2026-11-10 | OS-W42 N943: audit query for agent ids mangled before PR #158 (report five #107) | waived | — | waived (ruling, 10 Nov) |
 | #198 | 2026-11-10 | OS-W42 N944 N734 N1038 N1039 N1070 N1073: account deletions: a runbook for every state, an audited Resume deletion… (batch 2, #230) | waived | — | waived (ruling, 10 Nov) |
@@ -162,3 +165,6 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #225 | 2026-11-10 | docs: plan 1 record brought current, the by-hand counter-notice procedure… (batch 1, #228) | skipped | — | docs only (ruling, 7 Nov) |
 | #228 | 2026-11-10 | Batch 1: #225 #218 #220 #223 #219 #216 #224 | waived | — | waived (ruling, 10 Nov) |
 | #230 | 2026-11-10 | Batch 2: #203 #198 #222 | waived | — | waived (ruling, 10 Nov) |
+| #233 | 2026-11-10 | N667: staging's vehicle catalogue is filled, with the counts recorded… (batch 3, #235) | skipped | — | docs only (ruling, 7 Nov) |
+| #234 | 2026-11-10 | N1074: a camera photo chosen as a profile photo is shrunk to an avatar's size… (batch 3, #235) | waived | — | waived (ruling, 10 Nov) |
+| #235 | 2026-11-10 | Batch 3: #233 #234 #188 #195 #190 | waived | — | waived (ruling, 10 Nov) |
