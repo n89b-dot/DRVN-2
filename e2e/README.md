@@ -65,11 +65,14 @@ runs don't collide.
 
 ## In CI
 
-The `e2e` job runs the whole suite on every push and pull request against its
+The `e2e` job runs the whole suite on every push to `main` and on every pull
+request that changes anything other than documents, against its
 own `supabase start` stack (Auth, Storage, Mailpit and Realtime; migrations
 applied by `scripts/prepare-ci-supabase.mjs`), first attempt only. The
 `release-gate` job fails unless it ran and passed, with zero unexpected or
-flaky results and only the named exclusions. Live message delivery is proven
+flaky results and only the named exclusions. A pull request whose every
+changed file is a document skips the job, and the gate accepts that skip only
+(`docs/owner/branch-protection.md`, "Documents-only pull requests"). Live message delivery is proven
 by `realtime-delivery.spec.ts`, which waits less than the 20-second fallback
 refresh so polling can't pass it. (Until 1 October 2026 this section said E2E
 wasn't in CI; it has been since September.)
