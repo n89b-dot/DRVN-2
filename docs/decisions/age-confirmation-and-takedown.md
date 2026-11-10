@@ -11,3 +11,6 @@
 - Members with a session that never signs in again are not interrupted mid-session; the plan asks at the next sign-in.
 
 **Still the owner's:** registering the DMCA agent (F4, needs the entity from F1) and setting `confirmed: true` in `src/lib/legal/copyright-agent.ts` with the registered name and address.
+
+**10 Nov 2026 (#110).** A member who stays signed in used to be asked only at their next sign-in, which a long-lived session could put off indefinitely. The request proxy now asks on their next page request, once per browser (a cookie remembers the account it checked), through `public.my_age_confirmation_due()`. Sign-in, the question itself, onboarding and the legal pages are exempt.
+

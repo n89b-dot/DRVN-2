@@ -32,6 +32,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 10 — earlier members asked to confirm 18+ on their next visit: report five #110 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110130000_age_confirmation_due.sql` | not applied |
+
+Adds `public.my_age_confirmation_due()` for signed-in members. The request proxy calls it once per browser on a member's next page request, and sends a member who joined before the 18+ confirmation, with a handle and no record, to `/confirm-age`. **Apply before deploying the app from the same PR.** Until it exists the proxy reports a failed check on every signed-in page request and lets the page load.
+
 ## November 8 — deletion: late holds after the scrub, other members' notifications, the tombstone race, old retained cases: N418 (not applied anywhere)
 
 | File | Applied to |

@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Scenario = { claims: Record<string, unknown> | null; refresh: boolean; throws?: boolean };
 let scenario: Scenario = { claims: null, refresh: false };
+// #110: whether the signed-in member still owes the 18+ answer (my_age_confirmation_due).
+const age = { due: false as boolean, error: null as unknown, calls: 0 };
 
 const ROTATED = [
   { name: "sb-test-auth-token.0", value: "rotated-chunk-0", options: { path: "/", httpOnly: true, sameSite: "lax" as const, maxAge: 3600 } },
@@ -24,12 +26,16 @@ vi.mock("@supabase/ssr", () => ({
         return { data: scenario.claims ? { claims: scenario.claims } : null };
       },
     },
+    rpc: async () => {
+      age.calls += 1;
+      return { data: age.error ? null : age.due, error: age.error };
+    },
   }),
 }));
 vi.mock("@/lib/env", () => ({ hasSupabaseConfig: () => true, isProduction: false, publicKey: () => "anon-key" }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 
-import { updateSession } from "./proxy";
+import { AGE_COOKIE, ageCheckApplies, updateSession } from "./proxy";
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
 
@@ -146,3 +152,65 @@ describe("updateSession signs out a Server Action into a sign-in, not a failed c
     expect(response.headers.get("location")).toBeNull();
   });
 });
+
+describe("earlier members are asked to confirm 18+ on their next visit (N662, report five #110)", () => {
+  beforeEach(() => {
+    scenario = { claims: { sub: "u1" }, refresh: false };
+    age.due = false;
+    age.error = null;
+    age.calls = 0;
+  });
+  const withCookie = (path: string, value: string) => {
+    const r = request(path);
+    r.cookies.set(AGE_COOKIE, value);
+    return r;
+  };
+
+  it("sends a member who still owes the answer to /confirm-age, keeping where they were going", async () => {
+    age.due = true;
+    const response = await updateSession(request("/garage?tab=mods"));
+    const location = new URL(response.headers.get("location")!);
+    expect(location.pathname).toBe("/confirm-age");
+    expect(location.searchParams.get("next")).toBe("/garage?tab=mods");
+  });
+
+  it("remembers an answered member in this browser, and asks the database no more", async () => {
+    const response = await updateSession(request("/marketplace"));
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.cookies.get(AGE_COOKIE)?.value).toBe("u1");
+    await updateSession(withCookie("/marketplace", "u1"));
+    expect(age.calls).toBe(1);
+  });
+
+  it("asks again for a different account in the same browser", async () => {
+    age.due = true;
+    const response = await updateSession(withCookie("/home", "someone-else"));
+    expect(new URL(response.headers.get("location")!).pathname).toBe("/confirm-age");
+  });
+
+  it("never asks on the question itself, sign-in pages, legal pages, the API, actions or prefetches", async () => {
+    age.due = true;
+    for (const path of ["/confirm-age", "/onboarding", "/terms", "/privacy", "/api/version", "/logout"]) {
+      expect((await updateSession(request(path))).headers.get("location"), path).toBeNull();
+    }
+    expect((await updateSession(action("/settings"))).headers.get("location")).toBeNull();
+    const prefetch = new NextRequest(new URL("/home", "https://drvn.test"), { headers: { "next-router-prefetch": "1" } });
+    expect((await updateSession(prefetch)).headers.get("location")).toBeNull();
+    expect(ageCheckApplies(request("/admin-verify"), false)).toBe(false);
+    expect(age.calls).toBe(0);
+  });
+
+  it("lets the page load, unremembered, when the check fails", async () => {
+    age.error = { message: "timeout" };
+    const response = await updateSession(request("/home"));
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.cookies.get(AGE_COOKIE)).toBeUndefined();
+  });
+
+  it("asks nobody signed out", async () => {
+    scenario = { claims: null, refresh: false };
+    await updateSession(request("/marketplace"));
+    expect(age.calls).toBe(0);
+  });
+});
+
