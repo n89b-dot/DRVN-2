@@ -1,0 +1,98 @@
+{
+  "description": "Which part of the split browser suite runs which spec file (plan 2 item A0b). CI runs the four parts side by side, each on its own database and its own build; together they run every test of the unsplit suite exactly once, which tests/ci/e2e-parts.test.ts proves by listing both. A new spec file must be added to exactly one part: put it in the lightest. The split is by measured time, not by file count: the seconds below are each part's tests in CI run 42846262459, and `npm run e2e:parts -- balance <playwright.xml>` proposes a new split from a later run. Part 4 also runs the two cross-browser projects, so it is the only part that installs Firefox and WebKit. The recovery drills (npm run test:operations) run once, in the part named by operationsPart.",
+  "measured": {
+    "run": 42846262459,
+    "seconds": {
+      "1": 160,
+      "2": 190,
+      "3": 192,
+      "4": 165
+    }
+  },
+  "operationsPart": "1",
+  "parts": {
+    "1": {
+      "chromium": [
+        "account-export.spec.ts",
+        "agent-nudges.spec.ts",
+        "agent-photos.spec.ts",
+        "direction-journeys.spec.ts",
+        "explore-search.spec.ts",
+        "feature-regression.spec.ts",
+        "feedback-settings-recovery.spec.ts",
+        "golden-path.spec.ts",
+        "guest-checkout.spec.ts",
+        "message-recovery.spec.ts",
+        "mobile-matrix.spec.ts",
+        "mobile-remediation.spec.ts",
+        "mod-sheet-recovery.spec.ts",
+        "negotiation-three-rounds.spec.ts",
+        "private-photos.spec.ts",
+        "social-notification-recovery.spec.ts"
+      ]
+    },
+    "2": {
+      "chromium": [
+        "admin-mutation-recovery.spec.ts",
+        "admin-operation-reconcile.spec.ts",
+        "agent-chat.spec.ts",
+        "cart-recovery.spec.ts",
+        "discovery-remediation.spec.ts",
+        "gallery-recovery.spec.ts",
+        "garage-sell-lifecycle.spec.ts",
+        "marketplace-shopping.spec.ts",
+        "offer-action-recovery.spec.ts",
+        "offer-submission-recovery.spec.ts",
+        "remediation-security.spec.ts",
+        "report-recovery.spec.ts",
+        "responsive.spec.ts",
+        "return-dispute-recovery.spec.ts",
+        "transaction-completion.spec.ts"
+      ]
+    },
+    "3": {
+      "chromium": [
+        "a11y.spec.ts",
+        "accepted-offer-recovery.spec.ts",
+        "admin-product-identity.spec.ts",
+        "agent-build.spec.ts",
+        "agent-composer-phone.spec.ts",
+        "buyer-agent.spec.ts",
+        "landing-hero.spec.ts",
+        "listing-edit-atomic.spec.ts",
+        "listing-import.spec.ts",
+        "listing-recovery.spec.ts",
+        "marketplace-browsing.spec.ts",
+        "marketplace-family.spec.ts",
+        "mobile-layout.spec.ts",
+        "prd-p0-behaviour.spec.ts",
+        "realtime-delivery.spec.ts",
+        "seller-store-link.spec.ts",
+        "what-came-off.spec.ts"
+      ]
+    },
+    "4": {
+      "chromium": [
+        "account-settings-recovery.spec.ts",
+        "activity-recovery.spec.ts",
+        "add-car.spec.ts",
+        "admin-agent.spec.ts",
+        "agent-jobs.spec.ts",
+        "copyright-takedown.spec.ts",
+        "dispute-recovery-matrix.spec.ts",
+        "gallery-upload-response-loss.spec.ts",
+        "listing-withdrawal.spec.ts",
+        "seller-agent.spec.ts",
+        "thread-reading.spec.ts"
+      ],
+      "firefox": [
+        "golden-path.spec.ts",
+        "remediation-security.spec.ts"
+      ],
+      "webkit": [
+        "golden-path.spec.ts",
+        "remediation-security.spec.ts"
+      ]
+    }
+  }
+}

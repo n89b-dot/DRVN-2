@@ -170,9 +170,12 @@ describe("the workflow wires the scope to the browser suite only (plan 2 A0)", (
     expect(changes.steps[0].uses).toMatch(/^actions\/checkout@[0-9a-f]{40}$/);
   });
 
-  it("only e2e is conditional on it, and the Stripe lane no longer waits on e2e", () => {
-    expect(ci.jobs.e2e.needs).toEqual(["changes"]);
-    expect(ci.jobs.e2e.if).toBe("needs.changes.outputs.docs_only != 'true'");
+  it("only the browser suite is conditional on it, and the Stripe lane no longer waits on e2e", () => {
+    // The suite's four parts (plan 2 item A0b) and the job that judges them.
+    expect(ci.jobs["e2e-parts"].needs).toEqual(["changes"]);
+    expect(ci.jobs["e2e-parts"].if).toBe("needs.changes.outputs.docs_only != 'true'");
+    expect(ci.jobs.e2e.needs).toEqual(["changes", "e2e-parts"]);
+    expect(ci.jobs.e2e.if).toContain("needs.changes.outputs.docs_only != 'true'");
     expect(ci.jobs["stripe-integration"].needs).toBeUndefined();
     for (const name of ["verify", "secrets", "secrets-full", "sql-guard", "stripe-integration"]) {
       expect(ci.jobs[name].if, `${name} runs on every change`).toBeUndefined();
@@ -192,11 +195,11 @@ describe.skipIf(!hasJq)("release-gate with a change scope (plan 2 A0)", () => {
   const green = {
     EVENT: "pull_request", CHANGES: "success", DOCS_ONLY: "false",
     VERIFY: "success", SECRETS: "success", SECRETS_FULL: "success", SQL: "success",
-    E2E: "success", E2E_RAN: "true", E2E_FIRST_ATTEMPT: "true",
+    E2E_PARTS: "success", E2E: "success", E2E_RAN: "true", E2E_FIRST_ATTEMPT: "true",
     STRIPE: "success", STRIPE_RAN: "true",
   };
   // What GitHub hands the gate when e2e was skipped: no result but 'skipped', no outputs.
-  const skipped = { E2E: "skipped", E2E_RAN: "", E2E_FIRST_ATTEMPT: "" };
+  const skipped = { E2E_PARTS: "skipped", E2E: "skipped", E2E_RAN: "", E2E_FIRST_ATTEMPT: "" };
   const docsOnly = { ...green, DOCS_ONLY: "true", ...skipped };
 
   let n = 0;
@@ -222,6 +225,13 @@ describe.skipIf(!hasJq)("release-gate with a change scope (plan 2 A0)", () => {
 
   it.each([
     ["a code change whose e2e was skipped", { ...green, ...skipped }],
+    // Plan 2 item A0b: the four parts' own result is required beside the judgement.
+    ["a part that failed, even if the judging job said success", { ...green, E2E_PARTS: "failure" }],
+    ["a part that was cancelled", { ...green, E2E_PARTS: "cancelled" }],
+    ["parts that were skipped on a code change, even if the judging job said success", { ...green, E2E_PARTS: "skipped" }],
+    ["parts that passed but were never judged", { ...green, E2E: "skipped", E2E_RAN: "", E2E_FIRST_ATTEMPT: "" }],
+    ["a judgement that a part did not pass first time", { ...green, E2E: "failure", E2E_FIRST_ATTEMPT: "false" }],
+    ["a documents-only pull request whose parts ran and failed", { ...docsOnly, E2E_PARTS: "failure" }],
     ["a code change whose e2e failed", { ...green, E2E: "failure", E2E_FIRST_ATTEMPT: "" }],
     ["a code change whose e2e was cancelled", { ...green, E2E: "cancelled", E2E_RAN: "", E2E_FIRST_ATTEMPT: "" }],
     ["a skipped e2e when the changes job failed", { ...docsOnly, CHANGES: "failure", DOCS_ONLY: "" }],
