@@ -1126,6 +1126,54 @@ export async function adminResolveRecovery(
   }
 }
 
+// ---------- Stuck account deletions (20261110110000, report five #106/#108) ----------
+
+/**
+ * Puts a stuck account deletion back in the worker's queue: a case whose
+ * worker gave up (ten failed attempts), or a "late hold after the scrub"
+ * whose order has since settled. The database decides, under the deletion
+ * lock, and refuses every other state in words; the next pass still runs
+ * every hold check, and a scrubbed member's sign-in never comes back.
+ * docs/production-runbook.md §5d says when to use it.
+ */
+export async function adminResumeAccountDeletion(_prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const userId = field(formData, "user_id");
+  const reason = field(formData, "reason");
+  if (!/^[0-9a-f-]{36}$/i.test(userId)) return { error: "Missing member." };
+  if (!reason) return { error: "A reason is required — it goes in the audit log." };
+
+  // Asked first, so a refusal ("the order is still open") is said before
+  // anything is journalled and never leaves an operation to reconcile.
+  const check = await ctx.admin.rpc("admin_resume_account_deletion", { p_user: userId, p_dry_run: true });
+  if (check.error) return { error: check.error.message };
+
+  try {
+    await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: "deletion.resume",
+        subjectType: "user",
+        subjectId: userId,
+        reason,
+      },
+      async () => {
+        const { data, error } = await ctx.admin.rpc("admin_resume_account_deletion", { p_user: userId, p_dry_run: false });
+        if (error) throw new RefusedOperationError(error.message);
+        return data;
+      }
+    );
+    revalidatePath("/admin", "layout");
+    return { ok: "Deletion queued again. The worker picks it up on its next pass (within a few minutes)." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not resume the deletion." };
+  }
+}
+
 // ---------- Seller credit payouts (20261008100100 / 20261026150000) ----------
 
 type CarryPayoutControl = "retry" | "cancel";
