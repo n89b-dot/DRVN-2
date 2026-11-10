@@ -771,7 +771,11 @@ also verifies the result (`docs/owner/branch-protection.md`).
 Require `release-gate` alone: it is the aggregate check, and it fails unless
 `verify`, `secrets`, `secrets-full`, `sql-guard`, `e2e` and
 `stripe-integration` all ran and passed (updated 1 October 2026 — e2e no
-longer self-skips; it runs on a local stack in CI). `secrets` scans only the
+longer self-skips; it runs on a local stack in CI). One exception since
+November 2026: a pull request that changes documents only skips `e2e`, and
+the gate accepts that skip and no other; a push to `main` always runs
+everything (`docs/owner/branch-protection.md`, "Documents-only pull
+requests"). `secrets` scans only the
 commits a PR or push adds (first-parent, no merges); `secrets-full` is the
 full-history lane — every reachable commit, merges included, plus the tracked
 tree — and is what fails a key committed and later deleted (added 3 October
