@@ -35,7 +35,15 @@
 --
 -- Restated: private.scheduled_job_inventory() from
 -- 20261108100000_payout_setup_started.sql, with 'orderEmails' added to
--- drvn-transfer-worker. Idempotent.
+-- drvn-transfer-worker; private.notification_member_text() from
+-- 20261110220000_deletion_scrub_previews_repair.sql, with this migration's
+-- three notice kinds added. Idempotent.
+--
+-- Not inert without an email provider. With EMAIL_PROVIDER unset no email is
+-- sent, but the three new notices are written in the app whatever that
+-- setting is: the dispatch reminder, the payout-setup reminder and the
+-- partial-refund notice. The first run of the dispatch reminder reaches
+-- sellers of paid orders up to a day past their dispatch date.
 -- ============================================================================
 
 begin;
@@ -52,9 +60,10 @@ create table if not exists public.order_email_outbox (
   status text not null default 'pending' check (status in ('pending', 'sending', 'sent', 'skipped', 'failed')),
   skip_reason text check (skip_reason is null or skip_reason in (
     'email_off', 'stale', 'account_closed', 'no_address', 'not_a_party', 'muted', 'rejected')),
-  -- Set while the row waits because our own account with the provider is at
-  -- fault (a rotated key, a lapsed domain): such a row is not counted as an
-  -- attempt and is kept 72 hours, not 24 (work review #147).
+  -- Set on every waiting row when a send finds our own account with the
+  -- provider at fault (a rotated key, a lapsed domain): a row so marked is
+  -- kept 72 hours, not 24, whether or not it was the one tried (work review
+  -- #147; review of #204).
   provider_held_at timestamptz,
   attempts integer not null default 0 check (attempts >= 0),
   next_attempt_at timestamptz not null default now(),
@@ -165,6 +174,9 @@ declare
   v_row record;
   v_email text;
   v_confirmed boolean;
+  v_buyer_id uuid;
+  v_seller_id uuid;
+  v_party boolean;
   v_buyer boolean;
   v_reason text;
   v_lease uuid;
@@ -176,21 +188,28 @@ begin
       from public.order_email_outbox q
      where (q.status = 'pending' and q.next_attempt_at <= now())
         or (q.status = 'sending' and q.lease_expires_at < now())
-     order by q.next_attempt_at, q.id
+     order by q.next_attempt_at, q.created_at, q.id
      limit 500
      for update of q skip locked
   loop
     exit when v_claimed >= v_limit;
     select nullif(btrim(u.email), ''), u.confirmed_at is not null into v_email, v_confirmed
       from auth.users u where u.id = v_row.recipient_id;
-    select v_row.recipient_id = o.buyer_id into v_buyer from public.orders o where o.id = v_row.order_id;
+    -- "Is a party" and "is the buyer" are two questions, and neither may be
+    -- answered by a null: an order whose buyer's account is gone has a null
+    -- buyer_id, and its seller is still a party (review of #204).
+    v_buyer_id := null;
+    v_seller_id := null;
+    select o.buyer_id, o.seller_id into v_buyer_id, v_seller_id from public.orders o where o.id = v_row.order_id;
+    v_buyer := v_row.recipient_id is not distinct from v_buyer_id;
+    v_party := v_buyer or v_row.recipient_id is not distinct from v_seller_id;
 
     v_reason := case
       when v_row.created_at < now() - case when v_row.provider_held_at is not null then interval '72 hours' else interval '24 hours' end then 'stale'
       when exists (select 1 from public.profiles p where p.id = v_row.recipient_id and p.suspended_at is not null)
         or exists (select 1 from public.account_deletion_requests r where r.user_id = v_row.recipient_id
                     and (r.outcome <> 'temporary_financial_hold' or r.scrubbed_at is not null)) then 'account_closed'
-      when v_buyer is null then 'not_a_party'
+      when not v_party then 'not_a_party'
       when v_email is null then 'no_address'
       -- An unconfirmed address is a guest's: only the buyer's own emails.
       when not v_confirmed and not (v_buyer and v_row.kind in ('order_paid', 'order_shipped', 'receipt_auto_confirmed', 'order_refunded', 'order_partially_refunded', 'order_cancelled', 'dispute_resolved', 'admin_action')) then 'no_address'
@@ -238,12 +257,16 @@ grant execute on function public.claim_order_emails(integer) to service_role;
 
 -- p_outcome: sent, retry, rejected (the provider will never take it), provider
 -- (our own account with the provider is at fault: the row goes back to
--- waiting, this attempt is not counted, and it is kept 72 hours), or skipped
--- (p_reason: muted, email_off). Fenced by attempt: a late answer for an
--- earlier attempt changes nothing. Returns the row's new status, or 'held'.
+-- waiting, this attempt is not counted, and every waiting row is kept 72
+-- hours), rate_limited (the provider asked us to slow down: the row goes back
+-- uncounted and nothing is claimed before p_retry_after seconds have passed),
+-- or skipped (p_reason: muted, email_off). Fenced by attempt: a late answer
+-- for an earlier attempt changes nothing. Returns the row's new status, or
+-- 'held', or 'limited'.
+drop function if exists public.complete_order_email(uuid, integer, text, text, text, text);
 create or replace function public.complete_order_email(
   p_id uuid, p_attempt integer, p_outcome text, p_provider_message_id text default null,
-  p_error text default null, p_reason text default null)
+  p_error text default null, p_reason text default null, p_retry_after integer default null)
 returns text
 language plpgsql
 security definer
@@ -251,6 +274,7 @@ set search_path = public, pg_temp
 as $$
 declare
   v_row public.order_email_outbox%rowtype;
+  v_until timestamptz;
 begin
   select * into v_row from public.order_email_outbox where id = p_id for update;
   if not found then return 'gone'; end if;
@@ -258,7 +282,8 @@ begin
   if p_outcome = 'sent' then
     update public.order_email_outbox
        set status = 'sent', sent_at = now(), provider_message_id = left(p_provider_message_id, 200),
-           last_error = null, lease_id = null, lease_expires_at = null, updated_at = now()
+           -- Null, except a note on how it came to be counted as sent (a repeated key the provider refused).
+           last_error = left(p_error, 200), lease_id = null, lease_expires_at = null, updated_at = now()
      where id = p_id;
     return 'sent';
   elsif p_outcome = 'retry' then
@@ -279,7 +304,27 @@ begin
            last_error = left(p_error, 200), lease_id = null, lease_expires_at = null,
            next_attempt_at = now() + interval '10 minutes', updated_at = now()
      where id = p_id;
+    -- One window while the fault stands: the pass stops at the first row it
+    -- tries, so every other waiting row is marked here, or it would go stale
+    -- at 24 hours without ever having been tried (review of #204).
+    update public.order_email_outbox
+       set provider_held_at = now()
+     where status = 'pending' and provider_held_at is null;
     return 'held';
+  elsif p_outcome = 'rate_limited' then
+    -- Not this message's fault and not ours: the attempt is not counted. The
+    -- provider's own wait is honoured for the whole queue (nothing waiting is
+    -- claimed before it), a minute when it names none, an hour at most.
+    v_until := now() + make_interval(secs => least(greatest(coalesce(p_retry_after, 60), 1), 3600));
+    update public.order_email_outbox
+       set status = 'pending', attempts = greatest(v_row.attempts - 1, 0),
+           last_error = left(p_error, 200), lease_id = null, lease_expires_at = null,
+           next_attempt_at = v_until, updated_at = now()
+     where id = p_id;
+    update public.order_email_outbox
+       set next_attempt_at = v_until
+     where status = 'pending' and next_attempt_at < v_until;
+    return 'limited';
   elsif p_outcome = 'rejected' then
     update public.order_email_outbox
        set status = 'skipped', skip_reason = 'rejected', last_error = left(p_error, 200), lease_id = null, lease_expires_at = null, updated_at = now()
@@ -295,8 +340,8 @@ begin
   raise exception 'Unknown outcome %', p_outcome using errcode = '22023';
 end;
 $$;
-revoke all on function public.complete_order_email(uuid, integer, text, text, text, text) from public, anon, authenticated;
-grant execute on function public.complete_order_email(uuid, integer, text, text, text, text) to service_role;
+revoke all on function public.complete_order_email(uuid, integer, text, text, text, text, integer) from public, anon, authenticated;
+grant execute on function public.complete_order_email(uuid, integer, text, text, text, text, integer) to service_role;
 
 -- No provider: everything waiting is skipped, so a provider turned on later
 -- sends only what happens after.
@@ -469,6 +514,10 @@ begin
     select o.id, o.seller_id, o.dispatch_by
       from public.orders o
      where o.status = 'paid' and o.shipped_at is null
+       -- A seller whose account is gone has nobody to remind, and their null
+       -- id would fail the insert below and roll back every reminder with it
+       -- (review of #204).
+       and o.seller_id is not null
        and o.dispatch_by is not null and o.dispatch_by <= now() + interval '24 hours'
        -- Not for an order long past its date: that is the dispatch deadline's own handling.
        and o.dispatch_by > now() - interval '24 hours'
@@ -491,6 +540,36 @@ end;
 $$;
 revoke all on function public.raise_dispatch_reminders() from public, anon, authenticated;
 grant execute on function public.raise_dispatch_reminders() to service_role;
+
+-- ---------------------------------------------------------------------------
+-- Whose words each notice carries (20261110220000, N1069), restated with this
+-- migration's three kinds. None of them carries a member's words: an amount,
+-- a count of sales, and fixed sentences.
+-- ---------------------------------------------------------------------------
+create or replace function private.notification_member_text(p_kind text)
+returns text
+language sql
+immutable
+set search_path = pg_catalog, pg_temp
+as $$
+  select case
+    when p_kind in ('follow', 'car_follow', 'save', 'listing_save', 'comment', 'reaction', 'review', 'question', 'message') then 'actor'
+    when p_kind in ('offer_new', 'offer_countered', 'offer_declined', 'offer_accepted', 'offer_counter_accepted', 'offer_withdrawn',
+                    'offer_countered_back', 'offer_expired', 'offer_agent_recommends_accept', 'offer_agent_deal_reached',
+                    'offer_agent_out_of_rounds', 'offer_listing_withdrawn') then 'listing_title'
+    when p_kind in ('order_disputed', 'order_cancelled', 'order_refunded') then 'order_reason'
+    when p_kind = 'saved_search' then 'matched_titles'
+    when p_kind in ('order_sold', 'order_paid', 'order_shipped', 'order_delivered', 'order_completed', 'order_pending',
+                    'order_requires_action', 'order_payment_failed',
+                    'receipt_due', 'receipt_auto_confirmed', 'dispute_resolved', 'dispute_escalated',
+                    'refund_offered', 'refund_offer_expired', 'payout_sent', 'payout_blocked',
+                    'report_reviewed', 'post_removed', 'comment_removed', 'listing_removed', 'car_hidden', 'car_restored',
+                    'account_suspended', 'account_restored', 'password_changed', 'copyright_takedown', 'policy_updated',
+                    'admin_action',
+                    'payout_setup_reminder', 'order_partially_refunded', 'dispatch_reminder') then 'none'
+  end;
+$$;
+revoke all on function private.notification_member_text(text) from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Pruning (work review #147): nothing removed a settled row. Sent, skipped

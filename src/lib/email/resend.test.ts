@@ -15,8 +15,8 @@ describe("the Resend transport (OS-W41, report five #116)", () => {
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
-  const answering = (status: number, name: string, text = "") =>
-    resendTransport({ from: "f", env: { RESEND_API_KEY: "k" }, fetchImpl: (async () => Response.json({ name, message: text }, { status })) as unknown as typeof fetch })(message);
+  const answering = (status: number, name: string, text = "", headers: Record<string, string> = {}) =>
+    resendTransport({ from: "f", env: { RESEND_API_KEY: "k" }, fetchImpl: (async () => Response.json({ name, message: text }, { status, headers })) as unknown as typeof fetch })(message);
 
   it("N1063: a fault with our own account is a retry marked provider, never a rejection (work review #147)", async () => {
     const ours: [number, string, string][] = [
@@ -37,21 +37,34 @@ describe("the Resend transport (OS-W41, report five #116)", () => {
     }
   });
 
-  it("N1063: a refused recipient or a malformed message is a rejection; a rate limit, a 5xx or a request in flight is a plain retry", async () => {
+  it("N1063: a refused recipient or a malformed message is a rejection; a 5xx or a request in flight is a plain retry", async () => {
     for (const [status, name, text] of [[422, "validation_error", "buyer@example.test is invalid"], [400, "validation_error", "Invalid `to` field"], [422, "missing_required_field", "Missing `subject`"], [404, "not_found", ""]] as const) {
       const outcome = await answering(status, name, text);
       expect(outcome, `${status} ${text}`).toEqual({ status: "rejected", reason: `resend: ${status} ${name}` });
       expect(JSON.stringify(outcome)).not.toContain("buyer@example.test");
     }
-    for (const [status, name] of [[429, "rate_limit_exceeded"], [503, "service_unavailable"], [500, "application_error"], [409, "concurrent_idempotent_requests"]] as const) {
+    for (const [status, name] of [[503, "service_unavailable"], [500, "application_error"], [409, "concurrent_idempotent_requests"]] as const) {
       expect(await answering(status, name), `${status} ${name}`).toEqual({ status: "retry", reason: `resend: ${status} ${name}` });
     }
     const down = await resendTransport({ from: "f", env: { RESEND_API_KEY: "k" }, fetchImpl: (async () => { throw new Error("ECONNRESET"); }) as unknown as typeof fetch })(message);
     expect(down).toEqual({ status: "retry", reason: "resend: network" });
   });
 
-  it("N1063: a key Resend already took with a different body means the email went; it is not retried to failure", async () => {
-    expect(await answering(409, "invalid_idempotent_request", "Same idempotency key used with a different request body")).toEqual({ status: "sent", providerId: null });
+  it("N1063: a rate limit is a retry marked rateLimited, with Resend's own wait when it gives one in seconds (review of #204)", async () => {
+    expect(await answering(429, "rate_limit_exceeded", "Too many requests", { "retry-after": "3" })).toEqual({ status: "retry", reason: "resend: 429 rate_limit_exceeded", rateLimited: true, retryAfterSeconds: 3 });
+    expect(await answering(429, "rate_limit_exceeded", "", { "retry-after": "0.4" })).toEqual({ status: "retry", reason: "resend: 429 rate_limit_exceeded", rateLimited: true, retryAfterSeconds: 1 });
+    // No wait given, or one that is not a number of seconds: the caller's default.
+    expect(await answering(429, "rate_limit_exceeded")).toEqual({ status: "retry", reason: "resend: 429 rate_limit_exceeded", rateLimited: true });
+    expect(await answering(429, "", "", { "retry-after": "Wed, 21 Oct 2015 07:28:00 GMT" })).toEqual({ status: "retry", reason: "resend: 429", rateLimited: true });
+    // A quota is not a rate limit: it is our account, and stays a provider fault.
+    expect(await answering(429, "daily_quota_exceeded", "", { "retry-after": "3" })).toEqual({ status: "retry", reason: "resend: 429 daily_quota_exceeded", provider: true });
+  });
+
+  it("N1063: a key Resend already took with a different body is taken as sent, and marked so it can be counted", async () => {
+    expect(await answering(409, "invalid_idempotent_request", "Same idempotency key used with a different request body")).toEqual({ status: "sent", providerId: null, repeatedKey: true });
+    // An ordinary acceptance carries no such mark.
+    const ok = resendTransport({ from: "f", env: { RESEND_API_KEY: "k" }, fetchImpl: (async () => Response.json({ id: "re_2" })) as unknown as typeof fetch });
+    expect(await ok(message)).toEqual({ status: "sent", providerId: "re_2" });
   });
 
   it("N1063: a missing key keeps everything waiting and is our fault to fix", async () => {

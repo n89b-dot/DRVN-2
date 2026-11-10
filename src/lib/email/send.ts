@@ -30,8 +30,14 @@ export type EmailMessage = {
 };
 
 export type EmailOutcome =
-  /** The provider accepted it. */
-  | { status: "sent"; providerId: string | null }
+  /**
+   * The provider accepted it. `repeatedKey: true` when it did not say so this
+   * time: it refused the idempotency key as already used with another body,
+   * which we read as "accepted before". Callers count these and say so, so
+   * that a provider that keeps a key for a failed first attempt shows up
+   * (review of #204).
+   */
+  | { status: "sent"; providerId: string | null; repeatedKey?: true }
   /**
    * Worth trying again later: a timeout, a 429, a 5xx. `provider: true` when
    * the cause is our own account with the provider, not this message: a key
@@ -40,8 +46,12 @@ export type EmailOutcome =
    * fail the same way until someone fixes it, so the caller stops, keeps
    * what is waiting, and tells an operator. It is a field, not a fourth
    * status, so a caller that only knows the three statuses still retries.
+   *
+   * `rateLimited: true` when the provider asked us to slow down (a 429 that
+   * is not a quota): nobody's fault, so the caller must not count it as an
+   * attempt. `retryAfterSeconds` is the provider's own wait, when it gave one.
    */
-  | { status: "retry"; reason: string; provider?: true }
+  | { status: "retry"; reason: string; provider?: true; rateLimited?: true; retryAfterSeconds?: number }
   /** Never going to work: a refused address, a malformed message. */
   | { status: "rejected"; reason: string };
 

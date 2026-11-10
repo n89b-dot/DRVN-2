@@ -23,10 +23,17 @@ import type { createAdminClient } from "@/lib/supabase/admin";
  * key, a sending domain that lapsed, a quota: `provider: true` on the
  * outcome), every message would fail the same way. The pass stops at the
  * first one, that row goes back to waiting without the attempt counted, and
- * an operator is alerted, at most once an hour. Nothing is dropped; rows held
- * this way are kept 72 hours. A row that does fail for good (five attempts,
- * or a message the provider refuses) raises an alert of its own, naming the
- * order, so it is never only a row in a table.
+ * an operator is alerted, at most once an hour. Nothing is dropped: every row
+ * waiting at that moment is kept 72 hours, the ones the pass never reached
+ * included. A row that does fail for good (five attempts, or a message the
+ * provider refuses) raises an alert of its own, naming the order, so it is
+ * never only a row in a table.
+ *
+ * A rate limit is nobody's fault (review of #204). Sends are spaced so the
+ * provider's limit is not reached in the ordinary run. If it is reached
+ * anyway, the pass stops, the row goes back without the attempt counted, and
+ * nothing is claimed before the provider's own wait is over; the next pass
+ * carries on. No alert: one line to monitoring every ten minutes at most.
  */
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -37,6 +44,15 @@ export const ORDER_EMAIL_BATCH = 2_000;
 export const ORDER_EMAIL_BUDGET_MS = 120_000;
 /** The most one send may take, whatever the transport does; then it is retried later. */
 export const ORDER_EMAIL_SEND_TIMEOUT_MS = 10_000;
+/**
+ * The least time from one send's start to the next. Resend's published
+ * default is two requests a second; this keeps under it. To be confirmed on
+ * the first real send (record row #1-H5).
+ */
+export const ORDER_EMAIL_GAP_MS = 550;
+/** A rate limit is reported to monitoring at most this often. */
+const RATE_LIMIT_REPORT_EVERY_MS = 10 * 60_000;
+let rateLimitReportedAt = 0;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
   return new Promise((resolve) => {
@@ -83,9 +99,12 @@ const CARD_DISPUTE_REASON = /^Card dispute /;
 /**
  * `retrying` counts rows that will be tried again, a row held for a provider
  * fault included, so the family reads as failing while email is not going
- * out. `held` is 1 when the pass stopped for a provider fault.
+ * out. `held` is 1 when the pass stopped for a provider fault. `limited` is
+ * 1 when it stopped for a rate limit: that row is not in `retrying`, because
+ * a rate limit is not the family failing. `repeatedKey` counts emails taken
+ * as sent because the provider refused their key as already used.
  */
-export type OrderEmailTally = { claimed: number; sent: number; skipped: number; retrying: number; failed: number; errors: number; held: number };
+export type OrderEmailTally = { claimed: number; sent: number; skipped: number; retrying: number; failed: number; errors: number; held: number; limited: number; repeatedKey: number };
 
 type Claimed = {
   id: string;
@@ -136,7 +155,7 @@ async function facts(admin: Admin, row: Pick<Claimed, "order_id" | "recipient_id
   };
 }
 
-async function complete(admin: Admin, row: Claimed, outcome: "sent" | "retry" | "rejected" | "provider" | "skipped", extra: { providerId?: string | null; error?: string; reason?: "muted" | "email_off" } = {}) {
+async function complete(admin: Admin, row: Claimed, outcome: "sent" | "retry" | "rejected" | "provider" | "rate_limited" | "skipped", extra: { providerId?: string | null; error?: string; reason?: "muted" | "email_off"; retryAfter?: number } = {}) {
   const { data, error } = await admin.rpc("complete_order_email", {
     p_id: row.id,
     p_attempt: row.attempt,
@@ -144,6 +163,7 @@ async function complete(admin: Admin, row: Claimed, outcome: "sent" | "retry" | 
     ...(extra.providerId ? { p_provider_message_id: extra.providerId } : {}),
     ...(extra.error ? { p_error: extra.error.slice(0, 200) } : {}),
     ...(extra.reason ? { p_reason: extra.reason } : {}),
+    ...(extra.retryAfter ? { p_retry_after: extra.retryAfter } : {}),
   });
   if (error) throw new Error(`Order email outcome not recorded: ${error.code}`);
   return data as string;
@@ -157,6 +177,7 @@ export async function processOrderEmails(
     deadline = Math.min(Date.now() + ORDER_EMAIL_BUDGET_MS, notAfter),
     transport = emailTransport(),
     origin = siteUrl(),
+    gapMs = ORDER_EMAIL_GAP_MS,
   }: {
     batch?: number;
     /** When the caller's own time ends (the money pass): emails stop then, whatever is left of their budget. */
@@ -164,9 +185,12 @@ export async function processOrderEmails(
     deadline?: number;
     transport?: EmailTransport | null;
     origin?: string;
+    /** The least time between the starts of two sends. */
+    gapMs?: number;
   } = {},
 ): Promise<OrderEmailTally> {
-  const tally: OrderEmailTally = { claimed: 0, sent: 0, skipped: 0, retrying: 0, failed: 0, errors: 0, held: 0 };
+  const tally: OrderEmailTally = { claimed: 0, sent: 0, skipped: 0, retrying: 0, failed: 0, errors: 0, held: 0, limited: 0, repeatedKey: 0 };
+  let lastSendAt = -Infinity;
   if (!transport) {
     const { data, error } = await admin.rpc("skip_order_emails_email_off");
     if (error) throw new Error(`Order email skip failed: ${error.code}`);
@@ -198,6 +222,9 @@ export async function processOrderEmails(
           continue;
         }
         const message = renderOrderEmail(row.kind, loaded, { origin, guest: row.guest });
+        const wait = lastSendAt + gapMs - Date.now();
+        if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+        lastSendAt = Date.now();
         const outcome = await withTimeout<Awaited<ReturnType<EmailTransport["send"]>>>(
           transport.send({ to: row.email, ...message, idempotencyKey: `order-email/${row.id}` }),
           ORDER_EMAIL_SEND_TIMEOUT_MS,
@@ -218,10 +245,23 @@ export async function processOrderEmails(
           });
           break drain;
         }
+        if (outcome.status === "retry" && outcome.rateLimited) {
+          // The provider asked us to slow down. Not an attempt, not an alert:
+          // the row goes back, the queue waits out the provider's time, and
+          // the next pass carries on.
+          await complete(admin, row, "rate_limited", { error: outcome.reason, retryAfter: outcome.retryAfterSeconds });
+          tally.limited = 1;
+          if (Date.now() - rateLimitReportedAt >= RATE_LIMIT_REPORT_EVERY_MS) {
+            rateLimitReportedAt = Date.now();
+            reportError("[order-emails] the email provider rate-limited a pass; it carries on next pass", { provider: transport.name, reason: outcome.reason, retryAfterSeconds: outcome.retryAfterSeconds ?? null });
+          }
+          break drain;
+        }
         const status =
           outcome.status === "sent"
-            ? await complete(admin, row, "sent", { providerId: outcome.providerId })
+            ? await complete(admin, row, "sent", { providerId: outcome.providerId, ...(outcome.repeatedKey ? { error: `${transport.name}: taken as sent, the key was already used` } : {}) })
             : await complete(admin, row, outcome.status, { error: outcome.reason });
+        if (outcome.status === "sent" && outcome.repeatedKey) tally.repeatedKey += 1;
         if (status === "sent") tally.sent += 1;
         else if (status === "pending") tally.retrying += 1;
         else if (status === "failed" || status === "skipped") {
@@ -244,6 +284,11 @@ export async function processOrderEmails(
         reportError("[order-emails] row not finished", { id: row.id, error: error instanceof Error ? error.message : "error" });
       }
     }
+  }
+  // One line for the pass, however many: these rows are marked sent on the
+  // provider's refusal of a repeated key, not on its acceptance.
+  if (tally.repeatedKey > 0) {
+    reportError("[order-emails] emails taken as sent because their key was already used", { provider: transport.name, count: tally.repeatedKey });
   }
   return tally;
 }

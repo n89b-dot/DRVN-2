@@ -29,6 +29,16 @@
 --      sides with the amount, and a full refund or a lost card dispute does
 --      not; M one dispatch reminder per paid order due within a day; X settled
 --      rows and reminder ledgers past 90 days are pruned, waiting rows kept
+-- Review of #204 (N1063):
+--   V5 to V7  one window while a provider fault stands: 30 rows wait, the
+--      fault is found on the first, and every one of them is kept 72 hours
+--   N  an order whose buyer's account is gone: its seller is still a party
+--      and is emailed; a stranger and a missing order are not
+--   L  a rate limit is not a strike: the row goes back uncounted, nothing is
+--      claimed before the provider's wait, and the queue keeps its order
+--   F4 a lost card dispute books the whole remainder: no partial-refund notice
+--   M4 a paid order whose seller is gone does not stop the other reminders
+--   C4 an email taken as sent on a repeated key keeps a note saying so
 -- Every failed check is collected and reported together at the end.
 begin;
 do $$
@@ -122,12 +132,23 @@ declare
   o_part uuid := gen_random_uuid();
   o_ship uuid := gen_random_uuid();
   o_later uuid := gen_random_uuid();
+  lone uuid := gen_random_uuid();
+  o_gone uuid := gen_random_uuid();
+  o_orphan uuid := gen_random_uuid();
+  o_due uuid := gen_random_uuid();
+  o_lost uuid := gen_random_uuid();
+  v_is_buyer boolean;
+  v_ids uuid[];
+  v_first uuid;
+  v_oldest uuid;
+  v_later uuid;
+  v_other uuid;
   fails text[] := '{}';
 begin
   insert into auth.users (id, email, confirmed_at, raw_user_meta_data) values
     (seller, 'n116-seller@drvn.test', now(), '{}'), (buyer, 'n116-buyer@drvn.test', now(), '{}'),
     (stranger, 'n116-stranger@drvn.test', now(), '{}'), (leaver, 'n116-leaver@drvn.test', now(), '{}'),
-    (holder, 'n116-holder@drvn.test', now(), '{}');
+    (holder, 'n116-holder@drvn.test', now(), '{}'), (lone, 'n116-lone@drvn.test', now(), '{}');
   insert into auth.users (id, email, raw_user_meta_data) values (guest, 'n116-guest@drvn.test', '{"drvn_guest": true}');
   insert into public.orders (id, buyer_id, seller_id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, currency, completed_at) values
     (sale, buyer, seller, 'completed', 5000, 0, 500, 5000, 'USD', now()),
@@ -224,9 +245,12 @@ begin
   end loop;
   insert into public.order_email_outbox (notification_id, recipient_id, order_id, kind, next_attempt_at)
   values (gen_random_uuid(), buyer, sale, 'order_delivered', now() - interval '1 minute') returning id into h_good;
-  select count(*), max(c.id::text)::uuid, bool_and(c.buyer) into v_count, v_row from public.claim_order_emails(1) c;
+  select count(*), max(c.id::text)::uuid, bool_and(c.buyer) into v_count, v_row, v_is_buyer from public.claim_order_emails(1) c;
   if v_count <> 1 or v_row is distinct from h_good then
     fails := fails || format('FAIL H1: three rows that could never be sent held the queue: one claim returned %s row(s) (N1063)', v_count);
+  end if;
+  if v_is_buyer is distinct from true then
+    fails := fails || format('FAIL H3: the claim did not say a buyer''s own row is the buyer''s (buyer = %s) (N1063)', v_is_buyer);
   end if;
   if (select count(*) from public.order_email_outbox where recipient_id = buyer and skip_reason = 'stale' and created_at < now() - interval '29 hours') <> 3 then
     fails := fails || 'FAIL H2: the rows passed over were not marked skipped as stale (N1063)'::text;
@@ -256,6 +280,106 @@ begin
   if public.complete_order_email(v_row, 5, 'retry', null, 'resend: 503') <> 'failed' then
     fails := fails || 'FAIL V4: a fifth failed attempt did not end the row as failed (N1063)'::text;
   end if;
+
+  -- ---------- V5 to V7: one window while a provider fault stands (review of #204) ----------
+  update public.order_email_outbox set status = 'sent', sent_at = now() - interval '3 hours', lease_id = null, lease_expires_at = null where status in ('pending', 'sending');
+  for v_count in 1..30 loop
+    insert into public.order_email_outbox (notification_id, recipient_id, order_id, kind, created_at, next_attempt_at)
+    values (gen_random_uuid(), buyer, sale, 'order_shipped', now() - make_interval(mins => 31 - v_count), now() - make_interval(mins => 31 - v_count));
+  end loop;
+  select array_agg(q.id) into v_ids from public.order_email_outbox q where q.status = 'pending';
+  select c.id, c.attempt into v_row, v_count from public.claim_order_emails(1) c;
+  perform public.complete_order_email(v_row, v_count, 'provider', null, 'resend: 403');
+  if cardinality(v_ids) <> 30
+     or (select count(*) from public.order_email_outbox where id = any(v_ids) and status = 'pending' and provider_held_at is not null) <> 30 then
+    fails := fails || format('FAIL V5: a provider fault found on the first of 30 waiting rows marked %s of them as held (N1063)',
+      (select count(*) from public.order_email_outbox where id = any(v_ids) and provider_held_at is not null));
+  end if;
+  -- 25 hours on, the fault still standing: none has gone stale.
+  update public.order_email_outbox set created_at = now() - interval '25 hours', next_attempt_at = now() - interval '1 minute' where id = any(v_ids);
+  perform public.claim_order_emails(50);
+  if exists (select 1 from public.order_email_outbox where id = any(v_ids) and skip_reason = 'stale') then
+    fails := fails || format('FAIL V6: %s of 30 rows waiting behind a provider fault went stale after 25 hours, never having been tried (N1063)',
+      (select count(*) from public.order_email_outbox where id = any(v_ids) and skip_reason = 'stale'));
+  end if;
+  -- 73 hours on: all of them are.
+  update public.order_email_outbox
+     set status = 'pending', skip_reason = null, lease_id = null, lease_expires_at = null,
+         created_at = now() - interval '73 hours', next_attempt_at = now() - interval '1 minute'
+   where id = any(v_ids);
+  perform public.claim_order_emails(50);
+  if (select count(*) from public.order_email_outbox where id = any(v_ids) and skip_reason = 'stale') <> 30 then
+    fails := fails || format('FAIL V7: after 73 hours only %s of 30 held rows were given up as stale (N1063)',
+      (select count(*) from public.order_email_outbox where id = any(v_ids) and skip_reason = 'stale'));
+  end if;
+
+  -- ---------- N: an order whose buyer's account is gone (review of #204) ----------
+  update public.order_email_outbox set status = 'sent', sent_at = now() - interval '3 hours', lease_id = null, lease_expires_at = null where status in ('pending', 'sending');
+  insert into public.orders (id, buyer_id, seller_id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, currency, completed_at)
+  values (o_gone, null, lone, 'completed', 5000, 0, 500, 5000, 'USD', now());
+  insert into public.notifications (user_id, kind, section, title, href) values (lone, 'dispute_resolved', 'marketplace', 'Dispute resolved', '/orders/' || o_gone);
+  if (select count(*) from public.order_email_outbox where order_id = o_gone and recipient_id = lone and status = 'pending') <> 1 then
+    fails := fails || 'FAIL N1: a notice to the seller of an order whose buyer is gone queued no email (N1063)'::text;
+  end if;
+  select count(*), max(c.id::text)::uuid, bool_or(c.buyer) into v_count, v_row, v_is_buyer from public.claim_order_emails(5) c;
+  if v_count <> 1 or exists (select 1 from public.order_email_outbox where order_id = o_gone and status = 'skipped') then
+    fails := fails || format('FAIL N2: the seller of an order whose buyer is gone was not emailed: %s claimed, skipped as %s (N1063)', v_count,
+      (select string_agg(skip_reason, ', ') from public.order_email_outbox where order_id = o_gone and status = 'skipped'));
+  elsif v_is_buyer is distinct from false then
+    fails := fails || format('FAIL N2b: the claim said the seller''s row is the buyer''s (buyer = %s) (N1063)', v_is_buyer);
+  end if;
+  -- Someone who is not on the order, and an order that is not there, are still not parties.
+  insert into public.order_email_outbox (notification_id, recipient_id, order_id, kind) values (gen_random_uuid(), stranger, o_gone, 'dispute_resolved') returning id into v_other;
+  insert into public.order_email_outbox (notification_id, recipient_id, order_id, kind) values (gen_random_uuid(), lone, gen_random_uuid(), 'dispute_resolved') returning id into v_later;
+  perform public.claim_order_emails(5);
+  if (select count(*) from public.order_email_outbox where id in (v_other, v_later) and skip_reason = 'not_a_party') <> 2 then
+    fails := fails || 'FAIL N3: a stranger to the order, or a row for an order that does not exist, was not passed over (N1063)'::text;
+  end if;
+
+  -- ---------- L: a rate limit is not a strike (review of #204) ----------
+  -- v_row is the seller's row from N, being sent on its first attempt. Two more wait behind it, and one is set for later.
+  if v_row is null then
+    insert into public.order_email_outbox (notification_id, recipient_id, order_id, kind, status, attempts, lease_expires_at)
+    values (gen_random_uuid(), lone, o_gone, 'dispute_resolved', 'sending', 1, now() + interval '5 minutes') returning id into v_row;
+  end if;
+  insert into public.order_email_outbox (notification_id, recipient_id, order_id, kind, created_at, next_attempt_at)
+  values (gen_random_uuid(), lone, o_gone, 'admin_action', now() - interval '2 minutes', now() - interval '1 minute') returning id into v_first;
+  insert into public.order_email_outbox (notification_id, recipient_id, order_id, kind, created_at, next_attempt_at)
+  values (gen_random_uuid(), lone, o_gone, 'admin_action', now() - interval '3 minutes', now() - interval '30 seconds') returning id into v_oldest;
+  insert into public.order_email_outbox (notification_id, recipient_id, order_id, kind, next_attempt_at)
+  values (gen_random_uuid(), lone, o_gone, 'admin_action', now() + interval '2 hours') returning id into v_later;
+  v_text := public.complete_order_email(v_row, 1, 'rate_limited', null, 'resend: 429 rate_limit_exceeded', null, 7);
+  if v_text is distinct from 'limited' or not exists (select 1 from public.order_email_outbox where id = v_row and status = 'pending' and attempts = 0
+       and lease_id is null and last_error = 'resend: 429 rate_limit_exceeded' and next_attempt_at = now() + interval '7 seconds') then
+    fails := fails || format('FAIL L1: a rate-limited send was not put back uncounted for the provider''s wait (%s) (N1063)', v_text);
+  end if;
+  if exists (select 1 from public.order_email_outbox where status = 'pending' and next_attempt_at < now() + interval '7 seconds')
+     or (select count(*) from public.claim_order_emails(5)) <> 0 then
+    fails := fails || 'FAIL L2: a waiting row could be claimed before the provider''s wait was over (N1063)'::text;
+  end if;
+  if (select next_attempt_at from public.order_email_outbox where id = v_later) is distinct from now() + interval '2 hours' then
+    fails := fails || 'FAIL L3: a row set for later was pulled forward by a rate limit (N1063)'::text;
+  end if;
+  -- The wait over, the queue is taken in the order it was written, though every row now carries the same time.
+  update public.order_email_outbox set next_attempt_at = now() - interval '1 second' where id in (v_row, v_first, v_oldest);
+  if (select c.id from public.claim_order_emails(1) c) is distinct from v_oldest then
+    fails := fails || 'FAIL L4: after a rate limit the queue was not taken oldest first (N1063)'::text;
+  end if;
+  -- A fifth attempt that is rate-limited is not the end of the row; with no wait named it waits a minute; an absurd wait is an hour.
+  insert into public.order_email_outbox (notification_id, recipient_id, order_id, kind, status, attempts, lease_expires_at)
+  values (gen_random_uuid(), lone, o_gone, 'admin_action', 'sending', 5, now() + interval '5 minutes') returning id into v_other;
+  v_text := public.complete_order_email(v_other, 5, 'rate_limited', null, 'resend: 429');
+  if v_text is distinct from 'limited' or not exists (select 1 from public.order_email_outbox where id = v_other and status = 'pending' and attempts = 4
+       and next_attempt_at = now() + interval '60 seconds') then
+    fails := fails || format('FAIL L5: a rate limit on a fifth attempt ended the row, or did not wait a minute (%s, %s) (N1063)', v_text,
+      (select status || ' after ' || attempts from public.order_email_outbox where id = v_other));
+  end if;
+  update public.order_email_outbox set status = 'sending', attempts = 1, lease_expires_at = now() + interval '5 minutes' where id = v_other;
+  perform public.complete_order_email(v_other, 1, 'rate_limited', null, null, null, 999999);
+  if (select next_attempt_at from public.order_email_outbox where id = v_other) is distinct from now() + interval '1 hour' then
+    fails := fails || 'FAIL L6: a rate limit''s wait was not held to an hour (N1063)'::text;
+  end if;
+  update public.order_email_outbox set status = 'sent', sent_at = now() - interval '3 hours', lease_id = null, lease_expires_at = null where status in ('pending', 'sending');
 
   -- ---------- K: the new kinds queue ----------
   insert into public.notifications (user_id, kind, section, title, href) values
@@ -289,6 +413,16 @@ begin
      or exists (select 1 from public.notifications where kind = 'order_partially_refunded' and href = '/orders/' || o_later) then
     fails := fails || 'FAIL F3: a full refund or a lost card dispute was announced as a partial refund (N1063)'::text;
   end if;
+  -- What a lost card dispute books in production: the whole remainder, the order refunded, with the bank's reason.
+  -- An earlier part-refund from DRVN on the same order was announced (two notices); the bank's decision adds none.
+  insert into public.orders (id, buyer_id, seller_id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, currency) values
+    (o_lost, buyer, holder, 'paid', 5000, 0, 500, 5000, 'USD');
+  update public.orders set refunded_cents = 1000 where id = o_lost;
+  update public.orders set refunded_cents = 5000, status = 'refunded', cancel_reason = 'Card dispute lost (dp_n1063b)' where id = o_lost;
+  if (select count(*) from public.notifications where kind = 'order_partially_refunded' and href = '/orders/' || o_lost) <> 2 then
+    fails := fails || format('FAIL F4: a lost card dispute that booked the whole remainder left %s partial-refund notices, not the 2 from the earlier part-refund (N1063)',
+      (select count(*) from public.notifications where kind = 'order_partially_refunded' and href = '/orders/' || o_lost));
+  end if;
 
   -- ---------- M: one dispatch reminder per paid order due within a day ----------
   delete from public.notifications where kind = 'dispatch_reminder';
@@ -314,6 +448,25 @@ begin
   if public.raise_dispatch_reminders() <> 0 then
     fails := fails || 'FAIL M3: an order already dispatched was reminded (N1063)'::text;
   end if;
+  -- A paid order whose seller's account is gone has nobody to remind, and must not stop the reminder behind it.
+  insert into public.orders (id, buyer_id, seller_id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, currency) values
+    (o_orphan, buyer, null, 'paid', 5000, 0, 500, 5000, 'USD'),
+    (o_due, buyer, lone, 'paid', 5000, 0, 500, 5000, 'USD');
+  perform set_config('session_replication_role', 'replica', true);
+  update public.orders set dispatch_by = now() + interval '6 hours', shipped_at = null where id = o_orphan;
+  update public.orders set dispatch_by = now() + interval '7 hours', shipped_at = null where id = o_due;
+  perform set_config('session_replication_role', 'origin', true);
+  begin
+    v_count := public.raise_dispatch_reminders();
+    if v_count <> 1
+       or not exists (select 1 from public.notifications where kind = 'dispatch_reminder' and user_id = lone and href = '/orders/' || o_due)
+       or exists (select 1 from public.dispatch_reminders where order_id = o_orphan) then
+      fails := fails || format('FAIL M4: with a sellerless order due first, %s reminder(s) were raised, not the one behind it (N1063)', v_count);
+    end if;
+  exception when others then
+    get stacked diagnostics v_text = message_text;
+    fails := fails || format('FAIL M4b: an order whose seller is gone stopped every dispatch reminder (%s) (N1063)', v_text);
+  end;
 
   -- ---------- X: pruning ----------
   insert into public.order_email_outbox (notification_id, recipient_id, order_id, kind, status, sent_at, updated_at) values
@@ -379,6 +532,19 @@ begin
   if v_count < 1 or (select skip_reason from public.order_email_outbox where id = r.id) is distinct from 'email_off' then
     fails := fails || 'FAIL C3: with no provider, a waiting email was not skipped (OS-W41)'::text;
   end if;
+  -- An email taken as sent because the provider refused its key as already used keeps a note saying so; an ordinary one keeps none.
+  insert into public.order_email_outbox (notification_id, recipient_id, order_id, kind, status, attempts, lease_expires_at, last_error)
+  values (gen_random_uuid(), lone, o_gone, 'admin_action', 'sending', 2, now() + interval '5 minutes', 'resend: 503') returning id into v_row;
+  v_text := public.complete_order_email(v_row, 2, 'sent', null, 'resend: taken as sent, the key was already used');
+  if v_text is distinct from 'sent' or (select last_error from public.order_email_outbox where id = v_row) is distinct from 'resend: taken as sent, the key was already used' then
+    fails := fails || 'FAIL C4: an email taken as sent on a repeated key kept no note of it (N1063)'::text;
+  end if;
+  insert into public.order_email_outbox (notification_id, recipient_id, order_id, kind, status, attempts, lease_expires_at, last_error)
+  values (gen_random_uuid(), lone, o_gone, 'admin_action', 'sending', 2, now() + interval '5 minutes', 'resend: 503') returning id into v_row;
+  perform public.complete_order_email(v_row, 2, 'sent', 're_guard');
+  if (select last_error from public.order_email_outbox where id = v_row) is not null then
+    fails := fails || 'FAIL C5: an email the provider accepted kept an old error (N1063)'::text;
+  end if;
 
   -- ---------- R ----------
   insert into auth.users (id, email, confirmed_at, raw_user_meta_data) values
@@ -431,8 +597,11 @@ begin
   if has_table_privilege('authenticated', 'public.order_email_outbox', 'select')
      or has_table_privilege('anon', 'public.order_email_outbox', 'select')
      or has_function_privilege('authenticated', 'public.claim_order_emails(integer)', 'execute')
-     or has_function_privilege('authenticated', 'public.complete_order_email(uuid, integer, text, text, text, text)', 'execute')
+     or has_function_privilege('authenticated', 'public.complete_order_email(uuid, integer, text, text, text, text, integer)', 'execute')
+     or to_regprocedure('public.complete_order_email(uuid, integer, text, text, text, text)') is not null
      or has_function_privilege('authenticated', 'public.raise_payout_setup_reminders()', 'execute')
+     or has_function_privilege('authenticated', 'public.raise_dispatch_reminders()', 'execute')
+     or has_table_privilege('authenticated', 'public.dispatch_reminders', 'select')
      or has_table_privilege('authenticated', 'public.payout_setup_reminders', 'select') then
     fails := fails || 'FAIL P1: a member can reach the order email outbox (OS-W41)'::text;
   end if;

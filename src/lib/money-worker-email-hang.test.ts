@@ -73,13 +73,15 @@ afterEach(() => vi.useRealTimers());
 describe("a hanging email provider never slows money (OS-W41, report five #116)", () => {
   it("every money family is recorded before the first send, and the pass ends within the email budget", async () => {
     vi.useFakeTimers();
-    const started = Date.now();
     let done = false;
     const pass = runMoneyWorkerPass(admin).then((result) => { done = true; return result; });
+    // The clock is moved exactly this far and no further: the email budget
+    // plus one send's timeout. If the email pass ran past its limit (a send
+    // awaited beyond its timeout, or another row claimed after the budget),
+    // the pass would still be running here and `done` would be false.
     await vi.advanceTimersByTimeAsync(ORDER_EMAIL_BUDGET_MS + ORDER_EMAIL_SEND_TIMEOUT_MS + 1);
     expect(done).toBe(true);
     const result = await pass;
-    expect(Date.now() - started).toBeLessThanOrEqual(ORDER_EMAIL_BUDGET_MS + ORDER_EMAIL_SEND_TIMEOUT_MS + 1);
 
     const firstClaim = events.indexOf("claim");
     const moneyFinished = events.filter((e) => /:(succeeded|failed)$/.test(e) && !e.startsWith("orderEmails"));
@@ -91,6 +93,8 @@ describe("a hanging email provider never slows money (OS-W41, report five #116)"
     // Each hung send was given up after its timeout and put back for later;
     // what the budget didn't reach was never claimed.
     expect(hang.sends).toBeGreaterThan(0);
+    // No more sends than the budget has room for, one timeout each.
+    expect(hang.sends).toBeLessThanOrEqual(Math.ceil(ORDER_EMAIL_BUDGET_MS / ORDER_EMAIL_SEND_TIMEOUT_MS));
     expect(events.filter((e) => e === "complete:retry")).toHaveLength(hang.sends);
     expect(outbox.length).toBeGreaterThan(0);
     expect(events.at(-1)).toBe("orderEmails:failed");

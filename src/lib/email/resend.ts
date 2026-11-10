@@ -23,11 +23,16 @@ import type { EmailMessage, EmailOutcome } from "./send";
  *    These are `retry` with `provider: true`: nothing is dropped.
  *  - this message's: any other 400 or 422 (a refused recipient, a malformed
  *    body), 404, 405: `rejected`.
- *  - nobody's: a rate limit, a 5xx, a request with the same key still in
- *    flight: `retry`.
+ *  - nobody's: a 5xx, a request with the same key still in flight: `retry`.
+ *    A rate limit (a 429 that is not a quota) is `retry` with
+ *    `rateLimited: true` and Resend's own `retry-after`, so the caller does
+ *    not spend one of the message's five attempts on it (review of #204).
  *  - already done: 409 invalid_idempotent_request means this key was accepted
  *    before with a different body (the email is rendered again on each
- *    attempt, and the order may have changed in between): `sent`.
+ *    attempt, and the order may have changed in between): `sent`, marked
+ *    `repeatedKey` so the caller counts it. Not yet confirmed against the
+ *    live service: whether Resend keeps a key for a first attempt that
+ *    failed (record row #1-H5).
  */
 export const RESEND_TIMEOUT_MS = 8_000;
 
@@ -69,11 +74,16 @@ export function resendTransport({ from, env, fetchImpl = fetch }: { from: string
     if (response.ok) return { status: "sent", providerId: id };
     const status = response.status;
     const reason = `resend: ${status}${errorName ? ` ${errorName}` : ""}`;
-    if (status === 409 && errorName === "invalid_idempotent_request") return { status: "sent", providerId: null };
+    if (status === 409 && errorName === "invalid_idempotent_request") return { status: "sent", providerId: null, repeatedKey: true };
     if (status === 401 || status === 403 || (status === 429 && QUOTA_NAMES.has(errorName)) || ((status === 400 || status === 422) && aboutSender)) {
       return { status: "retry", reason, provider: true };
     }
-    if (status === 429 || status >= 500 || status === 409) return { status: "retry", reason };
+    if (status === 429) {
+      // Seconds, as Resend sends it. Anything else (a date, nothing) is left to the caller's default.
+      const after = Number(response.headers.get("retry-after"));
+      return { status: "retry", reason, rateLimited: true, ...(Number.isFinite(after) && after > 0 ? { retryAfterSeconds: Math.ceil(after) } : {}) };
+    }
+    if (status >= 500 || status === 409) return { status: "retry", reason };
     return { status: "rejected", reason };
   };
 }
