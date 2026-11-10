@@ -286,5 +286,14 @@ describe("the record's table: both remediation plans, step by step (plan 1 step 
     const steps = ["1", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "2.9", "2.10", "2.11", "2.12", "2.13", "3.1", "3.2", "3.3", "3.4", "4.8"];
     expect(steps.filter((step) => !findings.has(`#1-${step}`))).toEqual([]);
   });
-});
 
+  it("N718: plan 1 step 2.8 is in the record as a step that names it, so the OS reads its progress from one row", () => {
+    const text = fs.readFileSync(path.join(root, RECORD_FILE), "utf8");
+    const row = text.split("\n").find((line) => /^\|[^|]*\| #1-2\.8 \|/.test(line));
+    expect(row, "no row for #1-2.8").toBeDefined();
+    const [osId, finding, state, pullRequests] = row!.split("|").slice(1).map((cell) => cell.trim());
+    expect(osId.split(" ")).toContain("N718");
+    expect([finding, state]).toEqual(["#1-2.8", "step"]);
+    expect(pullRequests).toContain("#199");
+  });
+});
