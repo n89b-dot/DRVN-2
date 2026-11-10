@@ -200,9 +200,14 @@ describe("only photo fields are signed, never a URL a member wrote (N940, #178 r
   });
 });
 
+// A whole hour well after the real clock: earlier tests in this file fill the
+// process memo with real-time entries, and a fixed date that the real clock
+// has passed made those look fresh (it broke on 10 Nov 2026 at 10:00 UTC).
+const AHEAD = Math.ceil(Date.now() / 3_600_000) * 3_600_000 + 365 * 86_400_000;
+
 describe("a failed offer is not remembered locally (N954, review of #196)", () => {
   it("the next response asks the shared memo again rather than keeping this instance's URL", async () => {
-    vi.useFakeTimers({ now: Date.UTC(2026, 10, 10, 10, 0) });
+    vi.useFakeTimers({ now: AHEAD });
     try {
       const url = canonical("car-images", "offer-fails.webp");
       mocks.rpc.mockImplementation(async (fn: string) => (fn === "photo_signatures_offer" ? { data: null, error: { code: "40P01", message: "deadlock detected" } } : { data: [], error: null }));
@@ -276,7 +281,7 @@ describe("only database-guarded places are signed (N940, #196 review)", () => {
 
 describe("while the shared memo is down, the process memo still works (N954, #196 review)", () => {
   it("reuses this process's link until the shared memo is tried again", async () => {
-    vi.useFakeTimers({ now: Date.UTC(2026, 10, 11, 10, 0) });
+    vi.useFakeTimers({ now: AHEAD + 86_400_000 });
     try {
       mocks.rpc.mockImplementation(async () => ({ data: null, error: { message: "down" } }));
       const url = canonical("listing-images", "outage.webp");
