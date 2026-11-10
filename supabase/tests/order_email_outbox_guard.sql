@@ -18,7 +18,8 @@
 -- Work review #147 (N1063):
 --   T  first in the file, in a transaction of its own: a notice written with
 --      the server key (service_role) queues its email, so the trigger does
---      not run on the writer's permissions
+--      not run on the writer's permissions; and (T3) a member's own action
+--      that raises a notice still works with the trigger on the table
 --   H  rows that can never be sent do not hold the queue: one claim passes
 --      over them and returns the row behind
 --   V  a fault with our own provider account puts the row back uncounted,
@@ -53,6 +54,36 @@ begin
   perform set_config('role', 'none', true);
   if (select count(*) from public.order_email_outbox where recipient_id = member and order_id = ord and kind = 'order_paid') <> 1 then
     raise exception 'FAIL T2: a notice written with the server key queued no email (N1063)';
+  end if;
+end $$;
+rollback;
+
+-- T3, in a transaction of its own: a member's own action is the first write
+-- to public.notifications. Their follow raises its notice with the outbox
+-- trigger on the table, and a notice that is not about an order queues nothing.
+begin;
+do $$
+declare
+  follower uuid := gen_random_uuid();
+  followed uuid := gen_random_uuid();
+begin
+  insert into auth.users (id, email, confirmed_at, raw_user_meta_data) values
+    (follower, 'n1063-follower@drvn.test', now(), '{}'), (followed, 'n1063-followed@drvn.test', now(), '{}');
+  if exists (select 1 from public.notifications where user_id in (follower, followed)) then
+    raise exception 'Fixture: the fixtures already wrote a notification as the owner, so this transaction no longer proves a member''s write (N1063)';
+  end if;
+  perform set_config('request.jwt.claims', jsonb_build_object('sub', follower, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    insert into public.follows (follower_id, target_type, target_id) values (follower, 'profile', followed);
+  exception when others then
+    perform set_config('role', 'none', true);
+    raise exception 'FAIL T3: a member''s follow could not raise its notice with the outbox trigger in place: % (N1063)', sqlerrm;
+  end;
+  perform set_config('role', 'none', true);
+  if not exists (select 1 from public.notifications where user_id = followed and kind = 'follow' and actor_id = follower)
+     or exists (select 1 from public.order_email_outbox where recipient_id in (follower, followed)) then
+    raise exception 'FAIL T3: a member''s follow raised no notice, or queued an order email (N1063)';
   end if;
 end $$;
 rollback;

@@ -447,6 +447,8 @@ create table if not exists public.dispatch_reminders (
   dispatch_by timestamptz not null,
   created_at timestamptz not null default now()
 );
+-- The foreign key's own index: deleting a member looks their rows up by it.
+create index if not exists dispatch_reminders_seller_idx on public.dispatch_reminders (seller_id);
 alter table public.dispatch_reminders enable row level security;
 revoke all on table public.dispatch_reminders from public, anon, authenticated;
 grant all on table public.dispatch_reminders to service_role;
