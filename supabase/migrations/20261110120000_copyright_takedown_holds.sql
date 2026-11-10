@@ -51,7 +51,14 @@
 -- Blocking is by storage path: the same bytes uploaded again under a new
 -- path are not caught (on the owner's list).
 --
--- Restated from 20261107203000_media_integrity.sql: private.member_media_ref_ok
+-- 7. (Second review.) A taken-down object can't be pinned by a mention: for
+--    a blocked object, public.media_object_referenced counts only guarded
+--    positions (the photo columns, a post's image blocks), not a word in a
+--    post's text or an order's commercial snapshot, so the media worker can
+--    delete it.
+--
+-- Restated from 20261107203000_media_integrity.sql: public.media_object_referenced
+-- (the blocked-object branch added first, nothing else changed), private.member_media_ref_ok
 -- (now volatile, the blocklist added), private.guard_member_media_ref and
 -- private.guard_member_post_body_media (the blocklist checked for every
 -- writer before the member-only checks; otherwise unchanged).
@@ -316,6 +323,76 @@ create trigger copyright_blocked_media_purge
   after insert on public.copyright_blocked_media
   referencing new table as added
   for each statement execute function private.copyright_blocked_media_purge();
+
+-- The storage objects a post body shows (the guarded positions: an images
+-- block's urls, a before/after pair), as keys.
+create or replace function private.activity_body_media_keys(p_body jsonb)
+returns text[]
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  select coalesce(array_agg(distinct k) filter (where k is not null), '{}')
+    from (select private.media_object_key(u) as k from unnest(private.activity_body_media(p_body)) u) s;
+$$;
+revoke all on function private.activity_body_media_keys(jsonb) from public, anon, authenticated;
+
+create or replace function public.media_object_referenced(p_bucket text, p_path text)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  k text;
+begin
+  if p_bucket is null or p_bucket !~ '^[a-z0-9_-]{1,63}$' or not coalesce(private.media_path_ok(p_path), false) then
+    return true;
+  end if;
+  k := p_bucket || '/' || p_path;
+  -- 20261110120000: a taken-down object is referenced only where a guard
+  -- would have refused it (the photo columns the purge clears). A mention in
+  -- a post's text or an order's commercial snapshot can't pin it: the media
+  -- worker deletes it, and the proxy refuses it meanwhile.
+  if exists (select 1 from public.copyright_blocked_media b where b.object_key = k) then
+    return exists (select 1 from public.car_images where private.media_object_key(url) = k)
+      or exists (select 1 from public.listing_images where private.media_object_key(url) = k)
+      or exists (select 1 from public.activity_images where private.media_object_key(url) = k)
+      or exists (select 1 from public.order_item_snapshot_images where private.media_object_key(url) = k)
+      or exists (select 1 from public.profiles where private.media_object_key(avatar_url) = k)
+      or exists (select 1 from public.cars where private.media_object_key(cover_image_url) = k)
+      or exists (select 1 from public.mod_items where private.media_object_key(image_url) = k)
+      or exists (select 1 from public.car_hotspots where private.media_object_key(image_url) = k)
+      or exists (select 1 from public.activity_posts where strpos(body::text, '/storage/v1/') > 0 and k = any(private.activity_body_media_keys(body)));
+  end if;
+  return exists (select 1 from public.car_images where private.media_object_key(url) = k)
+    or exists (select 1 from public.listing_images where private.media_object_key(url) = k)
+    or exists (select 1 from public.activity_images where private.media_object_key(url) = k)
+    -- Purchase evidence (0049): the gallery frozen onto an order.
+    or exists (select 1 from public.order_item_snapshot_images where private.media_object_key(url) = k)
+    or exists (select 1 from public.profiles where private.media_object_key(avatar_url) = k)
+    or exists (select 1 from public.cars where private.media_object_key(cover_image_url) = k)
+    or exists (select 1 from public.mod_items where private.media_object_key(image_url) = k)
+    or exists (select 1 from public.car_hotspots where private.media_object_key(image_url) = k)
+    -- Dispute evidence is stored by bare path (0027); legacy rows by URL.
+    or (p_bucket = 'dispute-evidence' and exists (
+      select 1 from public.dispute_evidence de
+       where de.storage_path = p_path or de.url = p_path or private.media_object_key(de.url) = k))
+    -- Message photos are stored on the message by path (20260928140000).
+    or (p_bucket = 'message-photos' and exists (
+      select 1 from public.messages where attachments @> array[p_path]))
+    -- Embedded references: the commercial snapshot and post bodies. Every
+    -- URL string in them is canonicalised (an escaped spelling still names
+    -- its object); the substring test also keeps any bare path.
+    or exists (select 1 from public.order_items
+                where position(p_path in commercial_snapshot::text) > 0
+                   or (strpos(commercial_snapshot::text, '/storage/v1/') > 0 and k = any(private.json_media_keys(commercial_snapshot))))
+    or exists (select 1 from public.activity_posts
+                where position(p_path in body::text) > 0
+                   or (strpos(body::text, '/storage/v1/') > 0 and k = any(private.json_media_keys(body))));
+end;
+$$;
 
 do $$
 begin

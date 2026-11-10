@@ -6,6 +6,7 @@
 --      writes as the database owner, not as a member)
 --   R  a reference written after the takedown's purge but before its
 --      blocklist row is purged by that row, a post body's included
+--   M  a mention in a post's text can't pin a taken-down object for ever
 --   L  a listing the takedown removed can't be restored or re-published:
 --      refused, with the reason
 -- Every failed check is collected and reported together at the end.
@@ -106,6 +107,16 @@ begin
   end if;
   if not exists (select 1 from public.car_images where url = other_photo) then
     fails := fails || 'FAIL R2: the blocklist row purged a photo it doesn''t name (N946)'::text;
+  end if;
+
+  -- ---------- M: a mention can't pin a taken-down object ----------
+  insert into public.activity_posts (car_id, author_id, title, body, published_at) values
+    (car, seller, 'N946 mention', jsonb_build_array(jsonb_build_object('type', 'text', 'text', 'see ' || photo || ' and ' || other_photo)), now());
+  if public.media_object_referenced('car-images', seller || '/taken-down.webp') then
+    fails := fails || 'FAIL M1: a mention in a post''s text kept a taken-down photo from being deleted (N946)'::text;
+  end if;
+  if not public.media_object_referenced('car-images', seller || '/fine.webp') then
+    fails := fails || 'FAIL M2: an ordinary photo stopped counting as referenced (N946)'::text;
   end if;
 
   -- ---------- B: a blocked object can't be attached again ----------
