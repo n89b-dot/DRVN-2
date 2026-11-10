@@ -67,3 +67,14 @@ describe("branch protection watch (N949, report five #112)", () => {
     expect(doc.jobs.protection.steps.some((step) => step.run?.startsWith("node scripts/check-branch-protection.mjs"))).toBe(true);
   });
 });
+
+describe("the production deploy and its header agree on the release tag (N950, report five #113)", () => {
+  const deploy = fs.readFileSync(path.join(root, ".github/workflows/deploy.yml"), "utf8");
+
+  it("checks for an annotated tag, and says the sign-off is the environment's reviewer, not a signature", () => {
+    expect(deploy).toContain('git cat-file -t "refs/tags/$TAG"');
+    expect(deploy).toMatch(/annotated \(who made it, and when\), not cryptographically\s*\n#\s*signed/);
+    expect(deploy).toContain("production environment's required reviewer");
+    expect(deploy).not.toMatch(/signed off in the release packet|the release packet signs one/);
+  });
+});

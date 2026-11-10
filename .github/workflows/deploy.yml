@@ -8,6 +8,9 @@
 # rc-YYYYMMDD[-n] on main whose release-gate passed, through the "production"
 # environment (the owner sets its required reviewers), with the same
 # migration check and the sandbox overrides absent from the host (N540).
+# The tag must be annotated (who made it, and when), not cryptographically
+# signed: the sign-off is the production environment's required reviewer,
+# who approves the run in GitHub (report five #113).
 #
 # Neither job applies a migration: migrations are applied by the session that
 # merges them, before the merge (supabase/MIGRATIONS.md). A missing file stops
@@ -28,7 +31,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to deploy to production (rc-YYYYMMDD or rc-YYYYMMDD-n, signed off in the release packet)
+        description: Release tag to deploy to production (an annotated rc-YYYYMMDD or rc-YYYYMMDD-n tag on main; the production environment's reviewer approves the run)
         required: true
         type: string
 
@@ -125,7 +128,7 @@ jobs:
         run: |
           node scripts/deploy.mjs tag "$TAG"
           if [ "$(git cat-file -t "refs/tags/$TAG")" != "tag" ]; then
-            echo "::error::$TAG must be an annotated tag: the release packet signs one"
+            echo "::error::$TAG must be an annotated tag (git tag -a): a lightweight tag records no author or date"
             exit 1
           fi
           git merge-base --is-ancestor HEAD origin/main || { echo "::error::$TAG is not on main"; exit 1; }
