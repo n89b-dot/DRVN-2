@@ -65,8 +65,9 @@ runs don't collide.
 
 ## In CI
 
-The `e2e` job runs the whole suite on every push to `main` and on every pull
-request that changes anything other than documents, against its
+The whole suite runs on every push to `main` and on every pull
+request that changes anything other than documents, as **four parts side by
+side** (the `e2e-parts` jobs, "e2e part 1" to "e2e part 4"), each against its
 own `supabase start` stack (Auth, Storage, Mailpit and Realtime; migrations
 applied by `scripts/prepare-ci-supabase.mjs`), first attempt only. The
 `release-gate` job fails unless it ran and passed, with zero unexpected or
@@ -76,6 +77,38 @@ changed file is a document skips the job, and the gate accepts that skip only
 by `realtime-delivery.spec.ts`, which waits less than the 20-second fallback
 refresh so polling can't pass it. (Until 1 October 2026 this section said E2E
 wasn't in CI; it has been since September.)
+
+### The four parts
+
+One job took about 20 minutes, twelve of them the suite itself on one worker.
+`e2e/parts.json` splits the spec files into four parts of near-equal measured
+time. Each part has its own fresh database and its own build, and one worker
+inside it, because the tests share database state. The job named `e2e` then
+judges the four (every part must have run and passed on its first attempt; a
+part that is missing, skipped, cancelled or failed fails it) and merges their
+results into the files one job used to write.
+
+- **Adding a spec file:** add it to exactly one part in `e2e/parts.json`,
+  under `chromium`; put it in the lightest part. `npm test` fails until you do
+  (`tests/ci/e2e-parts.test.ts` asks Playwright to list the whole suite and
+  each part and compares them test by test), because a file in no part would
+  never run in CI.
+- **Rebalancing:** `npm run e2e:parts -- balance <playwright.xml>` proposes a
+  split from a run's measured times (take `playwright.xml` from a run's
+  `test-results-<sha>-e2e` artifact).
+- **The recovery drills** (`npm run test:operations`) run once, in the part
+  the manifest names (`operationsPart`). Firefox and WebKit run their two
+  specs in one part, the only one that installs them.
+- **The two named exclusions** (two importer tests that need the production
+  network guard, and are the only tests allowed to be skipped) live in one
+  part. The rule "the suite has exactly those two, skipped" is about the whole
+  suite, so one part cannot hold it: each part reports how many it saw, and
+  the `e2e` job fails unless the four add up to exactly two. Every other rule
+  of `e2e/release-reporter.ts` (no other skip, no flaky test, no failure, at
+  least one test) holds inside each part as it does in the whole suite.
+- **Locally nothing changes:** with `E2E_PART` unset, `npm run test:e2e` runs
+  the whole suite and holds every rule itself. `E2E_PART=2 npm run test:e2e`
+  runs one part.
 
 Run local Supabase CLI commands as `npx --yes supabase@2.116.0 …` (the
 version CI pins). The globally installed CLI (2.98.2 as of October 2026)

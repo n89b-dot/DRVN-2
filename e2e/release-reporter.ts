@@ -24,6 +24,18 @@ function isNamedImporterExclusion(test: TestCase): boolean {
   );
 }
 
+/**
+ * Plan 2 item A0b: CI runs the suite as four parts (E2E_PART=1…4), and the two
+ * named exclusions live in one of them. A part therefore cannot hold the
+ * whole-suite rule "exactly two named exclusions"; it reports how many it saw
+ * and how many the whole suite must have, and the job that judges the parts
+ * (`scripts/ci-e2e-parts.mjs merge`) holds the rule on their sum. A run of the
+ * whole suite (E2E_PART unset) holds it here, as before.
+ */
+function runningOnePart(): boolean {
+  return Boolean(process.env.E2E_PART?.trim());
+}
+
 function candidateId(): string {
   const raw = process.env.RELEASE_CANDIDATE_SHA ?? process.env.GITHUB_SHA ?? "local";
   return raw.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 80) || "unknown";
@@ -56,6 +68,11 @@ function writeCandidateSummary(
     playwrightStatus,
     releaseStatus,
     counts,
+    // Only a part says these: the judge of the parts sums `counts.excluded`
+    // and requires the sum to equal `exclusionsRequired`.
+    ...(runningOnePart()
+      ? { part: process.env.E2E_PART!.trim(), exclusionsRequired: importerExclusions.size }
+      : {}),
   };
 
   const outputDir = process.env.RELEASE_SUMMARY_DIR;
@@ -92,7 +109,8 @@ export default class ReleaseReporter implements Reporter {
   async onEnd(result: FullResult): Promise<{ status: FullResult["status"] }> {
     const tests = this.suite?.allTests() ?? [];
     const counts = releaseCounts(tests);
-    const hasExactExclusionInventory = counts.excluded === importerExclusions.size;
+    const hasExactExclusionInventory =
+      runningOnePart() || counts.excluded === importerExclusions.size;
     const violations = tests.filter(
       (test) => test.outcome() === "flaky" ||
         (test.outcome() !== "expected" && !isNamedImporterExclusion(test))

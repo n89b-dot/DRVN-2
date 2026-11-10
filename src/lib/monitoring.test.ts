@@ -130,6 +130,19 @@ describe("nested errors (N104)", () => {
 });
 
 
+describe("error reports name the deployment (N961, report five #123)", () => {
+  it("staging and production are distinct environments in Sentry", async () => {
+    const fetcher = stubSentry();
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("DRVN_DEPLOY_ENV", "staging");
+    await captureMessage("synthetic");
+    expect(sentEvent(fetcher).environment).toBe("staging");
+    vi.stubEnv("DRVN_DEPLOY_ENV", "production");
+    await captureMessage("synthetic");
+    expect(sentEvent(fetcher, 1).environment).toBe("production");
+  });
+});
+
 describe("release identity fallback (N957, report five #120)", () => {
   it("falls through empty SENTRY_RELEASE and VERCEL_GIT_COMMIT_SHA to GIT_COMMIT_SHA", async () => {
     const fetcher = stubSentry();

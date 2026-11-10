@@ -10,6 +10,9 @@ import { captureException, reportError } from "@/lib/monitoring";
  * gaps as warnings.
  */
 export async function register() {
+  const { deployEnvProblem } = await import("@/lib/deployment");
+  const deployProblem = deployEnvProblem();
+  if (deployProblem) throw new Error(deployProblem); // #121: an unnamed hosted deployment fails loudly
   const { validatePaymentsEnv } = await import("@/lib/env");
   const { warnings } = validatePaymentsEnv(); // throws → the deploy fails loudly
   for (const warning of warnings) reportError(`[startup] ${warning}`);
