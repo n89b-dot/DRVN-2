@@ -18,8 +18,10 @@ never a second charge).
 
 ## In CI
 
-The `stripe-integration` job runs this suite when the repository secret
-`STRIPE_TEST_SECRET_KEY` is configured, and posts a `::notice::` + summary row
+The `stripe-integration` job runs this suite on every change that is not a
+documents-only pull request, when the repository secret
+`STRIPE_TEST_SECRET_KEY` (the key of the Stripe sandbox kept for CI, so its
+49 test events a run reach no other deployment) is configured, and posts a `::notice::` + summary row
 saying it was skipped otherwise.
 
 ## Explicitly not covered here
