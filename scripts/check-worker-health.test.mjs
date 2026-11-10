@@ -20,7 +20,8 @@ test('a job and family the app marks disabled are present but not paged; unmarke
   jobs: healthy.jobs.map(j => j.job === 'drvn-saved-search-digests' ? { ...j, stale: !disabled, disabled: disabled || undefined, reason: 'overdue' } : j),
   families: healthy.families.map(f => f.family === 'savedSearchDigests' ? { ...f, stale: !disabled, disabled: disabled || undefined, reason: 'failing' } : f) });
  const marked = await checkWorkerHealth('https://drvn.example', 'secret', async () => Response.json(stale(true)));
- assert.deepEqual(marked, { healthy: true, families: 21, jobs: 21 });
+ // 22 families: the money pass gained orderEmails (#204), beside the 21 that plan 2's A5 counted.
+ assert.deepEqual(marked, { healthy: true, families: 22, jobs: 21 });
  await assert.rejects(checkWorkerHealth('https://drvn.example', 'secret', async () => Response.json(stale(false), { status: 503 })), error => {
   assert.equal(error.message, 'worker_health_unhealthy');
   assert.deepEqual(error.problems.map(p => `${p.area}:${p.name}:${p.reason}`).sort(), ['family:savedSearchDigests:failing', 'job:drvn-saved-search-digests:overdue']);
