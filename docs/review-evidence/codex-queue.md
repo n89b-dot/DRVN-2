@@ -151,6 +151,8 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #202 | 2026-11-10 | OS-W40 N951: the pooler route is refused for record-only and dry runs too (foll… | waived | — | waived (ruling, 10 Nov) |
 | #203 | 2026-11-10 | OS-W41 N955 N1074: photo uploads stay under what a serverless host accepts, and shrink a second way… (batch 2, #230) | waived | — | waived (ruling, 10 Nov) |
 | #205 | 2026-11-10 | N717: decision defaults for N786 and R-retention, deleted-photo caching closed… | skipped | — | docs only (ruling, 7 Nov) |
+| #206 | 2026-11-10 | OS-W42 N1069: a deleted member's words leave every other member's feed, saved-search emails included… (batch 6, #243) | waived | — | waived (ruling, 10 Nov) |
+| #208 | 2026-11-10 | OS-W42 N944 N1064: Retry a chargeback held for review, done right, with the basket checked on every replay… (batch 7, #245) | waived | — | waived (ruling, 10 Nov) |
 | #210 | 2026-11-10 | OS-W41 N940 N1062: photo signing signs only what the database guards, and a slow readiness check no longer blanks photos… (batch 4, #237) | waived | — | waived (ruling, 10 Nov) |
 | #212 | 2026-11-10 | docs(review): 10 Nov review of the work of 9 November | skipped | — | docs only (ruling, 7 Nov) |
 | #213 | 2026-11-10 | docs(plans): two remediation plans from the 10 November review | skipped | — | docs only (ruling, 7 Nov) |
@@ -178,3 +180,6 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #237 | 2026-11-10 | Batch 4: #210 | waived | — | waived (ruling, 10 Nov) |
 | #238 | 2026-11-10 | docs+test: the plan 1 record after batch 4, a current Needs Neil, and the table the Intelligence OS reads (batch 5, #240) | waived | — | waived (ruling, 10 Nov) |
 | #240 | 2026-11-10 | Batch 5: #238 #199 | waived | — | waived (ruling, 10 Nov) |
+| #241 | 2026-11-10 | docs: the plan 1 record after batch 5, the OS's rows, and B1 marked fixed in the 3 November report (batch 7, #245) | skipped | — | docs only (ruling, 7 Nov) |
+| #243 | 2026-11-10 | Batch 6: #206 | waived | — | waived (ruling, 10 Nov) |
+| #245 | 2026-11-10 | Batch 7: #241 #208 | waived | — | waived (ruling, 10 Nov) |

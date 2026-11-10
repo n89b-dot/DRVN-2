@@ -423,6 +423,20 @@ first, then open `/admin`: since N715 a signed-out visit gets the ordinary
 
 Every money queue is durable and visible in **Admin → Payments**:
 
+**A chargeback held for review** (#108, 20261110230000). A bank chargeback
+that doesn't match its payment basket is held: its orders are disputed, a
+recovery case opens ("Card dispute requires reconciliation") and the seller's
+payout and any deletion of either party wait. Its case has **Retry** in place
+of Close case, audited and needing a reason. Correct what didn't match first
+(a payment record, an order total), then press it. It reopens the chargeback
+and replays the Stripe event that held it (or the newest since) through the
+normal handling. If it still doesn't match, it's held again. Once Stripe's
+outcome is applied, the case closes by itself. Retry refuses, in words, a
+chargeback that was already won, closed or lost before a conflicting event
+held it, one held while a loss was being booked, and one with no stored event
+to replay. Those stay for the owner; the write-off after 90 days is a
+separate control, still to come. Never edit `stripe_dispute_journal` by hand.
+
 - **Refund operations** (`refund_operations`, 0026): anything not `completed`
   appears here. The worker pass (`/api/jobs/transfers`) resumes abandoned
   operations automatically (`resumeIncompleteRefunds`) — reconciling against
@@ -491,9 +505,10 @@ held for an operator.
 
 **Resume deletion** (`deletion.resume`) is audited like every other console
 action and needs a reason. The database decides, under the deletion lock
-(`admin_resume_account_deletion`, 20261110110000). It acts only on a failed
-job, or on a late hold whose order has settled, and refuses everything else in
-words. The next pass runs every hold check again, and a member whose data is
+(`admin_resume_account_deletion`, 20261110110000), and checks for itself that
+the caller acts for a full admin before it reads anything (20261111080000).
+It acts only on a failed job, or on a late hold whose order has settled, and
+refuses everything else in words. The next pass runs every hold check again, and a member whose data is
 already removed is never let back in.
 
 ### What the console cannot finish
@@ -570,14 +585,24 @@ chargeback that doesn't match its payment basket exactly is frozen for review:
 the orders go to `disputed`, a recovery case opens (Admin → Payments,
 "Card dispute requires reconciliation"), and the seller's payout and any
 deletion of either party wait. **Closing the recovery case does not lift the
-freeze**, because the journal still says `recovery`. Until the console's
-Retry for a held chargeback ships
-([#208](https://github.com/n89b-dot/DRVN-2/pull/208)), such a case **blocks
-Resume deletion for both parties, with no console way out and no safe SQL**:
-the journal's state drives payouts and refunds, and a hand edit can pay a
-seller for a sale the bank reversed. The safe action meanwhile is: read the
-dispute's final status in Stripe, record it on the recovery case's note, and
-leave the case open. Do not edit `stripe_dispute_journal` by hand. Writing
+freeze**, because the journal still says `recovery`. The control that moves
+it is **Retry**, on the case's row in Admin → Payments
+([#208](https://github.com/n89b-dot/DRVN-2/pull/208)): correct what did not
+match (usually the payment record), then Retry with a reason. It replays the
+Stripe event that held the chargeback, or the newest since, through the
+normal handling, which checks it against the payment again in one step: it
+ends applied, or held again saying so, and the case closes by itself when
+Stripe's outcome is applied. When the event replayed is not the bank's
+decision, the chargeback is open again and **its case stays listed until
+Stripe's outcome arrives**: that is the expected state after "Replayed", and
+there is nothing more to retry. Retry refuses a chargeback that was already
+settled, or was mid-booking, when a conflicting event held it, one held
+before 10 November 2026 (what it was held from was not recorded then, so it
+is treated as unknown), and one with no stored event: those stay for the owner, and still **block Resume deletion
+for both parties**. For those the safe action is: read the dispute's final
+status in Stripe, record it on the recovery case's note, and leave the case
+open. A case that was closed opens again by itself if a later Stripe event
+holds the chargeback again. Do not edit `stripe_dispute_journal` by hand. Writing
 off a chargeback the bank kept is a separate control
 ([#207](https://github.com/n89b-dot/DRVN-2/pull/207)), set aside until after
 launch; DRVN absorbs that loss, counted from the bank's decision (decisions
