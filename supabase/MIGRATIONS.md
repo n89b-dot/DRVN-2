@@ -32,6 +32,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 10 — a takedown stays taken down: report five #109 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110120000_copyright_takedown_holds.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
+
+Codex's review of #117, the two open database findings. A listing a checkout held at takedown (`keptListingStatus`) can never become `active` again: a failed or released checkout removes it instead, and a sale still completes. `private.member_media_ref_ok` (now `volatile`) takes the object's lock and refuses a blocklisted object. A new row in `copyright_blocked_media` takes the same lock and purges every reference to the object again. Applying it also removes, once, any held listing already back on sale. Order does not matter: no app change depends on it. After review: the blocklist binds every writer (`private.media_url_blocked`, checked first in the restated `private.guard_member_media_ref` and `private.guard_member_post_body_media`; the owner checks stay member-only); the purge runs once per statement in key order and strips post bodies too (`private.strip_media_from_body`); a listing a takedown removed can't be restored or re-published (refused with the reason).
+
 ## November 10 — one signed photo URL per window across instances: report five #117 (not applied anywhere)
 
 | File | Applied to |
