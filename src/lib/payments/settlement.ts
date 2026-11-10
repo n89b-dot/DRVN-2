@@ -416,17 +416,27 @@ export async function applyChargeRefund(
 }
 
 /**
- * Card disputes (chargebacks) from the processor. Created: the money is
- * frozen, so every order on the intent goes `disputed` — mirroring the
- * app-level dispute flow's columns so the same UI renders it. Closed: won
- * restores the pre-dispute status; lost means the money went back to the
- * buyer, which is a refund.
+ * A card dispute (chargeback) the bank decided against us: the money went
+ * back to the buyer, which is a refund, booked per order.
+ *
+ * Plan 2 item A2: this function no longer changes an order's status. A
+ * dispute being opened (every order on the intent goes `disputed`) and a
+ * dispute being won (each goes back to its status before the dispute) are
+ * applied by the database, in apply_stripe_dispute_event, which
+ * applyJournaledDispute calls first; it calls this function only for a
+ * dispute that closed as lost. Asked for anything else it refuses, so a
+ * mistaken caller fails loudly instead of believing an order moved.
  */
 export async function applyDisputeEvent(
   admin: Admin,
   dispute: Stripe.Dispute,
   closed: boolean
 ): Promise<"committed" | "retry" | "irrelevant"> {
+  if (!closed || dispute.status === "won") {
+    throw new Error(
+      "applyDisputeEvent books a lost dispute only: opening and winning a dispute are applied by apply_stripe_dispute_event"
+    );
+  }
   const intentId =
     typeof dispute.payment_intent === "string"
       ? dispute.payment_intent
@@ -445,62 +455,6 @@ export async function applyDisputeEvent(
     return "retry";
   }
   const orderIds = [...new Set(payments.map((p) => p.order_id))];
-
-  if (!closed) {
-    const { data: orders, error: ordersError } = await admin
-      .from("orders")
-      .select("id, status")
-      .in("id", orderIds);
-    if (ordersError) {
-      persistenceFailure("dispute order lookup failed", { dispute: dispute.id, ordersError });
-    }
-    if ((orders?.length ?? 0) !== orderIds.length) return "retry";
-    let needsRetry = false;
-    for (const order of orders ?? []) {
-      if (order.status === "disputed" || order.status === "refunded") {
-        continue;
-      }
-      if (!["paid", "shipped", "delivered", "completed"].includes(order.status)) {
-        needsRetry = true;
-        continue;
-      }
-      const { data: updated, error: updateError } = await admin
-        .from("orders")
-        .update({
-          status: "disputed",
-          pre_dispute_status: order.status,
-          disputed_at: new Date().toISOString(),
-          dispute_category: "other",
-          dispute_reason: `Card dispute via Stripe (${dispute.reason}) — ${dispute.id}`,
-          // These fields can describe a prior in-app or provider dispute. A
-          // newly created Stripe dispute reopens the order's dispute state.
-          dispute_resolved_at: null,
-          dispute_outcome: null,
-        })
-        .eq("id", order.id)
-        .eq("status", order.status)
-        .select("id");
-      if (updateError) {
-        persistenceFailure("dispute transition failed", { dispute: dispute.id, orderId: order.id, updateError });
-      }
-      if (!updated?.length) {
-        const { data: current, error: currentError } = await admin
-          .from("orders")
-          .select("status")
-          .eq("id", order.id)
-          .maybeSingle();
-        if (currentError || !current || !["disputed", "refunded"].includes(current.status)) {
-          persistenceFailure("dispute transition was not committed", {
-            dispute: dispute.id,
-            orderId: order.id,
-            current,
-            currentError,
-          });
-        }
-      }
-    }
-    return needsRetry ? "retry" : "committed";
-  }
 
   if (dispute.status === "lost") {
     // The card network took the buyer's money back from the platform. Book it
@@ -532,45 +486,6 @@ export async function applyDisputeEvent(
     return "committed";
   }
 
-  if (dispute.status === "won") {
-    const { data: orders, error: ordersError } = await admin
-      .from("orders")
-      .select("id, pre_dispute_status")
-      .in("id", orderIds)
-      .eq("status", "disputed");
-    if (ordersError) {
-      persistenceFailure("won dispute order lookup failed", { dispute: dispute.id, ordersError });
-    }
-    for (const order of orders ?? []) {
-      const { data: updated, error: updateError } = await admin
-        .from("orders")
-        .update({
-          status: order.pre_dispute_status ?? "paid",
-          dispute_resolved_at: new Date().toISOString(),
-        })
-        .eq("id", order.id)
-        .eq("status", "disputed")
-        .select("id");
-      if (updateError) {
-        persistenceFailure("won dispute transition failed", { dispute: dispute.id, orderId: order.id, updateError });
-      }
-      if (!updated?.length) {
-        const { data: current, error: currentError } = await admin
-          .from("orders")
-          .select("status")
-          .eq("id", order.id)
-          .maybeSingle();
-        if (currentError || !current || current.status === "disputed") {
-          persistenceFailure("won dispute resolution was not committed", {
-            dispute: dispute.id,
-            orderId: order.id,
-            currentError,
-          });
-        }
-      }
-    }
-    return "committed";
-  }
   // Stripe documents warning_closed as the third possible status on this
   // event: the warning ended without a chargeback, so no money effect exists.
   return dispute.status === "warning_closed" ? "irrelevant" : "retry";

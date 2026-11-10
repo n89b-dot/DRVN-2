@@ -22,17 +22,40 @@ function query(result: QueryResult) {
 
 const proofRecorded: QueryResult = { data: { ok: true, verdict: "review" }, error: null };
 
-function adminWith(...results: QueryResult[]) {
+// Plan 2 item A2: an order's status is changed by two database functions, not
+// by updates from this file. `moves` are their answers, in call order.
+const ORDER_MOVES = ["order_mark_shipped_from_tracking", "order_mark_delivered_from_tracking"];
+const proofCalls = (admin: { rpc: ReturnType<typeof vi.fn> }) => admin.rpc.mock.calls.filter(([name]) => name === "record_delivery_proof");
+
+function adminWithMoves(moves: QueryResult[], ...results: QueryResult[]) {
   const builders = results.map(query);
-  return {
+  const answers = [...moves];
+  const admin = {
+    proof: proofRecorded,
     from: vi.fn(() => {
       const next = builders.shift();
       if (!next) throw new Error("Unexpected database query");
       return next;
     }),
-    rpc: vi.fn(async () => proofRecorded),
+    rpc: vi.fn(async (...call: [name: string, args?: unknown]): Promise<QueryResult> => {
+      const [name] = call;
+      if (!ORDER_MOVES.includes(name)) return admin.proof;
+      const next = answers.shift();
+      if (!next) throw new Error(`Unexpected call of ${name}`);
+      return next;
+    }),
   };
+  return admin;
 }
+
+/** No order is expected to move: any call of the two functions fails the test. */
+function adminWith(...results: QueryResult[]) {
+  return adminWithMoves([], ...results);
+}
+
+const moved: QueryResult = { data: "moved", error: null };
+const movedInCase: QueryResult = { data: "moved_in_case", error: null };
+const unchanged = (status: string): QueryResult => ({ data: `unchanged:${status}`, error: null });
 
 /** The order facts delivery proof reads (N95). */
 const proofOrder: QueryResult = {
@@ -145,13 +168,10 @@ describe("tracking lookup durability", () => {
 
 describe("tracking replay convergence", () => {
   it("finishes an outbound order after shipment status committed on the first attempt", async () => {
-    const admin = adminWith(
+    const admin = adminWithMoves(
+      [unchanged("shipped"), moved],
       { data: null, error: { code: "23505" } },
-      { data: null, error: null },
-      { data: null, error: null },
-      { data: { status: "shipped" }, error: null },
       { data: [{ status: "delivered", direction: "outbound" }], error: null },
-      { data: { id: "order_1" }, error: null },
       proofOrder
     );
 
@@ -181,20 +201,17 @@ describe("tracking replay convergence", () => {
   });
 
   it("ignores an earlier scan while finishing effects from the delivered state", async () => {
-    const admin = adminWith(
+    const admin = adminWithMoves(
+      [unchanged("shipped"), moved],
       { data: null, error: { code: "23505" } },
-      { data: null, error: null },
-      { data: null, error: null },
-      { data: { status: "shipped" }, error: null },
-      { data: [{ status: "delivered", direction: "outbound" }], error: null },
-      { data: { id: "order_1" }, error: null }
+      { data: [{ status: "delivered", direction: "outbound" }], error: null }
     );
 
     await expect(
       applyTrackingSummary(admin as never, shipment(), summary({ state: "in_transit" }))
     ).resolves.toMatchObject({ orderEffect: "delivered", statusChanged: false });
     // A delayed in-transit payload never rewrites the delivery proof.
-    expect(admin.rpc).not.toHaveBeenCalled();
+    expect(proofCalls(admin)).toEqual([]);
   });
 });
 
@@ -279,40 +296,83 @@ describe("tracking effect failures", () => {
   });
 
   it("retries a downstream order persistence failure", async () => {
-    const admin = adminWith(
-      { data: null, error: { code: "23505" } },
-      { data: null, error: { code: "08006" } }
+    const admin = adminWithMoves(
+      [{ data: null, error: { code: "08006" } }],
+      { data: null, error: { code: "23505" } }
     );
     await expect(applyTrackingSummary(admin as never, shipment(), summary())).rejects.toThrow(
       "order shipped update failed; retry required"
     );
   });
+
+  it("retries when the delivered change fails in the database", async () => {
+    const admin = adminWithMoves(
+      [unchanged("shipped"), { data: null, error: { code: "08006" } }],
+      { data: null, error: { code: "23505" } },
+      { data: [{ status: "delivered", direction: "outbound" }], error: null }
+    );
+    await expect(applyTrackingSummary(admin as never, shipment(), summary())).rejects.toThrow(
+      "order delivered update failed; retry required"
+    );
+  });
+
+  // The database answers with the order's status when it moved nothing; a
+  // status the change should have been possible from, or no order at all,
+  // is a retry, as it was when this file read the row back itself.
+  it.each([
+    ["the order is still unpaid", unchanged("pending"), "order shipped update affected no row; retry required"],
+    ["there is no such order", { data: null, error: null }, "order shipped update could not be verified; retry required"],
+    ["the database answers something this file does not know", { data: "ok", error: null }, "order shipped update could not be verified; retry required"],
+  ])("retries the shipped change when %s", async (_, answer, message) => {
+    const admin = adminWithMoves([answer], { data: null, error: { code: "23505" } });
+    await expect(applyTrackingSummary(admin as never, shipment(), summary())).rejects.toThrow(message);
+  });
+
+  it.each([
+    ["the order went back to paid", unchanged("paid"), "order delivered update affected no row; retry required"],
+    ["there is no such order", { data: null, error: null }, "order delivered update could not be verified; retry required"],
+  ])("retries the delivered change when %s", async (_, answer, message) => {
+    const admin = adminWithMoves(
+      [unchanged("shipped"), answer],
+      { data: null, error: { code: "23505" } },
+      { data: [{ status: "delivered", direction: "outbound" }], error: null }
+    );
+    await expect(applyTrackingSummary(admin as never, shipment(), summary())).rejects.toThrow(message);
+  });
+
+  it.each(["delivered", "completed", "disputed", "refunded", "cancelled"])("an order already %s is left alone, and that is not a failure", async (status) => {
+    const admin = adminWithMoves([unchanged(status)], { data: null, error: { code: "23505" } });
+    await expect(
+      applyTrackingSummary(admin as never, shipment({ status: "in_transit" }), summary({ state: "in_transit", deliveredAt: null }))
+    ).resolves.toMatchObject({ orderEffect: "none" });
+  });
 });
 
 describe("an open case and delivery proof (N6, N95)", () => {
   it("records dispatch on an undispatched order in a not-received case without closing it", async () => {
-    const admin = adminWith(
-      { data: null, error: null }, // event insert
-      { data: null, error: null }, // paid -> shipped finds nothing: the order is disputed
-      { data: { id: "order_1" }, error: null } // disputed, pre_dispute_status paid -> shipped
+    const admin = adminWithMoves(
+      [movedInCase], // the order is disputed: its case now resolves to shipped
+      { data: null, error: null } // event insert
     );
     await expect(
       applyTrackingSummary(admin as never, shipment({ status: "in_transit" }), summary({ state: "in_transit", deliveredAt: null }))
     ).resolves.toMatchObject({ orderEffect: "shipped" });
-    expect(admin.rpc).not.toHaveBeenCalled();
+    expect(proofCalls(admin)).toEqual([]);
+    // The change is the database's, with the shipment's own time, carrier and code.
+    expect(admin.rpc.mock.calls).toEqual([
+      ["order_mark_shipped_from_tracking", { p_order: "order_1", p_shipped_at: "2026-09-04T10:00:00.000Z", p_carrier: "USPS", p_tracking: "TRACK1" }],
+    ]);
+    expect(admin.from).toHaveBeenCalledTimes(1);
   });
 
   it("records a delivered parcel's proof from the carrier's own evidence", async () => {
-    const admin = adminWith(
+    // The order is disputed: nothing to ship, and its case now resolves to delivered.
+    const admin = adminWithMoves(
+      [unchanged("disputed"), movedInCase],
       { data: null, error: { code: "23505" } },
       { data: null, error: { code: "23505" } },
       { data: null, error: { code: "23505" } },
-      { data: null, error: null },
-      { data: null, error: null },
-      { data: { status: "disputed" }, error: null },
       { data: [{ status: "delivered", direction: "outbound" }], error: null },
-      { data: null, error: null }, // shipped -> delivered: the order is disputed
-      { data: { id: "order_1" }, error: null }, // disputed case moves to delivered
       proofOrder
     );
     const delivered = summary({
@@ -342,16 +402,13 @@ describe("an open case and delivery proof (N6, N95)", () => {
   });
 
   it("retries when the proof can't be recorded", async () => {
-    const admin = adminWith(
+    const admin = adminWithMoves(
+      [unchanged("shipped"), moved],
       { data: null, error: { code: "23505" } },
-      { data: null, error: null },
-      { data: null, error: null },
-      { data: { status: "shipped" }, error: null },
       { data: [{ status: "delivered", direction: "outbound" }], error: null },
-      { data: { id: "order_1" }, error: null },
       proofOrder
     );
-    admin.rpc.mockResolvedValueOnce({ data: null, error: { code: "08006" } });
+    admin.proof = { data: null, error: { code: "08006" } };
     await expect(applyTrackingSummary(admin as never, shipment(), summary())).rejects.toThrow(
       "delivery proof could not be recorded; retry required"
     );

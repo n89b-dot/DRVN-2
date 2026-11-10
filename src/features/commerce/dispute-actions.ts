@@ -302,20 +302,17 @@ export async function closeDispute(
   if (order.buyer_id !== user.id) return { error: "That isn't your order." };
   if (order.status !== "disputed") return { error: "This order isn't in dispute." };
 
-  const { data: closed, error } = await admin
-    .from("orders")
-    .update({
-      status: order.pre_dispute_status ?? "delivered",
-      dispute_resolved_at: new Date().toISOString(),
-      dispute_outcome: "closed_by_buyer",
-      refund_offer_cents: null,
-      refund_offered_at: null,
-    })
-    .eq("id", orderId)
-    .eq("status", "disputed")
-    .select("id");
+  // Plan 2 item A2: the database makes the change (order_close_dispute), on
+  // the same conditions as before: the order is still in dispute, and it is
+  // this buyer's (checked above, and again in the same statement).
+  const { data: restored, error } = await admin.rpc("order_close_dispute", {
+    p_order: orderId,
+    p_outcome: "closed_by_buyer",
+    p_resolved_at: new Date().toISOString(),
+    p_buyer: user.id,
+  });
   if (error) return { error: error.message };
-  if (!closed?.length) return { error: "This dispute has already been settled." };
+  if (!restored) return { error: "This dispute has already been settled." };
 
   if (order.seller_id) {
     await postOrderEvent(

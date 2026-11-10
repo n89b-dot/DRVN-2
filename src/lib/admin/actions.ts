@@ -304,20 +304,15 @@ export async function adminResolveForSeller(
         if (!order) throw new Error("Order not found.");
         if (order.status !== "disputed") throw new Error("This order isn't in dispute.");
 
-        const { data: closed, error } = await ctx.admin
-          .from("orders")
-          .update({
-            status: order.pre_dispute_status ?? "delivered",
-            dispute_resolved_at: new Date().toISOString(),
-            dispute_outcome: "admin_resolved",
-            refund_offer_cents: null,
-            refund_offered_at: null,
-          })
-          .eq("id", orderId)
-          .eq("status", "disputed")
-          .select("id");
+        // Plan 2 item A2: the database makes the change (order_close_dispute),
+        // on the same condition as before: the order is still in dispute.
+        const { data: restored, error } = await ctx.admin.rpc("order_close_dispute", {
+          p_order: orderId,
+          p_outcome: "admin_resolved",
+          p_resolved_at: new Date().toISOString(),
+        });
         if (error) throw new Error(error.message);
-        if (!closed?.length) throw new Error("This dispute has already been settled.");
+        if (!restored) throw new Error("This dispute has already been settled.");
 
         await notifyBothParties(
           ctx.admin,
