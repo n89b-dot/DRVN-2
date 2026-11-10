@@ -17,7 +17,7 @@ This plan does four things, in this order:
 3. **Fix what the review found in code that has already merged.** These are grouped into three small changes that do not touch the database, so they can be built alongside step 2.
 4. **Fix the Intelligence OS's three rules that can close or reopen an item wrongly.** This is in the OS's own repository and is done by the OS session.
 
-Neil has five decisions to make (about half an hour in all, each with a recommended default) and two changes to merge in the browser. Nothing here waits on the hosting account, and nothing here delays it.
+Neil has six decisions to make (about half an hour in all, each with a recommended default) and two changes to merge in the browser. Nothing here waits on the hosting account, and nothing here delays it.
 
 **The end result** is a `main` with no change waiting in review, both shared databases level with `main` with no stray history, private photos that are actually private, and an OS that does not mis-close items. That is the "quiet point" at which plan 2 begins.
 
@@ -68,7 +68,7 @@ Thirteen pull requests were in review at 14:00 UTC on 10 November. They are take
 
 | Step | Pull request | Fix required before it merges | Finding | OS id |
 |---|---|---|---|---|
-| 2.1 | PR #198, deletion runbook and Resume | Re-date `20261110110000` to after `20261110120000`. Repair or document the old history row on shared dev and staging in `supabase/MIGRATIONS.md`. Add the three states that still need SQL to the runbook. Replace the guard's `exception when others then null`. | `#126`, `#154`, `#157` | N944, N734 |
+| 2.1 | PR #198, deletion runbook and Resume | Keep the file name `20261110110000` and add one named exception to `tests/ci/migration-order.test.ts` (file, date, pull request, reason), with a test that any unlisted back-dated file is still refused (decision D6). The applied file is not edited; any further change goes in a new migration. Add the three states that still need SQL to the runbook. Replace the guard's `exception when others then null`. It merges after step 2.2. | `#126`, `#154`, `#157` | N944, N734 |
 | 2.2 | PR #201, 18+ on long sessions | Sign the skip cookie. Enforce the confirmation on the actions that matter (message, offer, checkout, list), not only on page loads. Remove the prefetch exemption that never fires. | `#152` | N662 |
 | 2.3 | PR #203, upload size | Add a second shrink method for browsers where the first fails, and a test of the server's 413. | `#158` | N955 |
 | 2.4 | PR #188, staging out of search | One definition of "hosted". The deploy's version step also checks `/robots.txt` and `X-Robots-Tag`. The sitemap answers 404 when the site is not indexable. | `#156` | N958, N961 |
@@ -145,6 +145,7 @@ Done in the OS repository by the OS session, in this order. These are from the r
 | D3 | PR #210's one-time clean-up of photo rows that fail the new rule. | Yes, after the count on staging is shown to you and is small. | PR #210 cannot merge, and private photos rest on the weaker rule. |
 | D4 | Chargeback write-offs: DRVN absorbs the loss, and the 90 days count from the bank's decision. | Yes to both. | Recorded for when PR #207 returns. |
 | D5 | Should published photos have permanent public addresses, with signing kept for drafts and private builds? | Yes, built after launch as plan 2 item B7. Until then the current design stays and PR #210 still merges. | The current design stays. |
+| D6 | PR #198's migration is dated before one already on `main`, and both shared databases already hold it. Keep its name with a named exception in the order test, or rename it and rewrite the history row on both databases? | Keep the name. Both databases applied it before `20261110120000`, which is the order a new database will apply by name, so nothing is out of step; renaming would mean writing to the migration history of two shared databases to cure a problem that exists only in merge order. The reviewing session proposed this and the reviewer of 10 November agrees. | The exception is used. |
 
 Two owner steps are not decisions: merge PR #195 in the browser (or run `gh auth refresh -s workflow` once), and the hosting account (OS id R-hosting), which no item in this plan waits on.
 
