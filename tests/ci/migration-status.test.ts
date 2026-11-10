@@ -163,7 +163,7 @@ describe("--status over the session pooler (N951, report five #114)", () => {
 
 describe("N634: --status signs in with a read-only login when the env file has one (work review #138)", () => {
   type ReaderRow = Record<string, unknown>;
-  const READ_ONLY: ReaderRow = { role: "deploy_reader", read_only_default: "on", rolsuper: false, rolcreaterole: false, rolcreatedb: false, rolbypassrls: false, can_write_history: false, can_create_in_public: false };
+  const READ_ONLY: ReaderRow = { role: "deploy_reader", read_only_default: "on", rolsuper: false, rolcreaterole: false, rolcreatedb: false, rolbypassrls: false, can_write_history: false, can_create_in_public: false, member_of: null };
 
   async function withEnv(envLines: string[], argv: string[], reader: ReaderRow | null = READ_ONLY, targets: Record<string, unknown> = { "fixture-dev": { ref: REF, note: "fixture" } }) {
     const file = path.join(dir, `env-${Math.random().toString(36).slice(2)}.fixture`);
@@ -203,6 +203,9 @@ describe("N634: --status signs in with a read-only login when the env file has o
     expect(JSON.parse(out[0])).toMatchObject({ target: "fixture-dev", count: 1, missing: [] });
     expect(queries[0]).toBe("begin transaction read only");
     expect(queries[1]).toContain("from pg_roles r where r.rolname = current_user");
+    // The check that makes "read-only" true includes membership of other roles.
+    expect(queries[1]).toContain("from pg_auth_members m join pg_roles g on g.oid = m.roleid");
+    expect(queries[1]).toContain("where m.member = r.oid");
   });
 
   it("prefers the reader to an owner password in the same file, and qualifies its name with the project on the pooler", async () => {
@@ -221,6 +224,9 @@ describe("N634: --status signs in with a read-only login when the env file has o
       [{ ...READ_ONLY, can_write_history: true }, /it can write the migration history/],
       [{ ...READ_ONLY, can_create_in_public: true }, /it can create objects in public/],
       [{ ...READ_ONLY, role: "postgres" }, /signed in as postgres, not deploy_reader/],
+      // A member inherits the other role's rights, whatever its own attributes say.
+      [{ ...READ_ONLY, member_of: "postgres" }, /it is a member of postgres and inherits that role's rights/],
+      [{ ...READ_ONLY, member_of: "pg_read_all_data, service_role" }, /it is a member of pg_read_all_data, service_role/],
     ];
     for (const [row, reason] of cases) {
       const { code, out, err } = await withEnv(READER, ["--target", "fixture-dev", "--status"], row);

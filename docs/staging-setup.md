@@ -400,10 +400,15 @@ on a separate host (`docs/remediation-release-and-monitoring.md`).
 
      Put each password in its secret above and nowhere else. To rotate one,
      run `alter role deploy_reader password '<new password>';` and update the
-     secret. The runner checks the login on every use and refuses it if it
-     is a superuser, can create roles, bypasses row-level security, is not
+     secret. Grant it nothing else, and never make it a member of another
+     role (a member inherits that role's rights). The runner checks the
+     login on every use and refuses it if it is a superuser, can create
+     roles, bypasses row-level security, is a member of any role, is not
      read-only by default, or can write the history table, so a wrong
-     password pasted here cannot quietly be an owner's. To try it by hand,
+     password pasted here cannot quietly be an owner's. What keeps it from
+     writing is what it holds, not the read-only default, which a session
+     can switch off. These five statements were run on a new Supabase
+     Postgres 17 on 10 November 2026 and are enough for `--status`. To try it by hand,
      put `SUPABASE_DB_READER_USER=deploy_reader` and
      `SUPABASE_DB_READER_PASSWORD=…` in an env file beside
      `NEXT_PUBLIC_SUPABASE_URL` and run

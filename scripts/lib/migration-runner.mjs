@@ -241,9 +241,18 @@ export async function inspectTarget(client, { readerRole = null } = {}) {
 /**
  * Work review #138: what is wrong with a login that was given as read-only.
  * `--status` signs in with it so the deploy holds no owner password, and
- * that is only true if the login really cannot write: its sessions default
- * to read-only, it is not a superuser and cannot create roles or bypass row
- * security, and it holds no write privilege on the history table it reads.
+ * that is only true if the login really cannot write. What makes it true is
+ * what the role holds, so that is what is checked: it is not a superuser,
+ * cannot create roles or databases, does not bypass row security, holds no
+ * write privilege on the history table it reads, cannot create in `public`,
+ * and is a member of no other role (a member inherits that role's rights: a
+ * reader granted `postgres` or `service_role` by mistake would pass every
+ * check of its own attributes).
+ *
+ * `default_transaction_read_only` is checked too, but it is a default: a
+ * session can switch it off. It is a second layer, never the reason the
+ * login is safe. Do not rely on it alone.
+ *
  * Runs inside the caller's read-only transaction. Returns the reasons (none:
  * it is read-only).
  */
@@ -253,7 +262,10 @@ export async function readerLoginProblems(client, expectedRole) {
             current_setting('default_transaction_read_only') as read_only_default,
             r.rolsuper, r.rolcreaterole, r.rolcreatedb, r.rolbypassrls,
             has_table_privilege(current_user, 'supabase_migrations.schema_migrations', 'insert, update, delete, truncate') as can_write_history,
-            has_schema_privilege(current_user, 'public', 'create') as can_create_in_public
+            has_schema_privilege(current_user, 'public', 'create') as can_create_in_public,
+            (select string_agg(g.rolname::text, ', ' order by g.rolname)
+               from pg_auth_members m join pg_roles g on g.oid = m.roleid
+              where m.member = r.oid) as member_of
        from pg_roles r where r.rolname = current_user`,
   );
   const row = rows[0];
@@ -267,6 +279,7 @@ export async function readerLoginProblems(client, expectedRole) {
   if (row.rolbypassrls) problems.push("it bypasses row-level security");
   if (row.can_write_history) problems.push("it can write the migration history");
   if (row.can_create_in_public) problems.push("it can create objects in public");
+  if (row.member_of) problems.push(`it is a member of ${row.member_of} and inherits that role's rights (revoke the membership)`);
   return problems;
 }
 
