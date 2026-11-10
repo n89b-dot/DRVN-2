@@ -63,6 +63,10 @@ begin
   select id, seller_id from public.orders where id = p_order;
 end $$;
 
+-- This guard's own helpers are called while acting as other roles. A new
+-- function is closed by default (architecture plan 2, item A3), so they are opened here.
+grant execute on all routines in schema pg_temp to public;
+
 do $$
 declare
   seller uuid := gen_random_uuid();

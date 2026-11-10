@@ -26,6 +26,10 @@ $$;
 create function pg_temp.code(p_sql text) returns text language plpgsql as $$
 begin execute p_sql; return 'ok'; exception when others then return sqlstate; end $$;
 
+-- This guard's own helpers are called while acting as other roles. A new
+-- function is closed by default (architecture plan 2, item A3), so they are opened here.
+grant execute on all routines in schema pg_temp to public;
+
 do $$
 declare
   member uuid := gen_random_uuid();

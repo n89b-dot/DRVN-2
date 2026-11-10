@@ -35,6 +35,10 @@ end $$;
 create function pg_temp.claim(p_n integer default 1) returns table(job_id uuid, lease_id uuid, kind text, offer_id uuid, round_no integer)
 language sql as $$ select c.job_id, c.lease_id, c.kind, c.offer_id, c.round_no from public.agent_claim_jobs(p_n, 60) c $$;
 
+-- This guard's own helpers are called while acting as other roles. A new
+-- function is closed by default (architecture plan 2, item A3), so they are opened here.
+grant execute on all routines in schema pg_temp to public;
+
 do $$
 declare
   seller uuid := gen_random_uuid();

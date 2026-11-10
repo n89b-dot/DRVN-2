@@ -47,6 +47,14 @@ Three functions take over the four changes to `orders.status` and `orders.pre_di
 |---|---|
 | `20261111110000_order_status_moves.sql` | not applied |
 
+## November 11 — new functions are closed by default (architecture plan 2, item A3)
+
+Two `alter default privileges` statements for the role that applies migrations: a function created from here on is not executable by `PUBLIC`, `anon` or `authenticated` until a migration grants it. `service_role` keeps the platform's grant in `public`. Nothing that exists changes. Guard: `supabase/tests/functions_closed_by_default_guard.sql`.
+
+| File | Applied to |
+|---|---|
+| `20261111100000_functions_closed_by_default.sql` | not applied |
+
 ## November 10 — order emails through an outbox: report five #116
 
 | File | Applied to |

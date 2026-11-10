@@ -4,6 +4,10 @@ create function pg_temp.role_for(uid uuid, service boolean default false) return
  select set_config('request.jwt.claims',json_build_object('sub',uid,'role',case when service then 'service_role' when uid is null then 'anon' else 'authenticated' end)::text,true);
 $$;
 create function pg_temp.admin_role() returns void language sql as $$ select set_config('role','none',true); select set_config('request.jwt.claims','',true); $$;
+
+-- This guard's own helpers are called while acting as other roles. A new
+-- function is closed by default (architecture plan 2, item A3), so they are opened here.
+grant execute on all routines in schema pg_temp to public;
 do $$
 declare seller uuid:=gen_random_uuid(); buyer uuid:=gen_random_uuid(); car uuid; part uuid; garage uuid; n int; evidence text; saved uuid; saved_again uuid; fixture_make bigint; fixture_model bigint; vehicle_param text;
 begin
