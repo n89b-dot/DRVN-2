@@ -43,8 +43,14 @@ export async function pagedRows<T, K extends keyof T & string>(
   }
 }
 
-/** Splits ids into groups small enough for one `.in()` filter in a request URL. */
-export function chunks<T>(values: readonly T[], size = 200): T[][] {
+/**
+ * Splits ids into groups small enough for one `.in()` filter in a request
+ * URL. 100 uuids make a URL of about 4,000 characters (each comma is sent as
+ * `%2C`); 200 came to about 7,800, on the 8 KB request-line limit many
+ * gateways default to. The test holds a group's URL under 4,500.
+ */
+export const IN_FILTER_IDS = 100;
+export function chunks<T>(values: readonly T[], size = IN_FILTER_IDS): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < values.length; i += size) out.push(values.slice(i, i + size));
   return out;

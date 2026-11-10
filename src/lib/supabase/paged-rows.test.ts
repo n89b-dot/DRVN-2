@@ -1,3 +1,4 @@
+import { createClient } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
 
 import { chunks, pagedRows } from "./paged-rows";
@@ -36,6 +37,20 @@ describe("reading past PostgREST's row limit (N718)", () => {
     expect(failing.rows).toBeNull();
     expect((await pagedRows(table(ids(30)), "id", { pageSize: 10, cap: 25 })).rows).toBeNull();
     expect((await pagedRows(async () => ({ data: [{ id: "5" }], error: null }), "id")).rows).toBeNull(); // the cursor never moves
+  });
+
+  it("N718: the longest request a group of uuids makes stays under 4,500 characters", () => {
+    // The real query builder's own URL, for the widest read that uses a group
+    // (the unread flags: an .in() of offer ids, three more filters, a cursor).
+    const uuid = () => crypto.randomUUID();
+    const groups = chunks(Array.from({ length: 1000 }, uuid));
+    expect(groups[0]).toHaveLength(100);
+    const client = createClient("https://abcdefghijklmnopqrst.supabase.co", "anon-key-for-a-url-only");
+    const query = client.from("messages").select("id, offer_id").in("offer_id", groups[0]).eq("recipient_id", uuid()).is("read_at", null).order("id").limit(1000).gt("id", uuid());
+    const url = (query as unknown as { url: URL }).url.toString();
+    expect(url).toContain("offer_id=in.");
+    expect(url.length).toBeGreaterThan(3600);
+    expect(url.length).toBeLessThan(4500);
   });
 
   it("splits ids into groups for an .in() filter", () => {

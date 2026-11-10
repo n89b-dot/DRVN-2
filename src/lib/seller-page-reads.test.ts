@@ -86,7 +86,7 @@ describe("N718: the seller's pages read past 1,000 rows (work review #155)", () 
     const ids = Array.from({ length: 450 }, (_, i) => `offer-${i}`);
     const db = capped({ messages: [{ id: id(1), offer_id: "offer-449", recipient_id: "me", read_at: null }] });
     expect([...(await offersWithUnread(db.client, ids, "me"))!]).toEqual(["offer-449"]);
-    // Three groups of at most 200; the group with a row is read until an empty page.
-    expect(db.requests()).toBe(4);
+    // Five groups of at most 100; the group with a row is read until an empty page.
+    expect(db.requests()).toBe(6);
   });
 });

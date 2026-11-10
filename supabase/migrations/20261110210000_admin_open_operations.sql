@@ -17,6 +17,11 @@
 --
 -- The index makes "requests, newest first" an index scan; the closing-row
 -- check uses admin_audit_log_operation_idx (20261003130000).
+--
+-- Its cost grows with the log: with fewer open operations than the limit it
+-- probes every requested row through the index before it can stop. That is
+-- fine for an admin page read by a few operators; it is not a query to put
+-- on a member's page.
 
 begin;
 
@@ -56,7 +61,7 @@ as $$
 $$;
 
 comment on function public.admin_open_operations(integer) is
-  'The newest admin operations still awaiting an outcome (a "requested" audit row with no "completed" or "reconciled" row), with the phases recorded since and the operation''s newest audit id (N718). Service role only.';
+  'The newest admin operations still awaiting an outcome (a "requested" audit row with no "completed" or "reconciled" row), with the phases recorded since and the operation''s newest audit id (N718). With fewer open operations than the limit it probes every requested row through the index, so its cost grows with the log: for the admin audit page only. Service role only.';
 
 revoke all on function public.admin_open_operations(integer) from public, anon, authenticated;
 grant execute on function public.admin_open_operations(integer) to service_role;
