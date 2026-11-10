@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// photoSigningReady() remembers the database's answer per process, so each
-// test loads the module afresh: a new instance the database has never answered.
+// A signer remembers the database's answer, so each test builds its own: a
+// new instance the database has never answered, on a clock the test moves
+// (work review #135). Nothing here reads the real clock.
 const mocks = vi.hoisted(() => ({ sign: vi.fn(), rpc: vi.fn(), reportError: vi.fn(), signals: [] as unknown[] }));
 
 vi.mock("server-only", () => ({}));
@@ -34,24 +35,30 @@ function database(answer: Answer) {
 }
 const asked = () => mocks.rpc.mock.calls.filter(([fn]) => fn === "photo_signing_ready").length;
 
+const { createPhotoSigner, EXPORT_NOT_READY } = await import("./photo-signing");
+const { tableContext } = await import("@/lib/photo-urls");
+
+const START = Math.ceil(Date.now() / 3_600_000) * 3_600_000;
+const clock = { now: START };
+const advance = (ms: number) => { clock.now += ms; };
+/** Lets a question asked behind a response come back. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 async function instance() {
-  vi.resetModules();
-  const signing = await import("./photo-signing");
-  const { tableContext } = await import("@/lib/photo-urls");
+  const signing = createPhotoSigner({ now: () => clock.now });
   const read = async (request = "cars?select=cover_image_url", value: unknown = [{ cover_image_url: photo }]) =>
     (await signing.photoFetch((async () => json(value)) as unknown as typeof fetch, { sign: true })(`${O}/rest/v1/${request}`, { method: "GET" })).json();
   const cover = async () => (await read())[0].cover_image_url as string;
   const exported = () => signing.signPhotosForExport([{ cover_image_url: photo }], ME, tableContext("cars", "cover_image_url"));
-  return { ...signing, read, cover, exported };
+  return { ...signing, EXPORT_NOT_READY, read, cover, exported };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.signals.length = 0;
-  vi.useFakeTimers({ now: Date.now() });
+  clock.now = START;
   mocks.sign.mockImplementation(async (bucket: string, paths: string[]) => ({ data: paths.map((path) => ({ path, signedUrl: `${O}/storage/v1/object/sign/${bucket}/${path}?token=t`, error: null })), error: null }));
 });
-afterEach(() => { vi.useRealTimers(); });
 
 const SIGNED = "/object/sign/";
 
@@ -68,7 +75,7 @@ describe("the signer signs nothing until the database guards are there (N940, #1
     expect(asked()).toBe(1);
 
     // Applied: signing starts on the next check.
-    vi.advanceTimersByTime(30_001);
+    advance(30_001);
     database(true);
     expect(await cover()).toContain(SIGNED);
     expect(asked()).toBe(2);
@@ -83,10 +90,10 @@ describe("the signer signs nothing until the database guards are there (N940, #1
     const { cover } = await instance();
     database(true);
     expect(await cover()).toContain(SIGNED);
-    vi.advanceTimersByTime(5 * 60_000 + 1);
+    advance(5 * 60_000 + 1);
     database("no-function");
     await cover(); // the stale yes answers this one while the question is asked
-    await vi.advanceTimersByTimeAsync(0);
+    await settle();
     expect(await cover()).toBe(photo);
   });
 
@@ -94,10 +101,10 @@ describe("the signer signs nothing until the database guards are there (N940, #1
     const { cover } = await instance();
     database(true);
     expect(await cover()).toContain(SIGNED);
-    vi.advanceTimersByTime(5 * 60_000 + 1);
+    advance(5 * 60_000 + 1);
     database(false);
     await cover();
-    await vi.advanceTimersByTimeAsync(0);
+    await settle();
     expect(await cover()).toBe(photo);
   });
 
@@ -118,9 +125,9 @@ describe("a check that could not be made leaves the last answer standing (N1062,
 
     database("down");
     for (let minutes = 6; minutes <= 66; minutes += 6) {
-      vi.advanceTimersByTime(6 * 60_000);
+      advance(6 * 60_000);
       expect(await cover(), `${minutes} minutes in`).toContain(SIGNED);
-      await vi.advanceTimersByTimeAsync(0);
+      await settle();
     }
     expect(asked()).toBeGreaterThan(5);
     expect(mocks.reportError).toHaveBeenCalledWith(expect.stringContaining("the last answer stands"), expect.objectContaining({ reason: "ready-check-failed", lastAnswer: true }));
@@ -133,12 +140,12 @@ describe("a check that could not be made leaves the last answer standing (N1062,
     expect(asked()).toBe(1);
 
     // Inside five minutes: no question at all.
-    vi.advanceTimersByTime(4 * 60_000);
+    advance(4 * 60_000);
     expect(await cover()).toContain(SIGNED);
     expect(asked()).toBe(1);
 
     // Past it: a question that never comes back does not hold the response.
-    vi.advanceTimersByTime(60_001);
+    advance(60_001);
     database("never");
     expect(await cover()).toContain(SIGNED);
     expect(await cover()).toContain(SIGNED);
@@ -151,7 +158,7 @@ describe("a check that could not be made leaves the last answer standing (N1062,
     let answer!: (value: { data: boolean; error: null }) => void;
     mocks.rpc.mockImplementation((fn: string) => (fn === "photo_signing_ready" ? new Promise((resolve) => { answer = resolve; }) : Promise.resolve({ data: [], error: null })));
     const waiting = [cover(), cover(), cover(), cover()];
-    await vi.advanceTimersByTimeAsync(0);
+    await settle();
     expect(asked()).toBe(1);
     answer({ data: true, error: null });
     for (const url of await Promise.all(waiting)) expect(url).toContain(SIGNED);
@@ -165,25 +172,25 @@ describe("a check that could not be made leaves the last answer standing (N1062,
     expect(asked()).toBe(1);
     const waits = [2_000, 4_000, 8_000, 16_000, 30_000, 30_000];
     for (const [i, wait] of waits.entries()) {
-      vi.advanceTimersByTime(wait - 1);
+      advance(wait - 1);
       await cover();
       expect(asked(), `asked early, wait ${i}`).toBe(i + 1);
-      vi.advanceTimersByTime(1);
+      advance(1);
       await cover();
       expect(asked(), `not asked after ${wait} ms`).toBe(i + 2);
     }
     // An answer ends the back-off: the next failure waits two seconds again.
-    vi.advanceTimersByTime(30_000);
+    advance(30_000);
     database(true);
     expect(await cover()).toContain(SIGNED);
-    vi.advanceTimersByTime(5 * 60_000 + 1);
+    advance(5 * 60_000 + 1);
     database("down");
     await cover();
-    await vi.advanceTimersByTimeAsync(0);
+    await settle();
     const before = asked();
-    vi.advanceTimersByTime(2_000);
+    advance(2_000);
     await cover();
-    await vi.advanceTimersByTimeAsync(0);
+    await settle();
     expect(asked()).toBe(before + 1);
   });
 
@@ -198,12 +205,12 @@ describe("a check that could not be made leaves the last answer standing (N1062,
     const { exported, EXPORT_NOT_READY } = await instance();
     database("down");
     await expect(exported()).rejects.toThrow(EXPORT_NOT_READY);
-    vi.advanceTimersByTime(2_000);
+    advance(2_000);
     database(false);
     await expect(exported()).rejects.toThrow(EXPORT_NOT_READY);
     expect(mocks.sign).not.toHaveBeenCalled();
 
-    vi.advanceTimersByTime(30_001);
+    advance(30_001);
     database(true);
     expect((await exported())[0].cover_image_url).toContain(SIGNED);
   });
@@ -218,7 +225,7 @@ describe("a read the signer can't place is said, not repeated (N940)", () => {
     const res = await photoFetch((async () => json([{ url: photo }])) as unknown as typeof fetch, { sign: true })(`${O}/rest/v1/car_images?select=url`, { headers: { "Accept-Profile": "private" } });
     expect((await res.json())[0].url).toBe(photo);
     expect(mocks.reportError.mock.calls.map((c) => (c[1] as { reason: string }).reason)).toEqual(["unparsable-select", "two-selects", "non-public-profile"]);
-    vi.advanceTimersByTime(10 * 60_000 + 1);
+    advance(10 * 60_000 + 1);
     await read("car_images?select=url(", [{ url: photo }]);
     expect(mocks.reportError).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ reason: "unparsable-select", since: 2 }));
     // Storage and Auth answers are not "reads it can't place".

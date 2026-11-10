@@ -15,8 +15,25 @@ vi.mock("@supabase/supabase-js", () => ({
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://proj.supabase.co";
 process.env.SUPABASE_SECRET_KEY = "unit-test-key";
 
-const { EXPORT_PHOTO_LINK_SECONDS, photoFetch, signedOwnPhotoUrl, signedPhotoUrls, signPhotosForExport } = await import("./photo-signing");
+const { EXPORT_PHOTO_LINK_SECONDS, SIGN_BUDGET_MS, SIGN_RETRY_MS, createPhotoSigner } = await import("./photo-signing");
 const { tableContext } = await import("@/lib/photo-urls");
+type Signer = ReturnType<typeof createPhotoSigner>;
+
+/**
+ * Every test gets a signer of its own on a clock the test moves (work review
+ * #135): none of them reads the real clock or what a test before it left
+ * behind, so they pass in any order and on any date. START is the top of an
+ * hour (a signing window), taken from today only so no calendar date is
+ * written here.
+ */
+const START = Math.ceil(Date.now() / 3_600_000) * 3_600_000;
+const clock = { now: START };
+let signer: Signer;
+/** The signer's functions under their old names; a time, where a test gives one, sets the clock. */
+const signedPhotoUrls = (urls: readonly string[], at?: number) => { if (at !== undefined) clock.now = at; return signer.signedPhotoUrls(urls); };
+const signPhotosForExport = <T,>(value: T, ownerId: string, context: Parameters<Signer["signPhotosForExport"]>[2], at?: number) => { if (at !== undefined) clock.now = at; return signer.signPhotosForExport(value, ownerId, context); };
+const photoFetch: Signer["photoFetch"] = (base, options) => signer.photoFetch(base, options);
+const signedOwnPhotoUrl: Signer["signedOwnPhotoUrl"] = (url, ownerId) => signer.signedOwnPhotoUrl(url, ownerId);
 
 const O = "https://proj.supabase.co";
 const ME = "11111111-1111-4111-8111-111111111111";
@@ -25,6 +42,8 @@ const signedFor = (bucket: string, path: string) => `${O}/storage/v1/object/sign
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clock.now = START;
+  signer = createPhotoSigner({ now: () => clock.now });
   // No shared memo by default: the read finds nothing and the offer keeps this instance's URL.
   mocks.rpc.mockImplementation(async (fn: string, args: { p_signed?: unknown[] }) => ({ data: fn === "photo_signing_ready" ? true : fn === "photo_signatures_offer" ? args.p_signed : [], error: null }));
   mocks.sign.mockImplementation(async (bucket: string, paths: string[]) => ({
@@ -53,7 +72,7 @@ describe("photo signing at the database boundary (N455)", () => {
 
   it("N455: reuses a minted URL for the rest of its window", async () => {
     const url = canonical("activity-images", "reuse.webp");
-    const now = Date.UTC(2026, 10, 8, 20, 5);
+    const now = START + 5 * 60_000;
     const first = await signedPhotoUrls([url], now);
     const again = await signedPhotoUrls([url], now + 30 * 60_000);
     expect(again.get(url)).toBe(first.get(url));
@@ -106,7 +125,7 @@ describe("photo signing at the database boundary (N455)", () => {
 });
 
 describe("one signed URL per photo per window across instances (N954, report five #117)", () => {
-  const at = (minute: number) => Date.UTC(2026, 10, 10, 9, minute);
+  const at = (minute: number) => START + minute * 60_000;
 
   it("uses the URL another instance already signed, without minting", async () => {
     const url = canonical("car-images", "shared-hit.webp");
@@ -238,26 +257,21 @@ describe("only photo fields are signed, never a URL a member wrote (N940, #178 r
   });
 });
 
-// A whole hour well after the real clock: earlier tests in this file fill the
-// process memo with real-time entries, and a fixed date that the real clock
-// has passed made those look fresh (it broke on 10 Nov 2026 at 10:00 UTC).
-const AHEAD = Math.ceil(Date.now() / 3_600_000) * 3_600_000 + 365 * 86_400_000;
+const AHEAD = START + 365 * 86_400_000;
 
 describe("a failed offer is not remembered locally (N954, review of #196)", () => {
   it("the next response asks the shared memo again rather than keeping this instance's URL", async () => {
-    vi.useFakeTimers({ now: AHEAD });
-    try {
+    clock.now = AHEAD;
+    {
       const url = canonical("car-images", "offer-fails.webp");
       mocks.rpc.mockImplementation(async (fn: string) => (fn === "photo_signatures_offer" ? { data: null, error: { code: "40P01", message: "deadlock detected" } } : { data: [], error: null }));
-      await signedPhotoUrls([url], Date.now());
+      await signedPhotoUrls([url]);
       expect(mocks.sign).toHaveBeenCalledTimes(1);
       // Past the short pause, the shared memo has the winner; this instance shows it, not its own.
-      vi.advanceTimersByTime(31_000);
+      clock.now += 31_000;
       const theirs = `${O}/storage/v1/object/sign/car-images/${ME}/offer-fails.webp?token=winner`;
       mocks.rpc.mockImplementation(async (fn: string) => ({ data: fn === "photo_signatures_read" ? [{ bucket: "car-images", path: `${ME}/offer-fails.webp`, signed_url: theirs }] : [], error: null }));
-      expect((await signedPhotoUrls([url], Date.now())).get(url)).toBe(theirs);
-    } finally {
-      vi.useRealTimers();
+      expect((await signedPhotoUrls([url])).get(url)).toBe(theirs);
     }
   });
 });
@@ -323,16 +337,119 @@ describe("only database-guarded places are signed (N940, #196 review)", () => {
 
 describe("while the shared memo is down, the process memo still works (N954, #196 review)", () => {
   it("reuses this process's link until the shared memo is tried again", async () => {
-    vi.useFakeTimers({ now: AHEAD + 86_400_000 });
-    try {
+    clock.now = AHEAD + 86_400_000;
+    {
       mocks.rpc.mockImplementation(async () => ({ data: null, error: { message: "down" } }));
       const url = canonical("listing-images", "outage.webp");
-      const first = (await signedPhotoUrls([url], Date.now())).get(url);
-      vi.advanceTimersByTime(5_000);
-      expect((await signedPhotoUrls([url], Date.now())).get(url)).toBe(first);
+      const first = (await signedPhotoUrls([url])).get(url);
+      clock.now += 5_000;
+      expect((await signedPhotoUrls([url])).get(url)).toBe(first);
       expect(mocks.sign).toHaveBeenCalledTimes(1);
+    }
+  });
+});
+
+describe("N1052: a slow or failing photo store does not hold every page (work review #136)", () => {
+  it("N1052: after a signing call fails, none is made for thirty seconds; the photo shows as missing at once, then signs", async () => {
+    const url = canonical("car-images", "store-down.webp");
+    mocks.sign.mockResolvedValue({ data: null, error: { message: "storage unavailable" } });
+    expect((await signedPhotoUrls([url])).has(url)).toBe(false);
+    expect(mocks.sign).toHaveBeenCalledTimes(1);
+    // Twenty-nine seconds of pages: no call each, no wait each.
+    for (const later of [1, 10_000, SIGN_RETRY_MS - 1]) {
+      clock.now = START + later;
+      expect((await signedPhotoUrls([url, canonical("listing-images", `other-${later}.webp`)])).size).toBe(0);
+    }
+    expect(mocks.sign).toHaveBeenCalledTimes(1);
+    // Then it is tried again, and works.
+    mocks.sign.mockImplementation(async (bucket: string, paths: string[]) => ({ data: paths.map((path) => ({ path, signedUrl: signedFor(bucket, path), error: null })), error: null }));
+    clock.now = START + SIGN_RETRY_MS;
+    expect((await signedPhotoUrls([url])).get(url)).toBe(signedFor("car-images", `${ME}/store-down.webp`));
+    expect(mocks.sign).toHaveBeenCalledTimes(2);
+    // Said once, not once per page.
+    expect(mocks.reportError.mock.calls.filter(([message]) => String(message).includes("signing failed"))).toHaveLength(1);
+  });
+
+  it("N1052: a signing call with no answer is given up after its budget, not after ten seconds", async () => {
+    vi.useFakeTimers();
+    try {
+      const url = canonical("car-images", "store-hangs.webp");
+      mocks.sign.mockReturnValue(new Promise(() => {}));
+      let done = false;
+      const pending = signedPhotoUrls([url]).then((out) => { done = true; return out; });
+      await vi.advanceTimersByTimeAsync(SIGN_BUDGET_MS - 1);
+      expect(done).toBe(false);
+      await vi.advanceTimersByTimeAsync(2);
+      expect(done).toBe(true);
+      expect((await pending).has(url)).toBe(false);
+      expect(SIGN_BUDGET_MS).toBeLessThanOrEqual(3_000);
+      // And the pause follows, as after any failure.
+      mocks.sign.mockClear();
+      await signedPhotoUrls([canonical("car-images", "next.webp")]);
+      expect(mocks.sign).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
   });
+
+  it("N1052: links already signed this hour are still handed out while the store is down", async () => {
+    const known = canonical("car-images", "known.webp");
+    const first = (await signedPhotoUrls([known])).get(known);
+    mocks.sign.mockRejectedValue(new Error("ECONNRESET"));
+    const fresh = canonical("car-images", "fresh.webp");
+    const out = await signedPhotoUrls([known, fresh]);
+    expect(out.get(known)).toBe(first);
+    expect(out.has(fresh)).toBe(false);
+    clock.now = START + 5_000;
+    expect((await signedPhotoUrls([known, fresh])).get(known)).toBe(first);
+    expect(mocks.sign).toHaveBeenCalledTimes(2);
+  });
 });
+
+describe("N1051: a signer is given its clock and its client, and keeps its own memory (work review #135)", () => {
+  it("N1051: two signers share nothing: each signs for itself and asks the database for itself", async () => {
+    const url = canonical("car-images", "two-signers.webp");
+    const read = (target: Signer) => target.photoFetch((async () => new Response(JSON.stringify([{ url }]), { headers: { "content-type": "application/json" } })) as unknown as typeof fetch, { sign: true })(`${O}/rest/v1/car_images?select=url`, { method: "GET" });
+    await read(signer);
+    await read(signer);
+    expect(mocks.sign).toHaveBeenCalledTimes(1);
+    const asked = () => mocks.rpc.mock.calls.filter(([fn]) => fn === "photo_signing_ready").length;
+    expect(asked()).toBe(1);
+    const other = createPhotoSigner({ now: () => clock.now });
+    await read(other);
+    expect(mocks.sign).toHaveBeenCalledTimes(2);
+    expect(asked()).toBe(2);
+  });
+
+  it("N1051: it reads only the clock it is given: a link is reused within its hour by that clock, whatever the real time", async () => {
+    const url = canonical("car-images", "own-clock.webp");
+    const mine = { now: 0 };
+    const own = createPhotoSigner({ now: () => mine.now });
+    // An hour that ended decades before this test ran.
+    mine.now = 12 * 3_600_000 + 60_000;
+    await own.signedPhotoUrls([url]);
+    mine.now += 50 * 60_000;
+    await own.signedPhotoUrls([url]);
+    expect(mocks.sign).toHaveBeenCalledTimes(1);
+    mine.now += 15 * 60_000;
+    await own.signedPhotoUrls([url]);
+    expect(mocks.sign).toHaveBeenCalledTimes(2);
+  });
+
+  it("N1051: it uses the client it is given, and reports where it is told", async () => {
+    const calls: string[] = [];
+    const report = vi.fn();
+    const given = {
+      storage: { from: (bucket: string) => ({ createSignedUrls: async (paths: string[]) => { calls.push(`sign ${bucket} ${paths.length}`); return { data: null, error: { message: "refused" } }; } }) },
+      rpc: (fn: string) => ({ abortSignal: async () => { calls.push(fn); return { data: fn === "photo_signing_ready" ? true : [], error: null }; } }),
+    };
+    const own = createPhotoSigner({ now: () => clock.now, client: () => given as never, report });
+    await own.signedPhotoUrls([canonical("car-images", "given.webp")]);
+    expect(calls).toEqual(["photo_signatures_read", "sign car-images 1"]);
+    expect(mocks.sign).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(report).toHaveBeenCalledWith(expect.stringContaining("signing failed"), expect.objectContaining({ reason: "signing-failed", bucket: "car-images" }));
+    expect(mocks.reportError).not.toHaveBeenCalled();
+  });
+});
+
