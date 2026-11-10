@@ -91,7 +91,8 @@ export async function signedPhotoUrls(
   if (!missing.size) return out;
 
   if (memo.size > MAX_MEMO) {
-    for (const [key, value] of memo) if (value.window !== window) memo.delete(key);
+    // The live window, not the export's -1, or one export page would empty the memo.
+    for (const [key, value] of memo) if (value.window !== windowed.window) memo.delete(key);
     if (memo.size > MAX_MEMO) memo.clear();
   }
 
@@ -209,6 +210,16 @@ export async function signedPhotoUrl<T extends string | null | undefined>(url: T
 }
 
 /**
+ * One signed photo URL for a member's own object: a URL outside `ownerId`'s
+ * folder comes back as it was, unsigned, which Storage refuses. For an action
+ * that signs what it was handed rather than what a guarded read returned.
+ */
+export async function signedOwnPhotoUrl<T extends string | null | undefined>(url: T, ownerId: string): Promise<T> {
+  if (!url || signedPhotoObject(url)?.path.split("/")[0] !== ownerId) return url;
+  return signedPhotoUrl(url);
+}
+
+/**
  * The photo fields of a JSON answer signed, in one batch per bucket. Only
  * whole values at the places the database guards, for this answer's table or
  * RPC (src/lib/photo-urls.ts, PHOTO_POSITIONS): a photo URL written into
@@ -230,6 +241,9 @@ export async function signPhotoUrlsInText(text: string, context: SigningContext 
   return JSON.stringify(replacePhotoFields(parsed, context, await signedPhotoUrls(urls)));
 }
 
+/** Thrown by an export page read while the signer may not sign; the export job is retried. */
+export const EXPORT_NOT_READY = "Photo signing is not ready, so this export page was not written; the job will be tried again";
+
 /** How long a photo link in a member's data export opens for: the export's own download life. */
 export const EXPORT_PHOTO_LINK_SECONDS = 7 * 24 * 60 * 60;
 
@@ -244,47 +258,89 @@ export const EXPORT_PHOTO_LINK_SECONDS = 7 * 24 * 60 * 60;
  */
 export async function signPhotosForExport<T>(value: T, ownerId: string, context: SigningContext | null, nowMs = Date.now()): Promise<T> {
   if (value == null || !context) return value;
-  if (!(await photoSigningReady())) return value;
+  // An export page is stored for good: one written while signing is off would
+  // carry links that never open, and the export would still finish as a
+  // success. The job fails here instead, and its next attempt reads the page again.
+  if (!(await photoSigningReady())) throw new Error(EXPORT_NOT_READY);
   // The member's own objects only: their folder is the path's first segment.
   const urls = photoFieldUrls(value, context).filter((url) => signedPhotoObject(url)?.path.split("/")[0] === ownerId);
   if (!urls.length) return value;
   return replacePhotoFields(value, context, await signedPhotoUrls(urls, nowMs, EXPORT_PHOTO_LINK_SECONDS));
 }
 
-/** How long a "the guards are there" answer is trusted, and a "they aren't" one. */
-const READY_FOR_MS = 5 * 60_000;
+/** A "the guards are there" answer is used without asking again for this long. */
+const READY_FRESH_MS = 5 * 60_000;
+/** A "they aren't" answer is asked again after this long. */
 const NOT_READY_FOR_MS = 30_000;
-let ready: { value: boolean; until: number } | null = null;
-let readyAsk: Promise<boolean> | null = null;
+/** After a check that could not be made, the next waits this long, doubling each time up to the last. */
+const READY_RETRY_MS = [2_000, 4_000, 8_000, 16_000, 30_000];
+/** PostgREST's and Postgres's "there is no such function": the migration is not applied, which is an answer. */
+const NO_SUCH_FUNCTION = new Set(["PGRST202", "42883"]);
+
+/**
+ * `answer` is the last thing the database said (null: it has never answered
+ * this instance). `askAfter`: no new question before then. `failures`: checks
+ * in a row that could not be made.
+ */
+let readiness: { answer: boolean | null; askAfter: number; failures: number } = { answer: null, askAfter: 0, failures: 0 };
+let readyAsk: Promise<void> | null = null;
+
+/** One question to the database, shared by every caller waiting on it. Never rejects. */
+function askReadiness(): Promise<void> {
+  readyAsk ??= (async () => {
+    let answer: boolean | null = null;
+    let failure: unknown;
+    try {
+      type Call = { abortSignal: (signal: AbortSignal) => PromiseLike<{ data: unknown; error: unknown }> };
+      const call = (signingClient() as unknown as { rpc: (f: string) => Call }).rpc("photo_signing_ready");
+      const { data, error } = await call.abortSignal(AbortSignal.timeout(SHARED_BUDGET_MS));
+      if (error && NO_SUCH_FUNCTION.has(String((error as { code?: unknown }).code))) answer = false;
+      else if (error) throw error;
+      else answer = data === true;
+    } catch (error) {
+      failure = error ?? new Error("the readiness check failed");
+    }
+    const now = Date.now();
+    if (answer === null) {
+      // No answer (a timeout, an outage): what the database last said stands.
+      // A slow check must not blank every photo on the instance (work review #146).
+      const failures = readiness.failures + 1;
+      readiness = { answer: readiness.answer, askAfter: now + READY_RETRY_MS[Math.min(failures, READY_RETRY_MS.length) - 1], failures };
+      reportBounded("ready-check-failed", "[photos] could not check the database's photo guards; the last answer stands", { lastAnswer: readiness.answer, failures, error: failure });
+      return;
+    }
+    readiness = { answer, askAfter: now + (answer ? READY_FRESH_MS : NOT_READY_FOR_MS), failures: 0 };
+    if (!answer) reportBounded("not-ready", "[photos] the database's photo guards are missing (20261110190000); signing nothing", {});
+  })().finally(() => { readyAsk = null; });
+  return readyAsk;
+}
 
 /**
  * Whether the database guards every place the signer signs (N940,
  * public.photo_signing_ready, 20261110190000). Until it says so, nothing is
  * signed at the boundary or in an export: code deployed ahead of its
  * migration fails safe (photos show the no-photo plate) rather than signing
- * places nothing has checked. Asked once per instance every five minutes;
- * a failure counts as not ready and is asked again after thirty seconds.
+ * places nothing has checked.
+ *
+ * Only an answer from the database changes what this returns (N1062, work
+ * review #146). "Yes" is used for five minutes; after that it is still used,
+ * at once, while the database is asked again behind the response. "No" (or no
+ * such function) is asked again after thirty seconds. A check that could not
+ * be made, a timeout or an outage, leaves the last answer standing and is
+ * tried again after two seconds, doubling to thirty. An instance the database
+ * has never answered signs nothing.
  * (deploy.yml's migration-status step also stops a deploy whose migrations
  * are behind, but this does not depend on it.)
  */
 export async function photoSigningReady(): Promise<boolean> {
-  if (ready && Date.now() < ready.until) return ready.value;
-  readyAsk ??= (async () => {
-    let value = false;
-    try {
-      type Call = { abortSignal: (signal: AbortSignal) => PromiseLike<{ data: unknown; error: unknown }> };
-      const call = (signingClient() as unknown as { rpc: (f: string) => Call }).rpc("photo_signing_ready");
-      const { data, error } = await call.abortSignal(AbortSignal.timeout(SHARED_BUDGET_MS));
-      if (error) throw error;
-      value = data === true;
-      if (!value) reportBounded("not-ready", "[photos] the database's photo guards are missing (20261110190000); signing nothing", {});
-    } catch (error) {
-      reportBounded("ready-check-failed", "[photos] could not check the database's photo guards; signing nothing", { error });
-    }
-    ready = { value, until: Date.now() + (value ? READY_FOR_MS : NOT_READY_FOR_MS) };
-    return value;
-  })().finally(() => { readyAsk = null; });
-  return readyAsk;
+  const saidYes = () => readiness.answer === true;
+  if (Date.now() < readiness.askAfter) return saidYes();
+  if (saidYes()) {
+    void askReadiness();
+    return true;
+  }
+  await askReadiness();
+  return saidYes();
 }
 
 /** Each reason is reported at most once per ten minutes, with how many times it happened since. */

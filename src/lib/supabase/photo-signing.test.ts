@@ -15,7 +15,7 @@ vi.mock("@supabase/supabase-js", () => ({
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://proj.supabase.co";
 process.env.SUPABASE_SECRET_KEY = "unit-test-key";
 
-const { EXPORT_PHOTO_LINK_SECONDS, photoFetch, signedPhotoUrls, signPhotosForExport } = await import("./photo-signing");
+const { EXPORT_PHOTO_LINK_SECONDS, photoFetch, signedOwnPhotoUrl, signedPhotoUrls, signPhotosForExport } = await import("./photo-signing");
 const { tableContext } = await import("@/lib/photo-urls");
 
 const O = "https://proj.supabase.co";
@@ -137,7 +137,33 @@ describe("one signed URL per photo per window across instances (N954, report fiv
 
   it("the export's fixed-life links never touch the shared memo", async () => {
     await signPhotosForExport({ url: canonical("car-images", "export-shared.webp") }, ME, tableContext("car_images", "url"), at(3));
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    // Whether the readiness question is asked here depends on what ran before; the shared memo's calls must not be.
+    expect(mocks.rpc.mock.calls.filter(([fn]) => String(fn).startsWith("photo_signatures_"))).toEqual([]);
+    expect(mocks.sign).toHaveBeenCalledTimes(1);
+  });
+
+  it("N940: an export page does not empty this process's memo of the hour's links", async () => {
+    // Over the memo's cap, most of it from the hour before: only that part is dropped.
+    const now = AHEAD + 30 * 86_400_000;
+    const lastHour = Array.from({ length: 15_000 }, (_, i) => canonical("car-images", `memo-old-${i}.webp`));
+    const thisHour = Array.from({ length: 6_000 }, (_, i) => canonical("car-images", `memo-${i}.webp`));
+    await signedPhotoUrls(lastHour, now - 3_600_000);
+    await signedPhotoUrls(thisHour, now);
+    expect(mocks.sign).toHaveBeenCalledTimes(2);
+    await signPhotosForExport({ url: canonical("car-images", "memo-export.webp") }, ME, tableContext("car_images", "url"), now);
+    expect(mocks.sign).toHaveBeenCalledTimes(3);
+    await signedPhotoUrls([thisHour[0], thisHour[5_999]], now);
+    expect(mocks.sign).toHaveBeenCalledTimes(3);
+  });
+
+  it("N940: the own-photo signer signs an object in the member's folder and nothing else", async () => {
+    const mine = canonical("listing-images", "part-links/own.webp");
+    const theirs = mine.replace(ME, "22222222-2222-4222-8222-222222222222");
+    expect(await signedOwnPhotoUrl(mine, ME)).toBe(signedFor("listing-images", `${ME}/part-links/own.webp`));
+    expect(await signedOwnPhotoUrl(theirs, ME)).toBe(theirs);
+    expect(await signedOwnPhotoUrl("https://example.com/a.webp", ME)).toBe("https://example.com/a.webp");
+    expect(await signedOwnPhotoUrl(null, ME)).toBeNull();
+    expect(mocks.sign).toHaveBeenCalledTimes(1);
   });
 
   it("signs on its own when the shared memo is unavailable, reports it, and remembers nothing it couldn't share", async () => {
