@@ -498,6 +498,8 @@ Every item above that is a decision rather than work. Each has a recommended def
 | Launch market and currency | R-market | One country, one currency, the one the entity sits in | Tax (E6) cannot start |
 | One car platform and one country for the first beta | R-niche | The platform with the most seeded cars and parts today | Marketing has no target; no effect on code |
 | Agent in the first beta | R-agent-decision | No; open it 2–4 weeks after launch | Six items sit on the critical path |
+| The twelve shared-dev migration-history rows the runner can't verify | N786 | Document the gaps (done in `supabase/MIGRATIONS.md`) and close by hand; no attested-row runner mode | R-migrations stays open; no effect on staging or production, which are built by the runner |
+| How long financial records are kept | R-retention | Six years for financial records, as the deletion scrub already runs (`account_deletion_requests.retain_until`); counsel confirms | The retention proposal stays a draft; the scrub keeps its six-year clock |
 | Email provider | R-email | The provider `docs/owner/email-provider.md` recommends | No sign-up emails; staging cannot be used |
 | Point-in-time recovery on production | N663 | Yes | Restore is to last night only |
 | Who funds chargebacks up front | N501 | DRVN funds, recovers from the seller's next payout, writes off after 90 days | Code already does this; the terms must say it |

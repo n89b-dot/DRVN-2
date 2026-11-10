@@ -363,7 +363,9 @@ If the confirmed factor is ever removed (a lost phone: the recovery steps in
 operator repeats steps 2–4 for the new factor. Members confirmed by the
 migration itself were those with exactly one verified authenticator on file
 when it ran (`mfa_confirmed_by` says so); anyone else is pending until
-confirmed. The console is at `/admin`; it 404s for everyone else.
+confirmed. The console is at `/admin`; it 404s for everyone else. Sign in
+first, then open `/admin`: since N715 a signed-out visit gets the ordinary
+"Not found" page straight from the proxy, with no sign-in redirect.
 
 ## 5b. Money reconciliation & recovery (run these when things go wrong)
 
@@ -401,6 +403,20 @@ Every money queue is durable and visible in **Admin → Payments**:
   where id = 'dispute-evidence';` must be `false`; fetching a stored evidence
   URL unauthenticated must 400/403. (0027 self-checks assert this at apply
   time.)
+
+## 5c0. Deleted photos and cached copies (N717)
+
+Removing a member photo deletes the storage object; nothing purges copies by
+hand. That is enough, because since N455 every member photo is a private
+object reached through a signed link that lives at most two hours. The image
+optimiser's copy is keyed by that link: new uploads carry an hour's
+Cache-Control, and the proxy refuses an expired or unsigned member-photo
+source before the optimiser can answer (#196). Supabase's Smart CDN drops
+its own cached copy when an object is deleted. A copyright takedown is
+refused at `/_next/image` straight away (451). So a deleted photo stays
+reachable for at most about two hours, and only to someone who already held
+its live link. Photos uploaded before 10 Nov 2026 carry a year's
+Cache-Control on their object, but the proxy's expiry check covers them too.
 
 ## 5c. Old photos that still carry metadata (one-off, N627)
 
