@@ -23,7 +23,6 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 import { adminReadClient } from "./guard";
 import { deletionResumable } from "./presentation";
 import { reportError } from "@/lib/monitoring";
-import { pagedRows } from "@/lib/supabase/paged-rows";
 import { postHeadline } from "@/lib/activity/headline";
 
 /**
@@ -1969,55 +1968,20 @@ export type OpenOperation = {
 
 export async function getOpenOperations(limit = 50): Promise<OpenOperation[]> {
   const a = await admin();
-  const opId = (m: unknown) =>
-    m && typeof m === "object" && "operationId" in m ? String((m as { operationId: unknown }).operationId) : null;
-  // N718: the requests are read newest first, a page at a time (keyset on
-  // id), until `limit` open ones are found or none are left. Reading only the
-  // newest 200 requests hid every open one older than the 200th.
-  type Requested = { id: number; action: string; subject_type: AdminAuditLogEntry["subject_type"]; subject_id: string; order_id: string | null; reason: string; created_at: string; actor_id: string; metadata: unknown };
-  const phases = new Map<string, Set<string>>();
-  const latest = new Map<string, number>();
-  const open: { r: Requested; id: string | null }[] = [];
-  let before: number | null = null;
-  for (;;) {
-    let page = a
-      .from("admin_audit_log")
-      .select("id, action, subject_type, subject_id, order_id, reason, created_at, actor_id, metadata")
-      .eq("metadata->>phase", "requested")
-      .order("id", { ascending: false })
-      .limit(200);
-    if (before !== null) page = page.lt("id", before);
-    const { data: requested, error } = await page;
-    if (error) throw new Error(`Could not load pending operations: ${error.message}`);
-    const rows = (requested ?? []) as Requested[];
-    if (!rows.length) break;
-    before = rows[rows.length - 1].id;
-    const ids = rows.map((r) => opId(r.metadata)).filter((id): id is string => Boolean(id));
-    if (ids.length) {
-      // At most a few later phases per operation; paged anyway by id.
-      const later = await pagedRows<{ id: number; metadata: unknown }, "id">(
-        (after, size) => {
-          const query = a.from("admin_audit_log").select("id, metadata").in("metadata->>operationId", ids).neq("metadata->>phase", "requested").order("id").limit(size);
-          return (after === null ? query : query.gt("id", after)) as unknown as PromiseLike<{ data: { id: number; metadata: unknown }[] | null; error: unknown }>;
-        },
-        "id",
-      );
-      if (later.error || !later.rows) throw new Error("Could not load pending operations: later phases unreadable");
-      for (const row of later.rows) {
-        const id = opId(row.metadata);
-        const phase = (row.metadata as { phase?: string } | null)?.phase;
-        if (!id || !phase) continue;
-        phases.set(id, (phases.get(id) ?? new Set()).add(phase));
-        latest.set(id, Math.max(latest.get(id) ?? 0, row.id));
-      }
-    }
-    for (const r of rows) {
-      const id = opId(r.metadata);
-      if (id && !phases.get(id)?.has("completed") && !phases.get(id)?.has("reconciled")) open.push({ r, id });
-    }
-    if (open.length >= limit || rows.length < 200) break;
-  }
-  open.splice(limit);
+  // N718: one query in the database (admin_open_operations, 20261110210000)
+  // finds the newest requests with no closing row, however many closed ones
+  // are newer. The app used to walk the audit log for them, a page of
+  // requests and then every later row of those operations, on each load.
+  type Requested = {
+    id: number; action: string; subject_type: AdminAuditLogEntry["subject_type"]; subject_id: string; order_id: string | null;
+    reason: string; created_at: string; actor_id: string; operation_id: string; phases: string[]; seen_through: number;
+  };
+  const { data, error } = await a.rpc("admin_open_operations", { p_limit: limit });
+  if (error) throw new Error(`Could not load pending operations: ${error.message}`);
+  if (!Array.isArray(data)) throw new Error("Could not load pending operations: an answer that is not a list");
+  const open = (data as unknown as Requested[]).map((r) => ({ r, id: r.operation_id }));
+  const phases = new Map(open.map(({ r }) => [r.operation_id, new Set(r.phases ?? [])]));
+  const latest = new Map(open.map(({ r }) => [r.operation_id, Number(r.seen_through)]));
   if (!open.length) return [];
 
   // Refund records created by these requests (same rule as the database's
