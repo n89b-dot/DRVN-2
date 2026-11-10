@@ -102,23 +102,62 @@ One line each: what to do and where.
 
 ---
 
+# Plan 1 record: finish and fix (work review of 10 November 2026)
+
+The running record of `docs/plans/2026-11-work-review-remediation-plan.md`, kept by the plan 1 building session. Started 10 November 2026 from `main` at `58b4ad7` (merge of #201). Neil approved the plan and decisions D1 to D6 on 10 November. Every pull request here is reviewed by the orchestrating session before it merges and before its migration reaches shared dev or staging (rules R1 to R7 in the plan). The plain-language work log is https://claude.ai/artifact/LAtUiGKYfLQnvCj5doebFU.
+
+Status words: **merged** (on `main`, CI green) · **in review** (PR up, waiting for the orchestrator or for checks) · **set aside** (a recorded decision) · **not started**.
+
+## Plan 1 items
+
+| Step | Findings | Ids | PR | Merge commit | Status |
+|---|---|---|---|---|---|
+| 0 / 3.4 Codex reviews waived | `#129` | N725 | #214 | | in review: every owed row waived by Neil's ruling of 10 November; `tests/ci/codex-queue.test.ts` accepts `waived` and refuses `owed` |
+| 2.1 Deletion runbook and Resume | `#126`, `#154`, `#157` | N944, N734 | #198 | | not started (waiting for the previous session's hand-over) |
+| 2.2 18+ on the actions that matter | `#152` | N662 | #201 merged as written; follow-up to come | `58b4ad7` (#201) | not started |
+| 2.3 Upload size | `#158` | N955 | #203 | | not started (hand-over) |
+| 2.4 Staging out of search | `#156` | N958, N961 | #188 | | not started (hand-over) |
+| 2.5 Set-up order | `#156` | N952 | #190 | | not started (hand-over) |
+| 2.6 Protection watch, and its follow-up | `#156`, `#139` | N949, N950 | #195 | | not started (hand-over; the orchestrator merges #195 in the browser) |
+| 2.7 Photo signing rules | `#131`, `#146` | N940 | #210 | | not started (hand-over) |
+| 2.8 1,000-row limits | `#155` | N718 | #199 | | not started (hand-over) |
+| 2.9 A deleted member's words | `#153` | | #206 | | not started (hand-over) |
+| 2.10 Chargeback retry | `#148` | N944 | #208 | | not started (hand-over) |
+| 2.11 Order emails | `#147` | | #204 | | not started (hand-over) |
+| 2.12 Chargeback write-off | `#149` | N944 | #207 | | to be set aside as a draft (decision D1) |
+| 2.13 Copyright counter-notice | `#150` | | #209 | | to be set aside as a draft with a by-hand runbook entry (decision D2) |
+| Duplicate test fix | `#124` | | #211 | | to be closed: the fix merged with #200 |
+| 3.1 Photos on `main` | `#132`, `#135`, `#136`, `#137` | | | | not started (after step 2.7 merges) |
+| 3.2 The deploy path | `#138`, `#140`, `#142`, `#143`, `#144` | N715 | | | not started |
+| 3.3 Data set-up | `#141`, `#145` | N667, N943 | | | not started |
+
+## Plan 1: needs Neil
+
+Nothing.
+
+## Plan 1: judgement calls
+
+- **Step 0:** an `owed` row is now refused by the test, not only tolerated, so a later pull request cannot quietly restart the debt the ruling ended. A docs-only pull request stays `skipped`. Thirteen merged pull requests that had no row (#182 to #205) were given one.
+
+---
+
 # Plan 2 record: simplify the architecture (Part A)
 
 The running record of `docs/plans/2026-11-architecture-remediation-plan.md`, Part A (A0 to A6), kept by the plan 2 building session. Started 10 November 2026 from `main` at `58b4ad7` (merge of #201). Neil approved the plan and decisions DA1, DA2 and D5 on 10 November. Every pull request here is reviewed by the orchestrating session before it merges; no pull request that carries a migration is opened, and neither shared database is touched, before the orchestrator declares the quiet point (rules R1 to R7 in plan 1). The plain-language work log is https://claude.ai/artifact/FHHyhbxUXLVz45bXSDpHZw.
 
-Status words: **merged** (on `main`, CI green) · **in review** (PR up, waiting for the orchestrator or for checks) · **prepared** (built and proven on a branch, not opened for merge) · **not started**.
+Status words: **merged** (on `main`, CI green) · **in review** (PR up, waiting for the orchestrator or for checks) · **draft** (PR up, waiting for the pull request it is based on) · **prepared** (built and proven on a branch, not opened for merge) · **not started**.
 
 ## Plan 2 items
 
 | Item | Findings | Ids | PR | Merge commit | Status |
 |---|---|---|---|---|---|
-| A0 Documents-only pull requests skip the browser suite | | | #215 | | in review: `changes` job and `scripts/ci-change-scope.mjs`; `release-gate` accepts a skipped `e2e` only on a documents-only pull request; the Stripe lane no longer waits on `e2e`. Edits a workflow, so the orchestrator merges it |
-| A1 A checked-in copy of the database | `#159` | | | | not started: prepared on a branch before the quiet point, opened at it |
+| A0 Documents-only pull requests skip the browser suite | | | #215 | `9103915` | merged 10 November: the `changes` job and `scripts/ci-change-scope.mjs`; `release-gate` accepts a skipped `e2e` only on a documents-only pull request; the Stripe lane no longer waits on `e2e`. Measured on #216: mergeable in 4m48s. The `main` run on the merge commit was green |
+| A1 A checked-in copy of the database | `#159` | | branch `db/a1-schema-snapshot` | | prepared: `scripts/schema-snapshot.mjs` writes `supabase/schema/` (1,098 files) and `sql-guard` checks it. Two builds gave identical folders, and CI's own database matched the folder made on a Mac (run 42839710828). Opens at the quiet point, regenerated |
 | A2 The database owns every change to an order | | | | | not started (quiet point) |
-| A3 New functions closed by default | | | | | not started (quiet point) |
-| A4 Launch-configuration browser lane | `#162` | R-unproven | | | not started (after A0) |
-| A5 Launch switches recorded | | | | | not started |
-| A6 One baseline in place of 286 files | `#159` | N786 | | | not started: analysis only until the orchestrator freezes the database |
+| A3 New functions closed by default | | | | | not started (quiet point). Tried on a throwaway database: see judgement calls |
+| A4 Launch-configuration browser lane | `#162` | R-unproven | #226 | | draft until #224 merges. Five specs in the recorded launch configuration; passed six times locally with real Stripe test keys; each spec seen to fail for a deliberate fault. Needs the Actions variable `STRIPE_TEST_PUBLISHABLE_KEY` |
+| A5 Launch switches recorded | | R-email, R-unproven | #224 | | in review: `docs/release-evidence/launch-configuration.md` and `.json`, proven against the app's own resolvers; the saved-search digest job leaves the health check while there is no email provider. No migration |
+| A6 One baseline in place of the migration history | `#159` | N786 | branch `docs/a6-baseline-analysis` | | analysis sent for review (`docs/plans/2026-11-a6-baseline-analysis.md` on that branch). The work waits for A1 to A3 and for the orchestrator to freeze the database |
 
 ## Plan 2: needs Neil
 
@@ -126,6 +165,19 @@ Nothing.
 
 ## Plan 2: judgement calls
 
-- **A0, what a document is:** any `.md` file, and text, data or image files under `docs/`. A script under `docs/` and anything under `.github/workflows/` is code. The Stripe lane still runs on a documents-only pull request (about two minutes); only `e2e` is skipped, as the plan says.
+- **A0, what a document is:** any `.md` file, and text, data or image files under `docs/`. A script under `docs/` and anything under `.github/workflows/` is code. The Stripe lane still runs on a documents-only pull request (about two minutes); only the browser lanes are skipped.
 - **A0, `main` is never documents-only:** the skip applies to pull requests alone. A push to `main` runs the whole suite, so the deploy workflow and the Intelligence OS read the same proof on `main` as before.
-- **A0, no OS id:** plan 2's items have no OS id yet, so #215 has a plain title and `Resolves: none`.
+- **No OS ids for plan 2's items:** the pull requests have plain titles and `Resolves: none`. Tests name the OS item they bear on where one exists (R-unproven, R-email).
+- **A3, the plan's statement does not work as written.** On a throwaway database, as the non-superuser `postgres` role: `alter default privileges in schema public revoke execute on functions from public` leaves a new function callable by `anon` and `authenticated`, because Supabase's own per-schema defaults grant both and a per-schema default can only add to the global one. What closes a new function is the global form (`alter default privileges revoke execute on functions from public`) together with a per-schema revoke from `anon` and `authenticated`. `postgres` may not change `supabase_admin`'s defaults, so the migration uses the current-role form: CI builds as `supabase_admin`, a hosted project as `postgres`.
+- **A4, the card is presented through Stripe's API**, not typed into Stripe's form, after the form is seen to mount. Stripe's form changed shape between two runs and Stripe asks integrators not to automate it.
+- **A4, two small changes to the app** so the launch configuration can run on the loopback stack at all: `DRVN_PUBLIC_CACHE=on` switches the cache on there, and the production boot check accepts an http site URL there in Stripe test mode only.
+- **A5, what the plan did not rule on and was recorded as off:** carrier tracking (no EasyPost key) and the listing importer (it shares the agent's model key). Returns and pickup codes have no switch and stay on.
+- **A6, the baseline will not be made with `pg_dump` alone.** A trial rebuild from a privilege-preserving dump opened 308 functions to signed-out visitors. Permissions are written from the catalog. The curated vehicle generations are not in a fresh build and move to their own file.
+
+## Plan 2: found along the way, not fixed
+
+Reported to the orchestrator; none is in plan 2's scope.
+
+- The database does not itself refuse `shipping_mode = 'drvn'` when DRVN Shipping is off; the app does. No money can move that way.
+- Stripe's card form offers Bank and Klarna (Stripe Link options) beside Card, from the Stripe account's settings.
+- Under a local `next start` the app's own redirects are built on `localhost` whatever address the browser used, so a guest returning from Stripe to `127.0.0.1` loses their order cookie. It does not apply to a hosted deployment.
