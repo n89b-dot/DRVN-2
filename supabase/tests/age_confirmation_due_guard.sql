@@ -54,7 +54,7 @@ begin
   end if;
 
   if cardinality(fails) > 0 then
-    raise exception '%', array_to_string(fails, E'\n');
+    raise exception '% (N662)', array_to_string(fails, E'\n');
   end if;
   raise notice 'all age confirmation due checks passed';
 end $$;

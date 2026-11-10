@@ -56,6 +56,14 @@ function isProductPath(pathname: string) {
   );
 }
 
+/** An unknown route: rewriting to it renders the app's own not-found page with a 404. */
+export const CONSOLE_NOT_FOUND = "/_drvn-not-found";
+
+/** The admin console (not /admin-verify, the sign-in step for it). */
+export function isConsolePath(pathname: string) {
+  return pathname === "/admin" || pathname.startsWith("/admin/");
+}
+
 /**
  * A redirect that keeps the session (RR-06). A refresh inside getClaims()
  * rotates the refresh token and writes the new cookies onto the pass-through
@@ -174,6 +182,21 @@ export async function updateSession(request: NextRequest) {
   const isAuthPage = !isPasswordRecovery && AUTH_PAGES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
+
+  // N715: a second layer in front of the console. Signed out, /admin is the
+  // same 404 any unknown route gives (the layout's own gate answers the same
+  // way for a signed-in non-admin), so the console's existence is not
+  // confirmed and no console code runs. Membership itself is still checked
+  // beside every read and action (src/lib/admin/guard.ts); this only turns
+  // away the requests that cannot possibly be an admin.
+  if (!user && isConsolePath(pathname)) {
+    const notFound = request.nextUrl.clone();
+    notFound.pathname = CONSOLE_NOT_FOUND;
+    notFound.search = "";
+    const response = NextResponse.rewrite(notFound, { request: { headers: forwarded } });
+    for (const cookie of supabaseResponse.cookies.getAll()) response.cookies.set(cookie);
+    return response;
+  }
 
   if (!user && isProductRoute) {
     const url = request.nextUrl.clone();

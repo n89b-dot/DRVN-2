@@ -84,7 +84,12 @@ recorded in `supabase/MIGRATIONS.md`.
 the project has the IPv4 add-on) over TLS verified against Supabase's root CA,
 and only to a `--target` that is listed in `supabase/migration-targets.json`
 and matches the env file. **Add the production project to that file in a
-reviewed PR before its first migration.** Then, from the repo root:
+reviewed PR before its first migration**, with its session-pooler host as
+`"pooler"` and `"statusRoute": "pooler"` unless production buys the IPv4
+add-on: the deploy workflow's read-only `--status` runs on GitHub's IPv4-only
+runners and cannot reach the direct host otherwise (#114,
+`docs/staging-setup.md` §1.4). Only `--status` may use the pooler; applies
+always connect direct. Then, from the repo root:
 
 ```bash
 # 1. dry run: checks the target, prints each file's plan and a confirmation code
@@ -1007,3 +1012,14 @@ One member's agent is at `/admin/agent/members/<id>`: their limits with
 versions, tasks, record and approvals. Their chat opens only for a report about
 them or a dispute they're party to, with the case id and a reason, and is
 audited (`agent.chat_opened`) before a line is shown.
+
+### 13f. Agent records written before 8 November 2026 (#107)
+
+Until PR #158 the card-number redactor could corrupt about 0.3% of UUIDs it
+passed over, leaving text like `70e95888-a[card number removed]b5e67f70ec`
+in agent rows. New rows are safe. Before promoting any database that held agent
+activity from before 8 November, run `supabase/audits/agent_mangled_ids.sql`
+(read-only). Shared dev counted 0 on 9 November 2026; staging and production
+were created after the fix, or hold no agent rows. A non-zero count needs a
+backfill decision, because the original id can't be recovered from the row
+alone.
