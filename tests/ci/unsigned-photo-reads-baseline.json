@@ -1,14 +1,14 @@
 {
+  "src/app/api/jobs/ledger-reconciliation/route.ts": {
+    "reads": 1,
+    "why": "Money tables, read by a name the reconciliation passes in. None of them holds a photo."
+  },
   "src/lib/account-export-worker.ts": {
-    "reads": 2,
+    "reads": 1,
     "why": "A member's own data export. Rows are read in the canonical spelling and then signed for their owner alone, with links that last as long as the export does (signPhotosForExport)."
   },
   "src/lib/explore/search/indexing.ts": {
     "reads": 1,
     "why": "The search index takes the words of a post's body and never its pictures; nothing read here is shown to anyone."
-  },
-  "src/lib/payments/ledger-reconciliation.ts": {
-    "reads": 1,
-    "why": "Money tables, read by a name the reconciliation passes in. None of them holds a photo."
   }
 }

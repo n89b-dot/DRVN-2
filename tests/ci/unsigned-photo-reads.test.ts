@@ -3,7 +3,7 @@ import { join, relative, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { unsignedPhotoReads } from "./unsigned-photo-reads";
+import { photoHelpers, unsignedPhotoReads } from "./unsigned-photo-reads";
 
 /**
  * The ratchet on member photos read through a service-role client that does
@@ -11,7 +11,9 @@ import { unsignedPhotoReads } from "./unsigned-photo-reads";
  *
  * `createAdminClient()` hands photos back in the spelling the storage layer
  * refuses to serve. A page that shows them draws the no-photo plate and
- * nothing fails, so nothing used to catch a new page doing it.
+ * nothing fails, so nothing used to catch a new page doing it. The scan
+ * (./unsigned-photo-reads.ts, whose header says what it can and cannot see)
+ * follows such a client into the functions it is handed to.
  *
  * If this failed on your change:
  *   - the photo is shown to someone: ask for it signed,
@@ -61,20 +63,46 @@ describe("N1053: a member photo read with the service role is read signed, or sa
     expect(found(`${admin}await admin.from("cars").update({ name }).eq("id", id);`)).toEqual([]);
   });
 
-  it("N1053: knows a client that signs from one that does not", () => {
+  it("N1053: knows a client that signs from one that does not, by how it was made and never by its name", () => {
     const read = `.from("cars").select("cover_image_url")`;
-    // Signed clients, and the request's own client: not counted.
+    // Signed clients, and the request's own client: not counted, whatever they are called.
     expect(found(`const admin = createAdminClient({ signPhotos: true });\nawait admin${read};`)).toEqual([]);
     expect(found(`const supabase = await createClient();\nawait supabase${read};`)).toEqual([]);
-    expect(found(`const a = await adminClient();\nawait a${read};`)).toEqual([]);
-    // Unsigned: under any name it is bound to, used directly, typed, or handed in as `admin`.
+    expect(found(`const admin = await adminReadClient();\nawait admin${read};`)).toEqual([]);
+    expect(found(`export async function load(admin: Admin) {\n  await admin${read};\n}`)).toEqual([]);
+    // Unsigned: under any name it is bound to, or used directly.
     expect(found(`const db = createAdminClient();\nawait db${read};`)).toEqual(["cars.cover_image_url"]);
+    expect(found(`const supabase = createAdminClient();\nawait supabase${read};`)).toEqual(["cars.cover_image_url"]);
     expect(found(`await createAdminClient()${read};`)).toEqual(["cars.cover_image_url"]);
-    expect(found(`async function f(client: ReturnType<typeof createAdminClient>) {\n  await client${read};\n}`)).toEqual(["cars.cover_image_url"]);
-    expect(found(`export async function load(admin: Admin) {\n  await admin${read};\n}`)).toEqual(["cars.cover_image_url"]);
+    // A client kept on an object is not followed (the header says so); nor is a property that happens to be named like one.
+    expect(found(`const admin = createAdminClient();\nawait ctx.admin${read};`)).toEqual([]);
     // The nearest binding above the read decides, so one file can hold both kinds.
     const both = `function a() {\n  const admin = createAdminClient({ signPhotos: true });\n  return admin${read};\n}\nfunction b() {\n  const admin = createAdminClient();\n  return admin${read};\n}`;
     expect(unsignedPhotoReads(both).map((r) => r.line)).toEqual([7]);
+  });
+
+  it("N1053: follows an unsigned client into the function it is handed to, and on from there (review of #244)", () => {
+    const helpers = photoHelpers(new Map([
+      ["src/lib/cards.ts", `export async function hydrateListingCards(supabase: Client, rows: Row[]) {\n  const { data } = await supabase.from("listing_images").select("listing_id, url").in("listing_id", ids);\n  return data;\n}\nexport const decorate = async (rows: Row[], client: Client) => hydrateListingCards(client, rows);\nexport function titles(supabase: Client) {\n  return supabase.from("listings").select("id, title");\n}`],
+      ["src/lib/feed.ts", `export async function fetchFeed(db: Client) {\n  return db.rpc("feed_hydration", { p_ids: [] });\n}`],
+    ]));
+    // What each function reads through the client it is given, by parameter position.
+    expect([...helpers.get("hydrateListingCards")!]).toEqual([[0, "listing_images.url"]]);
+    expect([...helpers.get("decorate")!]).toEqual([[1, "listing_images.url (through hydrateListingCards())"]]);
+    expect([...helpers.get("fetchFeed")!]).toEqual([[0, "feed_hydration()"]]);
+    expect(helpers.has("titles")).toBe(false);
+
+    const at = (source: string) => unsignedPhotoReads(source, helpers).map((r) => r.what);
+    // The reviewer's case: a new page hands a fresh service-role client to the card helper.
+    expect(at(`const cards = await hydrateListingCards(createAdminClient(), rows);`)).toEqual(["listing_images.url, read by hydrateListingCards() through the client it is given"]);
+    expect(at(`const admin = createAdminClient();\nconst cards = await decorate(rows, admin);`)).toEqual(["listing_images.url (through hydrateListingCards()), read by decorate() through the client it is given"]);
+    expect(at(`const feed = await fetchFeed(createAdminClient());`)).toEqual(["feed_hydration(), read by fetchFeed() through the client it is given"]);
+    // Signed, the request's own, a helper that reads no photo, or the client at a position the helper does not read through: not counted.
+    expect(at(`await hydrateListingCards(createAdminClient({ signPhotos: true }), rows);`)).toEqual([]);
+    expect(at(`const supabase = await createClient();\nawait hydrateListingCards(supabase, rows);`)).toEqual([]);
+    expect(at(`const admin = await adminReadClient();\nawait hydrateListingCards(admin, rows);`)).toEqual([]);
+    expect(at(`await titles(createAdminClient());`)).toEqual([]);
+    expect(at(`const admin = createAdminClient();\nawait decorate(admin, rows);`)).toEqual([]);
   });
 
   it("N1053: a read the scan can't follow counts, so it has to be explained", () => {
@@ -91,8 +119,12 @@ describe("N1053: a member photo read with the service role is read signed, or sa
     const regressions: string[] = [];
     const stale: string[] = [];
     const counts = new Map<string, number>();
-    for (const file of walk(join(ROOT, "src")).sort()) {
-      const reads = unsignedPhotoReads(readFileSync(file, "utf8"));
+    const sources = new Map(walk(join(ROOT, "src")).sort().map((file) => [file, readFileSync(file, "utf8")]));
+    const helpers = photoHelpers(sources);
+    // The card helper every listing grid uses must be among the functions followed, or the scan has gone blind.
+    expect(helpers.get("hydrateListingCards")?.get(0)).toBe("listing_images.url");
+    for (const [file, source] of sources) {
+      const reads = unsignedPhotoReads(source, helpers, file);
       if (!reads.length) continue;
       const name = relative(ROOT, file).replaceAll("\\", "/");
       counts.set(name, reads.length);
