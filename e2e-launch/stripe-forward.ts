@@ -28,6 +28,9 @@ export async function forwardPaymentEvent(options: {
   if (!secret) throw new Error("The launch lane has no webhook secret to sign with");
   const deadline = Date.now() + (options.timeoutMs ?? 60_000);
   for (;;) {
+    // The newest 50 events of this type on the shared test account. If this lane ever fails with
+    // "Stripe has no payment_intent.succeeded event for …" while other runs are busy, the event was
+    // passed by before the first poll: page further back (or filter by `created`), do not raise the timeout.
     const events = await stripe.events.list({ type: options.type, limit: 50 });
     const event = events.data.find((candidate) => (candidate.data.object as { id?: string }).id === options.intentId);
     if (event) {
