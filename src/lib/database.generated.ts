@@ -6404,6 +6404,7 @@ export type Database = {
           lease_id: string | null
           order_ids: string[]
           payment_reference: string
+          retry_until: string | null
           state: string
           updated_at: string
         }
@@ -6421,6 +6422,7 @@ export type Database = {
           lease_id?: string | null
           order_ids?: string[]
           payment_reference: string
+          retry_until?: string | null
           state: string
           updated_at?: string
         }
@@ -6438,6 +6440,7 @@ export type Database = {
           lease_id?: string | null
           order_ids?: string[]
           payment_reference?: string
+          retry_until?: string | null
           state?: string
           updated_at?: string
         }

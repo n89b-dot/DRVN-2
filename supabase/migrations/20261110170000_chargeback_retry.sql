@@ -23,7 +23,19 @@
 --     open, holding deletion, with no console control to close it.
 --   * admin_retry_dispute_recovery asserts the actor is a full admin, has a
 --     dry run (the console asks first, so a refusal journals nothing), and
---     returns the state before for the audit row;
+--     returns the state before for the audit row. It does not reopen the
+--     entry (work review #148): it allows one replay of the held event for
+--     five minutes (retry_until) and leaves the entry held, so a crash
+--     before the replay leaves a chargeback that Retry still works on.
+--     apply_stripe_dispute_event, given that event inside that window,
+--     reopens the entry and replays it in its own one transaction, and the
+--     replay always runs the basket check: it does not stop at "this event
+--     is not newer than the last one applied", which is true of the event
+--     that held it and used to make Retry report success with nothing
+--     checked;
+--   * a recovery case that was closed is opened again when a later event
+--     holds the chargeback again (the four-argument hold_stripe_dispute);
+--     before, the chargeback was held with no open case and no control;
 --     release_refused_dispute_retry closes a refused retry's journal entry
 --     when the chargeback is still held, so the next try isn't blocked.
 --
@@ -32,8 +44,9 @@
 --
 -- Restated: public.apply_stripe_dispute_event from
 -- 20261107130000_chargeback_freezes_payout.sql, with only each
--- hold_stripe_dispute call given the event (8 calls) and the held
--- branch remembering a later event. New: the three journal columns, the
+-- hold_stripe_dispute call given the event (8 calls), the held branch
+-- remembering a later event or running an allowed replay, and the
+-- "not newer" return skipped for a replay. New: the four journal columns, the
 -- held-state trigger, private.note_held_dispute_event, the four-argument
 -- public.hold_stripe_dispute, the case-closing trigger,
 -- public.admin_retry_dispute_recovery, public.release_refused_dispute_retry.
@@ -45,10 +58,13 @@ begin;
 alter table public.stripe_dispute_journal
   add column if not exists held_event_id text,
   add column if not exists held_event_created bigint,
-  add column if not exists held_from_state text;
+  add column if not exists held_from_state text,
+  add column if not exists retry_until timestamptz;
 
 comment on column public.stripe_dispute_journal.held_event_id is
   'The newest Stripe event seen since the entry was held for review (20261110170000): what Retry replays.';
+comment on column public.stripe_dispute_journal.retry_until is
+  'Until when one replay of held_event_id may reopen this held entry (20261110170000). Set by an admin''s Retry, cleared by the replay or by a new hold.';
 comment on column public.stripe_dispute_journal.held_from_state is
   'The state the entry was in when it was held (20261110170000). A settled one is never retried.';
 
@@ -63,6 +79,7 @@ begin
     new.held_from_state := old.state;
     new.held_event_id := null;
     new.held_event_created := null;
+    new.retry_until := null;
   end if;
   return new;
 end;
@@ -96,9 +113,25 @@ set search_path = public, pg_temp
 as $$
 declare
   v_result text;
+  v_case public.payment_recoveries%rowtype;
 begin
   v_result := public.hold_stripe_dispute(p_dispute, p_detail);
   perform private.note_held_dispute_event(p_dispute, p_event, p_created);
+  -- Held again after its case was closed (work review #148): the two-argument
+  -- function only touches last_seen_at on a case that exists, so the
+  -- chargeback would be held with no open case and nothing in the console.
+  update public.payment_recoveries r
+     set status = 'open', resolved_at = null, resolved_by = null, resolution_note = null, last_seen_at = now(),
+         detail = left(p_detail || ' (This case was closed as ' || r.status || ' and opened again when a later Stripe event held the chargeback.)', 2000)
+   where r.recovery_key = 'stripe:dispute:' || p_dispute and r.status <> 'open'
+  returning * into v_case;
+  if found then
+    insert into public.admin_alert_outbox(kind, title, detail, order_id, amount_cents, payload, dedup_key)
+    values ('recovery_case_opened', 'Card dispute held for review again', left(p_detail, 2000), v_case.order_id, v_case.amount_cents,
+            jsonb_build_object('recovery_id', v_case.id, 'dispute_id', p_dispute, 'event_id', p_event),
+            'stripe-dispute:' || p_dispute || ':held-again:' || coalesce(p_event, 'no-event'))
+    on conflict (dedup_key) do nothing;
+  end if;
   return v_result;
 end;
 $$;
@@ -110,7 +143,7 @@ create or replace function public.apply_stripe_dispute_event(
  p_closed boolean,p_event text,p_created bigint,p_lease uuid
 ) returns text language plpgsql security definer set search_path=public,pg_temp as $$
 declare entry public.stripe_dispute_journal%rowtype; ids uuid[]; total bigint;
- valid boolean; order_row public.orders%rowtype; prior_exists boolean;
+ valid boolean; order_row public.orders%rowtype; prior_exists boolean; retried boolean:=false;
 begin
  if p_closed is null then raise exception 'Missing dispute event phase'; end if;
  if p_closed and (p_status in ('won','warning_closed','lost')) is distinct from true then return 'retry'; end if;
@@ -122,7 +155,19 @@ begin
   if entry.payment_reference<>p_intent or entry.amount_cents<>p_amount or entry.currency<>p_currency then return public.hold_stripe_dispute(p_dispute,p_event,p_created,'Provider dispute identity, amount or currency changed. Reconcile against the original journal.'); end if;
   -- 20261110170000: a later event while held is remembered, so Retry
   -- replays the newest Stripe knows.
-  if entry.state='recovery' then perform private.note_held_dispute_event(p_dispute,p_event,p_created); return 'recovery_recorded'; end if;
+  if entry.state='recovery' then
+   if entry.retry_until is not null and entry.retry_until>now() and p_event=entry.held_event_id
+      and coalesce(entry.held_from_state,'open')='open' then
+    -- An admin's Retry allowed this one replay (work review #148). The
+    -- reopen and everything below are this one transaction: it ends
+    -- settled, open, or held again, never reopened with nothing replayed.
+    update public.stripe_dispute_journal set state='open',retry_until=null,lease_id=null,lease_expires_at=null,updated_at=now()
+     where dispute_id=p_dispute returning * into entry;
+    retried:=true;
+   else
+    perform private.note_held_dispute_event(p_dispute,p_event,p_created); return 'recovery_recorded';
+   end if;
+  end if;
   if not p_closed and entry.state<>'open' then return 'committed'; end if;
   if p_closed and entry.state in ('won','warning_closed','lost') then
    if entry.state=p_status then return 'committed'; end if;
@@ -130,7 +175,10 @@ begin
   end if;
   if entry.state='loss_pending' and p_closed and p_status<>'lost' then return public.hold_stripe_dispute(p_dispute,p_event,p_created,'Conflicting terminal outcome during chargeback booking.'); end if;
   if entry.state='loss_pending' and entry.lease_expires_at>now() then return 'retry'; end if;
-  if not p_closed and p_created<=entry.last_event_created then return 'committed'; end if;
+  -- Not newer than the last event applied: nothing to do, except on a
+  -- replay, whose event (often the very one that held it) must be checked
+  -- against the basket below before anything is called done.
+  if not p_closed and p_created<=entry.last_event_created and not retried then return 'committed'; end if;
  end if;
  select array_agg(distinct p.order_id order by p.order_id),sum(p.amount_cents),
  bool_and(lower(p.currency)=p_currency and p.status in ('succeeded','partially_refunded','refunded'))
@@ -249,13 +297,15 @@ begin
   perform 1 from public.orders where id = any(v_entry.order_ids) order by id for update;
   select * into v_case from public.payment_recoveries where recovery_key = 'stripe:dispute:' || p_dispute for update;
   if not coalesce(p_dry_run, false) then
-    update public.stripe_dispute_journal set state = 'open', lease_id = null, lease_expires_at = null, updated_at = now()
+    -- The entry stays held. The replay of this event, inside five minutes,
+    -- reopens it and applies it in one transaction (apply_stripe_dispute_event).
+    update public.stripe_dispute_journal set retry_until = now() + interval '5 minutes', updated_at = now()
      where dispute_id = p_dispute;
   end if;
   return jsonb_build_object(
     'dispute_id', p_dispute,
     'event_id', v_entry.held_event_id,
-    'reopened', not coalesce(p_dry_run, false),
+    'replay_allowed', not coalesce(p_dry_run, false),
     'before', jsonb_build_object(
       'state', v_entry.state, 'held_from_state', v_entry.held_from_state,
       'amount_cents', v_entry.amount_cents, 'currency', v_entry.currency, 'order_ids', to_jsonb(v_entry.order_ids),

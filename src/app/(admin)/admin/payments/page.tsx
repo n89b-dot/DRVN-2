@@ -124,7 +124,7 @@ export default async function AdminPaymentsPage({
                       trigger="Retry"
                       triggerClassName="relbtn !static"
                       hidden={{ recovery_id: r.id }}
-                      confirmNote={`Chargeback ${r.recovery_key.slice("stripe:dispute:".length)} on ${r.order_id ? r.orderTitle : "orders not yet attributed"}, ${r.amount_cents != null ? formatPrice(r.amount_cents) : "amount unknown"}. Reopens it and replays the Stripe event that held it (or the newest since) through the normal handling. If it still doesn't match the payment, it's held again. A chargeback already settled before the hold can't be retried. Nothing is decided by hand.`}
+                      confirmNote={`Chargeback ${r.recovery_key.slice("stripe:dispute:".length)} on ${r.order_id ? r.orderTitle : "orders not yet attributed"}, ${r.amount_cents != null ? formatPrice(r.amount_cents) : "amount unknown"}. Replays the Stripe event that held it (or the newest since) through the normal handling, which checks it against the payment again. If it still doesn't match, it stays held for review. A chargeback already settled before the hold can't be retried. Nothing is decided by hand.`}
                       fields={[{ kind: "reason", placeholder: "e.g. The payment record was corrected" }]}
                       submitLabel="Retry"
                     />

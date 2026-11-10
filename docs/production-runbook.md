@@ -581,14 +581,20 @@ chargeback that doesn't match its payment basket exactly is frozen for review:
 the orders go to `disputed`, a recovery case opens (Admin → Payments,
 "Card dispute requires reconciliation"), and the seller's payout and any
 deletion of either party wait. **Closing the recovery case does not lift the
-freeze**, because the journal still says `recovery`. Until the console's
-Retry for a held chargeback ships
-([#208](https://github.com/n89b-dot/DRVN-2/pull/208)), such a case **blocks
-Resume deletion for both parties, with no console way out and no safe SQL**:
-the journal's state drives payouts and refunds, and a hand edit can pay a
-seller for a sale the bank reversed. The safe action meanwhile is: read the
-dispute's final status in Stripe, record it on the recovery case's note, and
-leave the case open. Do not edit `stripe_dispute_journal` by hand. Writing
+freeze**, because the journal still says `recovery`. The control that moves
+it is **Retry**, on the case's row in Admin → Payments
+([#208](https://github.com/n89b-dot/DRVN-2/pull/208)): correct what did not
+match (usually the payment record), then Retry with a reason. It replays the
+Stripe event that held the chargeback, or the newest since, through the
+normal handling, which checks it against the payment again in one step: it
+ends applied, or held again saying so, and the case closes by itself when
+Stripe's outcome is applied. Retry refuses a chargeback that was already
+settled, or was mid-booking, when a conflicting event held it, and one with
+no stored event: those stay for the owner, and still **block Resume deletion
+for both parties**. For those the safe action is: read the dispute's final
+status in Stripe, record it on the recovery case's note, and leave the case
+open. A case that was closed opens again by itself if a later Stripe event
+holds the chargeback again. Do not edit `stripe_dispute_journal` by hand. Writing
 off a chargeback the bank kept is a separate control
 ([#207](https://github.com/n89b-dot/DRVN-2/pull/207)), set aside until after
 launch; DRVN absorbs that loss, counted from the bank's decision (decisions

@@ -1135,12 +1135,16 @@ type DisputeRetryCheck = {
 };
 
 /**
- * Retry a chargeback held for review ('recovery'): the database reopens it
- * (admin_retry_dispute_recovery, under the journal → orders → case locks),
- * then the event that caused the hold, or the newest one since, is replayed
- * through the normal chargeback handling, so nothing is decided by hand. A
- * dry run first: a refusal (a settled chargeback, no stored event) is said
- * in words and journals nothing. Only "committed" is reported as done.
+ * Retry a chargeback held for review ('recovery'). The database allows one
+ * replay of the event that caused the hold, or the newest one since, for five
+ * minutes (admin_retry_dispute_recovery, under the journal → orders → case
+ * locks) and leaves the chargeback held. That event is then replayed through
+ * the normal chargeback handling, which reopens the entry and checks it
+ * against the payment in one transaction (work review #148): it ends
+ * applied, or held again, never reopened with nothing replayed, and a crash
+ * in between leaves a chargeback Retry still works on. Nothing is decided by
+ * hand. A dry run first: a refusal (a settled chargeback, no stored event) is
+ * said in words and journals nothing. Only "committed" is reported as done.
  * docs/production-runbook.md §5d.
  */
 export async function adminRetryDisputeRecovery(_prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
@@ -1177,7 +1181,7 @@ export async function adminRetryDisputeRecovery(_prev: AdminActionState, formDat
         if (error) throw new RefusedOperationError(error.message);
         const eventId = (data as unknown as DisputeRetryCheck).event_id;
         const { data: row, error: rowError } = await ctx.admin.from("webhook_events").select("id, payload").eq("id", eventId).maybeSingle();
-        if (rowError || !row?.payload) throw new Error(`Reopened, but Stripe event ${eventId} couldn't be read to replay. The next event from Stripe is handled normally.`);
+        if (rowError || !row?.payload) throw new Error(`Stripe event ${eventId} couldn't be read to replay, so the chargeback is still held. Try again; the next event from Stripe is handled normally.`);
         return { eventId, outcome: (await dispatchRecordedWebhookEvent(ctx.admin, row.id, row.payload)) as string };
       }
     );
@@ -1189,7 +1193,7 @@ export async function adminRetryDisputeRecovery(_prev: AdminActionState, formDat
   const { data: after } = await ctx.admin.from("stripe_dispute_journal").select("state").eq("dispute_id", disputeId).maybeSingle();
   if (after?.state === "recovery") return { error: "Replayed, and Stripe's record still doesn't match the payment: it's held for review again." };
   if (outcome !== "committed") {
-    return { error: `Reopened, but the replay didn't finish (${outcome ?? "no answer"}): the chargeback is unresolved and its payout stays frozen until Stripe's next event or a later retry settles it.` };
+    return { error: `The replay didn't finish (${outcome ?? "no answer"}): the chargeback is ${after?.state ?? "unresolved"} and its payout stays frozen until Stripe's next event or a later retry settles it.` };
   }
   return { ok: `Replayed Stripe's event: the chargeback is now ${after?.state ?? "updated"}.` };
 }

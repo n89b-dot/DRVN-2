@@ -46,7 +46,7 @@ const form = (fields: Record<string, string>) => {
   for (const [k, v] of Object.entries(fields)) data.set(k, v);
   return data;
 };
-const check = { dispute_id: "dp_1", event_id: "evt_held", reopened: false, before: { amount_cents: 5000, currency: "usd", order_ids: ["o1"], held_from_state: "open", last_event_id: "evt_old", case_status: "open" } };
+const check = { dispute_id: "dp_1", event_id: "evt_held", replay_allowed: false, before: { amount_cents: 5000, currency: "usd", order_ids: ["o1"], held_from_state: "open", last_event_id: "evt_old", case_status: "open" } };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -62,7 +62,7 @@ beforeEach(() => {
 });
 
 describe("retry a chargeback held for review (N944, report five #108)", () => {
-  it("dry-runs, then reopens as the admin and replays the held event, with the state before in the audit", async () => {
+  it("dry-runs, then allows one replay as the admin and replays the held event, with the state before in the audit", async () => {
     const result = await adminRetryDisputeRecovery(null, form({ recovery_id: CASE, reason: "Payment record corrected" }));
     expect(result).toEqual({ ok: expect.stringContaining("now won") });
     expect(mocks.rpc).toHaveBeenNthCalledWith(1, "admin_retry_dispute_recovery", { p_dispute: "dp_1", p_actor: "admin-1", p_dry_run: true });
@@ -88,6 +88,23 @@ describe("retry a chargeback held for review (N944, report five #108)", () => {
     mocks.rows.stripe_dispute_journal = { state: "open" };
     const result = await adminRetryDisputeRecovery(null, form({ recovery_id: CASE, reason: "Payment record corrected" }));
     expect(result).toEqual({ error: expect.stringContaining("didn't finish (retry)") });
+  });
+
+  it("N1064: an event that can't be read leaves the chargeback held, and says so (nothing was reopened)", async () => {
+    mocks.rows.webhook_events = { id: "evt_held", payload: null };
+    mocks.rows.stripe_dispute_journal = { state: "recovery" };
+    const result = await adminRetryDisputeRecovery(null, form({ recovery_id: CASE, reason: "Payment record corrected" }));
+    expect(result).toEqual({ error: expect.stringContaining("still held") });
+    expect((result as { error: string }).error).not.toMatch(/reopened/i);
+    expect(mocks.dispatch).not.toHaveBeenCalled();
+  });
+
+  it("N1064: a replay that didn't finish names the state the chargeback is in, not a reopening", async () => {
+    mocks.dispatch.mockResolvedValue("retry");
+    mocks.rows.stripe_dispute_journal = { state: "loss_pending" };
+    const result = await adminRetryDisputeRecovery(null, form({ recovery_id: CASE, reason: "Payment record corrected" }));
+    expect(result).toEqual({ error: expect.stringContaining("the chargeback is loss_pending") });
+    expect((result as { error: string }).error).not.toMatch(/reopened/i);
   });
 
   it("says when the replay is held again", async () => {
