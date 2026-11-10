@@ -4,7 +4,10 @@ Goal: nothing reaches `main` without a pull request whose CI passed. The
 check that matters is `release-gate` (`.github/workflows/ci.yml`). It is the
 aggregate job: it fails unless `verify`, `secrets`, `secrets-full`,
 `sql-guard`, `e2e` and `stripe-integration` all ran and passed. There is one
-exception, described under "Documents-only pull requests" below.
+exception, described under "Documents-only pull requests" below. The browser
+suite runs as four parts side by side (`e2e-parts`, shown as "e2e part 1" to
+"e2e part 4"); the job named `e2e` judges them, and the gate requires both the
+parts' own result and that judgement (plan 2 item A0b, `e2e/README.md`).
 
 Script: `scripts/owner/branch-protection.sh`. Background: runbook §8
 (`docs/production-runbook.md`).
@@ -135,6 +138,12 @@ minutes, not twenty to forty-five.
   `pdf`, `png`, `jpg`, `jpeg`, `gif`, `webp`, `svg`). Nothing under
   `.github/workflows/` counts, and a script kept under `docs/` does not count.
   The list is `scripts/ci-change-scope.mjs`.
+- **Only pull requests into `main`.** A pull request based on another branch
+  always gets the full suite. A check's result belongs to the head commit, and
+  GitHub does not rerun CI when a pull request's base is changed, so a
+  documents-only answer worked out against another branch would still stand
+  after the pull request was moved onto `main`, carrying that branch's code in
+  with it.
 - **What decides it:** the `changes` job, from the diff between the pull
   request's merge commit and its base. A moved file is read as a deletion plus
   an addition, so moving code into `docs/` is still a code change.
