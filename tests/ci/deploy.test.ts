@@ -10,7 +10,7 @@ import path from "node:path";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
-import { alertPayload, gateVerdict, missingMigrations, validReleaseTag, versionMatches } from "../../scripts/deploy.mjs";
+import { alertPayload, gateVerdict, missingMigrations, stillHead, validReleaseTag, versionMatches } from "../../scripts/deploy.mjs";
 
 type Step = { name?: string; uses?: string; run?: string; if?: string; env?: Record<string, string>; with?: Record<string, unknown> };
 type Job = { if?: string; environment?: string; permissions?: Record<string, string>; steps: Step[] };
@@ -124,5 +124,26 @@ describe("the deploy decisions (N528)", () => {
   it("N634: the alert is plain text, bounded", () => {
     expect(alertPayload("deployed")).toEqual({ text: "deployed" });
     expect(alertPayload("x".repeat(5000)).text).toHaveLength(3000);
+  });
+});
+
+describe("a superseded staging run deploys nothing (N634, Codex on #175)", () => {
+  it("asks whether its commit is still main's head just before the build, and gates the deploy and version check on it", () => {
+    const staging = deploy.jobs.staging;
+    const head = indexOf(staging, runs("scripts/deploy.mjs current"));
+    const ship = indexOf(staging, runs("vercel@65.2.0 deploy --prebuilt --prod"));
+    const version = indexOf(staging, runs("scripts/deploy.mjs version"));
+    expect(head).toBeLessThan(ship);
+    expect(staging.steps[head].run).toContain('>> "$GITHUB_OUTPUT"');
+    expect(staging.steps[ship].if).toBe("steps.head.outputs.current == 'true'");
+    expect(staging.steps[version].if).toBe("steps.head.outputs.current == 'true'");
+  });
+
+  it("only main's exact head counts as current", () => {
+    const sha = "aee656d9aee656d9aee656d9aee656d9aee656d9";
+    expect(stillHead(sha, sha)).toBe(true);
+    expect(stillHead("b".repeat(40), sha)).toBe(false);
+    expect(stillHead(undefined, sha)).toBe(false);
+    expect(stillHead("", "")).toBe(false);
   });
 });

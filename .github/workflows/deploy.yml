@@ -22,7 +22,11 @@
 # VERCEL_PRODUCTION_PROJECT_ID, STAGING_SUPABASE_DB_PASSWORD,
 # PRODUCTION_SUPABASE_DB_PASSWORD, ADMIN_ALERT_WEBHOOK_URL. Variables:
 # DRVN_DEPLOY_STAGING, DRVN_STAGING_ORIGIN, DRVN_PRODUCTION_ORIGIN,
-# DRVN_STAGING_SUPABASE_URL, DRVN_PRODUCTION_SUPABASE_URL.
+# DRVN_STAGING_SUPABASE_URL, DRVN_PRODUCTION_SUPABASE_URL. The two database
+# passwords belong on the staging and production environments, not the
+# repository (#123). On each hosting project (not here): DRVN_DEPLOY_ENV =
+# staging or production, read at build through `vercel pull` (#121); the
+# build refuses a hosted production build without it.
 name: Deploy
 
 on:
@@ -81,7 +85,16 @@ jobs:
           rm -f "$RUNNER_TEMP/target.env"
           node scripts/deploy.mjs migrations "$RUNNER_TEMP/status.json"
 
+      # Codex on #175: a delayed or re-run older run must not deploy over a
+      # newer one. Asked again here, just before the build and deploy.
+      - name: This commit is still main's head
+        id: head
+        run: node scripts/deploy.mjs current "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
       - name: Build and deploy this commit
+        if: steps.head.outputs.current == 'true'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -92,6 +105,7 @@ jobs:
           npx --yes vercel@65.2.0 deploy --prebuilt --prod --env GIT_COMMIT_SHA="$GITHUB_SHA" --token="$VERCEL_TOKEN"
 
       - name: Staging reports this commit
+        if: steps.head.outputs.current == 'true'
         run: node scripts/deploy.mjs version "$ORIGIN" "$GITHUB_SHA"
         env:
           ORIGIN: ${{ vars.DRVN_STAGING_ORIGIN }}
