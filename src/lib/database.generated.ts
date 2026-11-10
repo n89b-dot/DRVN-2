@@ -7507,6 +7507,7 @@ export type Database = {
           p_outcome: string
           p_provider_message_id?: string
           p_reason?: string
+          p_retry_after?: number
         }
         Returns: string
       }
