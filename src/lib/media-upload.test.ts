@@ -83,7 +83,7 @@ describe("upload failures stay per file and readable (N64)", () => {
   it("gives a bodiless 413 from the photo route words, not a JSON parse error", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 413 })));
     const result = await uploadImages({ files: [file("huge.png")], bucket: "car-images", pathPrefix: "u1" });
-    expect(result.failed).toEqual([expect.objectContaining({ reason: "huge.png is too large to upload.", retryable: false })]);
+    expect(result.failed).toEqual([expect.objectContaining({ reason: expect.stringMatching(/^huge\.png is too large to upload \(over 4 MB\)/), retryable: false })]);
   });
 
   it("maps every route status to clear copy", () => {
@@ -146,5 +146,52 @@ describe("upload failures stay per file and readable (N64)", () => {
     const result = await uploadImages({ files: [new File(["x"], "IMG_3.HEIC", { type: "image/heic" })], bucket: "activity-images", pathPrefix: "u1" });
     expect(fetch).not.toHaveBeenCalled();
     expect(result.failed).toEqual([expect.objectContaining({ reason: expect.stringMatching(/IMG_3\.HEIC is a HEIC photo this browser can't convert/), retryable: false })]);
+  });
+});
+
+describe("photos stay under what a serverless host accepts (N955, report five #118)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const big = (name: string, bytes: number, type = "image/jpeg") => new File([new Uint8Array(bytes)], name, { type });
+
+  it("refuses a photo still over 4 MB before sending it, saying what to do", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    // No canvas (shrinking fails), so the original is what would be sent.
+    const result = await uploadImages({ files: [big("IMG_9.jpg", 5 * 1024 * 1024)], bucket: "listing-images", pathPrefix: "u1", maxBytes: 10 * 1024 * 1024, normalize: true });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(result.failed).toEqual([expect.objectContaining({ reason: expect.stringMatching(/IMG_9\.jpg is too large to upload \(over 4 MB\)\. Save a smaller copy and try again/), retryable: false })]);
+  });
+
+  it("evidence uploads straight to Storage and keeps its own, larger limit", async () => {
+    upload.mockResolvedValue({ error: null });
+    const result = await uploadImages({ files: [big("receipt.png", 6 * 1024 * 1024, "image/png")], bucket: "dispute-evidence", pathPrefix: "u1/o1" });
+    expect(result.failed).toEqual([]);
+  });
+
+  it("a bodiless 413 from the route says the same", () => {
+    expect(publicPhotoFailureReason("a.jpg", 413)).toEqual({ reason: expect.stringMatching(/a\.jpg is too large to upload \(over 4 MB\)/), retryable: false });
+  });
+
+  it("steps the JPEG quality down until a detailed photo fits, leaving headroom", async () => {
+    const qualities: number[] = [];
+    vi.stubGlobal("createImageBitmap", vi.fn(async () => ({ width: 4032, height: 3024, close: vi.fn() })));
+    vi.stubGlobal("document", {
+      createElement: () => ({
+        width: 0,
+        height: 0,
+        getContext: () => ({ drawImage: vi.fn() }),
+        toBlob: (done: (blob: Blob) => void, type: string, quality: number) => {
+          qualities.push(quality);
+          done(new Blob([new Uint8Array(quality > 0.7 ? 3_900_000 : 2_000_000)], { type }));
+        },
+      }),
+    });
+    const fetch = vi.fn(async () => Response.json({ url: "https://cdn.test/u1/x.webp", path: "u1/x.webp" }));
+    vi.stubGlobal("fetch", fetch);
+    const result = await uploadImages({ files: [big("detail.jpg", 9 * 1024 * 1024)], bucket: "car-images", pathPrefix: "u1", normalize: true });
+    expect(result.failed).toEqual([]);
+    expect(qualities).toEqual([0.85, 0.75, 0.65]);
+    const sent = (fetch.mock.calls[0] as unknown as [string, { body: FormData }])[1].body.get("file") as File;
+    expect(sent.size).toBeLessThanOrEqual(3_500_000);
   });
 });

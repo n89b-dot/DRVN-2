@@ -29,6 +29,16 @@ export type UploadImagesResult = { uploaded: UploadedImage[]; failed: UploadFail
  */
 const SERVER_NORMALIZED_BUCKETS = ["avatars", "car-images", "activity-images", "listing-images", "message-photos", "agent-chat-photos"];
 
+import { SERVER_UPLOAD_MAX_BYTES } from "@/lib/upload-limits";
+
+export { SERVER_UPLOAD_MAX_BYTES };
+/** The shrink aims under this, leaving headroom below the cap for the form. */
+const SHRINK_TARGET_BYTES = 3_500_000;
+
+/** What to do with a photo that is still too large after shrinking. */
+export const tooLargeReason = (name: string, maxMb: number) =>
+  `${name} is too large to upload (over ${maxMb} MB). Save a smaller copy and try again: most phones can resize a photo from its share or edit menu, and a screenshot of it works too.`;
+
 /**
  * Client-side pre-shrink for photography (brief §S4): correct orientation,
  * cap the long edge at 2560px, re-encode as JPEG q0.85. This only saves
@@ -64,9 +74,14 @@ export async function normalizePublicPhoto(file: File): Promise<File> {
     }
     ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     bitmap.close();
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", 0.85),
-    );
+    // q0.85 puts a 2560px phone photo at about 1–2.5 MB. A very detailed one
+    // can come out larger, so step the quality down until it fits the
+    // target, leaving headroom under SERVER_UPLOAD_MAX_BYTES (#118).
+    let blob: Blob | null = null;
+    for (const quality of [0.85, 0.75, 0.65]) {
+      blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+      if (!blob || blob.size <= SHRINK_TARGET_BYTES) break;
+    }
     if (!blob || (!heic && blob.size >= file.size)) return file;
     const name = file.name.replace(/\.[a-z0-9]+$/i, "") + ".jpg";
     return new File([blob], name, { type: "image/jpeg" });
@@ -92,7 +107,7 @@ const HEIC_EVIDENCE_REASON = (name: string) =>
  */
 export function publicPhotoFailureReason(name: string, status: number, error?: string): { reason: string; retryable: boolean } {
   if (status === 401) return { reason: "Sign in again to upload photos.", retryable: false };
-  if (status === 413) return { reason: `${name} is too large to upload.`, retryable: false };
+  if (status === 413) return { reason: tooLargeReason(name, Math.round(SERVER_UPLOAD_MAX_BYTES / (1024 * 1024))), retryable: false };
   if (status === 415) return { reason: error || `${name} isn't a photo format DRVN can use. Try a JPEG, PNG or WebP.`, retryable: false };
   if (status === 422) return { reason: error || `${name} couldn't be processed. Try it as a JPEG, PNG or WebP.`, retryable: false };
   if (status === 429) return { reason: error || "Upload limit reached. Try again later.", retryable: true };
@@ -123,14 +138,13 @@ export async function uploadImages({
   bucket: string;
   /** Folder prefix, usually `${userId}` or `${userId}/${objectId}`. */
   pathPrefix: string;
-  /** Per-file size ceiling. Default 10MB (avatars pass 2MB). */
+  /** Per-file size ceiling. Default 10MB (avatars pass 2MB); photos through the photo route are capped at SERVER_UPLOAD_MAX_BYTES whatever this says. */
   maxBytes?: number;
   /** Run normalizePublicPhoto first (public photography only — never evidence). */
   normalize?: boolean;
 }): Promise<UploadImagesResult> {
   const uploaded: UploadedImage[] = [];
   const failed: UploadFailure[] = [];
-  const maxMb = Math.round(maxBytes / (1024 * 1024));
 
   for (let file of Array.from(files)) {
     // The picker filters via accept="image/*", but drag-and-drop hands us
@@ -155,8 +169,10 @@ export async function uploadImages({
         continue;
       }
     } else if (normalize) file = await normalizePublicPhoto(file);
-    if (file.size > maxBytes) {
-      failed.push({ file, reason: `${file.name} is over ${maxMb}MB.`, retryable: false });
+    // Through the photo route, never more than the host will accept (#118).
+    const limit = serverNormalized ? Math.min(maxBytes, SERVER_UPLOAD_MAX_BYTES) : maxBytes;
+    if (file.size > limit) {
+      failed.push({ file, reason: tooLargeReason(file.name, Math.round(limit / (1024 * 1024))), retryable: false });
       continue;
     }
     if (serverNormalized) {
