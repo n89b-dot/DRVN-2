@@ -15,7 +15,8 @@ vi.mock("@supabase/supabase-js", () => ({
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://proj.supabase.co";
 process.env.SUPABASE_SECRET_KEY = "unit-test-key";
 
-const { EXPORT_PHOTO_LINK_SECONDS, photoFetch, signedPhotoUrls, signPhotosForExport, signPhotosIn } = await import("./photo-signing");
+const { EXPORT_PHOTO_LINK_SECONDS, photoFetch, signedPhotoUrls, signPhotosForExport } = await import("./photo-signing");
+const { tableContext } = await import("@/lib/photo-urls");
 
 const O = "https://proj.supabase.co";
 const ME = "11111111-1111-4111-8111-111111111111";
@@ -88,7 +89,7 @@ describe("photo signing at the database boundary (N455)", () => {
   it("N455: a photo Storage won't sign keeps its canonical URL (a missing photo, never a failed page)", async () => {
     mocks.sign.mockResolvedValue({ data: null, error: { message: "boom" } });
     const url = canonical("car-images", "fail.webp");
-    await expect(signPhotosIn({ url })).resolves.toEqual({ url });
+    expect((await signedPhotoUrls([url])).has(url)).toBe(false);
     expect(mocks.reportError).toHaveBeenCalled();
   });
 
@@ -96,7 +97,7 @@ describe("photo signing at the database boundary (N455)", () => {
     const url = canonical("car-images", "export.webp");
     await signedPhotoUrls([url]);
     mocks.sign.mockClear();
-    const rows = await signPhotosForExport([{ url, alt: "x" }, { avatar_url: canonical("avatars", "me.webp") }], ME);
+    const rows = await signPhotosForExport([{ url, alt: "x" }, { avatar_url: canonical("avatars", "me.webp") }], ME, tableContext("car_images", "*"));
     expect(rows[0]).toEqual({ url: signedFor("car-images", `${ME}/export.webp`), alt: "x" });
     expect(rows[1]).toEqual({ avatar_url: canonical("avatars", "me.webp") });
     expect(mocks.sign).toHaveBeenCalledWith("car-images", [`${ME}/export.webp`], EXPORT_PHOTO_LINK_SECONDS);
@@ -135,7 +136,7 @@ describe("one signed URL per photo per window across instances (N954, report fiv
   });
 
   it("the export's fixed-life links never touch the shared memo", async () => {
-    await signPhotosForExport({ url: canonical("car-images", "export-shared.webp") }, ME, at(3));
+    await signPhotosForExport({ url: canonical("car-images", "export-shared.webp") }, ME, tableContext("car_images", "url"), at(3));
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
@@ -174,29 +175,40 @@ describe("only photo fields are signed, never a URL a member wrote (N940, #178 r
     expect(mocks.sign).not.toHaveBeenCalled();
   });
 
-  it("signs the photo fields: url rows, cover and image columns, post image and before/after blocks", async () => {
-    const out = await read({
+  it("signs the photo fields of a table read: its guarded columns, its embeds' and a post's image and before/after blocks", async () => {
+    const value = [{
       cover_image_url: mine,
-      car_images: [{ url: canonical("car-images", "g1.webp") }],
+      gallery: [{ url: canonical("car-images", "g1.webp") }],
       image: canonical("listing-images", "card.webp"),
-      body: [
-        { type: "images", urls: [canonical("activity-images", "p1.webp")] },
-        { type: "before_after", beforeUrl: canonical("activity-images", "b.webp"), afterUrl: canonical("activity-images", "a.webp") },
-        { type: "text", text: `see ${other}` },
-      ],
-    });
-    expect(out.cover_image_url).toBe(signedFor("car-images", `${ME}/my-cover.webp`));
-    expect(out.car_images[0].url).toBe(signedFor("car-images", `${ME}/g1.webp`));
-    expect(out.image).toBe(signedFor("listing-images", `${ME}/card.webp`));
-    expect(out.body[0].urls[0]).toBe(signedFor("activity-images", `${ME}/p1.webp`));
-    expect(out.body[1].beforeUrl).toBe(signedFor("activity-images", `${ME}/b.webp`));
-    expect(out.body[2].text).toBe(`see ${other}`);
+    }];
+    const res = await photoFetch((async () => json(value)) as unknown as typeof fetch, { sign: true })(
+      `${O}/rest/v1/cars?select=${encodeURIComponent("cover_image_url,image,gallery:car_images(url)")}`, { method: "GET" });
+    const [car] = await res.json();
+    expect(car.cover_image_url).toBe(signedFor("car-images", `${ME}/my-cover.webp`));
+    expect(car.gallery[0].url).toBe(signedFor("car-images", `${ME}/g1.webp`));
+    expect(car.image).toBe(canonical("listing-images", "card.webp"));
+    const post = [{ body: [
+      { type: "images", urls: [canonical("activity-images", "p1.webp")] },
+      { type: "before_after", beforeUrl: canonical("activity-images", "b.webp"), afterUrl: canonical("activity-images", "a.webp") },
+      { type: "text", text: `see ${other}` },
+    ] }];
+    const out = await (await photoFetch((async () => json(post)) as unknown as typeof fetch, { sign: true })(`${O}/rest/v1/activity_posts?select=body`, { method: "GET" })).json();
+    expect(out[0].body[0].urls[0]).toBe(signedFor("activity-images", `${ME}/p1.webp`));
+    expect(out[0].body[1].beforeUrl).toBe(signedFor("activity-images", `${ME}/b.webp`));
+    expect(out[0].body[2].text).toBe(`see ${other}`);
   });
 
   it("the export links the member's photo fields for seven days and not a URL they wrote in a comment", async () => {
-    const out = await signPhotosForExport({ cars: [{ cover_image_url: mine }], comments: [{ body: other }] }, ME);
-    expect(out.cars[0].cover_image_url).toBe(signedFor("car-images", `${ME}/my-cover.webp`));
-    expect(out.comments[0].body).toBe(other);
+    const cars = await signPhotosForExport([{ cover_image_url: mine }], ME, tableContext("cars", "id,cover_image_url"));
+    expect(cars[0].cover_image_url).toBe(signedFor("car-images", `${ME}/my-cover.webp`));
+    const comments = await signPhotosForExport([{ body: other }], ME, tableContext("activity_comments", "id,body"));
+    expect(comments[0].body).toBe(other);
+  });
+
+  it("another schema's same-named table is not signed", async () => {
+    const res = await photoFetch((async () => json([{ url: mine }])) as unknown as typeof fetch, { sign: true })(`${O}/rest/v1/car_images?select=url`, { method: "GET", headers: { "Accept-Profile": "private" } });
+    expect((await res.json())[0].url).toBe(mine);
+    expect(mocks.sign).not.toHaveBeenCalled();
   });
 });
 
@@ -243,34 +255,38 @@ describe("each leak route stays closed (N940, #178 review)", () => {
   });
 
   it("the export links only the member's own objects, even in a photo field", async () => {
-    const out = await signPhotosForExport({ cars: [{ cover_image_url: canonical("car-images", "mine.webp") }], conversation: { listing: { image_url: theirs } }, comments: [{ body: theirs }] }, ME);
-    expect(out.cars[0].cover_image_url).toContain("/object/sign/");
-    expect(out.conversation.listing.image_url).toBe(theirs);
-    expect(out.comments[0].body).toBe(theirs);
+    const out = await signPhotosForExport([{ url: canonical("car-images", "mine.webp") }, { url: theirs }], ME, tableContext("car_images", "id,url"));
+    expect(out[0].url).toContain("/object/sign/");
+    expect(out[1].url).toBe(theirs);
   });
 });
 
 describe("only database-guarded places are signed (N940, #196 review)", () => {
   const STRANGER = "22222222-2222-4222-8222-222222222222";
   const theirs = `${O}/storage/v1/object/public/car-images/${STRANGER}/private-car.webp`;
-  const read = async (value: unknown) => {
-    const res = await photoFetch((async () => new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } })) as unknown as typeof fetch, { sign: true })(`${O}/rest/v1/x`, { method: "GET" });
+  const read = async (request: string, value: unknown) => {
+    const res = await photoFetch((async () => new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } })) as unknown as typeof fetch, { sign: true })(`${O}/rest/v1/${request}`, { method: "GET" });
     return res.json();
   };
 
   it.each([
-    ["an embed block's url in a post body", { body: [{ type: "embed", videoId: "x", url: theirs }] }],
-    ["a label-less profile link", { links: [{ url: theirs }] }],
-    ["an import's image entry", { imported_images: [{ sourceUrl: "https://shop.example/a.jpg", url: theirs, path: "x" }] }],
-    ["a guarded column on a row owned by someone else", { owner_id: ME, cover_image_url: theirs }],
-  ])("%s stays canonical", async (_route, value) => {
-    expect(JSON.stringify(await read(value))).not.toContain("/object/sign/");
+    ["an embed block's url in a post body", "activity_posts?select=body", [{ body: [{ type: "embed", videoId: "x", url: theirs }] }]],
+    ["an images block nested in another block", "activity_posts?select=body", [{ body: [{ type: "text", x: { type: "images", urls: [theirs] } }] }]],
+    ["a label-less profile link", "profiles?select=links", [{ links: [{ url: theirs }] }]],
+    ["an import's image entry", "listing_imports?select=imported_images", [{ imported_images: [{ sourceUrl: "https://shop.example/a.jpg", url: theirs, path: "x" }] }]],
+    ["a condition snapshot that names its own owner", "order_items?select=condition_snapshot", [{ condition_snapshot: { owner_id: STRANGER, url: theirs } }]],
+    ["dispute evidence's url", "dispute_evidence?select=url", [{ url: theirs }]],
+    ["an agent event's result", "agent_events?select=result", [{ result: { image: theirs, url: theirs } }]],
+    ["a Json RPC that isn't listed", "rpc/agent_chat_turn_status", { member: { cards: [{ image_url: theirs }] } }],
+  ])("%s stays canonical", async (_route, request, value) => {
+    expect(JSON.stringify(await read(request, value))).not.toContain("/object/sign/");
     expect(mocks.sign).not.toHaveBeenCalled();
   });
 
-  it("a guarded column whose photo is the row owner's own is signed", async () => {
-    const out = await read({ owner_id: ME, cover_image_url: canonical("car-images", "mine-owned.webp") });
-    expect(out.cover_image_url).toBe(signedFor("car-images", `${ME}/mine-owned.webp`));
+  it("a buyer's order read signs the seller's frozen gallery without the seller's id in the select", async () => {
+    const seller = canonical("listing-images", "sold.webp");
+    const out = await read(`orders?select=${encodeURIComponent("id,order_items(order_item_snapshot_images(url))")}`, [{ id: "o", order_items: [{ order_item_snapshot_images: [{ url: seller }] }] }]);
+    expect(out[0].order_items[0].order_item_snapshot_images[0].url).toBe(signedFor("listing-images", `${ME}/sold.webp`));
   });
 });
 

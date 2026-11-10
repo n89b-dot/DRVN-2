@@ -8,8 +8,10 @@ import {
   photoFieldUrls,
   replacePhotoFields,
   signedPhotoObject,
+  signingContext,
   signingWindow,
   storageOrigin,
+  type SigningContext,
 } from "@/lib/photo-urls";
 
 /**
@@ -20,8 +22,9 @@ import {
  *  - on the way in (every PostgREST request), any signed photo URL in the
  *    body is turned back into its canonical spelling, so the database only
  *    ever stores and compares canonical URLs, whoever wrote them;
- *  - on the way out (`sign: true`), every canonical photo URL in a
- *    response is replaced by a signed URL. The rows were returned under the
+ *  - on the way out (`sign: true`), the canonical photo URLs at the places
+ *    the database guards for that table or RPC (src/lib/photo-urls.ts,
+ *    PHOTO_POSITIONS; N940) are replaced by signed URLs. The rows were returned under the
  *    reader's own row policies (or, for the console, after the admin gate),
  *    so this is the visibility check the page already made, applied once.
  *
@@ -207,30 +210,23 @@ export async function signedPhotoUrl<T extends string | null | undefined>(url: T
 
 /**
  * The photo fields of a JSON answer signed, in one batch per bucket. Only
- * whole values under photo-shaped keys (src/lib/photo-urls.ts,
- * isPhotoFieldKey): a photo URL written into prose, a profile link or any
- * other member-written field stays canonical, which the storage layer
- * refuses (#178 review). Text that isn't JSON is left as it is.
+ * whole values at the places the database guards, for this answer's table or
+ * RPC (src/lib/photo-urls.ts, PHOTO_POSITIONS): a photo URL written into
+ * prose, a profile link, a JSON column or any other member-written field
+ * stays canonical, which the storage layer refuses (#178 and #196 reviews).
+ * Text that isn't JSON, or an answer with no known context, is left as it is.
  */
-export async function signPhotoUrlsInText(text: string): Promise<string> {
-  if (!text.includes("/storage/v1/object/public/")) return text;
+export async function signPhotoUrlsInText(text: string, context: SigningContext | null): Promise<string> {
+  if (!context || !text.includes("/storage/v1/object/public/")) return text;
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
     return text;
   }
-  const urls = photoFieldUrls(parsed);
+  const urls = photoFieldUrls(parsed, context);
   if (!urls.length) return text;
-  return JSON.stringify(replacePhotoFields(parsed, await signedPhotoUrls(urls)));
-}
-
-/** Every photo field in a value (rows, nested objects) signed. */
-export async function signPhotosIn<T>(value: T): Promise<T> {
-  if (value == null) return value;
-  const urls = photoFieldUrls(value);
-  if (!urls.length) return value;
-  return replacePhotoFields(value, await signedPhotoUrls(urls));
+  return JSON.stringify(replacePhotoFields(parsed, context, await signedPhotoUrls(urls)));
 }
 
 /** How long a photo link in a member's data export opens for: the export's own download life. */
@@ -240,19 +236,17 @@ export const EXPORT_PHOTO_LINK_SECONDS = 7 * 24 * 60 * 60;
  * A member's own photos in their data export (N455): the stored canonical
  * URL no longer opens, so each becomes a link that opens for seven days. The
  * rows were selected for the requesting member only, by the export's own
- * ownership filters. Only photo fields are linked, and only objects in the
- * member's own folder: another member's photo URL the member wrote into a
- * comment, or another member's photo on a row the export carries, is not
- * (#178 review).
+ * ownership filters, from `context` (the section's table and projection).
+ * Only guarded photo places are linked, and only objects in the member's own
+ * folder: another member's photo URL the member wrote into a comment, or
+ * another member's photo on a row the export carries, is not (#178 review).
  */
-export async function signPhotosForExport<T>(value: T, ownerId: string, nowMs = Date.now()): Promise<T> {
-  if (value == null) return value;
+export async function signPhotosForExport<T>(value: T, ownerId: string, context: SigningContext | null, nowMs = Date.now()): Promise<T> {
+  if (value == null || !context) return value;
   // The member's own objects only: their folder is the path's first segment.
-  // A photo field on an exported row naming someone else's object (a
-  // conversation's listing, say) stays canonical.
-  const urls = photoFieldUrls(value).filter((url) => signedPhotoObject(url)?.path.split("/")[0] === ownerId);
+  const urls = photoFieldUrls(value, context).filter((url) => signedPhotoObject(url)?.path.split("/")[0] === ownerId);
   if (!urls.length) return value;
-  return replacePhotoFields(value, await signedPhotoUrls(urls, nowMs, EXPORT_PHOTO_LINK_SECONDS));
+  return replacePhotoFields(value, context, await signedPhotoUrls(urls, nowMs, EXPORT_PHOTO_LINK_SECONDS));
 }
 
 function requestUrl(input: RequestInfo | URL): string {
@@ -271,8 +265,14 @@ export function photoFetch(base: typeof fetch, options: { sign: boolean }): type
     const response = await base(input, outbound);
     if (!options.sign || !response.ok || response.body == null || [204, 205, 304].includes(response.status)) return response;
     if (!(response.headers.get("content-type") ?? "").includes("json")) return response;
+    // The table or RPC this answers, in the public schema only (another
+    // schema's same-named table isn't the one the guards cover).
+    const headers0 = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+    const profile = headers0.get("accept-profile") ?? headers0.get("content-profile");
+    const context = profile && profile !== "public" ? null : signingContext(requestUrl(input));
+    if (!context) return response;
     const text = await response.text();
-    const signed = await signPhotoUrlsInText(text);
+    const signed = await signPhotoUrlsInText(text, context);
     const headers = new Headers(response.headers);
     headers.delete("content-length");
     headers.delete("content-encoding");

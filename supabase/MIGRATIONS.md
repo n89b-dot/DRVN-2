@@ -32,6 +32,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 10 — photo signing signs only what the database guards: N940 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110190000_photo_signing_rules.sql` | not applied |
+
+Review of #196 (report five #105 follow-up). `private.photo_signable_positions()` lists the only places the app signs a member photo (seven photo columns, a post body's image blocks, four RPC answer paths); `src/lib/photo-urls.ts` `PHOTO_POSITIONS` must equal it. New triggers `photo_owner_folder_guard` (`private.guard_photo_owner_folder` / `_body`) refuse, for every writer, a photo at a listed place that names an object in a signed bucket outside the row owner's folder, the owner resolved from the row's car, listing, post or order (the seller, for `order_item_snapshot_images`, guarded for the first time). `private.activity_body_media` is restated to strings only, the exact shape the signer walks. Applying it moves rows that already break the rule into `private.photo_refs_quarantined` (whole rows kept): gallery, pin and snapshot rows are deleted, a cover or part thumbnail is cleared, a post body loses only the offending photos; the NOTICE says how many. Apply after `20261110120000` (#200) where both are pending; it touches none of that file's functions. Deploy with the app change in the same PR: the old signer signs by key name and does not need this, the new one relies on it.
+
 ## November 10 — one signed photo URL per window across instances: report five #117 (not applied anywhere)
 
 | File | Applied to |

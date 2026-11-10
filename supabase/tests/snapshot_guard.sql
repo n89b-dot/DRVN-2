@@ -67,8 +67,8 @@ begin
 
   insert into public.listing_images (listing_id, url, alt, position)
   values
-    (v_listing, 'https://example.test/storage/v1/object/public/listing-images/a/1.jpg', 'front', 0),
-    (v_listing, 'https://example.test/storage/v1/object/public/listing-images/a/2.jpg', 'side', 1);
+    (v_listing, 'https://example.test/storage/v1/object/public/listing-images/' || v_seller || '/1.jpg', 'front', 0),
+    (v_listing, 'https://example.test/storage/v1/object/public/listing-images/' || v_seller || '/2.jpg', 'side', 1);
 
   -- ---------- 1. purchase freezes the snapshot ----------
   v_result := public.purchase_begin(v_buyer, array[v_listing], 'snap-guard-key');

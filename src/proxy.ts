@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { blockedMediaKeys, imageRequestObjectKey } from "@/lib/copyright/blocked-media";
 import { buildContentSecurityPolicy, reportingEndpointsHeader } from "@/lib/csp";
-import { isUnsignedMemberPhoto, signedPhotoLinkExpired } from "@/lib/photo-urls";
+import { memberPhotoSourceRefused } from "@/lib/photo-urls";
 import { updateSession } from "@/lib/supabase/proxy";
 
 export async function proxy(request: NextRequest) {
@@ -46,9 +46,12 @@ async function imageGate(request: NextRequest) {
   // before the optimiser can serve the copy it kept for the object's own
   // (longer) Cache-Control. A member photo in its canonical (unsigned)
   // spelling is refused too: the optimiser may still hold a copy cached
-  // before the photos went private (Codex on #178). Pure checks on the URL.
-  const source = request.nextUrl.searchParams.get("url");
-  if (signedPhotoLinkExpired(source) || isUnsignedMemberPhoto(source)) {
+  // before the photos went private (Codex on #178). Pure checks on the URL,
+  // decoded the way Storage reads it, so no spelling slips past (#196
+  // review): a sign route needs exactly one live token, and a source the
+  // optimiser could read differently (two url parameters) is refused too.
+  const sources = request.nextUrl.searchParams.getAll("url");
+  if (sources.length > 1 || memberPhotoSourceRefused(sources[0] ?? null)) {
     return new NextResponse("This photo link has expired.", {
       status: 404,
       headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" },
