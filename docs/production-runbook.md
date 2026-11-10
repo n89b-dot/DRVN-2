@@ -522,9 +522,16 @@ calls a judgement.
    again.
 
 **The takedown log.** No code stands behind this procedure, so the log is
-the audit record. It is one dated document the copyright agent keeps beside
-the copyright inbox, outside the database, backed up with the business's
-other records (the restore procedure in §6 reads from it). One line per
+the audit record. **It does not exist yet**, and no admin screen holds it.
+The owner creates it when the copyright agent is registered (owner item F4):
+one private spreadsheet named "DRVN takedown log", in the business's own
+document storage beside the copyright inbox, backed up with the business's
+other records (the restore procedure in §6 reads from it). Never in this
+repository, which is public, and never in the database. **Until it exists**,
+the line is written as an email from the copyright agent's address to
+itself, subject `Takedown log: <notice id>`, replied to as each step
+happens, so the dates are stamped by the mail system and stay in one thread;
+copy those threads into the spreadsheet when it is made. One line per
 counter-notice, filled in as the steps happen, never rewritten afterwards:
 
 | What | Where it comes from |
