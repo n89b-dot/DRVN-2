@@ -29,7 +29,7 @@ vi.mock("@supabase/ssr", () => ({
 vi.mock("@/lib/env", () => ({ hasSupabaseConfig: () => true, isProduction: false, publicKey: () => "anon-key" }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 
-import { updateSession } from "./proxy";
+import { CONSOLE_NOT_FOUND, isConsolePath, updateSession } from "./proxy";
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
 
@@ -144,5 +144,36 @@ describe("updateSession signs out a Server Action into a sign-in, not a failed c
     const response = await updateSession(action("/settings"));
     expect(response.headers.get("x-action-redirect")).toBeNull();
     expect(response.headers.get("location")).toBeNull();
+  });
+});
+
+describe("the proxy turns signed-out visitors away from the console (N715)", () => {
+  beforeEach(() => {
+    scenario = { claims: null, refresh: false };
+  });
+
+  it("rewrites signed-out /admin and its pages to the not-found page, keeping cookie removals", async () => {
+    for (const path of ["/admin", "/admin/payments", "/admin/cases?kind=report"]) {
+      scenario = { claims: null, refresh: true };
+      const response = await updateSession(request(path));
+      const rewrite = response.headers.get("x-middleware-rewrite");
+      expect(rewrite, path).not.toBeNull();
+      expect(new URL(rewrite!).pathname).toBe(CONSOLE_NOT_FOUND);
+      expect(new URL(rewrite!).search).toBe("");
+      expect(response.headers.get("location")).toBeNull();
+      expectRotatedCookies(response);
+    }
+  });
+
+  it("leaves a signed-in visitor to the layout's own gate, and /admin-verify and look-alikes alone", async () => {
+    scenario = { claims: { sub: "u1" }, refresh: false };
+    expect((await updateSession(request("/admin"))).headers.get("x-middleware-rewrite")).toBeNull();
+    scenario = { claims: null, refresh: false };
+    for (const path of ["/admin-verify", "/administrator", "/marketplace"]) {
+      expect((await updateSession(request(path))).headers.get("x-middleware-rewrite"), path).toBeNull();
+    }
+    expect(isConsolePath("/admin")).toBe(true);
+    expect(isConsolePath("/admin/")).toBe(true);
+    expect(isConsolePath("/admin-verify")).toBe(false);
   });
 });
