@@ -112,29 +112,35 @@ Status words: **merged** (on `main`, CI green) · **in review** (PR up, waiting 
 
 | Step | Findings | Ids | PR | Merge commit | Status |
 |---|---|---|---|---|---|
-| 0 / 3.4 Codex reviews waived | `#129` | N725 | #214 | | in review: every owed row waived by Neil's ruling of 10 November; `tests/ci/codex-queue.test.ts` accepts `waived` and refuses `owed` |
-| 2.1 Deletion runbook and Resume | `#126`, `#154`, `#157` | N944, N734 | #198 | | not started (waiting for the previous session's hand-over) |
-| 2.2 18+ on the actions that matter | `#152` | N662 | #201 merged as written; follow-up to come | `58b4ad7` (#201) | not started |
-| 2.3 Upload size | `#158` | N955 | #203 | | not started (hand-over) |
-| 2.4 Staging out of search | `#156` | N958, N961 | #188 | | not started (hand-over) |
-| 2.5 Set-up order | `#156` | N952 | #190 | | not started (hand-over) |
-| 2.6 Protection watch, and its follow-up | `#156`, `#139` | N949, N950 | #195 | | not started (hand-over; the orchestrator merges #195 in the browser) |
-| 2.7 Photo signing rules | `#131`, `#146` | N940 | #210 | | not started (hand-over) |
-| 2.8 1,000-row limits | `#155` | N718 | #199 | | not started (hand-over) |
-| 2.9 A deleted member's words | `#153` | | #206 | | not started (hand-over) |
-| 2.10 Chargeback retry | `#148` | N944 | #208 | | not started (hand-over) |
-| 2.11 Order emails | `#147` | | #204 | | not started (hand-over) |
-| 2.12 Chargeback write-off | `#149` | N944 | #207 | | to be set aside as a draft (decision D1) |
-| 2.13 Copyright counter-notice | `#150` | | #209 | | to be set aside as a draft with a by-hand runbook entry (decision D2) |
-| Duplicate test fix | `#124` | | #211 | | to be closed: the fix merged with #200 |
+| 0 / 3.4 Codex reviews waived | `#129` | N725 | #214 | `029c29e` | merged 10 Nov: every owed row waived by Neil's ruling; `tests/ci/codex-queue.test.ts` accepts `waived` and refuses `owed` |
+| 1 Working rules written down | `#125` to `#128`, `#163` | | #221 | | in review, approved: R1 to R3 in `supabase/MIGRATIONS.md`, R5 and R6 in the pull-request template |
+| 2.1 Deletion runbook and Resume | `#126`, `#154`, `#157` | N944, N734 | #198 | | inherited 10 Nov; fix written, not pushed until its turn: the D6 named exception in `tests/ci/migration-order.test.ts`, the guard that passed on any error (and the same block in #200's takedown guard), the three situations the console cannot finish |
+| 2.2 18+ for earlier members | `#152` | N662, N686 | #201 merged as written (`58b4ad7`); #217 closed unmerged; #222 | | **removed by ruling (Neil, 10 November 2026)**; #222 in review, approved; migration `20261110131000` not applied |
+| 2.3 Upload size | `#158` | N955 | #203 | | inherited; fix written, not pushed until its turn: a second shrink method and tests of the server's 413 |
+| 2.4 Staging out of search | `#156` | N958, N961 | #188 | | inherited, not started |
+| 2.5 Set-up order | `#156` | N952 | #190 | | inherited, not started |
+| 2.6 Protection watch, and its follow-up | `#156`, `#139` | N949, N950 | #195 | | inherited, not started (the orchestrator merges #195) |
+| 2.7 Photo signing rules | `#131`, `#146` | N940 | #210 | | inherited, not started. Clean-up count, read-only, 10 Nov: 0 references on staging (no photo rows there), 1 on shared dev (`cars.cover_image_url`); within decision D3 |
+| 2.8 1,000-row limits | `#155` | N718 | #199 | | inherited, not started |
+| 2.9 A deleted member's words | `#153` | | #206 | | inherited, not started |
+| 2.10 Chargeback retry | `#148` | N944 | #208 | | inherited, not started |
+| 2.11 Order emails | `#147` | | #204 | | inherited, not started |
+| 2.12 Chargeback write-off | `#149` | N944 | #207 | | set aside until after launch (decision D1): a draft since 10 Nov, with what it needs when it returns |
+| 2.13 Copyright counter-notice | `#150` | | #209 | | set aside until after launch (decision D2): a draft since 10 Nov; the by-hand procedure is runbook §5e |
+| Duplicate test fix | `#124` | | #211 | | closed: the fix merged with #200 |
 | 3.1 Photos on `main` | `#132`, `#135`, `#136`, `#137` | | | | not started (after step 2.7 merges) |
-| 3.2 The deploy path | `#138`, `#140`, `#142`, `#143`, `#144` | N715 | | | not started |
-| 3.3 Data set-up | `#141`, `#145` | N667, N943 | | | not started |
+| 3.2 The deploy path | `#138`, `#140`, `#142`, `#143`, `#144` | N715, N962, N957, N714, N634 | #218, #219 | | in review, both approved. #218: admin gate on every console path, key kinds at boot, one commit-sha rule, patched ranges, rollback caveats. #219: `--status` signs in with a read-only login (the orchestrator merges it). The single definition of "hosted" (`#144`) is done in #188 |
+| 3.3 Data set-up | `#141`, `#145` | N667, N943 | #220 | | in review, approved. Staging import approved to run from merged code |
+| Fixed-date sweep | `#124`, `#163` | | none needed | | done 10 Nov: every unit test under `src` passes with the clock 400 days and five years ahead |
+| The table the OS reads | plan step 4.8 | | #223 | | in review, approved: format in `docs/ids.md`, check in `tests/ci/os-report-table.test.ts` |
 
 ## Plan 1: needs Neil
-
-Nothing.
 
 ## Plan 1: judgement calls
 
 - **Step 0:** an `owed` row is now refused by the test, not only tolerated, so a later pull request cannot quietly restart the debt the ruling ended. A docs-only pull request stays `skipped`. Thirteen merged pull requests that had no row (#182 to #205) were given one.
+- **Step 2.2, Neil's ruling of 10 November 2026:** "regarding the 18+ confirmation work....all current accounts are test accounts and not real users so this work doesn't matter and addressing it seems to be adding unecessary code, decide how this should be addressed in terms of code removal and send the work to the appropriate agent". Decision taken on that instruction: keep the requirement where a new person joins (the 18+ box at sign-up, onboarding and guest checkout, the table, and the database's refusal of a handle without a record) and remove everything that chased accounts from before 8 November (the sign-in redirect of #174, the page-request check of #201, `/confirm-age`, `public.my_age_confirmation_due()`). No real member can be an earlier member: production does not exist and every new account answers on the way in. Finding `#152` is settled by #222, not by the fix the plan listed; #217, which implemented that fix, was closed unmerged.
+- **Step 3.3, the three Volkswagen trims:** on a database filled only from the pinned VehiclesDB release, the curated generations for `Golf GTI`, `GTI` and `Golf R` (19 of 194) have no catalogue model to attach to, because VehiclesDB files them under `Golf`. Nothing was added to the catalogue. A GTI is entered as a Golf and resolves its generation. Revisit with real use.
+- **Step 3.2, the deploy's read-only login:** `deploy_reader` was not created on staging. It is five statements in the owner's set-up guide and has no secret to live in until the GitHub environments exist; it swaps two secrets on his list for two, adding none.
+- **Finding `#157`, one more guard than the plan names:** the takedown guard that merged with #200 had the same `when others then null` as #198's; both are fixed in #198's pull request, because it is one finding.
+- **Needs Neil, format:** every line under "Plan 1: needs Neil" is a bullet of the form `- **short name:** one sentence`, which is the shape the Intelligence OS reads. The section is empty when nothing needs him.

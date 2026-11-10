@@ -472,6 +472,86 @@ never touched (kept as uploaded); public buckets use
 `scripts/public-media-backfill.mjs`. Not scheduled: new uploads can't carry
 metadata, so there is nothing for a repeat run to find.
 
+## 5e. A copyright counter-notice, handled by hand (decision D2)
+
+The console can take content down after a copyright notice. It cannot yet put
+it back: the control for that
+([#209](https://github.com/n89b-dot/DRVN-2/pull/209)) is set aside until
+after launch (decision D2 of
+`docs/plans/2026-11-work-review-remediation-plan.md`). Until it returns, a
+counter-notice is handled by hand, as below. This is the procedure of the US
+DMCA (17 U.S.C. §512(g)); counsel confirms it for the entity and its market
+before the first real one (owner item F4), and decides anything this section
+calls a judgement.
+
+1. **Receive it and keep it.** A counter-notice comes to the copyright
+   agent's address. It should give the member's name, address and phone
+   number; say what was removed and where it was; state, under penalty of
+   perjury, that it was removed by mistake or misidentification; consent to
+   the jurisdiction of the federal court for their address; and be signed.
+   Whether it is valid is counsel's call, not the operator's. File the
+   message itself with the copyright agent's records and open a line in the
+   takedown log (below) the day it arrives. The database has nowhere for it:
+   do not write it into the notice.
+2. **Send it to the person who complained**, promptly, with a line saying the
+   content will be restored in ten business days unless they tell the
+   copyright agent they have filed a court action to stop it. Log the date
+   sent.
+3. **Wait ten business days from the day the counter-notice arrived, and no
+   more than fourteen.** Business days, not calendar days: count them on a
+   calendar and write the two dates in the log. If, in that time, the
+   complainant says they have filed a court action, stop here and hand it to
+   counsel; nothing is restored.
+4. **Restore it: the member lists the part again.** Tell the member they may
+   list it again and add its photos again. Nothing in the product stops
+   them: a takedown blocks the stored files it removed, not the member and
+   not the picture, and a photo uploaded again is a new file. The same goes
+   for a garage photo or a post: the member adds it again.
+   - The original listing stays removed, and its photos are gone. A takedown
+     deletes the files; they cannot be brought back.
+   - **Do not** change the notice (`copyright_notices.status` or its
+     `takedown` record), delete rows from `copyright_blocked_media`, or set
+     the removed listing's status with SQL. The database refuses to put back
+     a listing an acted-on notice holds, by design. And the blocklist is
+     kept by file, not by notice, so removing one notice's row can unblock a
+     file that a second notice still covers (work review #150).
+5. **Finish the line in the takedown log**, so the whole event can be read
+   from it later.
+6. **A second notice about the restored content**, after the complainant has
+   gone to court or otherwise, goes to counsel before anything is taken down
+   again.
+
+**The takedown log.** No code stands behind this procedure, so the log is
+the audit record. **It does not exist yet**, and no admin screen holds it.
+The owner creates it when the copyright agent is registered (owner item F4):
+one private spreadsheet named "DRVN takedown log", in the business's own
+document storage beside the copyright inbox, backed up with the business's
+other records (the restore procedure in §6 reads from it). Never in this
+repository, which is public, and never in the database. **Until it exists**,
+the line is written as an email from the copyright agent's address to
+itself, subject `Takedown log: <notice id>`, replied to as each step
+happens, so the dates are stamped by the mail system and stay in one thread;
+copy those threads into the spreadsheet when it is made. One line per
+counter-notice, filled in as the steps happen, never rewritten afterwards:
+
+| What | Where it comes from |
+|---|---|
+| The notice it answers | the notice's id, from its page in Admin (the id in the address) |
+| Who sent the counter-notice | the member's handle and account id, and the address it came from |
+| When it arrived | the date and time on the message, with the time zone |
+| Who recorded it | the operator's name |
+| Who judged it valid, and when | counsel's name and the date of their answer |
+| When it was sent to the complainant | the date and time, and the address it went to |
+| The two dates of the wait | the tenth and the fourteenth business day after it arrived |
+| Whether a court action was notified | yes or no, with the date and the message if yes |
+| When the member was told they may list again | the date and time |
+| What came back | the new listing's id, or the garage photo or post the member added again |
+
+What the set-aside control will add when it returns: a record of the
+counter-notice in the database, the waiting period counted in business days
+from a checked date, the original listing restored with its photos, and a
+blocklist kept by file and notice.
+
 ## 6. Backups, and the rehearsed restore
 
 Use the backup and point-in-time recovery facilities actually enabled on the
