@@ -9,7 +9,11 @@ const blocked = vi.hoisted(() => ({ keys: vi.fn() }));
 vi.mock("@/lib/supabase/proxy", () => ({ updateSession: session.update }));
 vi.mock("@/lib/copyright/blocked-media", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/copyright/blocked-media")>()),
-  blockedMediaKeys: blocked.keys,
+  // The proxy asks about one object; these tests still say which objects are blocked (null: unknown).
+  mediaIsBlocked: async (key: string) => {
+    const keys: Set<string> | null | undefined = await blocked.keys();
+    return keys === null ? null : (keys?.has(key) ?? false);
+  },
 }));
 session.update.mockImplementation(async () => NextResponse.next());
 
