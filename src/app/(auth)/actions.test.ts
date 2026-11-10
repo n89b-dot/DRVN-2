@@ -15,7 +15,6 @@ const mocks = vi.hoisted(() => ({
   reportError: vi.fn(),
   hasAgeConfirmation: vi.fn(),
   recordAgeConfirmation: vi.fn(),
-  needsAge: vi.fn(),
   redirect: vi.fn((path: string) => {
     throw new Error(`redirect:${path}`);
   }),
@@ -28,7 +27,6 @@ vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
 vi.mock("@/lib/age-confirmation-record", () => ({
   hasAgeConfirmation: mocks.hasAgeConfirmation,
   recordAgeConfirmation: mocks.recordAgeConfirmation,
-  needsReturningAgeConfirmation: mocks.needsAge,
 }));
 vi.mock("@/lib/revalidate", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/site", () => ({ siteUrl: () => "https://drvn.example" }));
@@ -68,7 +66,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-const { completeOnboarding, confirmAge, login, requestPasswordReset, signup, updatePassword } = await import("./actions");
+const { completeOnboarding, login, requestPasswordReset, signup, updatePassword } = await import("./actions");
 
 function form(fields: Record<string, string>) {
   const data = new FormData();
@@ -87,7 +85,6 @@ beforeEach(() => {
   mocks.signUp.mockResolvedValue({ data: { user: { id: "new", identities: [{ id: "i1" }] }, session: null }, error: null });
   mocks.hasAgeConfirmation.mockResolvedValue(true);
   mocks.recordAgeConfirmation.mockResolvedValue(true);
-  mocks.needsAge.mockResolvedValue(false);
   mocks.updateUser.mockResolvedValue({ error: null });
   mocks.getUser.mockResolvedValue({ data: { user: { id: "u1", user_metadata: { avatar_url: "https://img.example/a.png" } } } });
   mocks.profileUpdate.mockReturnValue({ data: [{ id: "u1" }], error: null });
@@ -399,39 +396,15 @@ describe("sign-up and return (F-3)", () => {
   });
 });
 
-// N686: a member who joined before the 18+ confirmation answers it once, at sign-in.
-describe("earlier members confirm their age at their next sign-in (N686)", () => {
-  it("N686: sign-in sends an earlier member to /confirm-age, keeping the destination", async () => {
-    mocks.needsAge.mockResolvedValue(true);
-    await expect(login({}, form({ email: "a@drvn.test", password: "pw", next: "/listings/abc" }))).rejects.toThrow(
-      "redirect:/confirm-age?next=%2Flistings%2Fabc",
-    );
-    await expect(login({}, form({ email: "a@drvn.test", password: "pw" }))).rejects.toThrow("redirect:/confirm-age");
-    expect(mocks.needsAge).toHaveBeenCalledWith({ id: "u1" });
-  });
-
-  it("N686: a member on record goes straight on", async () => {
-    await expect(login({}, form({ email: "a@drvn.test", password: "pw", next: "/garage" }))).rejects.toThrow("redirect:/garage");
-  });
-
-  it("N686: the action refuses an unticked box and records a ticked one as returning_member", async () => {
+// N686, N662: accounts from before the 18+ confirmation are test accounts
+// and are not asked (Neil's ruling, 10 November 2026).
+describe("sign-in asks no 18+ question of an existing account (N686, N662)", () => {
+  it("N686: a member with a handle goes straight to where they were going, with no lookup of their age record", async () => {
     mocks.hasAgeConfirmation.mockResolvedValue(false);
-    await expect(confirmAge({}, form({ next: "/garage" }))).resolves.toEqual({ error: "Confirm you're 18 or over to continue.", field: "age" });
+    await expect(login({}, form({ email: "a@drvn.test", password: "pw", next: "/listings/abc" }))).rejects.toThrow(/^redirect:\/listings\/abc$/);
+    await expect(login({}, form({ email: "a@drvn.test", password: "pw" }))).rejects.toThrow(/^redirect:\/home$/);
+    expect(mocks.hasAgeConfirmation).not.toHaveBeenCalled();
     expect(mocks.recordAgeConfirmation).not.toHaveBeenCalled();
-    await expect(confirmAge({}, form({ next: "/garage", age_confirmed: "yes" }))).rejects.toThrow("redirect:/garage");
-    expect(mocks.recordAgeConfirmation).toHaveBeenCalledWith("u1", "returning_member");
-  });
-
-  it("N686: a failed write says so, a member already on record isn't recorded twice, and a stranger is sent to sign in", async () => {
-    mocks.hasAgeConfirmation.mockResolvedValue(false);
-    mocks.recordAgeConfirmation.mockResolvedValue(false);
-    await expect(confirmAge({}, form({ age_confirmed: "yes" }))).resolves.toEqual({ error: "We couldn't save that. Try again." });
-    mocks.hasAgeConfirmation.mockResolvedValue(true);
-    mocks.recordAgeConfirmation.mockClear();
-    await expect(confirmAge({}, form({ next: "https://evil.example" }))).rejects.toThrow("redirect:/home");
-    expect(mocks.recordAgeConfirmation).not.toHaveBeenCalled();
-    mocks.getUser.mockResolvedValue({ data: { user: null } });
-    await expect(confirmAge({}, form({ age_confirmed: "yes" }))).rejects.toThrow("redirect:/login");
   });
 });
 

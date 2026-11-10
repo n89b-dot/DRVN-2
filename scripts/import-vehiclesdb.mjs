@@ -11,7 +11,8 @@
 // `on conflict do nothing`.
 //
 // Usage:
-//   node scripts/import-vehiclesdb.mjs --target <name> [--env-file <path>]           dry run: fetch, verify, count
+//   node scripts/import-vehiclesdb.mjs --target <name> [--env-file <path>]           dry run: fetch, verify, count,
+//     and say which curated generations will find a catalogue model and which will not
 //   node scripts/import-vehiclesdb.mjs --target <name> [--env-file <path>] --apply --confirm <code>
 //     import, then seed generations; the code is the one the dry run printed
 //
@@ -25,7 +26,18 @@ import { parseArgs } from "node:util";
 import { Client } from "pg";
 
 import { directClientConfig, loadTargets, readDbEnv, resolveTarget } from "./lib/supabase-db.mjs";
-import { VEHICLESDB, generationSeedSql, importConfirmationCode, makePopularity, verifiedJson, vehiclesDbUrl } from "./lib/vehicle-catalog.mjs";
+import {
+  VEHICLESDB,
+  coverageLines,
+  curatedCoverageSql,
+  generationSeedSql,
+  importConfirmationCode,
+  incomingPairs,
+  makePopularity,
+  summariseCoverage,
+  verifiedJson,
+  vehiclesDbUrl,
+} from "./lib/vehicle-catalog.mjs";
 
 const { values } = parseArgs({
   options: {
@@ -72,10 +84,28 @@ async function totals() {
   return rows[0];
 }
 
+/**
+ * Work review #141: curated generations against the catalogue, by the seed's
+ * own join. `incoming` is what this release will add (a dry run asks about
+ * the catalogue after the import without writing it); `[]` asks about the
+ * catalogue as it stands. Read-only.
+ */
+const coverageSql = curatedCoverageSql(seedSql);
+async function coverage(incoming) {
+  await client.query("begin transaction read only");
+  try {
+    const { rows } = await client.query(coverageSql, [JSON.stringify(incoming)]);
+    return summariseCoverage(rows);
+  } finally {
+    await client.query("rollback");
+  }
+}
+
 const before = await totals();
 console.log(`catalogue now: ${before.makes} makes, ${before.models} models, ${before.generations} generations`);
 const code = importConfirmationCode(target.ref, seedSql);
 if (!values.apply) {
+  for (const line of coverageLines(await coverage(incomingPairs(makes, models)), "after this import")) console.log(line);
   console.log(`Dry run: nothing was changed. To import and seed generations, re-run with --apply --confirm ${code}`);
   await client.end();
   process.exit(0);
@@ -148,5 +178,8 @@ try {
 
 const after = await totals();
 console.log(`catalogue now: ${after.makes} makes, ${after.models} models, ${after.generations} generations`);
+const seeded = await coverage([]);
+for (const line of coverageLines(seeded, "now")) console.log(line);
 if (after.generations === 0) console.error("warning: no generations after the seed; check the curated makes and models exist");
+else if (seeded.missed.length) console.error(`warning: ${seeded.missed.length} curated model(s) are not in the catalogue (listed above); record them with the counts`);
 await client.end();

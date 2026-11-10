@@ -327,7 +327,7 @@ export function GalleryManager({
         title={ordered.length ? "Add more photos" : "Add the first photos"}
         body={
           ordered.length
-            ? "Drop images here, or click to choose. 10MB max each."
+            ? "Drop images here, or click to choose. 4 MB max each; larger photos are shrunk first."
             : "Drop images here, or click to choose. The first upload becomes the cover."
         }
       />

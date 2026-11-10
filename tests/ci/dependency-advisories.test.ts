@@ -54,6 +54,23 @@ describe("production dependency advisories (N410, B1)", () => {
   });
 });
 
+describe("N714: package.json declares the patched ranges for undici and zod too (work review #144)", () => {
+  // The same floors the lockfile test above names. A declared range below
+  // them lets a fresh install (no lockfile, or a regenerated one) resolve a
+  // release inside the advisory.
+  it.each([
+    ["undici", "8.12.3"],
+    ["zod", "4.6.7"],
+  ])("%s's declared range starts at or above %s, and the lockfile's root agrees", (name, floor) => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };
+    const declared = pkg.dependencies[name];
+    expect(declared).toMatch(/^\^\d+\.\d+\.\d+$/);
+    expect(atLeast(declared.slice(1), floor), `${name} ${declared}`).toBe(true);
+    const lockRoot = (lock.packages[""] as { dependencies?: Record<string, string> }).dependencies;
+    expect(lockRoot?.[name]).toBe(declared);
+  });
+});
+
 describe("package.json declares the patched Next.js range (N714)", () => {
   it("next's declared range starts at the installed major.minor.patch floor, so a fresh install can't resolve a vulnerable release", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };

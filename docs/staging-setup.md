@@ -36,6 +36,82 @@ Parity with shared dev was checked at 765c7cd, before the last two migrations: t
 
 **Keeping staging current:** every migration merged to `main` must also be applied to staging, the same as dev. Apply it from the staging-only checkout (step 2.1), then rerun the history seed. Migrations can merge with timestamps earlier than ones already applied, so find new files with `git diff --name-only --diff-filter=A <last applied commit> origin/main -- supabase/migrations`, not by filename order.
 
+## The order to do the steps in (#115)
+
+The sections keep their numbers, because other documents cite them, but **the
+first deploy comes last**. A hosted deployment refuses the payment stub
+(N540), so staging runs in Stripe mode, and in that mode the app refuses to
+start without the Stripe, Sentry and alert values. A deploy made before they
+exist builds fine, then answers every request with an error.
+
+1. §0, §1, §2, §3: domain, Supabase project, schema, Auth.
+2. §2a: fill the vehicle catalogue (after the schema, before testers).
+3. §4.1–4.2: create the hosting project **from the terminal, not by
+   importing the repository** (the import deploys at once; §4.1 has the
+   commands), and attach the domain. **Do not deploy**, and do not connect
+   the repository to the project.
+4. §5 (Stripe test mode and **both** webhooks), §6 (EasyPost, if used),
+   §8 (Sentry), §9 (alert webhook). Stripe creates webhook endpoints for a URL
+   that isn't live yet, and the signing secrets exist from that moment.
+5. §4.3: set every variable in the table, including the values from step 4.
+   Check them against "What the app refuses to boot without", below.
+6. §11: GitHub environments, secrets and variables; then
+   `DRVN_DEPLOY_STAGING = true`. The first deploy runs on the next green push
+   to `main`.
+7. **Come back once staging answers `/api/version` with the commit**, and do
+   the "after the first deploy" half of §5.3 (a test event to each webhook),
+   §8 (a test error reaches Sentry) and §9 (a test alert reaches the channel;
+   it needs the §12 admin to see the outbox).
+8. §7 (scheduler), §10 (monitor), §12 (first admin), §13 (evidence).
+
+### What the app refuses to boot without
+
+Checked at server start (`src/instrumentation.ts`), in stages. Each stage
+stops the boot with its own message in the host's function logs, so fix what
+it names, redeploy, and read the next one:
+
+1. `DRVN_DEPLOY_ENV` (a plain `Error`: "DRVN_DEPLOY_ENV …"). The build checks
+   it too.
+2. The payment mode (`PaymentsConfigError`): `PAYMENTS_MODE` must be `stripe`
+   or `stub` when set, Stripe mode needs `STRIPE_SECRET_KEY`, and
+   `PAYMENTS_ALLOW_STUB_IN_PRODUCTION` must be absent on a hosted deployment.
+3. The database keys, on any hosted production deployment
+   (`PaymentsConfigError`: "missing its database configuration: …").
+4. Live-money configuration (`PaymentsConfigError`): first every **missing**
+   variable together ("missing required configuration: …"), then every
+   **invalid** one together ("configuration is invalid: …").
+5. The agent, only if `AGENTS_BETA=on`.
+
+On staging (production build, Stripe mode) that means:
+
+| Variable | Rule |
+|---|---|
+| `PAYMENTS_MODE` | `stripe` (if set, `stripe` or `stub`; nothing else) |
+| `STRIPE_SECRET_KEY` | set (`sk_test_…` on staging) |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or `…_ANON_KEY`), `SUPABASE_SECRET_KEY` (or `SUPABASE_SERVICE_ROLE_KEY`) | all set |
+| `STRIPE_WEBHOOK_SECRET`, `STRIPE_CONNECT_WEBHOOK_SECRET` | both set (§5.1, §5.2) |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | set |
+| `SENTRY_DSN` | an `https://<key>@<host>/<number>` DSN (§8) |
+| `ADMIN_ALERT_WEBHOOK_URL` | an `https:` URL (§9) |
+| `NEXT_PUBLIC_SITE_URL` | an `https:` origin with no path, query or credentials |
+| `CRON_SECRET`, `GUEST_RECEIPT_SECRET` | each at least 32 characters, and different from each other |
+| `ACCOUNT_EMAIL_DIGEST_KEY` | at least 32 characters, if set |
+| `DRVN_DEPLOY_ENV` | `staging` or `production` |
+| `PAYMENTS_ALLOW_STUB_IN_PRODUCTION` | **absent** |
+| `AGENT_MODEL`, `AGENT_WORKER_DATABASE_URL` | valid, if `AGENTS_BETA=on` |
+
+If the deploy workflow's "Staging reports this commit" step prints
+`HTTP 500` on every poll, the app is refusing to boot: open the host's
+function logs and look for `PaymentsConfigError`. The step prints each new
+answer it gets (status and the start of the body) and gives up after fifteen
+minutes.
+
+**`NEXT_PUBLIC_*` values are fixed when the deploy workflow builds** (on the
+GitHub runner, from `vercel pull`), not when the host serves. After changing
+one in the host's settings, re-run the Deploy workflow for that commit
+(Actions → Deploy → Re-run). Redeploying from the host's dashboard reuses the
+old build, and it skips the release gate.
+
 ---
 
 ## 0. Before you start [OWNER]
@@ -209,12 +285,36 @@ Emails:
 
 ## 4. Hosting project [OWNER creates, ENGINEER configures]
 
-1. Create the Vercel project from the GitHub repo [OWNER — needs the paid
-   tier the owner chooses]; production branch = the release-candidate
-   branch or `main`. Node 22 (CI uses 22.22.0). Build command `npm run
-   build`, install `npm ci`. Turn the project's automatic Git deploys off:
-   `.github/workflows/deploy.yml` deploys instead, only after `release-gate`
-   passes (§11.4).
+1. Create the Vercel project **without a deploy** [OWNER — needs the paid
+   tier the owner chooses]. **Do not use the dashboard's "Add New… →
+   Project → Import Git Repository"**: it builds and deploys the repository
+   the moment you finish the form, before a single variable exists, and
+   that deployment is public. Create an empty project from a terminal
+   instead, with no Git connection at all:
+
+   ```bash
+   npx vercel@65.2.0 login                              # once, as the owner
+   npx vercel@65.2.0 project create drvn-staging --scope <team-slug>
+   npx vercel@65.2.0 project update drvn-staging --scope <team-slug> \
+     --framework nextjs --node-version 22.x --build-command "npm run build" --install-command "npm ci"
+   npx vercel@65.2.0 project inspect drvn-staging --scope <team-slug>   # shows the project id (prj_…)
+   ```
+
+   `project create` makes the project and nothing else: no build, no
+   deployment, no repository. Leave it that way. **Do not connect the GitHub
+   repository** under the project's Settings → Git: with no connection the
+   host cannot deploy on a push, so there is no automatic deploy to turn
+   off. `.github/workflows/deploy.yml` builds on its own runner and uploads
+   the result, only after `release-gate` passes (§11.4); it needs the
+   project's id and the team's id, not a Git link. Note the two ids for
+   §11.4: the project id from `project inspect` (or Settings → General →
+   Project ID) is `VERCEL_STAGING_PROJECT_ID`; the team id (Team Settings →
+   General → Team ID) is `VERCEL_ORG_ID`. The same four settings can be made
+   in the dashboard instead (Settings → Build and Deployment: framework
+   Next.js, Node 22.x, build `npm run build`, install `npm ci`); CI builds
+   on Node 22.22.0. The subcommands and flags above were confirmed in
+   `vercel@65.2.0`'s own `--help` on 10 November 2026 and have not been run
+   against an account: the first time through, read what each prints.
 2. Attach the staging domain; confirm HTTPS.
 3. Set the environment variables below for the deployment environment that
    serves the staging domain.
@@ -225,6 +325,7 @@ Emails:
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | step 1.3 |
 | `SUPABASE_SECRET_KEY` | step 1.3 — server only |
 | `NEXT_PUBLIC_SITE_URL` | the staging origin, `https://…`, no path |
+| `DRVN_DEPLOY_ENV` | `staging` (the production project gets `production`). Required: a hosted deploy without it refuses to boot. Anything but `production` answers robots.txt with `Disallow: /` and sends `X-Robots-Tag: noindex`, so staging stays out of search engines, and error reports carry it as their environment (`src/lib/deployment.ts`). **Fixed at build, like `NEXT_PUBLIC_*`:** the deploy workflow's build reads it through `vercel pull`, so set it before the first deploy, don't mark it Sensitive (a Sensitive value isn't pulled), and re-run the Deploy workflow after changing it. A hosted production-mode build without it, or with a misspelt value, fails. **Checked after every deploy:** once the site reports its commit, the Deploy workflow asks the served site itself and fails the deploy unless staging disallows every crawler in `/robots.txt`, sends `X-Robots-Tag: noindex` and answers 404 for `/sitemap.xml` and the catalogue sitemaps (production must be the reverse). So a staging project set to `production` by mistake fails its first deploy, loudly, with the reasons |
 | `PAYMENTS_MODE` | `stripe` |
 | `STRIPE_SECRET_KEY` | Stripe **test mode** → Developers → API keys (`sk_test_…`). A test key keeps the site's test-mode notices on |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | same page (`pk_test_…`) |
@@ -250,7 +351,9 @@ Emails:
 
 Never set `PAYMENTS_ALLOW_STUB_IN_PRODUCTION` on staging — the candidate
 declares `paymentMode: "stripe-test"`, and the app refuses to boot with it
-on a hosted deployment (N540). Deploy; the build must start without a
+on a hosted deployment (N540). **Don't deploy yet.** The Stripe, Sentry and
+alert rows above need §5, §8 and §9 first ("The order to do the steps in",
+above). The first deploy is §11.4's, and it must start without a
 `PaymentsConfigError` in the logs. A boot failure lists every missing or
 invalid variable at once.
 
@@ -265,7 +368,8 @@ invalid variable at once.
    `payment_intent.requires_action`, `charge.refunded`, `refund.created`,
    `refund.updated`, `refund.failed`, `charge.dispute.created`,
    `charge.dispute.closed`, `account.updated`. Copy the signing secret into
-   `STRIPE_WEBHOOK_SECRET` and redeploy.
+   `STRIPE_WEBHOOK_SECRET` (§4.3). Before the first deploy that is all; if
+   staging is already deployed, re-run the Deploy workflow after changing it.
 2. Connect → enable Connect in test mode, **Express** accounts, platform
    profile and branding filled in [OWNER: platform business details]. Sellers
    onboard from `/payouts`; they return to `/settings/payouts/return`, which
@@ -273,10 +377,10 @@ invalid variable at once.
    Then add a **second** webhook endpoint, "events on connected accounts",
    at the same URL `https://<staging-origin>/api/stripe/webhook`, with the
    single event `account.updated`. Copy its signing secret into
-   `STRIPE_CONNECT_WEBHOOK_SECRET` and redeploy. This is how a seller's
-   payout status reaches DRVN after onboarding.
-3. Send a test event from the dashboard and confirm a `200` in the endpoint's
-   log.
+   `STRIPE_CONNECT_WEBHOOK_SECRET` (§4.3), as for the first. This is how a
+   seller's payout status reaches DRVN after onboarding.
+3. **After the first deploy** (step 7 of the order above): send a test event
+   to each endpoint from the dashboard and confirm a `200` in its log.
 
 ## 6. EasyPost, test mode [OWNER account, ENGINEER configures]
 
@@ -293,7 +397,7 @@ Only if staging declares `shippingMode: "easypost-test"`.
 
 ## 7. Scheduler → app [ENGINEER]
 
-The migrations already created the pg_cron jobs (19 as of 7 Nov 2026); the HTTP ones do
+The migrations already created the pg_cron jobs (twenty-one, listed in runbook §4); the HTTP ones do
 nothing until the database knows where the app is. In the SQL editor:
 
 ```sql
@@ -316,14 +420,17 @@ their first 03:17 / 03:37 UTC run. Trigger one by hand to confirm:
 Create a project (platform: Node/Next.js). Copy its DSN into `SENTRY_DSN`.
 Reporting is server-side only (`src/lib/monitoring.ts`); there is no browser
 SDK or replay to configure. Optionally set `SENTRY_RELEASE` (defaults to the
-commit SHA). Trigger a test error and confirm it arrives.
+commit SHA). **After the first deploy** (step 7 of the order): trigger a
+test error and confirm it arrives, tagged `staging`.
 
 ## 9. Operator alerts [OWNER]
 
 Create a Slack incoming webhook (or any HTTPS endpoint accepting a JSON body
 with a Slack-compatible `text`) in a channel the operator watches. Put it in
-`ADMIN_ALERT_WEBHOOK_URL`. Confirm a delivery: Admin → Payments shows the
-alert outbox; a `disabled` row means the variable was not set when raised.
+`ADMIN_ALERT_WEBHOOK_URL`. **After the first deploy and the §12 admin**
+(step 7 of the order): confirm a delivery. Admin → Payments shows the alert
+outbox; a `disabled` row means the variable was not set when the alert was
+raised.
 
 ## 10. Independent monitor [OWNER sets repo settings]
 
@@ -369,18 +476,70 @@ on a separate host (`docs/remediation-release-and-monitoring.md`).
    and staging has every migration, then waits for `/api/version` to report
    that commit. Production deploys only by hand, for an annotated
    `rc-YYYYMMDD` tag on `main`, through the `production` environment.
-   - Repository secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`,
-     `VERCEL_STAGING_PROJECT_ID`, `VERCEL_PRODUCTION_PROJECT_ID`,
-     `STAGING_SUPABASE_DB_PASSWORD`, `PRODUCTION_SUPABASE_DB_PASSWORD`,
-     `ADMIN_ALERT_WEBHOOK_URL`.
+   - Repository secret: `ADMIN_ALERT_WEBHOOK_URL` (both jobs post to it).
+   - **Environment secrets, not repository secrets (#123):** put each of the
+     following on the environment that uses it (Settings → Environments →
+     the environment → Add secret). A repository secret can be read by any
+     workflow on any branch. An environment secret reaches only a job that
+     names that environment, and production's waits for its required
+     reviewer. The workflow reads them under the same names, so nothing else
+     changes.
+     - `staging`: `STAGING_SUPABASE_READER_PASSWORD`, `VERCEL_TOKEN`,
+       `VERCEL_ORG_ID`, `VERCEL_STAGING_PROJECT_ID`.
+     - `production`: `PRODUCTION_SUPABASE_READER_PASSWORD`, `VERCEL_TOKEN`,
+       `VERCEL_ORG_ID`, `VERCEL_PRODUCTION_PROJECT_ID`.
+
+     The two database secrets are the password of `deploy_reader`, a
+     read-only login made as below. The workflow holds no database owner's
+     password (work review #138).
    - Repository variables: `DRVN_STAGING_ORIGIN`, `DRVN_PRODUCTION_ORIGIN`,
      `DRVN_STAGING_SUPABASE_URL`, `DRVN_PRODUCTION_SUPABASE_URL`, and
      `DRVN_DEPLOY_STAGING = true` to switch the staging job on.
    - Environments (Settings → Environments): `staging`, and `production`
      with **required reviewers** (the owner), so a production deploy waits for
-     a person's approval as well as the tag.
+     a person's approval as well as the tag. **Create both before the first
+     run** (work review #139): a job that names an environment which does not
+     exist makes GitHub create it, empty and unprotected, and run.
+   - **Restrict what may deploy to each** (work review #156): in each
+     environment, "Deployment branches and tags" → "Selected branches and
+     tags". `staging`: add the branch `main` and nothing else. `production`:
+     add the branch `main` (a production deploy is started by hand from
+     `main`, with the release tag typed in) and the tag pattern `rc-*`. With
+     the default, "No restriction", a workflow run from any branch can name
+     the environment and read its secrets; with this, a run from another
+     branch stops before it starts.
    - The pipeline never applies a migration. If staging or production lacks
      one, the deploy stops and names it; apply it with the runner (§2).
+   - **The read-only login `deploy_reader`.** The deploy's migration check
+     reads one table, `supabase_migrations.schema_migrations`, so it signs in
+     with a login that can do nothing else. Make it once on each database
+     (staging, then production when it exists), as the owner, in the
+     dashboard's SQL editor, with a new password of 32 or more characters
+     for each database:
+
+     ```sql
+     create role deploy_reader login password '<new password>' connection limit 3;
+     alter role deploy_reader set default_transaction_read_only = on;
+     alter role deploy_reader set statement_timeout = '10s';
+     grant usage on schema supabase_migrations to deploy_reader;
+     grant select on supabase_migrations.schema_migrations to deploy_reader;
+     ```
+
+     Put each password in its secret above and nowhere else. To rotate one,
+     run `alter role deploy_reader password '<new password>';` and update the
+     secret. Grant it nothing else, and never make it a member of another
+     role (a member inherits that role's rights). The runner checks the
+     login on every use and refuses it if it is a superuser, can create
+     roles, bypasses row-level security, is a member of any role, is not
+     read-only by default, or can write the history table, so a wrong
+     password pasted here cannot quietly be an owner's. What keeps it from
+     writing is what it holds, not the read-only default, which a session
+     can switch off. These five statements were run on a new Supabase
+     Postgres 17 on 10 November 2026 and are enough for `--status`. To try it by hand,
+     put `SUPABASE_DB_READER_USER=deploy_reader` and
+     `SUPABASE_DB_READER_PASSWORD=…` in an env file beside
+     `NEXT_PUBLIC_SUPABASE_URL` and run
+     `node scripts/apply-migration.mjs --target staging --env-file <file> --status`.
 
 ## 12. First admin [ENGINEER]
 

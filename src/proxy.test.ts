@@ -1,3 +1,6 @@
+// Next's own matcher check. Its docs call it unstable_doesProxyMatch; the
+// installed 16.4.3 exports it under the name it had before the rename.
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 import { NextRequest, NextResponse } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -12,7 +15,7 @@ session.update.mockImplementation(async () => NextResponse.next());
 
 import { buildContentSecurityPolicy } from "@/lib/csp";
 
-import { config, proxy } from "./proxy";
+import { config, isSitemapPath, proxy } from "./proxy";
 
 /** The generated policy as directive → sources. */
 function directives(policy: string): Map<string, string[]> {
@@ -172,5 +175,59 @@ describe("gate order and the optimiser's other spellings (N940, #196 review)", (
     const response = await proxy(new NextRequest(`https://drvn.example/_next/image/?url=${encodeURIComponent(`https://project.supabase.co/storage/v1/object/public/car-images/${OWNER}/gone.webp`)}&w=640&q=75`));
     expect(response.status).toBe(451);
     expect(config.matcher).toContain("/_next/image/:path*");
+  });
+});
+
+describe("N715: the proxy's matcher runs on every console path (work review #143)", () => {
+  const runs = (url: string) => unstable_doesMiddlewareMatch({ config, url });
+
+  it("runs on the console whatever the path ends in, an image extension included", () => {
+    for (const url of ["/admin", "/admin/", "/admin/users", "/admin/users/x.png", "/admin/cases/photo.JPG", "/admin/a/b/c.webp", "/admin/logo.svg"]) {
+      expect(runs(url), url).toBe(true);
+    }
+  });
+
+  it("still runs on pages, actions' own URLs and optimised images", () => {
+    for (const url of ["/", "/home", "/listings/123", "/admin-verify", "/api/version", "/_next/image", "/_next/image/"]) {
+      expect(runs(url), url).toBe(true);
+    }
+  });
+
+  it("still skips static assets and public image files outside the console", () => {
+    for (const url of ["/_next/static/chunks/main.js", "/favicon.ico", "/logo.png", "/brand/mark.svg", "/administrator.png"]) {
+      expect(runs(url), url).toBe(false);
+    }
+  });
+});
+
+describe("N958: only the deployment named production serves a sitemap (work review #156, N1072)", () => {
+  const get = (path: string) => proxy(new NextRequest(`https://drvn.example${path}`));
+
+  it("answers 404 for the static and catalogue sitemaps on staging and on an unnamed deployment, without reaching the app", async () => {
+    for (const name of ["staging", ""]) {
+      vi.stubEnv("DRVN_DEPLOY_ENV", name);
+      for (const path of ["/sitemap.xml", "/catalog/sitemap/index.xml", "/catalog/sitemap/listings-0.xml"]) {
+        session.update.mockClear();
+        const response = await get(path);
+        expect(response.status, `${name || "unnamed"} ${path}`).toBe(404);
+        expect(response.headers.get("cache-control")).toBe("no-store");
+        expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+        expect(session.update).not.toHaveBeenCalled();
+      }
+    }
+  });
+
+  it("lets the sitemaps through on production, and never touches another path", async () => {
+    vi.stubEnv("DRVN_DEPLOY_ENV", "production");
+    for (const path of ["/sitemap.xml", "/catalog/sitemap/index.xml"]) {
+      expect((await get(path)).status, path).toBe(200);
+    }
+    vi.stubEnv("DRVN_DEPLOY_ENV", "staging");
+    for (const path of ["/", "/marketplace", "/robots.txt", "/sitemap", "/catalog", "/listings/sitemap.xml"]) {
+      expect((await get(path)).status, path).toBe(200);
+      expect(isSitemapPath(path), path).toBe(false);
+    }
+    // The proxy runs on these paths at all.
+    for (const url of ["/sitemap.xml", "/catalog/sitemap/index.xml"]) expect(unstable_doesMiddlewareMatch({ config, url }), url).toBe(true);
   });
 });

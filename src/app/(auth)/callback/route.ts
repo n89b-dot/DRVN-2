@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 
-import { ageConfirmationPath } from "@/lib/age-confirmation";
-import { needsReturningAgeConfirmation } from "@/lib/age-confirmation-record";
 import { authErrorCode, oauthReturnNotice, type LoginNotice } from "@/lib/auth-errors";
 import { landingWithoutUsername, loadHeldDeletion } from "@/lib/held-deletion";
 import { safeRedirectPath } from "@/lib/safe-redirect";
@@ -59,12 +57,8 @@ export async function GET(request: Request) {
         // An account with no profile row at all goes there too (N40):
         // onboarding is where it is either completed or signed out.
         // OS-W11: a held deletion goes to its order instead.
-        // N686: a member from before the 18+ confirmation answers it once
-        // on the way in, keeping the destination.
         const destination = profile?.username
-          ? (await needsReturningAgeConfirmation(user))
-            ? ageConfirmationPath(next || undefined)
-            : next || "/home"
+          ? next || "/home"
           : landingWithoutUsername(await loadHeldDeletion(supabase, user.id), next);
         return redirectWithCookies(destination, authCookies);
       }
