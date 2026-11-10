@@ -89,6 +89,84 @@ export function publicKey(): string | undefined {
 export const isProduction = process.env.NODE_ENV === "production";
 
 // ---------------------------------------------------------------------------
+// Key shapes (work review #140): the right kind of key in the right variable
+// ---------------------------------------------------------------------------
+
+type SupabaseKeyKind = "publishable" | "secret" | "unknown";
+
+/** The `role` claim of a legacy JWT key, read without verifying it; null when the value isn't one. */
+function jwtRole(value: string): string | null {
+  const parts = value.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload: unknown = JSON.parse(atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "=")));
+    const role = (payload as { role?: unknown } | null)?.role;
+    return typeof role === "string" ? role : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Which kind of Supabase key a value is, by its shape: `sb_publishable_…` / `sb_secret_…`, or a legacy JWT's role. */
+export function supabaseKeyKind(value: string): SupabaseKeyKind {
+  if (value.startsWith("sb_publishable_")) return "publishable";
+  if (value.startsWith("sb_secret_")) return "secret";
+  const role = jwtRole(value);
+  if (role === "anon") return "publishable";
+  if (role === "service_role") return "secret";
+  return "unknown";
+}
+
+/** Values no browser may ever be sent: a Supabase secret key, a Stripe secret or restricted key, a webhook signing secret. */
+function looksSecret(value: string): boolean {
+  return supabaseKeyKind(value) === "secret" || /^(sk|rk)_(live|test)_/.test(value) || /^whsec_/.test(value);
+}
+
+/**
+ * What is wrong with the database configuration's shape, in words that name
+ * the variable and never print a value (work review #140). Presence is
+ * checked by the caller; this checks kind:
+ *  - a secret-shaped value in any `NEXT_PUBLIC_` variable, which the build
+ *    would ship to every browser;
+ *  - the public key variable holding anything but a publishable (or legacy
+ *    anon) key, and the secret variable anything but a secret (or legacy
+ *    service_role) key, so a swapped pair fails here and not as row-level
+ *    security errors on the first admin read;
+ *  - a Supabase URL that is not a bare https origin.
+ */
+export function databaseKeyProblems(env: EnvLike = process.env): string[] {
+  const problems: string[] = [];
+  const leaked = new Set<string>();
+  for (const [name, value] of Object.entries(env)) {
+    if (name.startsWith("NEXT_PUBLIC_") && value && looksSecret(value)) {
+      leaked.add(name);
+      problems.push(`${name} holds a secret key, and every NEXT_PUBLIC_ value is sent to browsers: move it to its server-only variable and rotate it`);
+    }
+  }
+  const publicName = PUBLIC_KEYS.find((name) => env[name]);
+  if (publicName && !leaked.has(publicName) && supabaseKeyKind(env[publicName]!) !== "publishable") {
+    problems.push(`${publicName} is not a Supabase publishable (or legacy anon) key`);
+  }
+  const secretName = SECRET_KEYS.find((name) => env[name]);
+  if (secretName) {
+    const kind = supabaseKeyKind(env[secretName]!);
+    if (kind === "publishable") problems.push(`${secretName} holds a publishable key, not the secret (or legacy service_role) key`);
+    else if (kind !== "secret") problems.push(`${secretName} is not a Supabase secret (or legacy service_role) key`);
+  }
+  const url = env.NEXT_PUBLIC_SUPABASE_URL;
+  if (url) {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) throw new Error("not a bare https origin");
+    } catch {
+      problems.push("NEXT_PUBLIC_SUPABASE_URL is not a bare https origin (https://<project>.supabase.co)");
+    }
+  }
+  return problems;
+}
+
+// ---------------------------------------------------------------------------
 // Payments mode — explicit, and fail-closed in production
 // ---------------------------------------------------------------------------
 
@@ -249,6 +327,11 @@ export function validatePaymentsEnv(env: EnvLike = process.env): {
     const missingKeys = [URL_KEYS, PUBLIC_KEYS, SECRET_KEYS].filter((names) => !names.some((name) => env[name])).map((names) => names.join(" or "));
     if (missingKeys.length) {
       throw new PaymentsConfigError(`A hosted production deployment is missing its database configuration: ${missingKeys.join(", ")}.`);
+    }
+    // Work review #140: present is not enough; each must be the right kind.
+    const wrongKind = databaseKeyProblems(env);
+    if (wrongKind.length) {
+      throw new PaymentsConfigError(`A hosted production deployment's database configuration is wrong: ${wrongKind.join("; ")}.`);
     }
   }
 
