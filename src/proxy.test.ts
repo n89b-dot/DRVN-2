@@ -158,3 +158,19 @@ describe("the image gate refuses unsigned member photos and nothing else (N940, 
     expect(session.update).not.toHaveBeenCalled();
   });
 });
+
+describe("gate order and the optimiser's other spellings (N940, #196 review)", () => {
+  const OWNER = "8f6c2a52-3d1e-4b8a-9c3f-2b1d4e5f6a7b";
+  it("a taken-down photo is 451 even when requested unsigned", async () => {
+    blocked.keys.mockResolvedValue(new Set([`car-images/${OWNER}/gone.webp`]));
+    const response = await proxy(new NextRequest(`https://drvn.example/_next/image?url=${encodeURIComponent(`https://project.supabase.co/storage/v1/object/public/car-images/${OWNER}/gone.webp`)}&w=640&q=75`));
+    expect(response.status).toBe(451);
+  });
+
+  it("gates /_next/image/ with a trailing slash too", async () => {
+    blocked.keys.mockResolvedValue(new Set([`car-images/${OWNER}/gone.webp`]));
+    const response = await proxy(new NextRequest(`https://drvn.example/_next/image/?url=${encodeURIComponent(`https://project.supabase.co/storage/v1/object/public/car-images/${OWNER}/gone.webp`)}&w=640&q=75`));
+    expect(response.status).toBe(451);
+    expect(config.matcher).toContain("/_next/image/:path*");
+  });
+});

@@ -16,6 +16,8 @@
  * These are the pure rules (no server-only import, so they can be tested).
  */
 
+import { MEMBER_JSON_COLUMNS } from "./json-columns";
+
 /** The buckets whose objects are read through signed URLs. Avatars stay public. */
 export const SIGNED_PHOTO_BUCKETS = ["car-images", "listing-images", "activity-images"] as const;
 
@@ -116,6 +118,12 @@ export function signingWindow(nowMs: number): { window: number; expiresIn: numbe
 }
 
 const UNSIGNED_MEMBER_PHOTO = new RegExp(`/storage/v1/object/public/(?:${BUCKETS})/`);
+const MEMBER_PHOTO = new RegExp(`/storage/v1/object/(?:public|sign)/(?:${BUCKETS})/`);
+
+/** A member photo in either spelling (#196 review: only these get the plate on a failed load). */
+export function isMemberPhotoSource(src: string | null | undefined): boolean {
+  return typeof src === "string" && MEMBER_PHOTO.test(src);
+}
 
 /**
  * A member photo still in its canonical spelling: signing failed or a loader
@@ -128,68 +136,82 @@ export function isUnsignedMemberPhoto(src: string | null | undefined): boolean {
 }
 
 /**
- * Which values in a database answer are photo fields that may be signed
- * (#178 review, P1). Signing every canonical photo URL anywhere in a
- * response let a member paste someone else's private photo URL into a
- * comment, a description, a bio or a profile link and get it signed for every
- * reader, the export included. Only whole values under a photo-shaped key are
- * signed: the columns and aliases that hold photos (url, image, images,
- * image_url, cover_image_url, cover_url, imported_images, a post's image and
- * before/after blocks), never a URL inside prose, and never a profile link's
- * `{ label, url }`. Every structured photo column is also owner-checked when
- * written (member_media_ref_ok, 20261107203000), so what these keys hold is
- * the row owner's own photo.
+ * Which values in a database answer may be signed (#178 review; #196 review).
+ * The rule: a value is signed only when
+ *   (a) it sits at a column or JSON path a DATABASE guard owner-checks on
+ *       write (member_media_ref_ok and guard_member_post_body_media,
+ *       20261107203000), and
+ *   (b) where the row's owner is known (owner_id, seller_id or author_id on
+ *       the nearest object that has one), the photo's folder is that owner.
+ * Everything else stays canonical, which the storage layer refuses.
+ *
+ * (a) in practice: the guarded columns url, image_url and cover_image_url
+ * (and the RPC aliases image, cover and cover_url, which read them), never
+ * anything inside a JSON column, except a post body's images block `urls` and
+ * its before/after `beforeUrl` / `afterUrl`, the only JSON paths the body
+ * guard checks. src/lib/photo-urls.test.ts holds both lists to the schema.
  */
-const PHOTO_KEY = /(?:^|_)(?:image|images|photo|photos|cover|covers|thumbnail|thumb)(?:_urls?)?$/i;
-const PHOTO_EXACT = new Set(["url", "urls", "src", "beforeUrl", "afterUrl"]);
-const NOT_PHOTO = new Set(["product_url", "source_url", "canonical_url", "video_url", "content_urls", "href", "website", "links", "link"]);
+export const GUARDED_PHOTO_COLUMNS = new Set(["url", "image_url", "cover_image_url", "image", "cover", "cover_url"]);
+/** The member-writable JSON columns (src/lib/json-columns.ts). */
+export const JSON_COLUMNS = new Set<string>(MEMBER_JSON_COLUMNS);
+const OWNER_KEYS = ["owner_id", "seller_id", "author_id"] as const;
 
-export function isPhotoFieldKey(key: string | null, holder: Record<string, unknown> | null): boolean {
-  if (!key || NOT_PHOTO.has(key)) return false;
-  // A profile link ({ label, url }) is member-written text, not a photo.
-  if (key === "url" && holder && "label" in holder) return false;
-  return PHOTO_EXACT.has(key) || PHOTO_KEY.test(key);
+type Walk = { key: string | null; holder: Record<string, unknown> | null; json: string | null; owner: string | null };
+
+/** Whether a value at this place may be signed (rule (a)). */
+export function isPhotoFieldKey(key: string | null, holder: Record<string, unknown> | null, json: string | null = null): boolean {
+  if (!key) return false;
+  if (json === null) return GUARDED_PHOTO_COLUMNS.has(key);
+  if (json !== "body" || !holder) return false;
+  return (key === "urls" && holder.type === "images") || ((key === "beforeUrl" || key === "afterUrl") && holder.type === "before_after");
 }
 
 function isWholeCanonicalPhoto(value: string, origin: string): boolean {
   return value.startsWith(origin) && signedPhotoObject(value, origin) !== null;
 }
 
-/** The canonical photo URLs held in photo fields of a parsed answer. */
-export function photoFieldUrls(value: unknown, origin: string | null = storageOrigin()): string[] {
-  if (!origin) return [];
-  const found = new Set<string>();
-  const visit = (node: unknown, key: string | null, holder: Record<string, unknown> | null) => {
-    if (typeof node === "string") {
-      if (isPhotoFieldKey(key, holder) && isWholeCanonicalPhoto(node, origin)) found.add(node);
-    } else if (Array.isArray(node)) {
-      for (const item of node) visit(item, key, holder);
-    } else if (node && typeof node === "object") {
-      const object = node as Record<string, unknown>;
-      for (const [k, v] of Object.entries(object)) visit(v, k, object);
-    }
-  };
-  visit(value, null, null);
-  return [...found];
+/** Rule (b): the photo's folder is the known owner's. */
+function ownedBy(value: string, owner: string | null, origin: string): boolean {
+  return owner === null || signedPhotoObject(value, origin)?.path.split("/")[0] === owner;
 }
 
-/** The same answer with each photo field's canonical URL replaced by its signed spelling, where one was minted. */
-export function replacePhotoFields<T>(value: T, signed: ReadonlyMap<string, string>, origin: string | null = storageOrigin()): T {
-  if (!origin || !signed.size) return value;
-  const visit = (node: unknown, key: string | null, holder: Record<string, unknown> | null): unknown => {
+function walk(value: unknown, origin: string, onPhoto: (url: string) => string | void): unknown {
+  const visit = (node: unknown, at: Walk): unknown => {
     if (typeof node === "string") {
-      return isPhotoFieldKey(key, holder) ? (signed.get(node) ?? node) : node;
+      if (isPhotoFieldKey(at.key, at.holder, at.json) && isWholeCanonicalPhoto(node, origin) && ownedBy(node, at.owner, origin)) {
+        return onPhoto(node) ?? node;
+      }
+      return node;
     }
-    if (Array.isArray(node)) return node.map((item) => visit(item, key, holder));
+    if (Array.isArray(node)) return node.map((item) => visit(item, at));
     if (node && typeof node === "object") {
       const object = node as Record<string, unknown>;
+      const ownKey = at.json === null ? OWNER_KEYS.find((k) => typeof object[k] === "string") : undefined;
+      const owner = ownKey ? (object[ownKey] as string) : at.owner;
       const out: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(object)) out[k] = visit(v, k, object);
+      for (const [k, v] of Object.entries(object)) {
+        const json = at.json ?? (JSON_COLUMNS.has(k) && v !== null && typeof v === "object" ? k : null);
+        out[k] = visit(v, { key: k, holder: object, json, owner });
+      }
       return out;
     }
     return node;
   };
-  return visit(value, null, null) as T;
+  return visit(value, { key: null, holder: null, json: null, owner: null });
+}
+
+/** The canonical photo URLs held at signable places of a parsed answer. */
+export function photoFieldUrls(value: unknown, origin: string | null = storageOrigin()): string[] {
+  if (!origin) return [];
+  const found = new Set<string>();
+  walk(value, origin, (url) => { found.add(url); });
+  return [...found];
+}
+
+/** The same answer with each signable photo replaced by its signed spelling, where one was minted. */
+export function replacePhotoFields<T>(value: T, signed: ReadonlyMap<string, string>, origin: string | null = storageOrigin()): T {
+  if (!origin || !signed.size) return value;
+  return walk(value, origin, (url) => signed.get(url)) as T;
 }
 
 const SIGNED_ROUTE = new RegExp(`/storage/v1/object/sign/(?:${BUCKETS})/[^?#]+\\?(?:[^#]*&)?token=([A-Za-z0-9._~-]+)`);

@@ -39,7 +39,8 @@ import {
  * for it instead of a broken image (src/components/ui/primitives.tsx).
  */
 
-type Signed = { window: number; url: string };
+/** `localUntil`: a link only this process holds (the shared memo was down); used until then, then the shared memo is asked again. */
+type Signed = { window: number; url: string; localUntil?: number };
 
 const MAX_MEMO = 20_000;
 const memo = new Map<string, Signed>();
@@ -76,7 +77,7 @@ export async function signedPhotoUrls(
   const missing = new Map<string, { path: string; url: string }[]>();
   for (const url of new Set(urls)) {
     const cached = fixedExpiresIn ? undefined : memo.get(url);
-    if (cached && cached.window === window) {
+    if (cached && cached.window === window && (cached.localUntil === undefined || Date.now() < cached.localUntil)) {
       out.set(url, cached.url);
       continue;
     }
@@ -137,10 +138,16 @@ export async function signedPhotoUrls(
   // Offer what this instance minted; where another instance won the race, its URL is the one shown.
   const offered = await sharedSignatures("photo_signatures_offer", window, minted);
   if (!offered) {
-    // Not stored in the shared memo: shown for this response only, never
-    // remembered here, so the next response tries the shared memo again
-    // instead of keeping this instance's own URL for the rest of the window.
-    for (const m of minted) out.set(urlByObject.get(`${m.bucket}/${m.path}`)!, m.signed_url);
+    // Not stored in the shared memo: remembered here only until the shared
+    // memo is tried again (#196 review), so an outage doesn't mean signing
+    // afresh on every render, and once it's back this process adopts the
+    // shared link rather than keeping its own for the rest of the window.
+    const localUntil = Math.max(sharedRetryAt, Date.now() + 1);
+    for (const m of minted) {
+      const url = urlByObject.get(`${m.bucket}/${m.path}`)!;
+      out.set(url, m.signed_url);
+      memo.set(url, { window, url: m.signed_url, localUntil });
+    }
     return out;
   }
   const winners = new Map(offered.map((row) => [`${row.bucket}/${row.path}`, row.signed_url]));

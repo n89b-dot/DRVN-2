@@ -157,8 +157,7 @@ export default async function SellPage({
     // P-9: no client select grant on the floor; see `my_default_offer_floor`.
     supabase.rpc("my_default_offer_floor"),
     importParam
-      ? // #105: the import's photos are shown as the form's previews.
-        createAdminClient({ signPhotos: true })
+      ? createAdminClient()
           .from("listing_imports")
           .select("*")
           .eq("id", importParam)
@@ -204,7 +203,13 @@ export default async function SellPage({
     }
     const fromImport = importInitialValues(importRow);
     if (!fromImport) redirect(`/sell/import?resume=${importRow.id}`);
-    initialValues = fromImport;
+    // #105, #196 review: the import's photos are shown signed, but only those
+    // in this member's own folder. imported_images is member-writable and not
+    // owner-checked by the database, so anything else stays canonical (the
+    // storage layer refuses it, and the form shows the no-photo plate).
+    const owned = (fromImport.images ?? []).map((img) => img.url).filter((url) => isOwnedStorageUrl(url, user.id));
+    const signedImports = await signedPhotoUrls(owned);
+    initialValues = { ...fromImport, images: (fromImport.images ?? []).map((img) => ({ ...img, url: signedImports.get(img.url) ?? img.url })) };
     capture(user.id, {
       event: "listing_import_review_opened",
       props: { adapter: importRow.source_adapter ?? importRow.source_mode },

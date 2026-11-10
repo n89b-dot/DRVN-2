@@ -65,7 +65,7 @@ test("N455: a private car's photo and a draft listing's photo are refused to a v
     // already sent: assert what a visitor sees, the not-found page itself,
     // and that neither the photo nor the car's name is anywhere in it.
     await page.goto(`/cars/${privateCar.slug}`);
-    await expect(page).toHaveTitle("Not found - DRVN");
+    await expect(page).toHaveTitle("Car not found - DRVN");
     await expect(page.getByText("Nothing at this address.")).toBeVisible();
     const privatePage = await page.content();
     expect(privatePage).not.toContain(paths.privateCar);

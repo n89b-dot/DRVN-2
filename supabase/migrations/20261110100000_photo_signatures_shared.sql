@@ -107,7 +107,11 @@ declare
 begin
   delete from cron.job_run_details where coalesce(end_time, start_time) < now() - interval '14 days';
   get diagnostics removed = row_count;
-  delete from private.photo_signatures where created_at < now() - interval '2 hours';
+  -- Rows an offer is writing right now are skipped, not waited for.
+  delete from private.photo_signatures d
+   where d.ctid in (select x.ctid from private.photo_signatures x
+                     where x.created_at < now() - interval '2 hours'
+                     for update skip locked);
   return removed;
 end;
 $$;
@@ -124,7 +128,13 @@ set search_path = public, pg_temp
 as $$
 begin
   if new.user_id is not null and new.scrubbed_at is not null and old.scrubbed_at is null then
-    delete from private.photo_signatures where split_part(path, '/', 1) = new.user_id::text;
+    -- Locked in key order, the order offers take, so this can never
+    -- deadlock with one and abort the scrub.
+    delete from private.photo_signatures d
+     where d.ctid in (select x.ctid from private.photo_signatures x
+                       where split_part(x.path, '/', 1) = new.user_id::text
+                       order by x.bucket, x.path, x.signing_window
+                       for update);
   end if;
   return new;
 end;

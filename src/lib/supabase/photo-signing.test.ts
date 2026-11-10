@@ -249,3 +249,43 @@ describe("each leak route stays closed (N940, #178 review)", () => {
     expect(out.comments[0].body).toBe(theirs);
   });
 });
+
+describe("only database-guarded places are signed (N940, #196 review)", () => {
+  const STRANGER = "22222222-2222-4222-8222-222222222222";
+  const theirs = `${O}/storage/v1/object/public/car-images/${STRANGER}/private-car.webp`;
+  const read = async (value: unknown) => {
+    const res = await photoFetch((async () => new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } })) as unknown as typeof fetch, { sign: true })(`${O}/rest/v1/x`, { method: "GET" });
+    return res.json();
+  };
+
+  it.each([
+    ["an embed block's url in a post body", { body: [{ type: "embed", videoId: "x", url: theirs }] }],
+    ["a label-less profile link", { links: [{ url: theirs }] }],
+    ["an import's image entry", { imported_images: [{ sourceUrl: "https://shop.example/a.jpg", url: theirs, path: "x" }] }],
+    ["a guarded column on a row owned by someone else", { owner_id: ME, cover_image_url: theirs }],
+  ])("%s stays canonical", async (_route, value) => {
+    expect(JSON.stringify(await read(value))).not.toContain("/object/sign/");
+    expect(mocks.sign).not.toHaveBeenCalled();
+  });
+
+  it("a guarded column whose photo is the row owner's own is signed", async () => {
+    const out = await read({ owner_id: ME, cover_image_url: canonical("car-images", "mine-owned.webp") });
+    expect(out.cover_image_url).toBe(signedFor("car-images", `${ME}/mine-owned.webp`));
+  });
+});
+
+describe("while the shared memo is down, the process memo still works (N954, #196 review)", () => {
+  it("reuses this process's link until the shared memo is tried again", async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 10, 11, 10, 0) });
+    try {
+      mocks.rpc.mockImplementation(async () => ({ data: null, error: { message: "down" } }));
+      const url = canonical("listing-images", "outage.webp");
+      const first = (await signedPhotoUrls([url], Date.now())).get(url);
+      vi.advanceTimersByTime(5_000);
+      expect((await signedPhotoUrls([url], Date.now())).get(url)).toBe(first);
+      expect(mocks.sign).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

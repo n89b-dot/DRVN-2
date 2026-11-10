@@ -3,19 +3,22 @@
 import Image, { type ImageProps } from "next/image";
 import { useState, type CSSProperties } from "react";
 
-import { isUnsignedMemberPhoto } from "@/lib/photo-urls";
+import { isMemberPhotoSource, isUnsignedMemberPhoto } from "@/lib/photo-urls";
 
 /**
  * N940: one place that decides whether a member photo can be shown. A photo
  * still in its canonical spelling (signing failed, or a loader read it
  * unsigned) is refused by the storage layer, and so is a signed link that has
  * expired; either used to show a broken image. Both now show the no-photo
- * plate. Keyed by src, so a new photo gets its own try.
+ * plate. Other images are untouched. Keyed by src, so a new photo gets its
+ * own try.
  */
 export function usePhotoFallback(src: string | null | undefined): { shown: string | null; onError: () => void } {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const shown = !src || failedSrc === src || isUnsignedMemberPhoto(src) ? null : src;
-  return { shown, onError: () => setFailedSrc(src ?? null) };
+  // Only a member photo falls back on a failed load (an expired or refused
+  // link); any other image keeps the browser's own behaviour, as before.
+  return { shown, onError: () => { if (isMemberPhotoSource(src)) setFailedSrc(src ?? null); } };
 }
 
 type PhotoImageProps = Omit<ImageProps, "src" | "onError" | "alt"> & {
