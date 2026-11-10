@@ -254,7 +254,7 @@ begin
   end if;
 
   if cardinality(fails) > 0 then
-    raise exception '%', array_to_string(fails, E'\n');
+    raise exception 'A deleted member''s words were left in another member''s feed, notice or email (N1069): %', E'\n' || array_to_string(fails, E'\n');
   end if;
   raise notice 'all deletion scrub preview repair checks passed';
 end $$;
