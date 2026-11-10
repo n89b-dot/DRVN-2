@@ -301,3 +301,65 @@ Stated plainly, so nothing is assumed.
 ## 10. Corrections to the plan's text
 
 For when the plan is next edited: 287 files and 60,173 lines (not 286 and 59,722); 525 functions, about 777 function definitions in the history; 8 buckets (not 5); 13 storage rules (not 20); 64 files with top-level data statements plus 7 that write through a call or a block (not 63); the curated vehicle generations are not reference rows of a fresh build (section 3).
+
+---
+
+## 11. Review outcome and additions (10 November 2026)
+
+The orchestrator accepted this analysis as the basis for A6 and ruled on section 9. The method below is part of A6 and is written before any database is touched.
+
+### Rulings on section 9
+
+1. **Curated generations.** The list, and the cars backfill that `generationSeedSql` takes with it, move byte for byte to `supabase/reference/curated-vehicle-generations.sql`. `GENERATIONS_MIGRATION` is repointed. A test keeps the extracted text, and so the import's confirmation code, identical before and after. The baseline does not carry the rows.
+2. **`product_grow_runs` starts empty.** Agreed.
+3. **The policy announcement row is carried.** A row that reads "announced, 0 recipients" is right for a database with no members; leaving it out risks announcing to everyone later.
+4. **The stack-build comparison** runs in its own workflow file, started by hand (`.github/workflows/baseline-proof.yml`, PR #231), not in `ci.yml`. It is kept after A6.
+5. **Step 4 reads the hosted databases as `os_reader`.** If `os_reader` cannot read something the snapshot needs (the `private` schema's reference rows are the likely case), it is not widened: the exact objects are reported and the orchestrator approves an owner-password session in a read-only transaction for those objects only.
+
+### (a) Step 5 in full: what happens to the old history rows
+
+The plan's "done when" is one applied file and nothing missing or extra on shared dev and on staging. Each holds one row per old file in `supabase_migrations.schema_migrations` (287 files on disk today; shared dev also has rows from before a rename and lacks twelve, OS id N786). After `APPROVED A6 STEP 5`, for each database, staging first:
+
+1. **Before anything is written:** `node scripts/apply-migration.mjs --target <name> --status`, kept as the "before" record (count, newest, missing, extra).
+2. **Verification.** `--record-only` on the baseline as a dry run. It verifies every object the file creates against the target, functions by signature and body, and records nothing. *Open risk:* `--record-only`'s parser was written for hand-written migrations and may refuse statements in a generated baseline it cannot read. If it does, the verification that stands in its place is step 4's comparison (the snapshot of the target equals the snapshot of the baseline's stack build), and the orchestrator is told which it was before step 3 runs.
+3. **One transaction**, under the runner's own advisory lock:
+   - `create table supabase_migrations.schema_migrations_archive_<yyyymmdd> as table supabase_migrations.schema_migrations;` (every column, every row)
+   - assert the archive's row count equals the history's;
+   - `delete from supabase_migrations.schema_migrations;`
+   - insert the baseline's row (`version`, `name`, `statements[0]` = the record-only mark, the provenance line, then the file's text), exactly as `--record-only` writes one;
+   - assert the history now holds exactly one row and the archive holds the "before" count; commit. Any assertion failing rolls the whole thing back.
+4. **After:** `--status` again. Expected: one applied, nothing missing, nothing extra. Both outputs and the three counts (before, archived, after) go in `supabase/MIGRATIONS.md` and the remediation record.
+
+**How it is undone**, in one transaction: delete the baseline's row; `insert into supabase_migrations.schema_migrations select * from supabase_migrations.schema_migrations_archive_<yyyymmdd>`; assert the count equals the "before" count. Nothing in step 5 changes a table, a function or a row of member data, so undoing the history rows returns the database to exactly where it was. The archive table is kept; dropping it is a later, separate decision.
+
+Only the history is written. The schema is not: step 4 has already shown it equals the baseline, or its differences have been fixed forward or written down.
+
+### (b) The permission rule, stated for functions
+
+For **every** function in `public` and `private`, the baseline writes, in this order:
+
+1. `revoke all on function <signature> from public;`
+2. `revoke all on function <signature> from <every role that can hold a grant>;` naming them: `anon`, `authenticated`, `service_role`, `agent_worker`, and any other role that appears in any ACL of the source build;
+3. the exact grants of the source build, one statement per grantee.
+
+`PUBLIC` is named explicitly and first. Tables, columns, sequences, schemas and types follow the same shape. The result does not depend on what default privileges the applying role has.
+
+Added to the deliberate faults the comparison must catch (section 5): **a function left executable through `PUBLIC` only** (its grants to named roles correct), and **a column-level grant removed**.
+
+### (c) The baseline's name
+
+`<timestamp>_baseline.sql`, where the timestamp is the UTC time the A6 pull request is next to merge (rule R3). That is later than A2's and A3's migrations, which merge before A6, and later than every file it replaces, the newest of which is `20261110130000` today. The exact name is stated in the A6 pull request.
+
+What each tool must then do with a database that recorded the old names, to be confirmed in that pull request and not assumed:
+
+- **The runner, on shared dev and staging after step 5:** the history holds only the baseline's version; `--status` reports nothing missing or extra; a later migration sorts after the baseline and applies normally.
+- **The runner, on either database if step 5 had not been done:** the baseline would show as missing, and because it is marked as a baseline it is refused on a database that has tables. That refusal is the safety net and is kept.
+- **`supabase start` on a new local stack:** no history, so it applies the one file. **On an existing local volume** that recorded the old names it applies nothing it has not recorded and would try to run the baseline over a full schema; the instruction for local stacks after A6 is `supabase db reset`, said in `e2e/README.md`.
+
+### (d) The production runbook
+
+In the same pull request, the runbook's "create the database" step becomes: apply the baseline; then, immediately and before anything else touches the database, run the snapshot check read-only against it and keep the output. A difference stops the launch of that database. This is the first real proof that a brand-new hosted project built from the baseline is the database CI tested (section 8, item 4).
+
+### Corrections folded into the plan
+
+Section 10's corrections to the plan's text (file and line counts, 8 buckets, 13 storage rules, 64 + 7 files that change rows, the curated generations) are made in the A6 pull request.
