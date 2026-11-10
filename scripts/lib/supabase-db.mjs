@@ -48,11 +48,31 @@ export function verifiedTls(host, ca = loadSupabaseRootCa()) {
   };
 }
 
-/** `SUPABASE_DB_PASSWORD` and the project ref from an env file's text. */
+/**
+ * A read-only database login's name (work review #138): a plain role name,
+ * and never the owner or one of the platform's own roles.
+ */
+export const READER_ROLE = /^(?!postgres$|supabase_|pg_|authenticator$|service_role$)[a-z_][a-z0-9_]{0,62}$/;
+
+/**
+ * `SUPABASE_DB_PASSWORD` and the project ref from an env file's text, and
+ * the read-only login when the file carries one: `SUPABASE_DB_READER_USER`
+ * with `SUPABASE_DB_READER_PASSWORD`. `--status` signs in with the reader
+ * when it is there, so a job that only reads holds no owner password.
+ */
 export function readDbEnv(text) {
-  const password = text.match(/^SUPABASE_DB_PASSWORD=(.+)$/m)?.[1]?.trim();
+  const line = (name) => text.match(new RegExp(`^${name}=(.+)$`, "m"))?.[1]?.trim();
+  const password = line("SUPABASE_DB_PASSWORD");
   const ref = text.match(/^NEXT_PUBLIC_SUPABASE_URL=https:\/\/([a-z0-9]+)\.supabase\.co\/?\s*$/m)?.[1];
-  return { password, ref };
+  const readerUser = line("SUPABASE_DB_READER_USER");
+  const readerPassword = line("SUPABASE_DB_READER_PASSWORD");
+  if (Boolean(readerUser) !== Boolean(readerPassword)) {
+    throw new Error("the env file needs both SUPABASE_DB_READER_USER and SUPABASE_DB_READER_PASSWORD, or neither");
+  }
+  if (readerUser && !READER_ROLE.test(readerUser)) {
+    throw new Error("SUPABASE_DB_READER_USER must be a read-only role's name, not the owner or a platform role");
+  }
+  return { password, ref, reader: readerUser ? { user: readerUser, password: readerPassword } : null };
 }
 
 /**
@@ -110,7 +130,7 @@ export function loadDynamicSqlAllowed(file = TARGETS_PATH) {
  * env file points at. Naming the target is the operator's explicit choice;
  * the env file alone never decides where a script writes.
  */
-export function resolveTarget({ targets, name, envRef, route = "direct" }) {
+export function resolveTarget({ targets, name, envRef, route = "direct", role = "postgres" }) {
   const names = Object.keys(targets).join(", ");
   if (!name) throw new Error(`name the target with --target <name> (allowed: ${names})`);
   const target = Object.hasOwn(targets, name) ? targets[name] : undefined;
@@ -128,9 +148,9 @@ export function resolveTarget({ targets, name, envRef, route = "direct" }) {
     }
     // Session mode (port 5432) on the pinned pooler host. The user name
     // carries the project ref, which is how the pooler finds the project.
-    return { name, ref: target.ref, note: target.note ?? "", route, host: target.pooler, user: `postgres.${target.ref}` };
+    return { name, ref: target.ref, note: target.note ?? "", route, host: target.pooler, user: `${role}.${target.ref}` };
   }
-  return { name, ref: target.ref, note: target.note ?? "", route, host: `db.${target.ref}.supabase.co`, user: "postgres" };
+  return { name, ref: target.ref, note: target.note ?? "", route, host: `db.${target.ref}.supabase.co`, user: role };
 }
 
 /**
