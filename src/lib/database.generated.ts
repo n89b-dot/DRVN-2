@@ -8279,7 +8279,6 @@ export type Database = {
         Returns: string
       }
       my_account_deletion_status: { Args: never; Returns: Json }
-      my_age_confirmation_due: { Args: never; Returns: boolean }
       my_car_vin: { Args: { p_car: string }; Returns: string }
       my_deal_listing_ids: { Args: never; Returns: string[] }
       my_default_offer_floor: { Args: never; Returns: number }

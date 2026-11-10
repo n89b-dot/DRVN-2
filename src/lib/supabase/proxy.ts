@@ -35,32 +35,6 @@ const PRODUCT_PATTERNS = [/^\/listings\/?$/, /^\/listings\/[^/]+\/edit\/?$/];
 
 const AUTH_PAGES = ["/login", "/signup"];
 
-/** The account the 18+ answer was checked for in this browser (#110). */
-export const AGE_COOKIE = "drvn_age_checked";
-
-/**
- * Pages a member may open before answering: signing in and out, the question
- * itself, the legal and policy pages, and GET handlers that finish something
- * already under way (a checkout's return, Stripe's payout set-up return, a
- * notification's open link) or serve a machine (robots, sitemap).
- */
-const AGE_EXEMPT = [
-  "/confirm-age", "/onboarding", "/callback", "/confirm", "/logout", "/login", "/signup", "/account-deletion", "/admin-verify", "/email-change",
-  "/terms", "/privacy", "/copyright", "/fees", "/protection",
-  "/cart/complete", "/settings/payouts/return", "/notifications/open",
-  "/robots.txt", "/sitemap.xml", "/api", "/docs",
-];
-/** The most the age check may add to a navigation; past it the page loads and it asks again next time. */
-export const AGE_CHECK_TIMEOUT_MS = 1_500;
-
-/** #110: a page request (not an action, a prefetch or an API call) a member should be asked on. */
-export function ageCheckApplies(request: NextRequest, isAuthPage: boolean): boolean {
-  if (isAuthPage || request.method !== "GET" || request.headers.has("next-action")) return false;
-  if (request.headers.has("next-router-prefetch") || request.headers.get("purpose") === "prefetch") return false;
-  const { pathname } = request.nextUrl;
-  return !AGE_EXEMPT.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-}
-
 function isProductPath(pathname: string) {
   return (
     PRODUCT_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) ||
@@ -220,29 +194,6 @@ export async function updateSession(request: NextRequest) {
     // A failed refresh clears the session cookies; the redirect carries
     // those removals too.
     return redirectKeepingSession(url, supabaseResponse, request);
-  }
-
-  // #110: a member from before the 18+ confirmation who stays signed in is
-  // asked on their next page request, not only at their next sign-in.
-  if (user && ageCheckApplies(request, isAuthPage)) {
-    const subject = typeof user.sub === "string" ? user.sub : "";
-    if (subject && request.cookies.get(AGE_COOKIE)?.value !== subject) {
-      // A stalled database must not hang every signed-in navigation.
-      const { data: due, error: dueError } = await supabase.rpc("my_age_confirmation_due").abortSignal(AbortSignal.timeout(AGE_CHECK_TIMEOUT_MS));
-      if (dueError) {
-        // Unknown: let the page load and ask again on the next request.
-        reportError("[proxy] age confirmation check failed", dueError);
-      } else if (due === true) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/confirm-age";
-        url.search = "";
-        url.searchParams.set("next", pathname + request.nextUrl.search);
-        return redirectKeepingSession(url, supabaseResponse, request);
-      } else {
-        // Answered (or never owed): remembered for this account in this browser.
-        supabaseResponse.cookies.set(AGE_COOKIE, subject, { path: "/", httpOnly: true, sameSite: "lax", secure: isProduction, maxAge: 60 * 60 * 24 * 365 });
-      }
-    }
   }
 
   if (user && (isAuthPage || pathname === "/")) {
