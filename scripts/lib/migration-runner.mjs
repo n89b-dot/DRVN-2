@@ -205,9 +205,13 @@ const PUBLIC_TABLES = `select count(*)::int as n from pg_class c join pg_namespa
   where n.nspname = 'public' and c.relkind in ('r', 'p')`;
 
 /** Reads what planning needs, in a read-only transaction. Writes nothing. */
-export async function inspectTarget(client) {
+export async function inspectTarget(client, { readerRole = null } = {}) {
   await client.query("begin transaction read only");
   try {
+    if (readerRole) {
+      const problems = await readerLoginProblems(client, readerRole);
+      if (problems.length) throw new Error(`the read-only login is not read-only: ${problems.join("; ")}. Refusing to use it`);
+    }
     const who = await client.query(
       `select current_user as role, current_database() as db, current_setting('server_version') as version,
               (select ssl from pg_stat_ssl where pid = pg_backend_pid()) as ssl`,
@@ -232,6 +236,51 @@ export async function inspectTarget(client) {
   } finally {
     await client.query("rollback");
   }
+}
+
+/**
+ * Work review #138: what is wrong with a login that was given as read-only.
+ * `--status` signs in with it so the deploy holds no owner password, and
+ * that is only true if the login really cannot write. What makes it true is
+ * what the role holds, so that is what is checked: it is not a superuser,
+ * cannot create roles or databases, does not bypass row security, holds no
+ * write privilege on the history table it reads, cannot create in `public`,
+ * and is a member of no other role (a member inherits that role's rights: a
+ * reader granted `postgres` or `service_role` by mistake would pass every
+ * check of its own attributes).
+ *
+ * `default_transaction_read_only` is checked too, but it is a default: a
+ * session can switch it off. It is a second layer, never the reason the
+ * login is safe. Do not rely on it alone.
+ *
+ * Runs inside the caller's read-only transaction. Returns the reasons (none:
+ * it is read-only).
+ */
+export async function readerLoginProblems(client, expectedRole) {
+  const { rows } = await client.query(
+    `select current_user as role,
+            current_setting('default_transaction_read_only') as read_only_default,
+            r.rolsuper, r.rolcreaterole, r.rolcreatedb, r.rolbypassrls,
+            has_table_privilege(current_user, 'supabase_migrations.schema_migrations', 'insert, update, delete, truncate') as can_write_history,
+            has_schema_privilege(current_user, 'public', 'create') as can_create_in_public,
+            (select string_agg(g.rolname::text, ', ' order by g.rolname)
+               from pg_auth_members m join pg_roles g on g.oid = m.roleid
+              where m.member = r.oid) as member_of
+       from pg_roles r where r.rolname = current_user`,
+  );
+  const row = rows[0];
+  if (!row) return ["the login's role could not be read"];
+  const problems = [];
+  if (row.role !== expectedRole) problems.push(`signed in as ${row.role}, not ${expectedRole}`);
+  if (row.read_only_default !== "on") problems.push("its sessions are not read-only by default (alter role … set default_transaction_read_only = on)");
+  if (row.rolsuper) problems.push("it is a superuser");
+  if (row.rolcreaterole) problems.push("it can create roles");
+  if (row.rolcreatedb) problems.push("it can create databases");
+  if (row.rolbypassrls) problems.push("it bypasses row-level security");
+  if (row.can_write_history) problems.push("it can write the migration history");
+  if (row.can_create_in_public) problems.push("it can create objects in public");
+  if (row.member_of) problems.push(`it is a member of ${row.member_of} and inherits that role's rights (revoke the membership)`);
+  return problems;
 }
 
 /**
@@ -466,7 +515,9 @@ export const USAGE = `usage:
   --target <name>     a project in supabase/migration-targets.json; must be the one the env file points at
   --pr <n>            the merged PR these files came from, recorded with each row (default "none")
   --applied-by <who>  recorded with each row (default: git user.name, else the OS user)
-  --env-file <path>   read SUPABASE_DB_PASSWORD and NEXT_PUBLIC_SUPABASE_URL from here (default .env.local)
+  --env-file <path>   read SUPABASE_DB_PASSWORD and NEXT_PUBLIC_SUPABASE_URL from here (default .env.local).
+                      --status signs in with SUPABASE_DB_READER_USER and SUPABASE_DB_READER_PASSWORD (a
+                      read-only login) when the file has them, and then needs no SUPABASE_DB_PASSWORD
   --apply             apply for real; needs --confirm with the code the dry run printed for these files
   --record-only       don't run the files: record the history row of each one whose every object is
                       verified on the target (functions by signature and body); list the rest with reasons
@@ -563,14 +614,26 @@ export async function run(argv, deps = {}) {
   let ca;
   let migrations;
   let allowed;
+  /** Work review #138: the read-only role --status signed in as, when the env file gave one. */
+  let readerRole = null;
   try {
     const env = readDbEnv(readFile(values["env-file"]));
-    password = env.password;
+    // Only --status may use the read-only login; everything else writes, or
+    // plans a write, and signs in as the owner.
+    const reader = values.status ? env.reader : null;
+    readerRole = reader?.user ?? null;
+    password = reader ? reader.password : env.password;
     const targets = deps.targets ?? loadTargets();
     const listed = Object.hasOwn(targets, values.target ?? "") ? targets[values.target] : undefined;
     const route = values.route ?? (values.status ? listed?.statusRoute : undefined) ?? "direct";
-    target = resolveTarget({ targets, name: values.target, envRef: env.ref, route });
-    if (!password) throw new Error(`${values["env-file"]} has no SUPABASE_DB_PASSWORD`);
+    target = resolveTarget({ targets, name: values.target, envRef: env.ref, route, ...(reader ? { role: reader.user } : {}) });
+    if (!password) {
+      throw new Error(
+        values.status
+          ? `${values["env-file"]} has neither a read-only login (SUPABASE_DB_READER_USER and SUPABASE_DB_READER_PASSWORD) nor SUPABASE_DB_PASSWORD`
+          : `${values["env-file"]} has no SUPABASE_DB_PASSWORD`,
+      );
+    }
     ca = deps.ca ?? loadSupabaseRootCa();
     allowed = deps.allowed ?? loadDynamicSqlAllowed();
     migrations = [...positionals]
@@ -606,7 +669,7 @@ export async function run(argv, deps = {}) {
   client.on?.("notice", (notice) => log(`NOTICE: ${notice.message}`));
   try {
     await client.connect();
-    const state = await inspectTarget(client);
+    const state = await inspectTarget(client, { readerRole });
     if (values.status) {
       // stdout is the JSON alone, so it can be piped; inspectTarget read it in a read-only transaction.
       const listDir = deps.listMigrations ?? ((dir) => readdirSync(dir));

@@ -68,5 +68,10 @@ export const config = {
     // with or without a trailing slash or more path.
     "/_next/image",
     "/_next/image/:path*",
+    // …and on every console path, whatever it ends in. The first pattern
+    // skips any path ending in an image extension, so /admin/users/x.png
+    // reached the console's own layout without passing the proxy's gate
+    // (work review #143, N715).
+    "/admin/:path*",
   ],
 };

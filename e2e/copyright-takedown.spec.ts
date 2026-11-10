@@ -25,7 +25,7 @@ function totp(secret: string) {
  * audited, the seller is told, and the optimised-image route refuses the
  * photo (451) instead of serving the copy Next.js cached.
  */
-test("a rights holder's notice is taken down from the admin console", async ({ page, browser, baseURL }) => {
+test("a rights holder's notice is taken down from the admin console (R69-dmca)", async ({ page, browser, baseURL }) => {
   test.skip(process.env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation", "Copyright fixtures are restricted to the isolated local stack");
   test.setTimeout(120_000);
   page.setDefaultTimeout(15_000);
@@ -58,11 +58,24 @@ test("a rights holder's notice is taken down from the admin console", async ({ p
       .single();
     if (listing.error) throw listing.error;
     const listingId = listing.data.id;
-    const photo = `${storage}/storage/v1/object/public/listing-images/${sellerId}/rehosted-${tag}.webp`;
+    // A real photo, so the optimiser really serves and caches it (#109: the
+    // test used to name an object that didn't exist, and accepted a 404).
+    // Member photos are private (N455): the page shows it through a signed
+    // link, and that link is what the optimiser fetches and caches.
+    const objectPath = `${sellerId}/rehosted-${tag}.webp`;
+    const { default: sharp } = await import("sharp");
+    const bytes = await sharp({ create: { width: 16, height: 16, channels: 3, background: "teal" } }).webp().toBuffer();
+    const uploaded = await admin.storage.from("listing-images").upload(objectPath, bytes, { contentType: "image/webp" });
+    if (uploaded.error) throw uploaded.error;
+    const photo = `${storage}/storage/v1/object/public/listing-images/${objectPath}`;
     const image = await admin.from("listing_images").insert({ listing_id: listingId, url: photo, position: 0 });
     if (image.error) throw image.error;
-    const optimised = `/_next/image?url=${encodeURIComponent(photo)}&w=640&q=75`;
-    expect((await page.request.get(optimised)).status(), "served (or missing) before the takedown, never refused").not.toBe(451);
+    const signed = await admin.storage.from("listing-images").createSignedUrl(objectPath, 3600);
+    if (signed.error || !signed.data) throw signed.error ?? new Error("Missing signed photo URL");
+    const optimised = `/_next/image?url=${encodeURIComponent(signed.data.signedUrl)}&w=640&q=75`;
+    const before = await page.request.get(optimised);
+    expect(before.status(), "the optimiser serves, and caches, the photo before the takedown").toBe(200);
+    expect(before.headers()["content-type"]).toMatch(/^image\//);
 
     // The rights holder: no account.
     const visitor = await browser.newContext();
@@ -126,7 +139,8 @@ test("a rights holder's notice is taken down from the admin console", async ({ p
       [listingId, noticeId, actorId]
     );
     expect(state.rows[0]).toEqual({ status: "removed", photos: 0, blocked: true, audited: true, told: true });
-    // The proxy reads the blocked list at most every 15 seconds.
+    // The proxy reads the blocked list at most every 15 seconds. The same
+    // URL the optimiser cached above is refused, not served from its cache.
     await expect
       .poll(async () => (await page.request.get(optimised)).status(), { message: "the cached optimised copy is refused", timeout: 30_000, intervals: [2_000] })
       .toBe(451);
@@ -136,6 +150,7 @@ test("a rights holder's notice is taken down from the admin console", async ({ p
       await db.query("delete from public.copyright_notices where id = $1", [noticeId]);
     }
     await db.query("delete from public.media_cleanup_queue where owner_id = $1", [sellerId]);
+    await admin.storage.from("listing-images").remove([`${sellerId}/rehosted-${tag}.webp`]);
     await db.end();
     await cleanupFixtureUser(sellerId);
     await cleanupFixtureUser(actorId);

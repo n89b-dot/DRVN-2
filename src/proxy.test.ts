@@ -1,3 +1,6 @@
+// Next's own matcher check. Its docs call it unstable_doesProxyMatch; the
+// installed 16.4.3 exports it under the name it had before the rename.
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 import { NextRequest, NextResponse } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -220,6 +223,28 @@ describe("a signed link is judged as Storage reads it, however it is spelled (N9
     for (const source of [`${base}?token=${token(now + 3600)}`, `${base}?token=%65${token(now + 3600).slice(1)}`]) {
       const response = await gate(source);
       expect(response.headers.get("x-middleware-next"), source).toBe("1");
+    }
+  });
+});
+
+describe("N715: the proxy's matcher runs on every console path (work review #143)", () => {
+  const runs = (url: string) => unstable_doesMiddlewareMatch({ config, url });
+
+  it("runs on the console whatever the path ends in, an image extension included", () => {
+    for (const url of ["/admin", "/admin/", "/admin/users", "/admin/users/x.png", "/admin/cases/photo.JPG", "/admin/a/b/c.webp", "/admin/logo.svg"]) {
+      expect(runs(url), url).toBe(true);
+    }
+  });
+
+  it("still runs on pages, actions' own URLs and optimised images", () => {
+    for (const url of ["/", "/home", "/listings/123", "/admin-verify", "/api/version", "/_next/image", "/_next/image/"]) {
+      expect(runs(url), url).toBe(true);
+    }
+  });
+
+  it("still skips static assets and public image files outside the console", () => {
+    for (const url of ["/_next/static/chunks/main.js", "/favicon.ico", "/logo.png", "/brand/mark.svg", "/administrator.png"]) {
+      expect(runs(url), url).toBe(false);
     }
   });
 });
