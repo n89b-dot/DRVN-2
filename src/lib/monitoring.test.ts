@@ -142,3 +142,18 @@ describe("error reports name the deployment (N961, report five #123)", () => {
     expect(sentEvent(fetcher, 1).environment).toBe("production");
   });
 });
+
+describe("release identity fallback (N957, report five #120)", () => {
+  it("falls through empty SENTRY_RELEASE and VERCEL_GIT_COMMIT_SHA to GIT_COMMIT_SHA", async () => {
+    const fetcher = stubSentry();
+    vi.stubEnv("SENTRY_RELEASE", "");
+    vi.stubEnv("VERCEL_GIT_COMMIT_SHA", "");
+    vi.stubEnv("GIT_COMMIT_SHA", "abc999");
+    vi.stubEnv("VERCEL_DEPLOYMENT_ID", "");
+    vi.stubEnv("DEPLOY_ID", "dep-1");
+    await captureMessage("synthetic");
+    const event = sentEvent(fetcher);
+    expect(event.release).toBe("abc999");
+    expect(event.tags.deployment).toBe("dep-1");
+  });
+});
