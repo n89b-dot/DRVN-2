@@ -186,6 +186,55 @@ Each line describes the pull request as written on 10 November.
 
 ---
 
+## For the Intelligence OS
+
+One row per finding in this review, read exactly by the Intelligence OS. Where a row and the prose differ, the row is right.
+
+| OS id | Finding | State | Pull request | For | Note |
+|---|---|---|---|---|---|
+| new | #124 | fixed | #200 | engineer | `main` failed a photo-signing test that GitHub showed as passing |
+| new | #125 | open | #198 | engineer | Shared dev and staging hold a migration that is not on `main` |
+| new | #126 | open | #198 | engineer | An applied migration is dated before one that has already merged |
+| new | #127 | fixed | #213 | engineer | Two stacked pull requests showed as mergeable though not based on `main` |
+| new | #128 | fixed | #213 | engineer | The merge process could not keep up with the writing |
+| N725 | #129 | open | #214 | engineer | Per-change Codex reviews are waived by ruling; one review of the whole work remains |
+| new | #130 | fixed | #213 | engineer | A change merged while the previous run on `main` had failed |
+| N940 | #131 | open | #210 | engineer | The server unlocks a member photo by the name of the field it sits in |
+| new | #132 | open |  | engineer | A listing's share image stops working within two hours |
+| new | #133 | after launch |  | decide | Every photo is private and signed, including photos on public listings (decision D5) |
+| new | #134 | open |  | engineer | Each photo is re-processed every hour for every size |
+| new | #135 | open |  | engineer | The photo signer keeps timing state that tests cannot reset |
+| new | #136 | open |  | engineer | A slow photo store holds every page with photos for ten seconds |
+| new | #137 | open |  | engineer | Nothing catches a new page that shows member photos unsigned |
+| new | #138 | open | #219 | engineer | The deploy's status check signs in with the database owner's password |
+| new | #139 | open | #195 | engineer | The production environment does not exist and would be created unprotected |
+| new | #140 | open | #218 | engineer | The boot check does not test that each database key is the right kind |
+| N667 | #141 | open | #220 | engineer | The vehicle catalogue import has never been applied and drops misses silently |
+| new | #142 | open | #218 | engineer | The hosted rollback procedure omits two facts |
+| new | #143 | open | #218 | engineer | The admin gate in the proxy has small holes the layout still covers |
+| new | #144 | open | #218 | engineer | Three rules are each written twice |
+| new | #145 | open | #220 | engineer | The audit for damaged agent ids misses about one in five |
+| new | #146 | open | #210 | engineer | The photo rules change can blank every photo, and its migration deletes rows |
+| new | #147 | open | #204 | engineer | Order emails are dropped for good if the provider's key lapses |
+| new | #148 | open | #208 | engineer | Chargeback Retry reports success without checking anything |
+| new | #149 | after launch | #207 | engineer | The chargeback write-off can record the same loss twice (decision D1) |
+| new | #150 | after launch | #209 | engineer | A counter-notice can unblock a photo another notice still covers (decision D2) |
+| new | #151 | open | #199 | engineer | After a takedown the blocklist read still stops at 1,000 rows and the same file can be uploaded again |
+| new | #152 | open | #217 | engineer | The 18+ confirmation asks on a page load but holds no action |
+| new | #153 | open | #206 | engineer | A deleted member's listing titles remain in saved-search emails |
+| new | #154 | open | #198 | engineer | The deletion runbook says no state needs SQL, and three do |
+| N718 | #155 | open | #199 | engineer | Counts that stop at 1,000 rows: four reads remain and nothing stops the next |
+| new | #156 | open | #188, #190, #195 | engineer | First-deploy set-up gaps in three pull requests |
+| new | #157 | open | #198 | engineer | Three new SQL guards pass on any error |
+| new | #158 | open | #203 | engineer | Some browsers will refuse every phone photo over 4 MB |
+| new | #159 | open |  | engineer | There is no single place to read the current database (plan 2 A1, then A6) |
+| new | #160 | after launch |  | engineer | The same list is written in several SQL functions (plan 2 Part B, B5) |
+| new | #161 | after launch |  | engineer | The dispute function is the hardest code in the project to read (plan 2 Part B, B5) |
+| new | #162 | open |  | engineer | The configuration that will launch is not the one the browser tests run (plan 2 A4) |
+| new | #163 | after launch |  | engineer | Some tests cannot fail (plan 2 Part B, B8) |
+
+---
+
 ## 9. Method and sources
 
 - Read by the reviewer: every merged pull request's description; `photo-signing.ts`, `photo-urls.ts`, migration `20261110100000`, `public-cache.ts`, `public.ts`, `deploy.yml`, the write-off migration on its branch, `tests/ci/migration-order.test.ts`, report five, the remediation plan and its record.
