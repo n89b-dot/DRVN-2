@@ -1,5 +1,5 @@
 import { DataRow, PageHead, SheetTabs } from "@/components/ui";
-import { adminCopyrightTakedown, adminRejectCopyrightNotice } from "@/lib/admin/actions";
+import { adminCopyrightTakedown, adminRecordCounterNotice, adminReinstateAfterCounterNotice, adminRejectCopyrightNotice } from "@/lib/admin/actions";
 import { getCopyrightNotices, type CopyrightNoticeRow } from "@/lib/admin/copyright";
 import { copyrightHosts } from "@/lib/copyright/hosts";
 import { takedownTargets } from "@/lib/copyright/notice";
@@ -116,6 +116,39 @@ function ClosedNotice({ notice }: { notice: CopyrightNoticeRow }) {
               note={takedown.stillReferenced?.join(", ")}
             />
           )}
+        </div>
+      )}
+      {notice.status === "actioned" && (
+        // #109: a valid counter-notice is recorded, then the content can be
+        // reinstated 14 days after it arrived (20261110200000).
+        <div className="mt-3 flex flex-wrap gap-2">
+          <ActionDialog
+            action={adminRecordCounterNotice}
+            title="Record the member's counter-notice"
+            trigger="Counter-notice"
+            triggerClassName="relbtn !static"
+            hidden={{ notice_id: notice.id }}
+            confirmNote="As the member sent it: their name and address, their statement that the content was removed by mistake or misidentification, their consent to jurisdiction, and their signature. Send a copy to the claimant."
+            fields={[
+              { kind: "text", name: "member_name", label: "Member's name" },
+              { kind: "text", name: "member_address", label: "Member's address" },
+              { kind: "text", name: "statement", label: "Their statement", hint: "Why they say it was removed by mistake or misidentification." },
+              { kind: "text", name: "signature", label: "Their signature" },
+              { kind: "text", name: "received_on", label: "Arrived on", hint: "YYYY-MM-DD" },
+              { kind: "select", name: "consents", label: "Consents to jurisdiction", placeholder: "Choose", options: [{ value: "yes", label: "Yes, it says so" }, { value: "no", label: "No" }] },
+            ]}
+            submitLabel="Record counter-notice"
+          />
+          <ActionDialog
+            action={adminReinstateAfterCounterNotice}
+            title="Reinstate after the counter-notice"
+            trigger="Reinstate"
+            triggerClassName="relbtn !static"
+            hidden={{ notice_id: notice.id }}
+            confirmNote="Only 14 days or more after the counter-notice arrived, and only if the claimant hasn't told us they've gone to court. The listings this notice removed go back to their sellers, paused; its photos come off the blocklist (any already deleted, the seller uploads again). Needs a fresh authenticator check."
+            fields={[{ kind: "reason", label: "Note (audit log)", placeholder: "Counter-notice received 2 Nov; no court action notified" }]}
+            submitLabel="Reinstate"
+          />
         </div>
       )}
     </div>

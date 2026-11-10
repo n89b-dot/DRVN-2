@@ -40,6 +40,14 @@ TLS. Details: "Recording without running" below.
 
 Codex's review of #117, the two open database findings. A listing a checkout held at takedown (`keptListingStatus`) can never become `active` again: a failed or released checkout removes it instead, and a sale still completes. `private.member_media_ref_ok` (now `volatile`) takes the object's lock and refuses a blocklisted object. A new row in `copyright_blocked_media` takes the same lock and purges every reference to the object again. Applying it also removes, once, any held listing already back on sale. Order does not matter: no app change depends on it. After review: the blocklist binds every writer (`private.media_url_blocked`, checked first in the restated `private.guard_member_media_ref` and `private.guard_member_post_body_media`; the owner checks stay member-only); the purge runs once per statement in key order and strips post bodies too (`private.strip_media_from_body`); a listing a takedown removed can't be restored or re-published (refused with the reason).
 
+## November 10 — reinstate after a valid counter-notice (report five #109)
+
+| File | Applied to |
+|---|---|
+| `20261110200000_copyright_counter_notice.sql` | not applied |
+
+Adds the notice state `reinstated`, `public.copyright_counter_notices` (service role only), and two admin RPCs behind the takedown's step-up: `public.record_copyright_counter_notice` and `public.reinstate_after_counter_notice` (14 days after the counter-notice arrived: the notice becomes `reinstated`, its removed listings go back to `paused`, its photos come off the blocklist; audited). Needs `20261110120000` first.
+
 ## November 8 — deletion: late holds after the scrub, other members' notifications, the tombstone race, old retained cases: N418 (not applied anywhere)
 
 | File | Applied to |

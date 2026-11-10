@@ -1815,3 +1815,81 @@ export async function adminRejectCopyrightNotice(
   revalidatePath("/admin", "layout");
   return { ok: "Notice closed with no action. Reply to the claimant with the reason." };
 }
+
+/**
+ * Records a member's counter-notice to a takedown (20261110200000), as
+ * received. The database checks the admin's step-up and that the notice was
+ * acted on, and writes the audit row.
+ */
+export async function adminRecordCounterNotice(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+  const noticeId = field(formData, "notice_id");
+  const receivedOn = field(formData, "received_on");
+  if (!noticeId) return { error: "Missing notice." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(receivedOn)) return { error: "When it arrived, as YYYY-MM-DD." };
+  if (field(formData, "consents") !== "yes") return { error: "A counter-notice must consent to jurisdiction; without it, it isn't valid." };
+  const session = await createClient();
+  const { error } = await session.rpc("record_copyright_counter_notice", {
+    p_notice: noticeId,
+    p_member_name: field(formData, "member_name"),
+    p_member_address: field(formData, "member_address"),
+    p_statement: field(formData, "statement"),
+    p_consents: true,
+    p_signature: field(formData, "signature"),
+    p_received_at: `${receivedOn}T00:00:00Z`,
+  });
+  if (error) {
+    if (error.code === "42501") return { error: "Confirm your authenticator again, then retry." };
+    return { error: error.message };
+  }
+  revalidatePath("/admin", "layout");
+  return { ok: "Counter-notice recorded. Send a copy to the claimant; the content can be reinstated 14 days after it arrived unless they tell us of a court action." };
+}
+
+/**
+ * Reinstates a takedown's content after a valid counter-notice
+ * (20261110200000): the notice is marked reinstated, the listings it removed
+ * go back to paused for their sellers, and its photos come off the
+ * blocklist. The database enforces the 14 days and writes the audit row.
+ */
+export async function adminReinstateAfterCounterNotice(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+  const noticeId = field(formData, "notice_id");
+  const note = field(formData, "reason");
+  if (!noticeId) return { error: "Missing notice." };
+  if (!note) return { error: "A note is required: say the claimant hasn't told us of a court action." };
+  const session = await createClient();
+  const { data, error } = await session.rpc("reinstate_after_counter_notice", { p_notice: noticeId, p_note: note });
+  if (error) {
+    if (error.code === "42501") return { error: "Confirm your authenticator again, then retry." };
+    return { error: error.message };
+  }
+  const result = data as { restoredListings: string[]; unblockedPhotos: number; owners: string[] };
+  if (result.owners.length) {
+    const { error: noteError } = await ctx.admin.from("notifications").insert(
+      result.owners.map((userId) => ({
+        user_id: userId,
+        kind: "copyright_takedown",
+        section: "marketplace" as const,
+        title: "Your content can go back up",
+        body: "After your counter-notice, the listing removed for a copyright notice is back in your listings, paused. Add its photos again and publish it when you're ready.",
+        href: "/listings",
+        actor_id: null,
+      }))
+    );
+    if (noteError) reportError("[admin] copyright reinstate notification failed", { noticeId, noteError });
+  }
+  revalidatePath("/", "layout");
+  revalidatePath("/admin", "layout");
+  return { ok: `Reinstated: ${result.restoredListings.length} listing(s) back to paused for their sellers, ${result.unblockedPhotos} photo(s) unblocked.` };
+}
