@@ -99,8 +99,16 @@ results into the files one job used to write.
 - **The recovery drills** (`npm run test:operations`) run once, in the part
   the manifest names (`operationsPart`). Firefox and WebKit run their two
   specs in one part, the only one that installs them.
+- **The two named exclusions** (two importer tests that need the production
+  network guard, and are the only tests allowed to be skipped) live in one
+  part. The rule "the suite has exactly those two, skipped" is about the whole
+  suite, so one part cannot hold it: each part reports how many it saw, and
+  the `e2e` job fails unless the four add up to exactly two. Every other rule
+  of `e2e/release-reporter.ts` (no other skip, no flaky test, no failure, at
+  least one test) holds inside each part as it does in the whole suite.
 - **Locally nothing changes:** with `E2E_PART` unset, `npm run test:e2e` runs
-  the whole suite. `E2E_PART=2 npm run test:e2e` runs one part.
+  the whole suite and holds every rule itself. `E2E_PART=2 npm run test:e2e`
+  runs one part.
 
 Run local Supabase CLI commands as `npx --yes supabase@2.116.0 …` (the
 version CI pins). The globally installed CLI (2.98.2 as of October 2026)

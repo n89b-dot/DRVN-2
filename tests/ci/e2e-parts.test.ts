@@ -16,7 +16,7 @@ import path from "node:path";
 import yaml from "js-yaml";
 import { afterAll, describe, expect, it } from "vitest";
 
-import { balance, findUnder, judgeParts, manifestProblems, mergeJUnit, mergeSummaries, planPart, readManifest } from "../../scripts/ci-e2e-parts.mjs";
+import { balance, findUnder, inventoryProblems, judgeParts, manifestProblems, mergeJUnit, mergeSummaries, planPart, readManifest } from "../../scripts/ci-e2e-parts.mjs";
 
 const root = path.resolve(__dirname, "../..");
 const manifest = readManifest();
@@ -183,6 +183,46 @@ describe("every part must have run and passed first time (plan 2 A0b)", () => {
   });
 });
 
+describe("the two named exclusions are counted across the parts (plan 2 A0b)", () => {
+  // What e2e/release-reporter.ts writes in a part: how many named exclusions it saw, and how many the whole suite must have.
+  const summary = (part: string, excluded = 0, exclusionsRequired: unknown = 2) => ({ candidate: "abc", part, exclusionsRequired, playwrightStatus: "passed", releaseStatus: "passed", counts: { selected: 5, expected: 5 - excluded, flaky: 0, excluded, unexpected: 0 } });
+  const all = (where: Record<string, number> = { "3": 2 }) => Object.fromEntries(PARTS.map((part) => [part, summary(part, where[part] ?? 0)])) as Record<string, ReturnType<typeof summary> | null>;
+
+  it("both in one part, or one in each of two, is the whole suite's two", () => {
+    expect(inventoryProblems(PARTS, all())).toEqual([]);
+    expect(inventoryProblems(PARTS, all({ "1": 1, "4": 1 }))).toEqual([]);
+  });
+
+  it.each([
+    ["one of the two gone (deleted, renamed, or no longer skipped)", all({ "3": 1 }), /must have exactly 2; the parts have 1 \(part 1: 0, part 2: 0, part 3: 1, part 4: 0\)/],
+    ["both gone", all({}), /must have exactly 2; the parts have 0/],
+    ["the same two counted in two parts", all({ "2": 2, "3": 2 }), /must have exactly 2; the parts have 4/],
+  ])("refuses %s", (_, summaries, message) => {
+    expect(inventoryProblems(PARTS, summaries).join("\n")).toMatch(message);
+  });
+
+  it("refuses a part with no summary, one part's summary standing in for another, and a whole-suite summary", () => {
+    const missing = all(); missing["2"] = null;
+    expect(inventoryProblems(PARTS, missing)).toEqual(["part 2: no browser release summary"]);
+    const swapped = all(); swapped["2"] = summary("3", 2);
+    expect(inventoryProblems(PARTS, swapped).join("\n")).toMatch(/part 2: its browser release summary says it is part 3/);
+    const whole = all(); delete (whole["1"] as { part?: string }).part;
+    expect(inventoryProblems(PARTS, whole).join("\n")).toMatch(/part 1: its browser release summary says it is part of no part/);
+  });
+
+  it("refuses parts that disagree on, or do not say, how many the whole suite must have", () => {
+    const disagree = all(); disagree["4"] = summary("4", 0, 0);
+    expect(inventoryProblems(PARTS, disagree).join("\n")).toMatch(/the parts disagree .*part 3: 2, part 4: 0/);
+    for (const bad of [null, "2", -1, 1.5]) {
+      const silent = all(); silent["1"] = summary("1", 0, bad);
+      expect(inventoryProblems(PARTS, silent).join("\n")).toMatch(/part 1: its summary does not say how many named exclusions the whole suite must have/);
+    }
+    // A requirement of zero everywhere cannot hide two skipped tests either.
+    expect(inventoryProblems(PARTS, Object.fromEntries(PARTS.map((part) => [part, summary(part, part === "3" ? 2 : 0, 0)]))).join("\n")).toMatch(/must have exactly 0; the parts have 2/);
+    expect(inventoryProblems([], {})).toEqual(["no part wrote a browser release summary"]);
+  });
+});
+
 describe("the merged results keep their old names and shapes (plan 2 A0b)", () => {
   const junit = (suites: string, tests: number, failures = 0) => `<testsuites id="" name="" tests="${tests}" failures="${failures}" skipped="0" errors="0" time="1.5">\n${suites}\n</testsuites>`;
   const suite = (name: string, project: string, tests: number, failures = 0) =>
@@ -207,12 +247,12 @@ describe("the merged results keep their old names and shapes (plan 2 A0b)", () =
   });
 
   /** Lays out what four part jobs upload, runs the real merge command, and returns what it wrote. */
-  function merge(name: string, shape: (part: string) => { result?: object | null; flat?: boolean; summary?: boolean }) {
+  function merge(name: string, shape: (part: string) => { result?: object | null; flat?: boolean; summary?: boolean; excluded?: number }) {
     const partsDir = path.join(tmp, name, "parts");
     const out = path.join(tmp, name, "out");
     const outputs = path.join(tmp, name, "outputs");
     for (const part of PARTS) {
-      const { result = { part, sha: "abc", ran: true, first_attempt_passed: true }, flat = false, summary = true } = shape(part);
+      const { result = { part, sha: "abc", ran: true, first_attempt_passed: true }, flat = false, summary = true, excluded = part === "3" ? 2 : 0 } = shape(part);
       if (result === null) continue;
       const dir = path.join(partsDir, `e2e-part-${part}-abc`);
       // A part that wrote only its result file is uploaded with that file at the artifact's root.
@@ -225,7 +265,7 @@ describe("the merged results keep their old names and shapes (plan 2 A0b)", () =
       fs.writeFileSync(path.join(dir, "test-results/playwright.xml"), junit(suite(`part${part}.spec.ts`, "chromium", 2), 2));
       fs.writeFileSync(path.join(dir, `test-results/design/shot-${part}.png`), part);
       if (part === manifest.operationsPart) fs.writeFileSync(path.join(dir, "test-results/operations.xml"), "<testsuites><testsuite name=\"drills\"></testsuite></testsuites>");
-      if (summary) fs.writeFileSync(path.join(dir, "release-results/browser-release-abc.json"), JSON.stringify({ candidate: "abc", playwrightStatus: "passed", releaseStatus: "passed", counts: { selected: 2, expected: 2, flaky: 0, excluded: 0, unexpected: 0 } }));
+      if (summary) fs.writeFileSync(path.join(dir, "release-results/browser-release-abc.json"), JSON.stringify({ candidate: "abc", part, exclusionsRequired: 2, playwrightStatus: "passed", releaseStatus: "passed", counts: { selected: 2 + excluded, expected: 2, flaky: 0, excluded, unexpected: 0 } }));
     }
     fs.mkdirSync(partsDir, { recursive: true });
     const run = spawnSync("node", [path.join(root, "scripts/ci-e2e-parts.mjs"), "merge", partsDir, out], {
@@ -242,7 +282,7 @@ describe("the merged results keep their old names and shapes (plan 2 A0b)", () =
     expect(merged.outputs).toBe("ran=true\nfirst_attempt_passed=true\n");
     expect(merged.read("test-results/playwright.xml")).toMatch(/^<testsuites id="" name="" tests="8"/);
     expect(merged.read("test-results/operations.xml")).toContain("drills");
-    expect(JSON.parse(merged.read("release-results/browser-release-abc.json")!)).toMatchObject({ releaseStatus: "passed", parts: 4, counts: { selected: 8, expected: 8 } });
+    expect(JSON.parse(merged.read("release-results/browser-release-abc.json")!)).toEqual({ candidate: "abc", playwrightStatus: "passed", releaseStatus: "passed", parts: 4, counts: { selected: 10, expected: 8, flaky: 0, excluded: 2, unexpected: 0 } });
     expect(fs.readdirSync(path.join(merged.out, "test-results/design")).sort()).toEqual(PARTS.map((part) => `shot-${part}.png`));
   });
 
@@ -252,6 +292,21 @@ describe("the merged results keep their old names and shapes (plan 2 A0b)", () =
     expect(merged.outputs).toBe("ran=true\nfirst_attempt_passed=false\n");
     expect(merged.stdout).toContain("::error title=Browser suite::part 2: the suite did not pass on its first attempt");
     expect(merged.read("test-results/playwright.xml")).toMatch(/tests="8"/);
+  });
+
+  it("every part green but a named exclusion missing from the whole suite: exit 1, and the summary says failed", () => {
+    const merged = merge("inventory", (part) => (part === "3" ? { excluded: 1 } : {}));
+    expect(merged.status).toBe(1);
+    expect(merged.outputs).toBe("ran=true\nfirst_attempt_passed=false\n");
+    expect(merged.stdout).toContain("::error title=Browser suite::named exclusions: the whole suite must have exactly 2; the parts have 1");
+    expect(JSON.parse(merged.read("release-results/browser-release-abc.json")!)).toMatchObject({ releaseStatus: "failed", counts: { excluded: 1 } });
+  });
+
+  it("every part green but one wrote no browser summary: exit 1", () => {
+    const merged = merge("no-summary", (part) => (part === "2" ? { summary: false } : {}));
+    expect(merged.status).toBe(1);
+    expect(merged.outputs).toBe("ran=true\nfirst_attempt_passed=false\n");
+    expect(merged.stdout).toContain("part 2: no browser release summary");
   });
 
   it("a part that was skipped or cancelled (nothing uploaded): exit 1, and neither output is true", () => {

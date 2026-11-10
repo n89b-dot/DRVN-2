@@ -91,6 +91,34 @@ export function judgeParts(expected, results) {
   };
 }
 
+/**
+ * The whole-suite rule a single part cannot hold: the suite has exactly the
+ * named exclusions the release reporter allows (two importer tests that need
+ * the production network guard), no more and no fewer. Each part's summary
+ * says how many it saw skipped and how many the whole suite must have
+ * (`e2e/release-reporter.ts`); the rule is held here, on the sum.
+ * `summaries` maps a part's name to its browser release summary, or to null.
+ */
+export function inventoryProblems(expected, summaries) {
+  const problems = [];
+  const present = [];
+  for (const part of expected) {
+    const summary = summaries[part];
+    if (!summary) problems.push(`part ${part}: no browser release summary`);
+    else if (String(summary.part) !== String(part)) problems.push(`part ${part}: its browser release summary says it is part ${summary.part ?? "of no part (a whole-suite run)"}`);
+    else if (!Number.isInteger(summary.exclusionsRequired) || summary.exclusionsRequired < 0) problems.push(`part ${part}: its summary does not say how many named exclusions the whole suite must have`);
+    else if (!Number.isInteger(summary.counts?.excluded) || summary.counts.excluded < 0) problems.push(`part ${part}: its summary does not say how many named exclusions it saw`);
+    else present.push([part, summary]);
+  }
+  if (problems.length || present.length === 0) return problems.length ? problems : ["no part wrote a browser release summary"];
+  const required = new Set(present.map(([, summary]) => summary.exclusionsRequired));
+  if (required.size !== 1) return [`the parts disagree on how many named exclusions the whole suite must have (${present.map(([part, s]) => `part ${part}: ${s.exclusionsRequired}`).join(", ")})`];
+  const [need] = required;
+  const seen = present.reduce((sum, [, summary]) => sum + summary.counts.excluded, 0);
+  if (seen !== need) problems.push(`named exclusions: the whole suite must have exactly ${need}; the parts have ${seen} (${present.map(([part, s]) => `part ${part}: ${s.counts.excluded}`).join(", ")})`);
+  return problems;
+}
+
 const attribute = (tag, name) => new RegExp(`\\b${name}="([^"]*)"`).exec(tag)?.[1];
 
 /**
@@ -209,23 +237,30 @@ function main() {
     if (junit("playwright-diagnostic.xml").length) fs.writeFileSync(path.join(b, "test-results/playwright-diagnostic.xml"), mergeJUnit(junit("playwright-diagnostic.xml")));
     const operations = readUnder(dirOf(manifest.operationsPart), "operations.xml");
     if (operations) fs.writeFileSync(path.join(b, "test-results/operations.xml"), operations);
-    const summaries = expected.map((part) => readUnder(dirOf(part), `browser-release-${sha}.json`)).filter(Boolean).map((text) => JSON.parse(text));
+    const byPart = Object.fromEntries(expected.map((part) => {
+      const text = readUnder(dirOf(part), `browser-release-${sha}.json`);
+      return [part, text ? JSON.parse(text) : null];
+    }));
+    const summaries = Object.values(byPart).filter(Boolean);
     const summary = mergeSummaries(summaries, sha);
-    if (summaries.length !== expected.length) summary.releaseStatus = "failed";
+    // Judged only when every part ran: a part that did not is already a problem above.
+    const inventory = verdict.ran ? inventoryProblems(expected, byPart) : [];
+    if (summaries.length !== expected.length || inventory.length) summary.releaseStatus = "failed";
     fs.writeFileSync(path.join(b, "release-results", `browser-release-${sha}.json`), `${JSON.stringify(summary, null, 2)}\n`);
     for (const part of expected) {
       const design = findUnder(dirOf(part), "design", true);
       if (design) copyTree(design, path.join(b, "test-results/design"));
     }
 
-    output({ ran: verdict.ran, first_attempt_passed: verdict.first_attempt_passed });
+    const problems = [...verdict.problems, ...inventory];
+    output({ ran: verdict.ran, first_attempt_passed: verdict.first_attempt_passed && problems.length === 0 });
     console.log(`Browser suite across ${expected.length} parts: ${summary.counts.selected} tests, ${summary.counts.expected} expected, ${summary.counts.unexpected} unexpected, ${summary.counts.flaky} flaky.`);
     if (process.env.GITHUB_STEP_SUMMARY) {
       const row = (part) => `| ${part} | ${results[part] ? (results[part].ran ? "yes" : "no") : "missing"} | ${results[part]?.first_attempt_passed ? "yes" : "no"} |`;
       fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## Browser suite, four parts\n\n| Part | Ran | Passed first time |\n|---|---|---|\n${expected.map(row).join("\n")}\n\n${summary.counts.selected} tests in all.\n`);
     }
-    if (verdict.problems.length) {
-      for (const problem of verdict.problems) console.log(`::error title=Browser suite::${problem}`);
+    if (problems.length) {
+      for (const problem of problems) console.log(`::error title=Browser suite::${problem}`);
       process.exit(1);
     }
     return;
