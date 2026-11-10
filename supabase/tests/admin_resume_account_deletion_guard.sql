@@ -126,6 +126,10 @@ begin
   if (select status from public.remediation_jobs where id = failed_job) <> 'failed'
      or (select attempts from public.remediation_jobs where id = failed_job) <> 10 then
     fails := fails || 'FAIL N3: a refused caller changed the deletion job (N944)'::text;
+    -- Put it back, so the checks below still say what they find by name.
+    update public.remediation_jobs
+       set status = 'failed', attempts = 10, last_error = 'Customer ownership requires operator review', completed_at = null
+     where id = failed_job;
   end if;
   if to_regprocedure('public.admin_resume_account_deletion(uuid, boolean)') is not null then
     fails := fails || 'FAIL N4: the two-argument resume, which names no admin, still exists (N944)'::text;
