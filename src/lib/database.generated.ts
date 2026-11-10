@@ -6824,6 +6824,10 @@ export type Database = {
         Args: { p_from: string; p_to: string }
         Returns: Json
       }
+      admin_resume_account_deletion: {
+        Args: { p_dry_run?: boolean; p_user: string }
+        Returns: Json
+      }
       admin_retry_dispute_recovery: {
         Args: { p_actor: string; p_dispute: string; p_dry_run?: boolean }
         Returns: Json
@@ -8447,6 +8451,22 @@ export type Database = {
           reason: string
         }[]
       }
+      photo_signatures_offer: {
+        Args: { p_signed: Json; p_window: number }
+        Returns: {
+          bucket: string
+          path: string
+          signed_url: string
+        }[]
+      }
+      photo_signatures_read: {
+        Args: { p_objects: Json; p_window: number }
+        Returns: {
+          bucket: string
+          path: string
+          signed_url: string
+        }[]
+      }
       pickup_mint_pass: {
         Args: {
           p_buyer_id: string
@@ -8777,6 +8797,10 @@ export type Database = {
         Returns: boolean
       }
       release_refused_admin_refund: {
+        Args: { p_actor: string; p_detail: string; p_operation: string }
+        Returns: Json
+      }
+      release_refused_deletion_resume: {
         Args: { p_actor: string; p_detail: string; p_operation: string }
         Returns: Json
       }

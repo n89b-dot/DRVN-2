@@ -39,6 +39,26 @@ Every file in `supabase/migrations/` has a row in `supabase/MIGRATIONS.md`, and 
 
 `node scripts/apply-migration.mjs --target <name> --status` prints, read-only, what a target has applied against what is on disk, as JSON. Each row the runner records in `supabase_migrations.schema_migrations` carries a provenance comment line in `statements[0]`: `-- applied_by=<user> source_sha=<sha> pr=<n>`. It is the first line of an applied file's row, and the second (after the `--record-only` marker) of a row recorded without running the file. Pass `--pr <n>` when applying a merged PR's files.
 
+## The table the OS reads from a report
+
+A report or review tells the OS what it found through one table, which the OS reads exactly. The prose around it is for people; where a row and the prose differ, the row is right. `tests/ci/os-report-table.test.ts` fails a malformed table here, before the OS meets it.
+
+- **Where.** Under the heading `## For the Intelligence OS`, at most one such table per file, in a `docs/` file whose name contains `readiness`, `review`, `audit`, `report` or `findings` (the files the OS reads as reports). Never under `docs/plans/`. A file without the heading is not checked.
+- **Header, exactly:** `| OS id | Finding | State | Pull request | For | Note |`
+
+| Column | What goes in it |
+|---|---|
+| OS id | An id the OS already holds (`N123`, `R-slug`, `R12`), or `new` for a finding it has not seen. |
+| Finding | `#` and digits, the finding's number in this report. Required when OS id is `new`. |
+| State | Exactly one of `fixed`, `open`, `same as <id>`, `not the same as <id>`, `by design`, `accepted`, `waiting on <id>`, `after launch`. The three with an `<id>` take one N or R id. |
+| Pull request | `#N`, several separated by commas, or blank. |
+| For | `engineer`, `you`, `counsel` or `decide`. Required when OS id is `new`. |
+| Note | Free text. For a `new` item it is the item's one-line title, so it cannot be blank. |
+
+**Rows and prose agree.** In the same file, every finding written up as an entry that starts a line with `**#NNN ` has a row whose Finding is that number, and every row's Finding has such an entry. A finding appears on one row only.
+
+A row's State is a claim like any other: the OS still closes an item only on evidence (a merged pull request that names it, and a green run on `main`).
+
 ## What CI publishes per commit
 
 All artifacts are keyed by the commit sha and kept 30 days.
@@ -47,10 +67,11 @@ All artifacts are keyed by the commit sha and kept 30 days.
 |---|---|---|
 | `test-results-<sha>-verify` | verify | `test-results/vitest.xml` (JUnit, `npm test`) |
 | `test-results-<sha>-sql-guard` | sql-guard | `test-results/sql-guards.xml` (JUnit: one `<testcase>` per guard, named by the file's basename without `.sql`; a failure's body is the guard's `FAIL` lines verbatim) |
-| `test-results-<sha>-e2e` | e2e | `test-results/operations.xml` (JUnit, `test:operations`), `test-results/playwright.xml` (JUnit, Playwright) |
+| `test-results-<sha>-e2e` | e2e | `test-results/operations.xml` (JUnit, `test:operations`), `test-results/playwright.xml` (JUnit, Playwright). The browser suite runs as four parts (`e2e/parts.json`); this file is the four parts' files merged: every `<testsuite>` (one per spec file and browser, as before) under one root whose counts are the sums |
 | `test-results-<sha>-stripe-integration` | stripe-integration | `test-results/stripe.xml` (JUnit, `test:stripe`) |
-| `browser-release-summary-<sha>` | e2e | `browser-release-<sha>.json`, the browser suite's counts |
-| `release-gate-<sha>` | release-gate | `release-gate-<sha>.json`: the gate's result and each requirement's outcome, written even when the gate fails |
+| `browser-release-summary-<sha>` | e2e | `browser-release-<sha>.json`, the browser suite's counts, summed over the four parts; `releaseStatus` is `passed` only when every part's was; `parts` says how many parts reported |
+| `e2e-part-<n>-<sha>` (n = 1 to 4) | e2e-parts | One part's own results before merging: `part.json` (`ran`, `first_attempt_passed`), its `playwright.xml`, its browser summary, and `operations.xml` from the one part that runs the drills. A reader that wants the whole suite uses the two merged artifacts above |
+| `release-gate-<sha>` | release-gate | `release-gate-<sha>.json`: the gate's result and each requirement's outcome, written even when the gate fails. `scope` is `full`, or `documents-only` on a pull request that changed documents only and so skipped the browser suite (`docs/owner/branch-protection.md`); a run on `main` is always `full` |
 
 To collect every JUnit file for a run, list the run's artifacts and take every name that starts with `test-results-<sha>-`.
 

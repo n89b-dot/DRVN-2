@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { adminSuspendUser, adminUnsuspendUser } from "@/lib/admin/actions";
+import { adminResumeAccountDeletion, adminSuspendUser, adminUnsuspendUser } from "@/lib/admin/actions";
 import { deletionBlockerLabel, isDeletionPending, SUSPENDED_CHIP } from "@/lib/admin/presentation";
 import { ACCOUNT_DELETIONS_PAGE_SIZE, getAccountDeletionCases, searchUsers, USER_STATE_FILTERS, USERS_PAGE_SIZE, type UserStateFilter } from "@/lib/admin/queries";
 import { cx, isPersonStub, personLabel } from "@/lib/format";
@@ -121,6 +121,30 @@ export default async function AdminUsersPage({
                       {d.reviewAt ? ` · review by ${new Date(d.reviewAt).toLocaleDateString()}` : ""}
                       {d.retainUntil ? ` · keys kept until ${new Date(d.retainUntil).toLocaleDateString()}` : ""}
                     </span>
+                    {d.job?.status === "failed" && (
+                      <span className="order__meta block">
+                        The worker gave up after {d.job.attempts} tries{d.job.lastError ? `: ${d.job.lastError}` : ""}
+                      </span>
+                    )}
+                    {/* #108: the way out of a stuck case without SQL (runbook §5d). */}
+                    {d.resumable && d.userId && (
+                      <div className="mt-2">
+                        <ActionDialog
+                          action={adminResumeAccountDeletion}
+                          title="Resume this deletion"
+                          trigger="Resume deletion"
+                          triggerClassName="relbtn !static"
+                          hidden={{ user_id: d.userId }}
+                          confirmNote={
+                            d.job?.status === "failed"
+                              ? "Puts the deletion back in the worker's queue with its attempts reset. Fix what stopped it first (the error above); it comes back here if the cause remains. Every hold check runs again, and a member whose data is already removed is never let back in."
+                              : "The order that held this deletion has settled. This puts the deletion back in the worker's queue to finish. If anything still holds it, it pauses again with the account kept disabled."
+                          }
+                          fields={[{ kind: "reason", placeholder: "e.g. Refund on the held order completed; Stripe customer checked" }]}
+                          submitLabel="Queue again"
+                        />
+                      </div>
+                    )}
                   </td>
                   <td data-label="Asked">
                     {new Date(d.requestedAt).toLocaleDateString()}

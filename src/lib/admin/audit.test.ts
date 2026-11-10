@@ -26,6 +26,25 @@ it("resumes the explicitly linked replacement after an audit crash", async () =>
   expect(insert.mock.calls[0][0].metadata.operationId).toBe("existing");
 });
 
+describe("a refused deletion resume never blocks the next one (N944, #198)", () => {
+  it("closes the journal entry through the deletion releaser and rethrows the refusal", async () => {
+    const { RefusedOperationError } = await import("./audit");
+    const rpc = vi.fn(async (name: string) => {
+      if (name === "assert_admin_actor") return { error: null };
+      if (name === "begin_admin_external_operation") return { data: { operationId: "op-1", reused: false }, error: null };
+      if (name === "release_refused_deletion_resume") return { data: { released: true }, error: null };
+      throw new Error(`unexpected ${name}`);
+    });
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    const mutate = vi.fn().mockRejectedValue(new RefusedOperationError("The order that holds this deletion is still open"));
+    await expect(
+      auditedAction({ rpc, from: () => ({ insert }) } as never, { actorId: "actor", action: "deletion.resume", subjectType: "user", subjectId: "member", reason: "Checked" }, mutate),
+    ).rejects.toThrow("still open");
+    expect(rpc).toHaveBeenCalledWith("release_refused_deletion_resume", { p_actor: "actor", p_operation: "op-1", p_detail: "The order that holds this deletion is still open" });
+    expect(insert).not.toHaveBeenCalled();
+  });
+});
+
 describe("a refused chargeback retry never blocks the next one (N944, #108)", () => {
   it("closes the journal entry through the retry releaser and rethrows the refusal", async () => {
     const { RefusedOperationError } = await import("./audit");
