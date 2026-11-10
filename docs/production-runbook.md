@@ -171,7 +171,22 @@ name and both hashes together; then re-run the script on each project. A
 release that renames a make or model onto an existing name aborts the run on
 a unique index and changes nothing; resolve the clash first. Licence: CC BY
 4.0 (`LICENSE` at the pinned commit; GitHub detects none).
-Record the run in `docs/release-evidence/infrastructure.md`.
+
+The seed joins the curated list to the catalogue, so a curated make or model
+the catalogue lacks is dropped without an error. Both runs say what happened
+(work review #141): the dry run prints how many curated generations will find
+a catalogue model after the import and lists each curated model that will
+not, with its generations; the apply prints the same for the catalogue as it
+then stands. Neither changes the exit code. On a database filled only from
+the pinned release (staging, 10 November 2026 dry run), 175 of 194 curated
+generations match: VehiclesDB files the Golf GTI and Golf R under Golf, so the
+curated rows for `Golf GTI`, `GTI` and `Golf R` (19 generations) have no model
+to attach to. A car entered as a Golf still resolves its generation. Shared
+dev matches all 194, because its catalogue also holds models from the
+earlier vPIC seed.
+
+Record the run in `docs/release-evidence/infrastructure.md`: the closing
+counts and the coverage line, with any misses.
 
 ## 4. Wire the app
 
@@ -1243,7 +1258,14 @@ Until PR #158 the card-number redactor could corrupt about 0.3% of UUIDs it
 passed over, leaving text like `70e95888-a[card number removed]b5e67f70ec`
 in agent rows. New rows are safe. Before promoting any database that held agent
 activity from before 8 November, run `supabase/audits/agent_mangled_ids.sql`
-(read-only). Shared dev counted 0 on 9 November 2026; staging and production
-were created after the fix, or hold no agent rows. A non-zero count needs a
-backfill decision, because the original id can't be recovered from the row
-alone.
+(read-only). A non-zero count needs a backfill decision, because the original
+id can't be recovered from the row alone.
+
+The audit counts a marker with a hex digit or a dash touching it on either
+side. Its first version (9 November) asked for one on both sides and missed
+an id whose removed digits ran to its first or last character, about one
+mangled id in five (work review #145). The corrected audit counted 0 in every
+agent table on shared dev and on staging on 10 November 2026; neither holds
+any `agent_events` or `agent_messages` rows. Staging is not exempt by date: it
+was created on 7 November, a day before the fix merged. Production does not
+exist yet and will be created after the fix.
