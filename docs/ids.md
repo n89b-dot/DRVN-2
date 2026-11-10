@@ -50,7 +50,7 @@ All artifacts are keyed by the commit sha and kept 30 days.
 | `test-results-<sha>-e2e` | e2e | `test-results/operations.xml` (JUnit, `test:operations`), `test-results/playwright.xml` (JUnit, Playwright) |
 | `test-results-<sha>-stripe-integration` | stripe-integration | `test-results/stripe.xml` (JUnit, `test:stripe`) |
 | `browser-release-summary-<sha>` | e2e | `browser-release-<sha>.json`, the browser suite's counts |
-| `release-gate-<sha>` | release-gate | `release-gate-<sha>.json`: the gate's result and each requirement's outcome, written even when the gate fails |
+| `release-gate-<sha>` | release-gate | `release-gate-<sha>.json`: the gate's result and each requirement's outcome, written even when the gate fails. `scope` is `full`, or `documents-only` on a pull request that changed documents only and so skipped the browser suite (`docs/owner/branch-protection.md`); a run on `main` is always `full` |
 
 To collect every JUnit file for a run, list the run's artifacts and take every name that starts with `test-results-<sha>-`.
 
