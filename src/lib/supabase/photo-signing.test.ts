@@ -428,16 +428,17 @@ describe("N1062: the shared copy of public data never holds a result of failed s
     const { cachedPublicFetch } = await import("./public-cache");
     const url = canonical("car-images", "kept.webp");
     const stored = JSON.stringify([{ owner_id: ME, cover_image_url: url }]);
-    // Next's data cache, reduced to what matters here: the first answer is kept and handed out again.
+    // Next's data cache, reduced to what matters here: a read that asks for a
+    // copy (`next.revalidate`) is kept and handed out again; any other read
+    // goes to the database.
     const copies = new Map<string, string>();
     let databaseReads = 0;
-    const dataCache = (async (input: RequestInfo | URL) => {
+    const dataCache = (async (input: RequestInfo | URL, init?: RequestInit & { next?: { revalidate?: number } }) => {
       const key = String(input);
-      if (!copies.has(key)) {
-        databaseReads += 1;
-        copies.set(key, stored);
-      }
-      return new Response(copies.get(key), { headers: { "content-type": "application/json", date: new Date().toUTCString() } });
+      const keeps = Boolean(init?.next?.revalidate);
+      if (!keeps || !copies.has(key)) databaseReads += 1;
+      if (keeps && !copies.has(key)) copies.set(key, stored);
+      return new Response(keeps ? copies.get(key) : stored, { headers: { "content-type": "application/json", date: new Date().toUTCString() } });
     }) as typeof fetch;
     const before = process.env.DRVN_PUBLIC_CACHE;
     process.env.DRVN_PUBLIC_CACHE = "on";
