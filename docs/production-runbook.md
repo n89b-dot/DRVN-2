@@ -167,6 +167,9 @@ if any is missing or invalid.
 | `STRIPE_CONNECT_WEBHOOK_SECRET` | required (live) | signing secret of the Connect endpoint (`account.updated` on sellers' accounts) |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | required (live) | live publishable key |
 | `SENTRY_DSN` | required (live) | must be an `https:` DSN with a key and a numeric project path (`https://<key>@<host>/<project id>`) |
+| `EMAIL_PROVIDER` | recommended (live) | `resend`, the one transport (`src/lib/email/resend.ts`, #116). Unset: order emails are skipped as `email_off` (never sent later as a backlog) and saved-search digests are recorded unsent. The provider is the owner's to confirm (R-email) |
+| `EMAIL_FROM` | with `EMAIL_PROVIDER` | the sender, an address on the provider's verified sending domain, e.g. `DRVN <orders@<domain>>`. Without it email stays off and the misconfiguration is reported |
+| `RESEND_API_KEY` | with `EMAIL_PROVIDER=resend` | a sending-only Resend API key. Without it every email is refused as `rejected` |
 | `ADMIN_ALERT_WEBHOOK_URL` | required (live), `https:` | operator alerts (Slack-compatible body). Outside live-money mode it may be unset; alerts then accumulate as `disabled` outbox rows in Admin → Payments |
 | `NEXT_PUBLIC_SITE_URL` | required (live), `https:` | the canonical origin only — no path, query, fragment or credentials. Unset, links fall back to `https://` + Vercel's `VERCEL_PROJECT_PRODUCTION_URL` (set by the platform), then `http://localhost:3000` |
 | `CRON_SECRET` | required (live), ≥ 32 chars | bearer for every `/api/jobs/*` route and `/api/health/workers`; the same value goes in `job_config.transfer_worker_secret` and the monitor's `DRVN_MONITOR_SECRET` |
@@ -314,7 +317,7 @@ every family below.
 - `drvn-saved-search-digests`: `savedSearchDigests`
 - `drvn-saved-search-worker`: `savedSearches`
 - `drvn-search-worker`: `search`
-- `drvn-transfer-worker`: `expiries`, `captures`, `transfers`, `transferReconciliation`, `refunds`, `labelVoids`, `returns`, `disputes`, `payoutDeadlines`, `alerts`, `receipts`, `analytics`
+- `drvn-transfer-worker`: `expiries`, `captures`, `transfers`, `transferReconciliation`, `refunds`, `labelVoids`, `returns`, `disputes`, `payoutDeadlines`, `alerts`, `receipts`, `analytics`, `orderEmails` (last, after every money family, #116)
 <!-- job-families:end -->
 
 `select jobname, schedule from cron.job order by 1;` must return exactly
@@ -724,8 +727,23 @@ the alert was (last) turned on is mailed either, even when a long-open
 transaction pins the window's start id below it (`activated_at`). Records
 are kept 90 days. Sending goes
 through `src/lib/email/send.ts`, selected by `EMAIL_PROVIDER` and sent from
-`EMAIL_FROM`. No provider is chosen yet (R-email): until one is, digests are
-recorded and nothing is sent, and the route logs and returns `provider: null`.
+`EMAIL_FROM` (Resend, #116). With no provider set, digests are recorded and
+nothing is sent, and the route logs and returns `provider: null`.
+
+**Order emails (#116).** Every in-app order notice (sold, receipt,
+dispatched, delivered, auto-confirmed, dispute opened and decided, refunded,
+DRVN support's updates, and the day 3/7/12 payout-setup reminders) queues one
+row in `public.order_email_outbox` in the same transaction
+(20261110140000). The row holds the recipient's user id and the order id
+only. The money pass drains it last (`orderEmails`, `src/lib/order-emails.ts`),
+10 at a time within 20 seconds, with a 10-second limit per send. Retries back
+off 10, 20, 40 and 80 minutes, then fail. Rows older than 24 hours are
+skipped. So are deleted, suspended or address-less accounts, muted kinds
+(receipts, refunds, payout notices and support updates can't be muted), and
+anything past 20 an hour to one person. A guest buyer is emailed only about
+their own order, with no link of ours. Admin → Settings → Background jobs
+shows the family. To see what's waiting:
+`select status, skip_reason, count(*) from public.order_email_outbox group by 1, 2;`
 
 `/api/jobs/media-gc` and `/api/jobs/listing-imports` are scheduled the same
 way. To run any of them by hand:

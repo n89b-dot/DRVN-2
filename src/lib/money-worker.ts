@@ -17,6 +17,7 @@ import { resumeIncompleteRefunds } from "@/lib/payments/refunds";
 import { processReservationExpiries } from "@/lib/payments/reservation-expiry";
 import { processDueTransfers, reconcileTransferRecords } from "@/lib/payments/transfer-worker";
 import { processPurchaseAnalytics } from "@/lib/purchase-analytics";
+import { processOrderEmails } from "@/lib/order-emails";
 import { processReceiptJobs } from "@/lib/receipt-worker";
 import { reconcileOutboundLabelVoids } from "@/lib/shipping/outbound-label-void";
 import { processTrackerRegistrations } from "@/lib/shipping/tracker-registration";
@@ -96,7 +97,7 @@ export async function runMoneyWorkerPass(admin: Admin): Promise<MoneyWorkerPass>
   };
   const results: Record<string, unknown> = {};
   let failed = false;
-  await mapBounded(Object.entries(jobs), 4, async ([family, run]) => {
+  const runFamily = async ([family, run]: [string, () => Promise<unknown>]) => {
     const id = randomUUID();
     try {
       const started = await admin.rpc("record_worker_run", { p_id: id, p_family: family, p_status: "running" });
@@ -114,6 +115,12 @@ export async function runMoneyWorkerPass(admin: Admin): Promise<MoneyWorkerPass>
       await admin.rpc("record_worker_run", { p_id: id, p_family: family, p_status: "failed", p_summary: { error: "Worker family failed" } });
       reportError("[worker] family failed", { family, runId: id, error });
     }
-  });
+  };
+  await mapBounded(Object.entries(jobs), 4, runFamily);
+  // Order emails (#116) last, once every money family above has finished,
+  // inside their own time budget, their own failure and a provider timeout
+  // per send: an email provider that hangs or fails can't delay a transfer,
+  // a refund or a payout deadline.
+  await runFamily(["orderEmails", () => processOrderEmails(admin)]);
   return { results, failed };
 }

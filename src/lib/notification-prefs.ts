@@ -55,7 +55,7 @@ export const NOTIFICATION_PREFS = [
     key: "order_updates",
     group: "Marketplace",
     label: "Dispatch & delivery",
-    hint: "Payment, dispatch, delivery and cancellations on your orders",
+    hint: "Dispatch, delivery and problems on your orders, in the app and by email. Receipts, refunds and payout notices are always sent",
   },
   {
     key: "saved_searches",

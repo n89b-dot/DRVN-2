@@ -2,15 +2,17 @@ import "server-only";
 
 import { reportError } from "@/lib/monitoring";
 
+import { resendTransport } from "./resend";
+
 /**
  * The email seam: the one door app code uses to send an email of its own.
  * Auth emails (confirmation, password reset, email change) are Supabase
  * Auth's and do not come through here.
  *
- * No provider is chosen yet (readiness item R-email), so there are no
- * transports and `emailTransport()` returns null: callers record what they
- * would have sent and send nothing, saying so in their log, the way
- * analytics without POSTHOG_KEY and search without TYPESENSE_URL are no-ops.
+ * With no EMAIL_PROVIDER set, `emailTransport()` returns null: callers
+ * record what they would have sent and send nothing, saying so in their log,
+ * the way analytics without POSTHOG_KEY and search without TYPESENSE_URL are
+ * no-ops. The one transport is Resend (src/lib/email/resend.ts, #116).
  * Adding a provider is one entry in TRANSPORTS, selected by EMAIL_PROVIDER,
  * sending from EMAIL_FROM. A transport must pass `idempotencyKey` to the
  * provider where it supports one, so a retry after a crash between the
@@ -43,8 +45,11 @@ export type EmailTransport = {
 type EmailEnv = Record<string, string | undefined>;
 
 /** Provider name → transport factory, given the sender address and the
- *  environment for its own key. Empty until a provider is chosen. */
-export const TRANSPORTS: Record<string, (config: { from: string; env: EmailEnv }) => EmailTransport["send"]> = {};
+ *  environment for its own key. Resend is the one docs/owner/email-provider.md
+ *  suggests (#116); the choice is Neil's to confirm (R-email). */
+export const TRANSPORTS: Record<string, (config: { from: string; env: EmailEnv }) => EmailTransport["send"]> = {
+  resend: ({ from, env }) => resendTransport({ from, env }),
+};
 
 /** The configured transport, or null when email is off (no provider, an
  *  unknown one, or no sender address). Only a misconfiguration is reported;

@@ -116,5 +116,15 @@ export async function processPayoutDeadlines(
       reportError("[payout-deadline] order failed", { orderId: order.order_id, error });
     }
   }
+  // Then the reminders to set payouts up, on days 3, 7 and 12 of a sale
+  // (#116, a default Neil can change): each is an in-app notice, and so an
+  // order email, at most once a day per sale. A failure here never holds
+  // back the deadline above, and isn't counted against it.
+  try {
+    const { error: reminderError } = await admin.rpc("raise_payout_setup_reminders");
+    if (reminderError) throw reminderError;
+  } catch (reminderFailure) {
+    reportError("[payout-deadline] setup reminders failed", { error: reminderFailure });
+  }
   return summary;
 }

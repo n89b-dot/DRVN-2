@@ -5,14 +5,16 @@ vi.mock("@/lib/monitoring", () => ({ reportError }));
 
 import { TRANSPORTS, emailTransport } from "./send";
 
+const shipped = { ...TRANSPORTS };
 afterEach(() => {
   reportError.mockReset();
   for (const name of Object.keys(TRANSPORTS)) delete TRANSPORTS[name];
+  Object.assign(TRANSPORTS, shipped);
 });
 
 describe("the email seam", () => {
-  it("is off, quietly, while no provider is chosen (R-email)", () => {
-    expect(Object.keys(TRANSPORTS)).toEqual([]);
+  it("is off, quietly, while no provider is chosen (R-email); Resend is the one transport shipped (OS-W41)", () => {
+    expect(Object.keys(TRANSPORTS)).toEqual(["resend"]);
     expect(emailTransport({})).toBeNull();
     expect(emailTransport({ EMAIL_PROVIDER: " " })).toBeNull();
     expect(reportError).not.toHaveBeenCalled();

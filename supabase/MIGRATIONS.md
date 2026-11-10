@@ -32,6 +32,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 10 — order emails through an outbox: report five #116 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110140000_order_email_outbox.sql` | not applied |
+
+`public.order_email_outbox`, filled by a trigger on `public.notifications` for the order kinds (the notice's own recipient, an exact `/orders/<uuid>` href, a party to the order), drained by the money pass's new last family `orderEmails` through `claim_order_emails` / `complete_order_email`. Also `skip_order_emails_email_off`, `raise_payout_setup_reminders` (days 3, 7 and 12, run by `payoutDeadlines`), a deletion-request trigger that skips the member's pending rows, and `private.scheduled_job_inventory()` restated from `20261108100000` with `orderEmails`. Apply with the app from the same PR: the app's family calls these functions, and an older app ignores the table (rows just wait, then are skipped as stale).
+
 ## November 8 — deletion: late holds after the scrub, other members' notifications, the tombstone race, old retained cases: N418 (not applied anywhere)
 
 | File | Applied to |

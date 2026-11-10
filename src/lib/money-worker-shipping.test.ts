@@ -29,6 +29,8 @@ vi.mock("@/lib/payments/reservation-expiry", () => ({ processReservationExpiries
 vi.mock("@/lib/payments/transfer-worker", () => ({ processDueTransfers: mocks.quiet, reconcileTransferRecords: mocks.quiet }));
 vi.mock("@/lib/purchase-analytics", () => ({ processPurchaseAnalytics: mocks.quiet }));
 vi.mock("@/lib/receipt-worker", () => ({ processReceiptJobs: mocks.quiet }));
+// #116: the order-email family runs last in the pass; these tests are about the others.
+vi.mock("@/lib/order-emails", () => ({ processOrderEmails: mocks.quiet }));
 // The real label-void and tracker queues and the real provider resolution,
 // over a mocked EasyPost.
 vi.mock("@/lib/shipping/easypost", () => ({

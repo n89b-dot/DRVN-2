@@ -7243,6 +7243,19 @@ export type Database = {
         Args: { p_bucket: string; p_path: string }
         Returns: Json
       }
+      claim_order_emails: {
+        Args: { p_limit: number }
+        Returns: {
+          attempt: number
+          email: string
+          guest: boolean
+          id: string
+          kind: string
+          notification_prefs: Json
+          order_id: string
+          recipient_id: string
+        }[]
+      }
       claim_outbound_label_void: {
         Args: { p_shipment: string; p_worker: string }
         Returns: Json
@@ -7371,6 +7384,17 @@ export type Database = {
       complete_media_deletion: {
         Args: { p_bucket: string; p_path: string; p_token: string }
         Returns: boolean
+      }
+      complete_order_email: {
+        Args: {
+          p_attempt: number
+          p_error?: string
+          p_id: string
+          p_outcome: string
+          p_provider_message_id?: string
+          p_reason?: string
+        }
+        Returns: string
       }
       complete_outbound_label: {
         Args: { p_label: Json; p_shipment: string }
@@ -8561,6 +8585,7 @@ export type Database = {
         }
         Returns: Json
       }
+      raise_payout_setup_reminders: { Args: never; Returns: number }
       recommend_listings: {
         Args: { p_limit?: number; p_user: string }
         Returns: {
@@ -9076,6 +9101,7 @@ export type Database = {
           updated_at: string
         }[]
       }
+      skip_order_emails_email_off: { Args: never; Returns: number }
       storage_object_rows: {
         Args: { p_after?: string; p_bucket: string; p_limit?: number }
         Returns: {

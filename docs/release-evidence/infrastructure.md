@@ -56,6 +56,9 @@ Set in the host's environment for each project (never in the repository). `job_c
 | `STRIPE_CONNECT_WEBHOOK_SECRET` | required (live) | | | | |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | required (live) | | | | |
 | `SENTRY_DSN` | required (live) | | | | |
+| `EMAIL_PROVIDER` | recommended (live) | | | | `resend` (#116) |
+| `EMAIL_FROM` | with `EMAIL_PROVIDER` | | | | |
+| `RESEND_API_KEY` | with `EMAIL_PROVIDER=resend` | | | | |
 | `ADMIN_ALERT_WEBHOOK_URL` | required (live), `https:` | | | | |
 | `NEXT_PUBLIC_SITE_URL` | required (live), `https:` | | | | |
 | `CRON_SECRET` | required (live), ≥ 32 chars | | | | |
