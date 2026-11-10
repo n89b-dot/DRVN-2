@@ -43,7 +43,7 @@ TLS. Details: "Recording without running" below.
 
 | File | Applied to |
 |---|---|
-| `20261110131000_drop_age_confirmation_due.sql` | not applied |
+| `20261110131000_drop_age_confirmation_due.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
 
 Drops `public.my_age_confirmation_due()`. Every account from before the 18+ confirmation is a test account, so nothing asks them any more: the app from the same PR no longer calls the function, has no `/confirm-age` page and no check in the request proxy. The 18+ box at sign-up, onboarding and guest checkout, the `age_confirmations` table and its rows are untouched. Apply at any time before a first deploy; an older app that still calls the function reports a failed check and lets the page load. After this the next paragraph's function no longer exists.
 

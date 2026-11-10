@@ -149,4 +149,12 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #213 | 2026-11-10 | docs(plans): two remediation plans from the 10 November review | skipped | — | docs only (ruling, 7 Nov) |
 | #214 | 2026-11-10 | N725: owed Codex reviews are waived by ruling, and the queue test accepts a waived row (work… | waived | — | waived (ruling, 10 Nov) |
 | #215 | 2026-11-10 | Plan 2 A0: a documents-only pull request skips the browser suite | waived | — | waived (ruling, 10 Nov) |
+| #216 | 2026-11-10 | docs(plans): the plan 2 record (Part A) (landed in batch 1, #228) | skipped | — | docs only (ruling, 7 Nov) |
+| #218 | 2026-11-10 | N715 N962 N957 N714: admin gate on every console path, key kinds checked at boot… (batch 1, #228) | waived | — | waived (ruling, 10 Nov) |
+| #219 | 2026-11-10 | N634: the deploy's migration check uses a read-only database login… (batch 1, #228) | waived | — | waived (ruling, 10 Nov) |
+| #220 | 2026-11-10 | N667 N943: the catalogue import reports matched curated generations… (batch 1, #228) | waived | — | waived (ruling, 10 Nov) |
 | #221 | 2026-11-10 | docs: the 10 November working rules are written into MIGRATIONS.md and the pull-request… | skipped | — | docs only (ruling, 7 Nov) |
+| #223 | 2026-11-10 | test(ci): a report's table for the Intelligence OS is checked here… (batch 1, #228) | waived | — | waived (ruling, 10 Nov) |
+| #224 | 2026-11-10 | Plan 2 A5: the launch switch settings are recorded… (batch 1, #228) | waived | — | waived (ruling, 10 Nov) |
+| #225 | 2026-11-10 | docs: plan 1 record brought current, the by-hand counter-notice procedure… (batch 1, #228) | skipped | — | docs only (ruling, 7 Nov) |
+| #228 | 2026-11-10 | Batch 1: #225 #218 #220 #223 #219 #216 #224 | waived | — | waived (ruling, 10 Nov) |
