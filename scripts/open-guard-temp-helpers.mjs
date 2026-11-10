@@ -3,7 +3,8 @@
 // default (20261111100000), a SQL guard's own `pg_temp` helpers included, and
 // a guard calls its helpers while acting as other roles. This adds, after the
 // last top-level `create function pg_temp.…` (or procedure) of each guard in
-// supabase/tests/ that has one and lacks it, the line that opens them:
+// supabase/tests/ that has one and lacks it, and of each scripts/perf/ file that
+// also switches role, the line that opens them:
 //
 //   grant execute on all routines in schema pg_temp to public;
 //
@@ -23,19 +24,22 @@ const LINE = "grant execute on all routines in schema pg_temp to public;";
 const NOTE = "-- This guard's own helpers are called while acting as other roles. A new\n-- function is closed by default (architecture plan 2, item A3), so they are opened here.";
 const HELPER = /^create (or replace )?(function|procedure) pg_temp\./i;
 const GRANT = /^grant execute on all routines in schema pg_temp to public$/i;
-const dir = "supabase/tests";
+const ROLE_SWITCH = /set_config\('role'|\bset (local )?role\b/i;
 const check = process.argv.includes("--check");
 
+const sqlFiles = (dir) => fs.readdirSync(dir).filter((file) => file.endsWith(".sql")).sort().map((name) => path.join(dir, name));
+const files = [...sqlFiles("supabase/tests"), ...sqlFiles("scripts/perf").filter((file) => ROLE_SWITCH.test(fs.readFileSync(file, "utf8")))];
+
 const needing = [];
-for (const name of fs.readdirSync(dir).filter((file) => file.endsWith(".sql")).sort()) {
-  const file = path.join(dir, name);
+for (const file of files) {
   const text = fs.readFileSync(file, "utf8");
+  const note = file.startsWith("scripts/") ? NOTE.replace("This guard's", "This script's") : NOTE;
   const statements = splitStatements(text).map((statement) => ({ ...statement, code: statement.code.replace(/\s+/g, " ") }));
   const lastHelper = statements.findLast((statement) => HELPER.test(statement.code));
   if (!lastHelper) continue;
   if (statements.some((statement) => GRANT.test(statement.code) && statement.start >= lastHelper.end)) continue;
   needing.push(file);
-  if (!check) fs.writeFileSync(file, `${text.slice(0, lastHelper.end)}\n\n${NOTE}\n${LINE}${text.slice(lastHelper.end)}`);
+  if (!check) fs.writeFileSync(file, `${text.slice(0, lastHelper.end)}\n\n${note}\n${LINE}${text.slice(lastHelper.end)}`);
 }
 for (const file of needing) console.log(`${check ? "needs the line" : "opened"}: ${file}`);
 console.log(`${needing.length} guard(s) ${check ? "need" : "given"} the line.`);
