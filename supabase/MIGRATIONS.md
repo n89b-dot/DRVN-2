@@ -40,6 +40,22 @@ TLS. Details: "Recording without running" below.
 
 Adds `public.my_age_confirmation_due()` for signed-in members. The request proxy calls it once per browser on a member's next page request, and sends a member who joined before the 18+ confirmation, with a handle and no record, to `/confirm-age`. **Apply before deploying the app from the same PR.** Until it exists the proxy reports a failed check on every signed-in page request and lets the page load.
 
+## November 10 — a takedown stays taken down: report five #109 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110120000_copyright_takedown_holds.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
+
+Codex's review of #117, the two open database findings. A listing a checkout held at takedown (`keptListingStatus`) can never become `active` again: a failed or released checkout removes it instead, and a sale still completes. `private.member_media_ref_ok` (now `volatile`) takes the object's lock and refuses a blocklisted object. A new row in `copyright_blocked_media` takes the same lock and purges every reference to the object again. Applying it also removes, once, any held listing already back on sale. Order does not matter: no app change depends on it. After review: the blocklist binds every writer (`private.media_url_blocked`, checked first in the restated `private.guard_member_media_ref` and `private.guard_member_post_body_media`; the owner checks stay member-only); the purge runs once per statement in key order and strips post bodies too (`private.strip_media_from_body`); a listing a takedown removed can't be restored or re-published (refused with the reason).
+
+## November 10 — one signed photo URL per window across instances: report five #117 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110100000_photo_signatures_shared.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
+
+Adds `private.photo_signatures` and the service-role functions `photo_signatures_read` and `photo_signatures_offer` (offers insert in key order, so concurrent instances never deadlock, and skip paths the table would refuse), the shared memo that makes every app instance show one signed URL per member photo per hour-long window (`src/lib/supabase/photo-signing.ts`). It also restates `private.prune_cron_history()` (from `20261107191000`, the job's command unchanged) to drop rows older than two hours daily, and adds a trigger that removes a member's rows when their deletion scrub records `scrubbed_at`. Order does not matter: while the functions are missing, the app signs per response, as before, and reports it at most every ten minutes.
+
 ## November 8 — deletion: late holds after the scrub, other members' notifications, the tombstone race, old retained cases: N418 (not applied anywhere)
 
 | File | Applied to |

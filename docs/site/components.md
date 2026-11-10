@@ -129,7 +129,7 @@ image upload loop: validation, storage placement, GC staging).
 
 Source of truth: `src/components/registry.ts` (validated by `src/components/registry.test.ts`).
 
-### Primitives (91)
+### Primitives (92)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -190,6 +190,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `PageHead` | Primitive | `@/components/ui` | Page header: mono eyebrow, display h1, dim sub line, revealed on entry. — `.pagehead` | The head of every page instead of hand-assembling `.pagehead` markup. |
 | `Pagination` | Primitive | `@/components/ui` | Ghost prev/next with mono page marker; renders nothing on a lone first page. | Every paginated list. (Admin's jumplink Pager is a deliberate console variant.) |
 | `PasswordField` | Primitive | `@/components/ui` | TextField's password sibling with a labelled reveal/conceal eye toggle; type flips client-side only. — `.field / .ctl` | Every password input — never a bare TextField type=password. |
+| `PhotoImage` | Primitive | `@/components/ui` | A member photo drawn with next/image (or a plain <img> with `plain`) whose failure state is the no-photo plate: an unsigned member-photo URL or a link that fails to load shows the plate, not a broken image (N940). `usePhotoFallback` is the same rule as a hook; Media uses it. | Where a member photo can't sit in Media's frame: galleries, zoom views, before/after, showcase pins, editor previews at natural size. *Not for:* Anything Media covers (cards, heroes, rows, thumbs); brand assets and non-member images. |
 | `Radio` | Primitive | `@/components/ui` | Radio in the square-mark language. — `.sq` | Exclusive options. |
 | `RatingStars` | Primitive | `@/components/ui` | Read-only five-star display with sr-only value. — `.review__stars` | Displaying a rating. (The interactive picker is the review form's `.star-pick`.) |
 | `ResultNote` | Primitive | `@/components/ui` | Action outcome line — ok chip or error text, role=alert. Motion-driven enter/exit presence. | useActionState results next to a form. |

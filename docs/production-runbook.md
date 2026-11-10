@@ -148,6 +148,31 @@ runner only runs files from `supabase/migrations/`, so it won't run this one.
 `on conflict do nothing` makes it safe to repeat. Keep `supabase/MIGRATIONS.md`
 as the human record of what was applied where and when.
 
+### 3a. Vehicle catalogue
+
+A new project starts with an empty catalogue and no generations: `0041` seeds
+from cache tables that are empty on a new project, and the generations
+migration joins to the catalogue (#119). After the schema, before launch, run
+`scripts/import-vehiclesdb.mjs` against the target, dry run first. `production`
+is not in `supabase/migration-targets.json` yet: a reviewed PR adds it before
+its first migration (§3), and this step needs it too.
+
+```bash
+node scripts/import-vehiclesdb.mjs --target production
+node scripts/import-vehiclesdb.mjs --target production --apply --confirm <code from the dry run>
+```
+
+It imports VehiclesDB's car catalogue at the release pinned in
+`scripts/lib/vehicle-catalog.mjs` (commit and per-file sha256), then re-runs
+the curated generations seed and its backfill from
+`20261020100000_vehicle_generations.sql`, in one transaction. Moving to a
+newer VehiclesDB release is a reviewed PR that changes the commit, the release
+name and both hashes together; then re-run the script on each project. A
+release that renames a make or model onto an existing name aborts the run on
+a unique index and changes nothing; resolve the clash first. Licence: CC BY
+4.0 (`LICENSE` at the pinned commit; GitHub detects none).
+Record the run in `docs/release-evidence/infrastructure.md`.
+
 ## 4. Wire the app
 
 Environment (deployment platform). Boot-time validation:
@@ -363,7 +388,9 @@ If the confirmed factor is ever removed (a lost phone: the recovery steps in
 operator repeats steps 2–4 for the new factor. Members confirmed by the
 migration itself were those with exactly one verified authenticator on file
 when it ran (`mfa_confirmed_by` says so); anyone else is pending until
-confirmed. The console is at `/admin`; it 404s for everyone else.
+confirmed. The console is at `/admin`; it 404s for everyone else. Sign in
+first, then open `/admin`: since N715 a signed-out visit gets the ordinary
+"Not found" page straight from the proxy, with no sign-in redirect.
 
 ## 5b. Money reconciliation & recovery (run these when things go wrong)
 
@@ -401,6 +428,20 @@ Every money queue is durable and visible in **Admin → Payments**:
   where id = 'dispute-evidence';` must be `false`; fetching a stored evidence
   URL unauthenticated must 400/403. (0027 self-checks assert this at apply
   time.)
+
+## 5c0. Deleted photos and cached copies (N717)
+
+Removing a member photo deletes the storage object; nothing purges copies by
+hand. That is enough, because since N455 every member photo is a private
+object reached through a signed link that lives at most two hours. The image
+optimiser's copy is keyed by that link: new uploads carry an hour's
+Cache-Control, and the proxy refuses an expired or unsigned member-photo
+source before the optimiser can answer (#196). Supabase's Smart CDN drops
+its own cached copy when an object is deleted. A copyright takedown is
+refused at `/_next/image` straight away (451). So a deleted photo stays
+reachable for at most about two hours, and only to someone who already held
+its live link. Photos uploaded before 10 Nov 2026 carry a year's
+Cache-Control on their object, but the proxy's expiry check covers them too.
 
 ## 5c. Old photos that still carry metadata (one-off, N627)
 
