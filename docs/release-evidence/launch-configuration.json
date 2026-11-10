@@ -1,0 +1,44 @@
+{
+  "description": "The switch settings DRVN launches with (plan 2 item A5, approved by Neil on 10 November 2026). Each variable is either absent from the host (null) or present. docs/release-evidence/launch-configuration.md is the same record in words; tests/ci/launch-configuration.test.ts holds the two together and proves, with the app's own code, what each setting resolves to. The launch-configuration browser lane (plan 2 item A4) builds its environment from this file.",
+  "recorded": "2026-11-10",
+  "variables": {
+    "PAYMENTS_MODE": null,
+    "STRIPE_SECRET_KEY": "present",
+    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "present",
+    "STRIPE_WEBHOOK_SECRET": "present",
+    "STRIPE_CONNECT_WEBHOOK_SECRET": "present",
+    "PAYMENTS_ALLOW_STUB_IN_PRODUCTION": null,
+
+    "FLAG_INTEGRATED_SHIPPING_V1": null,
+    "SHIPPING_MODE": null,
+    "EASYPOST_API_KEY": null,
+    "EASYPOST_WEBHOOK_SECRET": null,
+    "SHIPPING_ALLOW_STUB_IN_PRODUCTION": null,
+
+    "AGENTS_BETA": null,
+    "AGENT_AI_MODE": null,
+    "AGENT_WORKER_DATABASE_URL": null,
+    "ANTHROPIC_API_KEY": null,
+    "LISTING_IMPORT_AI_MODE": null,
+    "LISTING_IMPORT_ALLOW_STUB_IN_PRODUCTION": null,
+
+    "DRVN_PUBLIC_CACHE": null,
+
+    "TYPESENSE_URL": null,
+    "TYPESENSE_API_KEY": null,
+    "POSTHOG_KEY": null,
+    "EMAIL_PROVIDER": null
+  },
+  "resolvesTo": {
+    "payments": "stripe",
+    "drvnShipping": "disabled",
+    "carrierTracking": "off",
+    "agent": "off",
+    "agentModel": "disabled",
+    "listingImporter": "disabled",
+    "publicDataCache": "on",
+    "searchEngine": "postgres",
+    "analytics": "off",
+    "email": "none"
+  }
+}
