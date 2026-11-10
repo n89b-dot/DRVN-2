@@ -39,7 +39,7 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
-## November 10 — order emails through an outbox: report five #116 (not applied anywhere)
+## November 10 — order emails through an outbox: report five #116
 
 | File | Applied to |
 |---|---|
@@ -47,13 +47,14 @@ TLS. Details: "Recording without running" below.
 
 `public.order_email_outbox`, filled by a trigger on `public.notifications` for the order kinds (the notice's own recipient, an exact `/orders/<uuid>` href, a party to the order), drained by the money pass's new last family `orderEmails` through `claim_order_emails` / `complete_order_email`. Also `skip_order_emails_email_off`, `raise_payout_setup_reminders` (one a day per seller on days 3, 7 and 12 of any unpaid sale, recorded in the new `public.payout_setup_reminders`, run by `payoutDeadlines`), a deletion-request trigger that skips the member's pending rows, and `private.scheduled_job_inventory()` restated from `20261108100000` with `orderEmails`. After the 10 November work review (#147, N1063): `claim_order_emails` passes over rows that can never be sent instead of stopping at one (and returns whether the recipient is the buyer); a member at the hourly cap waits half an hour instead of being dropped; `complete_order_email` takes a `provider` outcome for a fault with our own provider account, which puts the row back without counting the attempt and keeps it 72 hours (`provider_held_at`). Three more kinds queue: `order_cancelled`, `order_partially_refunded` (raised by a new trigger on `orders.refunded_cents`, `private.notify_on_partial_refund`, to both sides with the amount; never for a full refund or a lost card dispute) and `dispatch_reminder` (`public.raise_dispatch_reminders()`, once per paid order due within a day, recorded in the new `public.dispatch_reminders`). `private.prune_cron_history()` is restated from `20261110190000` to remove settled outbox rows and both reminder ledgers after 90 days. **Apply before the app from the same PR deploys:** that app calls `claim_order_emails` and `raise_dispatch_reminders`, and without them its `orderEmails` and `payoutDeadlines` families report a failure on every pass. An app older than the migration ignores the table; its rows wait and are skipped as stale by the first claim. With `EMAIL_PROVIDER` unset no email is sent and every waiting row is skipped as `email_off`. **Not inert in the app:** once applied and deployed, the dispatch reminder, the payout-setup reminder and the partial-refund notice are written as in-app notices whatever `EMAIL_PROVIDER` is, and the first run of the dispatch reminder reaches sellers of paid orders up to a day past their dispatch date. After the review of the PR (10 November): a provider fault marks every waiting row as held, so all of them are kept 72 hours; the claim treats "is a party" and "is the buyer" as two null-safe questions, so the seller of an order whose buyer's account is gone is still emailed; `raise_dispatch_reminders` leaves out an order with no seller; `complete_order_email` takes a seventh argument, `p_retry_after`, and a `rate_limited` outcome that puts the row back uncounted and moves every waiting row to no earlier than the provider's wait; a row recorded as sent may keep a note in `last_error`; and `private.notification_member_text` is restated from `20261110220000` with `payout_setup_reminder`, `order_partially_refunded` and `dispatch_reminder` as kinds that carry no member's words.
 
-## November 11 — Resume deletion checks the admin in the database: N944 (not applied anywhere)
+## November 11 — Resume deletion checks the admin in the database: N944
 
 | File | Applied to |
 |---|---|
 | `20261111080000_resume_deletion_actor.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
 
 Follow-up owed from the review of #198. `public.admin_resume_account_deletion` now takes the acting admin first (`p_actor, p_user, p_dry_run`) and calls `public.assert_admin_actor` before it reads anything, on a dry run too; the rest of the function is `20261110110000`'s, unchanged. The two-argument function is dropped so it cannot be the way round the check. Service role only, as before. **Apply together with the app from the same PR:** the older app calls the two-argument function, so its Resume deletion button fails with "function not found" (and changes nothing) against a database that has this migration.
+
 ## November 10 — Retry a chargeback held for review: N944 (report five #108, part A)
 
 | File | Applied to |
@@ -62,7 +63,7 @@ Follow-up owed from the review of #198. `public.admin_resume_account_deletion` n
 
 Adds `held_event_id`, `held_event_created` and `held_from_state` to `public.stripe_dispute_journal` (a trigger fills `held_from_state` on entering `recovery`), `private.note_held_dispute_event`, a four-argument `public.hold_stripe_dispute` that records the event, a trigger that closes a held chargeback's recovery case when the journal reaches won, warning closed or lost, `public.admin_retry_dispute_recovery(p_dispute, p_actor, p_dry_run)` and `public.release_refused_dispute_retry`, all service role only. Restates `public.apply_stripe_dispute_event` (from `20261107130000`) with only its hold calls given the event and the held branch remembering a later one. No new journal state. After the 10 November work review (#148, N1064): a fourth column, `retry_until`. Retry no longer reopens the entry; it allows one replay of the held event for five minutes and leaves the chargeback held, and `apply_stripe_dispute_event` reopens and replays in its own one transaction, always running the basket check on a replay (it used to return `committed` for the event that caused the hold, checking nothing). The four-argument `hold_stripe_dispute` opens a closed recovery case again, with an alert, when a later event holds the chargeback again. Apply with the app from the same PR.
 
-## November 10 — a deleted member's words leave every feed: Codex on #181 (not applied anywhere)
+## November 10 — a deleted member's words leave every feed: Codex on #181
 
 | File | Applied to |
 |---|---|
@@ -70,7 +71,7 @@ Adds `held_event_id`, `held_event_created` and `held_from_state` to `public.stri
 
 Adds `private.scrub_member_notices(p_user, p_username)`: a leaver's words leave other members' notifications, found by actor and by the offer or order a notice is about (actor-less offer notices, `offer_agent_deal_reached` on `/orders/<id>/checkout`, `order_disputed`'s dispute text, a party's cancel reason). They are replaced by a line that still reads; bodies with none of the leaver's words stay. Restates `public.scrub_deleted_account` (from `20261108180000`) to call it, nothing else changed. Adds `private.repair_scrubbed_previews(p_batch)` and runs it once: the same rules for members scrubbed before `20261108180000`, and links to retired handles cleared in batches. The counts are printed as a NOTICE when applied; record them here. Idempotent. After the 10 November work review (#153, N1069): `private.notification_member_text(kind)` says whose words each notification kind carries (the actor's, a listing's title, an order party's reason, matched listing titles, or none), and the scrub reads it instead of a hand-written list; a kind it does not know is scrubbed as a member's words. A trigger on `public.notifications` (`notification_kind_classified`) refuses an unclassified kind only where `drvn.strict_notification_kinds` is `on`, which `scripts/test-sql-guards.sh` sets on the test database and production never does. `private.scrub_member_digest_items(p_user)` takes the leaver's listings out of saved-search emails (`saved_search_email_digests.items`): an unsent email loses those items and is not sent when none is left (new `skip_reason` `listings_removed`, so the table's skip-reason check is restated), a sent one keeps its shape with a neutral title. Saved-search notices that named the leaver's listing lose that title. The scrub and the one-time repair both run these, and the repair's NOTICE gains two counts.
 
-## November 10 — the console's open operations are one query: N718 (not applied anywhere)
+## November 10 — the console's open operations are one query: N718
 
 | File | Applied to |
 |---|---|
@@ -78,7 +79,7 @@ Adds `private.scrub_member_notices(p_user, p_username)`: a leaver's words leave 
 
 Work review #155. Adds `public.admin_open_operations(p_limit)`, service role only: the newest admin operations whose "requested" audit row has no "completed" or "reconciled" row after it, each with the phases recorded since and the operation's newest audit id. The audit page's "open operations" list calls it once; the app used to walk the audit log for them, page by page, on every load. Also `admin_audit_log_requested_idx`, a partial index on the requested rows. Additive: it changes no table and no existing function. **Apply before the app from the same PR deploys:** without the function the audit page fails to load (it throws rather than show an empty list of open operations).
 
-## November 10 — photo signing signs only what the database guards: N940 (not applied anywhere)
+## November 10 — photo signing signs only what the database guards: N940
 
 | File | Applied to |
 |---|---|
@@ -94,7 +95,7 @@ Review of #196 (report five #105 follow-up). `private.photo_signable_positions()
 
 Drops `public.my_age_confirmation_due()`. Every account from before the 18+ confirmation is a test account, so nothing asks them any more: the app from the same PR no longer calls the function, has no `/confirm-age` page and no check in the request proxy. The 18+ box at sign-up, onboarding and guest checkout, the `age_confirmations` table and its rows are untouched. Apply at any time before a first deploy; an older app that still calls the function reports a failed check and lets the page load. After this the next paragraph's function no longer exists.
 
-## November 10 — an operator resumes a stuck account deletion: report five #106/#108 (not applied anywhere)
+## November 10 — an operator resumes a stuck account deletion: report five #106/#108
 
 | File | Applied to |
 |---|---|
@@ -102,7 +103,7 @@ Drops `public.my_age_confirmation_due()`. Every account from before the 18+ conf
 
 Adds `public.admin_resume_account_deletion(p_user, p_dry_run)`, service role only, which the console's **Resume deletion** (`deletion.resume`) calls through `auditedAction`. It puts a failed deletion job, or a late-hold case whose hold has settled, back in the worker's queue under the deletion lock, and refuses every other state. Additive. Also `public.release_refused_deletion_resume(p_actor, p_operation, p_detail)`, service role only, which closes a refused resume's journal entry when the job is not queued, so the next resume isn't blocked as awaiting reconciliation. The control appears with the app from the same PR; applied first, the function waits unused.
 
-## November 10 — earlier members asked to confirm 18+ on their next visit: report five #110 (not applied anywhere)
+## November 10 — earlier members asked to confirm 18+ on their next visit: report five #110
 
 | File | Applied to |
 |---|---|
@@ -110,7 +111,7 @@ Adds `public.admin_resume_account_deletion(p_user, p_dry_run)`, service role onl
 
 Adds `public.my_age_confirmation_due()` for signed-in members. The request proxy calls it once per browser on a member's next page request, and sends a member who joined before the 18+ confirmation, with a handle and no record, to `/confirm-age`. **Apply before deploying the app from the same PR.** Until it exists the proxy reports a failed check on every signed-in page request and lets the page load.
 
-## November 10 — a takedown stays taken down: report five #109 (not applied anywhere)
+## November 10 — a takedown stays taken down: report five #109
 
 | File | Applied to |
 |---|---|
@@ -118,7 +119,7 @@ Adds `public.my_age_confirmation_due()` for signed-in members. The request proxy
 
 Codex's review of #117, the two open database findings. A listing a checkout held at takedown (`keptListingStatus`) can never become `active` again: a failed or released checkout removes it instead, and a sale still completes. `private.member_media_ref_ok` (now `volatile`) takes the object's lock and refuses a blocklisted object. A new row in `copyright_blocked_media` takes the same lock and purges every reference to the object again. Applying it also removes, once, any held listing already back on sale. Order does not matter: no app change depends on it. After review: the blocklist binds every writer (`private.media_url_blocked`, checked first in the restated `private.guard_member_media_ref` and `private.guard_member_post_body_media`; the owner checks stay member-only); the purge runs once per statement in key order and strips post bodies too (`private.strip_media_from_body`); a listing a takedown removed can't be restored or re-published (refused with the reason).
 
-## November 10 — one signed photo URL per window across instances: report five #117 (not applied anywhere)
+## November 10 — one signed photo URL per window across instances: report five #117
 
 | File | Applied to |
 |---|---|
@@ -126,7 +127,7 @@ Codex's review of #117, the two open database findings. A listing a checkout hel
 
 Adds `private.photo_signatures` and the service-role functions `photo_signatures_read` and `photo_signatures_offer` (offers insert in key order, so concurrent instances never deadlock, and skip paths the table would refuse), the shared memo that makes every app instance show one signed URL per member photo per hour-long window (`src/lib/supabase/photo-signing.ts`). It also restates `private.prune_cron_history()` (from `20261107191000`, the job's command unchanged) to drop rows older than two hours daily, and adds a trigger that removes a member's rows when their deletion scrub records `scrubbed_at`. Order does not matter: while the functions are missing, the app signs per response, as before, and reports it at most every ten minutes.
 
-## November 8 — deletion: late holds after the scrub, other members' notifications, the tombstone race, old retained cases: N418 (not applied anywhere)
+## November 8 — deletion: late holds after the scrub, other members' notifications, the tombstone race, old retained cases: N418
 
 | File | Applied to |
 |---|---|
@@ -187,7 +188,7 @@ Apply after `20261107231001`, before the app from this PR: the new `/confirm-age
 | `20261011121000` | a policy change (`alter policy`) only | policy "published activity readable" has the same `qual` fingerprint (md5 `1afdefb0`) as on staging |
 | `20261017140000` | policy changes (`alter policy`) only | none of the 130 `public` policies calls `auth.uid()` outside a `(select …)`, the file's rewrite, as on staging |
 
-## November 8 — account deletion checks financial holds before banning sign-in: OS-W11 (#157, not applied anywhere)
+## November 8 — account deletion checks financial holds before banning sign-in: OS-W11 (#157)
 
 | File | Applied to |
 |---|---|
@@ -251,7 +252,7 @@ From #149. Apply in order, after every earlier migration (they sort before `2026
 
 Guards: `account_deletion_scrub_guard.sql` (U1–U6, S1–S12; fails before these migrations: the functions don't exist) and `definer_exposure_guard.sql`. Checked on a fresh `supabase/postgres` (CI's pinned image) with the CI shim: every migration applies and every SQL guard passes.
 
-## November 8 — Payout setup: started to sell, 14 days to finish, N244 (not applied anywhere)
+## November 8 — Payout setup: started to sell, 14 days to finish, N244
 
 | File | Applied to |
 |---|---|
@@ -279,7 +280,7 @@ From #117. Apply in order, after every earlier migration, **before the app from 
 
 Guard: `supabase/tests/launch_legal_guard.sql` (fails before these migrations). Checked on a fresh `supabase/postgres:17.6.1.165` with the CI shim: every migration applies and every SQL guard passes.
 
-## November 7 — payout hold fallbacks become 2 days, R-hold (not applied anywhere)
+## November 7 — payout hold fallbacks become 2 days, R-hold
 
 | File | Applied to |
 |---|---|
@@ -287,7 +288,7 @@ Guard: `supabase/tests/launch_legal_guard.sql` (fails before these migrations). 
 
 Apply after every earlier migration. Neil, 7 Nov 2026: the fallbacks follow his 2-day rule. `settlement_settings.payout_hold_days` defaults to 2 (was 7), and `payout_available_at()` (restated from `20261006100000`, the only change being the coalesce's 7 → 2) treats a missing settings row as a fixed 2 days. The deployed row is already fixed, 2 days (`20261009100000`), so no payout date changes; dates already set never move. The app's `DEFAULT_PAYOUT_HOLD` changes to 2 in the same PR. Guard: `payout_hold_setting_guard.sql` check 7 (missing row and a new row both mean 2 days), which fails on the schema before this migration.
 
-## November 7 — Refund gap snapshot, OS-W20 follow-up (not applied anywhere)
+## November 7 — Refund gap snapshot, OS-W20 follow-up
 
 | File | Applied to |
 |---|---|
@@ -295,7 +296,7 @@ Apply after every earlier migration. Neil, 7 Nov 2026: the fallbacks follow his 
 
 Apply after `20261107210100`. New `refund_gap_snapshot(payment_reference, refund_references[])` (service role only, read-only): a payment's booked refund total and the cents of the listed refunds whose operation is still booking, from one statement. `applyChargeRefund` opens an "unattributed refund" case only on this result, so a refund settling while `charge.refunded` is handled can't be counted in neither place. Redefines nothing. Guard: `supabase/tests/refund_gap_snapshot_guard.sql` (fails before this migration: the function doesn't exist). Checked on a fresh native PostgreSQL 17 with the CI shim: every migration applies and every guard passes except `job_inventory_health_guard.sql` (needs real pg_cron).
 
-## November 7 — Settlement correctness and reconciliation, OS-W20 (not applied anywhere)
+## November 7 — Settlement correctness and reconciliation, OS-W20
 
 | File | Applied to |
 |---|---|
@@ -305,7 +306,7 @@ Apply after every earlier migration. Restates `claim_transfer_intents` (latest 2
 
 Checked on a fresh database (native PostgreSQL 17 with the CI shim and stubbed roles, `auth`, `cron` and `net`): every migration applies and every SQL guard passes except `job_inventory_health_guard.sql`, which needs real pg_cron (CI's image has it).
 
-## November 7 — fulfilment integrity, OS-W19 / OS-W30 (not applied anywhere)
+## November 7 — fulfilment integrity, OS-W19 / OS-W30
 
 | File | Applied to |
 |---|---|

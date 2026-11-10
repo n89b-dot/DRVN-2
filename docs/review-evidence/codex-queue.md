@@ -150,6 +150,7 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #201 | 2026-11-10 | OS-W42: earlier members confirm 18+ on their next visit, however long their ses… | waived | — | waived (ruling, 10 Nov) |
 | #202 | 2026-11-10 | OS-W40 N951: the pooler route is refused for record-only and dry runs too (foll… | waived | — | waived (ruling, 10 Nov) |
 | #203 | 2026-11-10 | OS-W41 N955 N1074: photo uploads stay under what a serverless host accepts, and shrink a second way… (batch 2, #230) | waived | — | waived (ruling, 10 Nov) |
+| #204 | 2026-11-10 | OS-W41 N1063: order emails through an outbox that never slows money, and that drops nothing when the provider refuses our account… (batch 9, #249) | waived | — | waived (ruling, 10 Nov) |
 | #205 | 2026-11-10 | N717: decision defaults for N786 and R-retention, deleted-photo caching closed… | skipped | — | docs only (ruling, 7 Nov) |
 | #206 | 2026-11-10 | OS-W42 N1069: a deleted member's words leave every other member's feed, saved-search emails included… (batch 6, #243) | waived | — | waived (ruling, 10 Nov) |
 | #208 | 2026-11-10 | OS-W42 N944 N1064: Retry a chargeback held for review, done right, with the basket checked on every replay… (batch 7, #245) | waived | — | waived (ruling, 10 Nov) |
@@ -182,6 +183,9 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #240 | 2026-11-10 | Batch 5: #238 #199 | waived | — | waived (ruling, 10 Nov) |
 | #241 | 2026-11-10 | docs: the plan 1 record after batch 5, the OS's rows, and B1 marked fixed in the 3 November report (batch 7, #245) | skipped | — | docs only (ruling, 7 Nov) |
 | #243 | 2026-11-10 | Batch 6: #206 | waived | — | waived (ruling, 10 Nov) |
+| #244 | 2026-11-10 | OS-W41 N1048 N1051 N1052 N1053: a listing's share image that does not run out, a signer tests can drive, a signing time budget… (batch 9, #249) | waived | — | waived (ruling, 10 Nov) |
 | #245 | 2026-11-10 | Batch 7: #241 #208 | waived | — | waived (ruling, 10 Nov) |
 | #246 | 2026-11-10 | OS-W42 N944: Resume deletion names the acting admin, and the database checks them before it reads anything… (batch 8, #248) | waived | — | waived (ruling, 10 Nov) |
+| #247 | 2026-11-10 | docs: the plan 1 record after batches 6 and 7, with the order-email and photo reviews (batch 9, #249) | skipped | — | docs only (ruling, 7 Nov) |
 | #248 | 2026-11-10 | Batch 8: #246 | waived | — | waived (ruling, 10 Nov) |
+| #249 | 2026-11-10 | Batch 9: #247 #244 #204 | waived | — | waived (ruling, 10 Nov) |
