@@ -49,10 +49,14 @@ const nextConfig: NextConfig = {
       : [],
     formats: ["image/avif", "image/webp"],
     // One signing window (an hour, src/lib/photo-urls.ts): a signed photo
-    // keeps its URL for the window, so a resized variant is reused within it,
-    // and no resized copy outlives the window. A month-long copy would keep
-    // serving a photo after its car went private (N455). The AVIF re-encode
-    // (0.6–1 s per image) now happens once an hour per photo and width.
+    // keeps its URL for the window, so a resized variant is reused within it.
+    // Next keeps a copy for the LARGER of this and the object's own
+    // Cache-Control, so member photos are uploaded with an hour too
+    // (src/app/api/media/public-photo/route.ts; photos uploaded before
+    // 10 Nov 2026 carry a year), and the proxy refuses a signed link whose
+    // token has expired before the cache can answer (src/proxy.ts, #178
+    // review). The AVIF re-encode (0.6–1 s per image) happens about once an
+    // hour per photo and width.
     minimumCacheTTL: 3600,
     // Uploads are capped at 2560px (src/lib/media-upload.ts), so a 3840px
     // variant is an upscale nobody needs — and the slowest encode there is.

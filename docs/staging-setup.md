@@ -46,8 +46,10 @@ exist builds fine, then answers every request with an error.
 
 1. §0, §1, §2, §3: domain, Supabase project, schema, Auth.
 2. §2a: fill the vehicle catalogue (after the schema, before testers).
-3. §4.1–4.2: create the hosting project and attach the domain. **Do not
-   deploy.** Keep automatic Git deploys off.
+3. §4.1–4.2: create the hosting project **from the terminal, not by
+   importing the repository** (the import deploys at once; §4.1 has the
+   commands), and attach the domain. **Do not deploy**, and do not connect
+   the repository to the project.
 4. §5 (Stripe test mode and **both** webhooks), §6 (EasyPost, if used),
    §8 (Sentry), §9 (alert webhook). Stripe creates webhook endpoints for a URL
    that isn't live yet, and the signing secrets exist from that moment.
@@ -213,6 +215,39 @@ every table in `public`.
    config declares this as `"guestCheckout": "capped"` (§13), and the
    `guest-hold-caps` gate proves it on staging.
 
+## 2a. Fill the vehicle catalogue [ENGINEER]
+
+A new project's catalogue is empty. `0041_vehicle_catalog.sql` seeds makes
+and models from cache tables that are empty on a new project, and
+`20261020100000_vehicle_generations.sql` joins its curated generations to that
+catalogue, so it inserts nothing. Until this step runs, the Add Car dialog,
+the sell form's fitment fields and the Marketplace's make filters have
+nothing to offer (#119).
+
+From the same staging-only checkout as step 2, after the schema and before
+any tester signs up:
+
+```bash
+node scripts/import-vehiclesdb.mjs --target staging            # dry run: fetches, verifies, counts
+node scripts/import-vehiclesdb.mjs --target staging --apply --confirm <code from the dry run>   # imports, then re-runs the generations seed
+```
+
+The script reads the env file the way the migration runner does
+(`--env-file`, default `.env.local`). It fetches VehiclesDB's car catalogue
+**at the pinned release** (`scripts/lib/vehicle-catalog.mjs`: a commit, and a
+sha256 per file; other bytes are refused). It upserts makes and models, then
+runs the generations migration's own curated seed and backfill again, all in
+one transaction. Expect about 300 makes, about 5,500 models and a non-zero
+generation count. Re-running the same release is idempotent. A VehiclesDB
+upgrade (a PR that changes the pin) is safe to try, but a release that
+renames a make or model to a name another row already has fails on the
+`lower(name)` or `vdb_id` unique index, and the whole run rolls back. Read the
+error, fix the clash in a reviewed PR, then run again. Attribution ("Vehicle
+data by VehiclesDB") is already in the Add Car dialog. **Licence:** CC BY 4.0,
+read on 9 Nov 2026 from `LICENSE` at the pinned commit `d0e40c9`, which covers
+`catalog/**`. GitHub's own licence detector reports none, because the file's
+wording isn't one it matches.
+
 ## 3. Supabase Auth [OWNER clicks, ENGINEER can drive]
 
 Authentication → URL configuration:
@@ -250,12 +285,36 @@ Emails:
 
 ## 4. Hosting project [OWNER creates, ENGINEER configures]
 
-1. Create the Vercel project from the GitHub repo [OWNER — needs the paid
-   tier the owner chooses]; production branch = the release-candidate
-   branch or `main`. Node 22 (CI uses 22.22.0). Build command `npm run
-   build`, install `npm ci`. Turn the project's automatic Git deploys off:
-   `.github/workflows/deploy.yml` deploys instead, only after `release-gate`
-   passes (§11.4).
+1. Create the Vercel project **without a deploy** [OWNER — needs the paid
+   tier the owner chooses]. **Do not use the dashboard's "Add New… →
+   Project → Import Git Repository"**: it builds and deploys the repository
+   the moment you finish the form, before a single variable exists, and
+   that deployment is public. Create an empty project from a terminal
+   instead, with no Git connection at all:
+
+   ```bash
+   npx vercel@65.2.0 login                              # once, as the owner
+   npx vercel@65.2.0 project create drvn-staging --scope <team-slug>
+   npx vercel@65.2.0 project update drvn-staging --scope <team-slug> \
+     --framework nextjs --node-version 22.x --build-command "npm run build" --install-command "npm ci"
+   npx vercel@65.2.0 project inspect drvn-staging --scope <team-slug>   # shows the project id (prj_…)
+   ```
+
+   `project create` makes the project and nothing else: no build, no
+   deployment, no repository. Leave it that way. **Do not connect the GitHub
+   repository** under the project's Settings → Git: with no connection the
+   host cannot deploy on a push, so there is no automatic deploy to turn
+   off. `.github/workflows/deploy.yml` builds on its own runner and uploads
+   the result, only after `release-gate` passes (§11.4); it needs the
+   project's id and the team's id, not a Git link. Note the two ids for
+   §11.4: the project id from `project inspect` (or Settings → General →
+   Project ID) is `VERCEL_STAGING_PROJECT_ID`; the team id (Team Settings →
+   General → Team ID) is `VERCEL_ORG_ID`. If your version of the CLI has no
+   `project update`, set the same four things in the dashboard (Settings →
+   Build and Deployment: framework Next.js, Node 22.x, build `npm run
+   build`, install `npm ci`); CI builds on Node 22.22.0. These commands were
+   checked against Vercel's CLI reference on 10 November 2026, not run
+   against an account: the first time through, read what each prints.
 2. Attach the staging domain; confirm HTTPS.
 3. Set the environment variables below for the deployment environment that
    serves the staging domain.
@@ -374,6 +433,12 @@ raised.
 
 ## 10. Independent monitor [OWNER sets repo settings]
 
+The **primary** monitor is an outside uptime service calling
+`/api/health/workers` every 3–5 minutes with the `CRON_SECRET` bearer and
+paging a phone (runbook §9b, #104). GitHub runs the scheduled workflow below
+only every few hours on a quiet repository, so it is the second line.
+
+
 GitHub → repository → Settings → Secrets and variables → Actions:
 
 - variable `DRVN_MONITOR_ENABLED` = `true`
@@ -410,25 +475,70 @@ on a separate host (`docs/remediation-release-and-monitoring.md`).
    and staging has every migration, then waits for `/api/version` to report
    that commit. Production deploys only by hand, for an annotated
    `rc-YYYYMMDD` tag on `main`, through the `production` environment.
-   - Repository secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`,
-     `VERCEL_STAGING_PROJECT_ID`, `VERCEL_PRODUCTION_PROJECT_ID`,
-     `ADMIN_ALERT_WEBHOOK_URL`.
-   - **Environment secrets, not repository secrets (#123):**
-     `STAGING_SUPABASE_DB_PASSWORD` on the `staging` environment and
-     `PRODUCTION_SUPABASE_DB_PASSWORD` on the `production` environment
-     (Settings → Environments → the environment → Add secret). A repository
-     secret can be read by any workflow on any branch. An environment secret
-     reaches only a job that names that environment, and production's waits
-     for its required reviewer. The workflow reads them under the same names,
-     so nothing else changes.
+   - Repository secret: `ADMIN_ALERT_WEBHOOK_URL` (both jobs post to it).
+   - **Environment secrets, not repository secrets (#123):** put each of the
+     following on the environment that uses it (Settings → Environments →
+     the environment → Add secret). A repository secret can be read by any
+     workflow on any branch. An environment secret reaches only a job that
+     names that environment, and production's waits for its required
+     reviewer. The workflow reads them under the same names, so nothing else
+     changes.
+     - `staging`: `STAGING_SUPABASE_READER_PASSWORD`, `VERCEL_TOKEN`,
+       `VERCEL_ORG_ID`, `VERCEL_STAGING_PROJECT_ID`.
+     - `production`: `PRODUCTION_SUPABASE_READER_PASSWORD`, `VERCEL_TOKEN`,
+       `VERCEL_ORG_ID`, `VERCEL_PRODUCTION_PROJECT_ID`.
+
+     The two database secrets are the password of `deploy_reader`, a
+     read-only login made as below. The workflow holds no database owner's
+     password (work review #138).
    - Repository variables: `DRVN_STAGING_ORIGIN`, `DRVN_PRODUCTION_ORIGIN`,
      `DRVN_STAGING_SUPABASE_URL`, `DRVN_PRODUCTION_SUPABASE_URL`, and
      `DRVN_DEPLOY_STAGING = true` to switch the staging job on.
    - Environments (Settings → Environments): `staging`, and `production`
      with **required reviewers** (the owner), so a production deploy waits for
-     a person's approval as well as the tag.
+     a person's approval as well as the tag. **Create both before the first
+     run** (work review #139): a job that names an environment which does not
+     exist makes GitHub create it, empty and unprotected, and run.
+   - **Restrict what may deploy to each** (work review #156): in each
+     environment, "Deployment branches and tags" → "Selected branches and
+     tags". `staging`: add the branch `main` and nothing else. `production`:
+     add the branch `main` (a production deploy is started by hand from
+     `main`, with the release tag typed in) and the tag pattern `rc-*`. With
+     the default, "No restriction", a workflow run from any branch can name
+     the environment and read its secrets; with this, a run from another
+     branch stops before it starts.
    - The pipeline never applies a migration. If staging or production lacks
      one, the deploy stops and names it; apply it with the runner (§2).
+   - **The read-only login `deploy_reader`.** The deploy's migration check
+     reads one table, `supabase_migrations.schema_migrations`, so it signs in
+     with a login that can do nothing else. Make it once on each database
+     (staging, then production when it exists), as the owner, in the
+     dashboard's SQL editor, with a new password of 32 or more characters
+     for each database:
+
+     ```sql
+     create role deploy_reader login password '<new password>' connection limit 3;
+     alter role deploy_reader set default_transaction_read_only = on;
+     alter role deploy_reader set statement_timeout = '10s';
+     grant usage on schema supabase_migrations to deploy_reader;
+     grant select on supabase_migrations.schema_migrations to deploy_reader;
+     ```
+
+     Put each password in its secret above and nowhere else. To rotate one,
+     run `alter role deploy_reader password '<new password>';` and update the
+     secret. Grant it nothing else, and never make it a member of another
+     role (a member inherits that role's rights). The runner checks the
+     login on every use and refuses it if it is a superuser, can create
+     roles, bypasses row-level security, is a member of any role, is not
+     read-only by default, or can write the history table, so a wrong
+     password pasted here cannot quietly be an owner's. What keeps it from
+     writing is what it holds, not the read-only default, which a session
+     can switch off. These five statements were run on a new Supabase
+     Postgres 17 on 10 November 2026 and are enough for `--status`. To try it by hand,
+     put `SUPABASE_DB_READER_USER=deploy_reader` and
+     `SUPABASE_DB_READER_PASSWORD=…` in an env file beside
+     `NEXT_PUBLIC_SUPABASE_URL` and run
+     `node scripts/apply-migration.mjs --target staging --env-file <file> --status`.
 
 ## 12. First admin [ENGINEER]
 
@@ -447,6 +557,13 @@ sign up themselves; there are no invitations (the invite-only beta was removed
 by #126).
 
 ## 13. Release-candidate evidence — the 15 gates [ENGINEER, OWNER reviews]
+
+**Staging proofs that need two server instances (before the gates).** One
+signed link per photo across instances (#117, N954): with staging serving
+from at least two instances, open one public car page twice in different
+browsers. Every photo's `/object/sign/…?token=` must be the same in both,
+and `select count(*) from private.photo_signatures` must grow once per
+photo per hour, not once per instance.
 
 1. Write the candidate config **outside the checkout** (no secrets in it):
    ```json

@@ -38,6 +38,7 @@ describe("release-gate record (OS-signals)", () => {
       NODE_ENV: "test" as const,
       PATH: process.env.PATH,
       RUNNER_TEMP: tmp,
+      EVENT: "pull_request", CHANGES: "success", DOCS_ONLY: "false",
       VERIFY: "success", SECRETS: "success", SECRETS_FULL: "success", SQL: "failure", E2E: "success",
       STRIPE: "success", E2E_RAN: "true", E2E_FIRST_ATTEMPT: "true", STRIPE_RAN: "true",
     };
@@ -52,11 +53,13 @@ describe("release-gate record (OS-signals)", () => {
       sha: "abc",
       head_sha: "def",
       event: "pull_request",
+      scope: "full",
       result: "failure",
       first_attempt_passed: true,
       browser_counts: { selected: 3, expected: 3 },
     });
-    expect(Object.keys(record.requirements)).toHaveLength(9);
+    expect(Object.keys(record.requirements)).toHaveLength(10);
+    expect(record.requirements["change scope decided"]).toEqual({ value: "success", needs: "success", ok: true });
     expect(record.requirements["sql-guard"]).toEqual({ value: "failure", needs: "success", ok: false });
     expect(record.requirements.verify).toEqual({ value: "success", needs: "success", ok: true });
   });

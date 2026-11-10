@@ -78,6 +78,21 @@ describe("the deploy workflow (N634, N528)", () => {
     }
   });
 
+  it("N634: holds no database owner's password; each migration check signs in with the read-only login (work review #138)", () => {
+    const raw = fs.readFileSync(path.join(root, ".github/workflows/deploy.yml"), "utf8");
+    // Neither the secret's name nor the env-file line that would carry an owner password.
+    expect(raw).not.toMatch(/SUPABASE_DB_PASSWORD/);
+    expect(raw).not.toMatch(/_DB_PASSWORD/);
+    for (const [name, secret] of [["staging", "STAGING_SUPABASE_READER_PASSWORD"], ["production", "PRODUCTION_SUPABASE_READER_PASSWORD"]] as const) {
+      const step = deploy.jobs[name].steps[indexOf(deploy.jobs[name], runs(`--target ${name} --env-file`))];
+      expect(step.env?.SUPABASE_DB_READER_PASSWORD).toBe(`\${{ secrets.${secret} }}`);
+      expect(step.run).toContain("SUPABASE_DB_READER_USER=deploy_reader");
+      expect(step.run).toContain("--status");
+      // The file with the login is removed before the next command runs.
+      expect(step.run).toMatch(/--status > "\$RUNNER_TEMP\/status\.json"\n\s*rm -f "\$RUNNER_TEMP\/target\.env"/);
+    }
+  });
+
   it("N634: tells the alert channel on every outcome", () => {
     for (const job of Object.values(deploy.jobs)) {
       const alert = job.steps.at(-1)!;
