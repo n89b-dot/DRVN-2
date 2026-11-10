@@ -388,7 +388,8 @@ took that couldn't be recovered from the seller: only once Stripe has closed
 it as **lost**, and 90 days or more after its case opened (DRVN funds a
 chargeback, recovers it from the seller, writes it off after 90 days; a
 default the owner confirms). It never pays the seller for those orders: their
-waiting payouts are cancelled, the orders close as refunded by the bank, the
+waiting payouts are cancelled (a payout that may already be at Stripe must be
+reconciled first; the write-off refuses until it is), the orders close as refunded by the bank, the
 loss is recorded against the platform (`platform_chargeback_losses`), and the
 case closes as written off. The seller's other orders are untouched.
 

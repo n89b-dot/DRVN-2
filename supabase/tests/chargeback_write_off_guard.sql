@@ -86,6 +86,19 @@ begin
   end;
 
   -- ---------- W ----------
+  -- A worker claimed the payout before the write-off and hasn't sent it.
+  update public.transfer_intents set status = 'processing', locked_by = 'n944w-worker', locked_at = now(), lease_expires_at = now() + interval '5 minutes'
+   where order_id = sale;
+  -- One that may already be at Stripe is refused until reconciled.
+  update public.transfer_intents set provider_call_may_have_occurred = true where order_id = sale;
+  begin
+    perform public.admin_write_off_dispute_recovery('dp_n944w', admin_actor, 'Recovery from the seller failed for 90 days', false);
+    fails := fails || 'FAIL W0: a chargeback was written off with its payout possibly at Stripe (N944)'::text;
+  exception when others then
+    get stacked diagnostics msg = message_text;
+    if msg not like '%may already be at Stripe%' then fails := fails || format('FAIL W0b: the refusal said "%s" (N944)', msg); end if;
+  end;
+  update public.transfer_intents set provider_call_may_have_occurred = false where order_id = sale;
   r := public.admin_write_off_dispute_recovery('dp_n944w', admin_actor, 'Recovery from the seller failed for 90 days', false);
   if (select state from public.stripe_dispute_journal where dispute_id = 'dp_n944w') <> 'written_off'
      or (select status from public.payment_recoveries where recovery_key = 'stripe:dispute:dp_n944w') <> 'written_off' then
@@ -114,15 +127,14 @@ begin
   if exists (select 1 from public.claim_transfer_intents('n944w-probe', 200, 300, 8) c where c.order_id = sale) then
     fails := fails || 'FAIL X1: a written-off order''s payout was claimed (N944)'::text;
   end if;
-  update public.transfer_intents set status = 'processing', locked_by = 'n944w-worker', locked_at = now(), lease_expires_at = now() + interval '5 minutes'
-   where order_id = sale;
+  -- The worker that claimed it before the write-off now tries to send it.
   begin
     refused := not public.prepare_transfer_dispatch(sale, 'n944w-worker', 'transfer:' || sale::text, 4500, 'usd', 'acct_n944w', 'ch_n944w', 'pi_n944w');
   exception when others then
     refused := true;
   end;
   if not refused then
-    fails := fails || 'FAIL X2: a written-off order''s payout could still be dispatched, even forced to processing (N944)'::text;
+    fails := fails || 'FAIL X2: the payout a worker claimed before the write-off could still be dispatched (N944)'::text;
   end if;
   t := public.apply_stripe_dispute_event('dp_n944w', 'pi_n944w', 5000, 'usd', 'won', true, 'evt_n944w_c', 300, gen_random_uuid());
   if t <> 'committed'

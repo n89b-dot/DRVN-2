@@ -11,8 +11,9 @@
 --     'lost'. Anything else is refused.
 --   * 90 days after the recovery case opened, by the database's clock
 --     (exactly 90 days is allowed).
---   * The order's payout is never released: its unpaid transfer intents are
---     cancelled. A payout already made before the chargeback stays made; DRVN
+--   * The order's payout is never released: every transfer intent not yet
+--     paid is cancelled, a worker's claimed-but-unsent one included; one
+--     that may already be at Stripe must be reconciled first (refused). A payout already made before the chargeback stays made; DRVN
 --     absorbs it. The orders end as a lost chargeback's do: refunded in full
 --     (the bank returned the buyer's money), the dispute resolved.
 --   * The loss is a ledger row against the platform
@@ -294,9 +295,19 @@ begin
     raise exception 'A chargeback can be written off 90 days after its recovery case opened (on %)', (v_case.created_at + interval '90 days')::date
       using errcode = '22023';
   end if;
+  -- A payout that may already be at Stripe is reconciled first: writing off
+  -- under it could pay the seller for money the bank took.
+  if exists (select 1 from public.transfer_intents t
+              where t.order_id = any(v_entry.order_ids) and t.provider_call_may_have_occurred
+                and t.status not in ('transferred', 'cancelled')) then
+    raise exception 'A payout for this order may already be at Stripe. Reconcile it (Admin → Payments, stuck payouts) before writing the chargeback off'
+      using errcode = '22023';
+  end if;
+  -- Every payout not yet made, including one a worker has claimed but not
+  -- sent (processing, no provider call): none of it is ever paid.
   select coalesce(sum(t.amount_cents), 0)::integer into v_withheld
     from public.transfer_intents t
-   where t.order_id = any(v_entry.order_ids) and t.status in ('holding', 'ready', 'blocked_unpayable', 'failed');
+   where t.order_id = any(v_entry.order_ids) and t.status not in ('transferred', 'cancelled');
 
   if coalesce(p_dry_run, false) then
     return jsonb_build_object('dispute_id', p_dispute, 'written_off', false,
@@ -308,7 +319,7 @@ begin
   -- The seller is never paid for these orders.
   update public.transfer_intents
      set status = 'cancelled', last_error = 'Chargeback written off: the bank took this payment, so it is not paid out', updated_at = now()
-   where order_id = any(v_entry.order_ids) and status in ('holding', 'ready', 'blocked_unpayable', 'failed');
+   where order_id = any(v_entry.order_ids) and status not in ('transferred', 'cancelled');
   get diagnostics v_cancelled = row_count;
   -- As a lost chargeback ends: refunded in full by the bank, dispute resolved.
   update public.orders
