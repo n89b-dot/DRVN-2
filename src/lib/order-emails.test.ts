@@ -81,7 +81,7 @@ describe("the order email drain (OS-W41, report five #116)", () => {
   });
 
   it("prices in the order's currency and counts every sale a payout reminder covers (OS-W41)", async () => {
-    const send = vi.fn(async (_message: { subject: string; text: string }) => ({ status: "sent" as const, providerId: null }));
+    const send = vi.fn<(message: { subject: string; text: string }) => Promise<{ status: "sent"; providerId: null }>>(async () => ({ status: "sent", providerId: null }));
     const admin = fakeAdmin([row({ id: "p1", kind: "order_paid" }), row({ id: "p2", kind: "payout_setup_reminder" })]);
     await processOrderEmails(admin as never, { transport: { name: "t", send }, origin: "https://d.example" });
     expect(send.mock.calls[0][0].text).toContain("€10");

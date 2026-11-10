@@ -213,7 +213,7 @@ begin
      or (select sale_count from public.payout_setup_reminders where seller_id = s_many and reminded_on = current_date) is distinct from 2 then
     fails := fails || 'FAIL R2: a seller with sales on days 3 and 7 did not get one reminder covering both, linked to the oldest (OS-W41)'::text;
   end if;
-  if (select count(*) from public.notifications where kind = 'payout_setup_reminder' and user_id = s_last and body like 'Two days left%') <> 1
+  if (select count(*) from public.notifications where kind = 'payout_setup_reminder' and user_id = s_last and body like '2 days left%') <> 1
      or not exists (select 1 from public.order_email_outbox where recipient_id = s_last and kind = 'payout_setup_reminder' and order_id = o_last) then
     fails := fails || 'FAIL R3: a day-12 sale did not get its two-days-left reminder and email (OS-W41)'::text;
   end if;
