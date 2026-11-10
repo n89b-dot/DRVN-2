@@ -1148,7 +1148,7 @@ export async function adminResumeAccountDeletion(_prev: AdminActionState, formDa
 
   // Asked first, so a refusal ("the order is still open") is said before
   // anything is journalled and never leaves an operation to reconcile.
-  const check = await ctx.admin.rpc("admin_resume_account_deletion", { p_user: userId, p_dry_run: true });
+  const check = await ctx.admin.rpc("admin_resume_account_deletion", { p_actor: ctx.userId, p_user: userId, p_dry_run: true });
   if (check.error) return { error: check.error.message };
 
   try {
@@ -1162,7 +1162,7 @@ export async function adminResumeAccountDeletion(_prev: AdminActionState, formDa
         reason,
       },
       async () => {
-        const { data, error } = await ctx.admin.rpc("admin_resume_account_deletion", { p_user: userId, p_dry_run: false });
+        const { data, error } = await ctx.admin.rpc("admin_resume_account_deletion", { p_actor: ctx.userId, p_user: userId, p_dry_run: false });
         if (error) throw new RefusedOperationError(error.message);
         return data;
       }

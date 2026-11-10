@@ -12,6 +12,11 @@
 --   R  refused, in words: a member's own financial hold, a retained-identity
 --      case, a job already queued, a completed deletion, no request
 --   P  nobody but the service role can call it
+--   N  20261111080000: the database checks the acting admin itself. A caller
+--      naming nobody, or a member who is not a full admin, is refused before
+--      anything is read, on a dry run too, and the job is untouched; the
+--      service role acting for an admin is answered; the two-argument
+--      function that took no admin is gone
 -- Every failed check is collected and reported together at the end.
 begin;
 
@@ -61,7 +66,7 @@ begin
   end if;
 
   begin
-    perform public.admin_resume_account_deletion(late, false);
+    perform public.admin_resume_account_deletion(admin_actor, late, false);
     fails := fails || 'FAIL A1: a late-hold case was resumed while its chargeback is still open (N944)'::text;
   exception when others then
     get stacked diagnostics msg = message_text;
@@ -69,12 +74,12 @@ begin
   end;
 
   update public.stripe_dispute_journal set state = 'won' where dispute_id = 'dp_n944';
-  r := public.admin_resume_account_deletion(late, true);
+  r := public.admin_resume_account_deletion(admin_actor, late, true);
   if (r->>'resumed')::boolean or r->>'shape' is distinct from 'late_hold_settled'
      or (select status from public.remediation_jobs where id = late_job) <> 'completed' then
     fails := fails || format('FAIL A2: a dry run changed the job or misread the case (%s) (N944)', r);
   end if;
-  r := public.admin_resume_account_deletion(late, false);
+  r := public.admin_resume_account_deletion(admin_actor, late, false);
   if not (r->>'resumed')::boolean
      or (select status from public.remediation_jobs where id = late_job) <> 'pending'
      or (select attempts from public.remediation_jobs where id = late_job) <> 0
@@ -88,7 +93,57 @@ begin
   returning id into failed_job;
   insert into public.account_deletion_requests (user_id, job_id, outcome, next_action, responsible_owner)
   values (failed, failed_job, 'cleanup_pending', 'Automated cleanup is in progress.', 'privacy worker');
-  r := public.admin_resume_account_deletion(failed, false);
+
+  -- N: the acting admin is checked by the database, before the member is looked at.
+  for r in select jsonb_build_object('actor', a, 'who', w, 'dry', d) from (values
+      (null::uuid, 'nobody', true), (null::uuid, 'nobody', false),
+      (buyer, 'a member who is not an admin', true), (buyer, 'a member who is not an admin', false),
+      (nobody, 'an id that is no account', false)) as t(a, w, d) loop
+    begin
+      perform public.admin_resume_account_deletion((r->>'actor')::uuid, failed, (r->>'dry')::boolean);
+      fails := fails || format('FAIL N1: %s resumed a deletion (dry run %s) (N944)', r->>'who', r->>'dry');
+    exception
+      when insufficient_privilege then
+        get stacked diagnostics msg = message_text;
+        if msg not like '%is not a full admin%' then
+          fails := fails || format('FAIL N1b: the refusal to %s did not say why (%s) (N944)', r->>'who', msg);
+        end if;
+      when others then
+        get stacked diagnostics msg = message_text;
+        fails := fails || format('FAIL N1c: resuming as %s failed for another reason (%s: %s) (N944)', r->>'who', sqlstate, msg);
+    end;
+  end loop;
+  -- A non-admin is refused the same way whatever the member's state, so the refusal tells them nothing about it.
+  begin
+    perform public.admin_resume_account_deletion(buyer, nobody, true);
+    fails := fails || 'FAIL N2: a non-admin was told about a member with no deletion request (N944)'::text;
+  exception
+    when insufficient_privilege then null;
+    when others then
+      get stacked diagnostics msg = message_text;
+      fails := fails || format('FAIL N2b: a non-admin asking about a member with no request was told "%s" (N944)', msg);
+  end;
+  if (select status from public.remediation_jobs where id = failed_job) <> 'failed'
+     or (select attempts from public.remediation_jobs where id = failed_job) <> 10 then
+    fails := fails || 'FAIL N3: a refused caller changed the deletion job (N944)'::text;
+  end if;
+  if to_regprocedure('public.admin_resume_account_deletion(uuid, boolean)') is not null then
+    fails := fails || 'FAIL N4: the two-argument resume, which names no admin, still exists (N944)'::text;
+  end if;
+  -- The console's own path: the service role, acting for a full admin.
+  set local role service_role;
+  begin
+    r := public.admin_resume_account_deletion(admin_actor, failed, true);
+    if (r->>'resumed')::boolean or r->>'shape' is distinct from 'failed_job' then
+      fails := fails || format('FAIL N5: the service role acting for an admin was not answered (%s) (N944)', r);
+    end if;
+  exception when others then
+    get stacked diagnostics msg = message_text;
+    fails := fails || format('FAIL N5b: the service role acting for an admin was refused (%s: %s) (N944)', sqlstate, msg);
+  end;
+  reset role;
+
+  r := public.admin_resume_account_deletion(admin_actor, failed, false);
   if r->>'shape' is distinct from 'failed_job' or r->>'previous_error' is distinct from 'Customer ownership requires operator review'
      or (select status from public.remediation_jobs where id = failed_job) <> 'pending'
      or (select attempts from public.remediation_jobs where id = failed_job) <> 0
@@ -106,7 +161,7 @@ begin
   values (scrubbed, scrubbed_job, 'cleanup_pending', 'Automated cleanup is in progress.', 'privacy worker', now());
   insert into public.stripe_dispute_journal (dispute_id, payment_reference, amount_cents, currency, state, last_event_id, last_event_created, order_ids)
   values ('dp_n944_h', 'pi_n944_h', 5000, 'usd', 'open', 'evt_n944_h', 1, array[scrubbed_sale]);
-  r := public.admin_resume_account_deletion(scrubbed, false);
+  r := public.admin_resume_account_deletion(admin_actor, scrubbed, false);
   if r->>'shape' is distinct from 'failed_job' or not (r->>'still_held')::boolean
      or (select status from public.remediation_jobs where id = scrubbed_job) <> 'pending'
      or (select scrubbed_at from public.account_deletion_requests where user_id = scrubbed) is null then
@@ -159,7 +214,7 @@ begin
       (retained, 'retention date'), (held, 'rechecks it every hour'), (queued, 'already queued'),
       (done, 'already complete'), (nobody, 'no deletion request')) as t(u, e) loop
     begin
-      perform public.admin_resume_account_deletion((r->>'user')::uuid, false);
+      perform public.admin_resume_account_deletion(admin_actor, (r->>'user')::uuid, false);
       fails := fails || format('FAIL R1: a deletion was resumed that should be refused (%s) (N944)', r->>'expect');
     exception when others then
       get stacked diagnostics msg = message_text;
@@ -174,9 +229,9 @@ begin
   end if;
 
   -- P: service role only.
-  if has_function_privilege('authenticated', 'public.admin_resume_account_deletion(uuid, boolean)', 'execute')
-     or has_function_privilege('anon', 'public.admin_resume_account_deletion(uuid, boolean)', 'execute')
-     or not has_function_privilege('service_role', 'public.admin_resume_account_deletion(uuid, boolean)', 'execute')
+  if has_function_privilege('authenticated', 'public.admin_resume_account_deletion(uuid, uuid, boolean)', 'execute')
+     or has_function_privilege('anon', 'public.admin_resume_account_deletion(uuid, uuid, boolean)', 'execute')
+     or not has_function_privilege('service_role', 'public.admin_resume_account_deletion(uuid, uuid, boolean)', 'execute')
      or has_function_privilege('authenticated', 'public.release_refused_deletion_resume(uuid, uuid, text)', 'execute') then
     fails := fails || 'FAIL P1: resuming a deletion is not service-role only (N944)'::text;
   end if;
