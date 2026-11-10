@@ -43,7 +43,7 @@ case "$action" in
     until psql -h 127.0.0.1 -p "$port" -U supabase_admin -d postgres -X -tAc "select 1" >/dev/null 2>&1; do sleep 1; done
     psql -h 127.0.0.1 -p "$port" -U supabase_admin -d postgres -X -q -v ON_ERROR_STOP=1 -f "$root/supabase/tests/ci_shim.sql" 2>&1 | grep -v 'already exists, skipping' || true
     count=0
-    if [ $# -gt 2 ]; then files=("${@:3}"); what="${#files[@]} given file(s)"; else files=("$root"/supabase/migrations/*.sql); what="migrations"; fi
+    if [ $# -gt 2 ]; then files=("${@:3}"); what="given file(s)"; else files=("$root"/supabase/migrations/*.sql); what="migrations"; fi
     for file in "${files[@]}"; do
       [ -f "$file" ] || { echo "No such file: $file" >&2; exit 1; }
       if ! output=$(psql -h 127.0.0.1 -p "$port" -U supabase_admin -d postgres -X -q -v ON_ERROR_STOP=1 -f "$file" 2>&1); then

@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BETWEEN_CONSTRAINTS,
   cleanStructure,
   cronStatements,
   grants,
@@ -145,15 +146,28 @@ describe("pg_dump supplies structure and nothing else (N1075)", () => {
     "",
   ].join("\n");
 
+  // The fixture's one constraint of that shape, held by name as the real seven are.
+  const HELD = { betweenConstraints: ["public.orders c"] };
+
+  it("rewrites as BETWEEN exactly the constraints it holds by name, and stops otherwise", () => {
+    expect(cleanStructure(dump, HELD).rewritten).toEqual(["public.orders c"]);
+    expect(() => cleanStructure(dump, { betweenConstraints: [] })).toThrow(/Rewritten but not held: public\.orders c\. Held but not rewritten: none\./);
+    expect(() => cleanStructure(dump, { betweenConstraints: ["public.orders c", "public.cars cars_text_bounds"] })).toThrow(/Rewritten but not held: none\. Held but not rewritten: public\.cars cars_text_bounds\./);
+    expect(() => cleanStructure(dump, { betweenConstraints: ["public.listings c"] })).toThrow(/not exactly the ones the generator holds/);
+    // The real list is the seven the analysis names, and a real dump is held to it by default.
+    expect(BETWEEN_CONSTRAINTS).toHaveLength(7);
+    expect(() => cleanStructure(dump)).toThrow(/Held but not rewritten: public\.activity_posts activity_posts_text_bounds/);
+  });
+
   it("drops psql meta-commands, the two create-schema statements, publication membership and the tool's version", () => {
-    const { text, dropped } = cleanStructure(dump);
+    const { text, dropped } = cleanStructure(dump, HELD);
     expect(dropped).toEqual(["CREATE SCHEMA public;", "CREATE SCHEMA private;", "ALTER PUBLICATION supabase_realtime ADD TABLE ONLY public.messages;"]);
     expect(text).not.toMatch(/restrict|Dumped|CREATE SCHEMA|ALTER PUBLICATION/);
     expect(text).toContain("-- PostgreSQL database dump");
   });
 
   it("makes every session setting local to the baseline's transaction", () => {
-    const { text } = cleanStructure(dump);
+    const { text } = cleanStructure(dump, HELD);
     expect(text).toContain("SET LOCAL check_function_bodies = false;");
     expect(text).toContain("SET LOCAL search_path = '';");
     expect(text).not.toMatch(/^SET check_function_bodies/m);
@@ -161,12 +175,12 @@ describe("pg_dump supplies structure and nothing else (N1075)", () => {
   });
 
   it("reads statements, not lines: what is inside a function body is left exactly as it is", () => {
-    const { text } = cleanStructure(dump);
+    const { text } = cleanStructure(dump, HELD);
     expect(text).toContain("begin\nSET search_path = 'x';\nGRANT ALL ON TABLE public.orders TO anon;\nend $$;");
   });
 
   it("writes a leading BETWEEN in a table's check as BETWEEN again", () => {
-    expect(cleanStructure(dump).text).toContain("    CONSTRAINT c CHECK (((char_length(note) BETWEEN 1 AND 140) AND (id IS NOT NULL)))");
+    expect(cleanStructure(dump, HELD).text).toContain("    CONSTRAINT c CHECK (((char_length(note) BETWEEN 1 AND 140) AND (id IS NOT NULL)))");
   });
 
   it.each([
@@ -181,11 +195,11 @@ describe("pg_dump supplies structure and nothing else (N1075)", () => {
     ["a setting that would outlive the file", "SELECT pg_catalog.set_config('role', 'postgres', false);", /does not know/],
     ["another psql meta-command", "\\connect postgres", /meta-command/],
   ])("refuses a dump that carries %s", (_, statement, message) => {
-    expect(() => cleanStructure(`${dump}${statement}\n`)).toThrow(message);
+    expect(() => cleanStructure(`${dump}${statement}\n`, HELD)).toThrow(message);
   });
 
   it("refuses a dump that ends inside a function body", () => {
-    expect(() => cleanStructure("CREATE FUNCTION public.f() RETURNS void LANGUAGE sql AS $$ select 1;")).toThrow(/ends inside/);
+    expect(() => cleanStructure("CREATE FUNCTION public.f() RETURNS void LANGUAGE sql AS $$ select 1;", { betweenConstraints: [] })).toThrow(/ends inside/);
   });
 
   it("a leading BETWEEN is written as BETWEEN again, and nothing else is touched", () => {
@@ -271,6 +285,7 @@ describe("the file as a whole (N1075)", () => {
     doc: doc(), rows: {}, extras: { cron_jobs: [{ name: "drvn-a", schedule: "* * * * *", command: "select 1;", active: true }] },
     structure: "SET check_function_bodies = false;\nSELECT pg_catalog.set_config('search_path', '', false);\nCREATE TABLE public.orders (\n    id uuid NOT NULL\n);\n",
     source: "2 migration files",
+    betweenConstraints: [],
   });
 
   it("is one transaction: the migration runner sees one outer begin/commit, no other transaction control, and no problem", () => {

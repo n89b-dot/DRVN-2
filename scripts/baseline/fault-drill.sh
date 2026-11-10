@@ -54,6 +54,7 @@ faults=(
   "a storage bucket made public|update storage.buckets set public = true where id = 'message-photos'|update storage.buckets set public = false where id = 'message-photos'"
   "row-level security switched off on one table|alter table public.orders disable row level security|alter table public.orders enable row level security"
   "a table added outside our schemas|create table storage.drvn_fault_drill (id int)|drop table storage.drvn_fault_drill"
+  "a second row in the one table allowed to differ|insert into public.product_grow_runs (result) values ('{}'::jsonb)|delete from public.product_grow_runs"
   "one reserved username added|insert into private.reserved_usernames (username, reason) values ('drvnfaultdrill', '$reason')|delete from private.reserved_usernames where username = 'drvnfaultdrill'"
 )
 

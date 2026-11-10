@@ -16,8 +16,12 @@
 # read with a read-only login, against a stack build's capture).
 #
 # What is not a difference, and nothing else is excused:
-#   - public.product_grow_runs holds 1 row in A and 0 in B: a log line the
-#     migrations write by running the product grower once.
+#   - public.product_grow_runs holds 1 row in A and 0 in B, and the comparison
+#     requires exactly that: 20261020120000_products.sql (line 639) runs the
+#     product grower once as a backfill, and every run logs a row. It is a log
+#     of work done on the database the old files built, not something a new
+#     database needs: the grower, the admin coverage panel and that migration's
+#     own self-check each handle "no run yet" (orchestrator's ruling, 10 Nov).
 #   - public.worker_runs is not counted: scheduled jobs write to it while a
 #     database is up (23 minutes past each hour), so its count is the time of
 #     day, not the build.
@@ -64,7 +68,11 @@ compare() {
   verdict "1. snapshot ($(find "$a/snapshot" -type f | wc -l | tr -d ' ') files: functions, tables, permissions, policies, triggers, jobs, buckets, reference rows)" "$b/1-snapshot.diff"
   diff "$a/outside.txt" "$b/outside.txt" >"$b/2-outside.diff" 2>&1
   verdict "2. everything outside our two schemas ($(wc -l <"$a/outside.txt" | tr -d ' ') catalog rows)" "$b/2-outside.diff"
-  { LC_ALL=C join -t '|' "$a/rows.txt" "$b/rows.txt" | awk -F'|' '$2 != $3' | grep -v -x -F "$ACCEPTED_ROW_DIFFERENCE"; diff <(cut -d'|' -f1 "$a/rows.txt") <(cut -d'|' -f1 "$b/rows.txt"); } >"$b/3-rows.diff" 2>&1
+  LC_ALL=C join -t '|' "$a/rows.txt" "$b/rows.txt" | awk -F'|' '$2 != $3' >"$b/3-rows.all"
+  { grep -v -x -F "$ACCEPTED_ROW_DIFFERENCE" "$b/3-rows.all"; diff <(cut -d'|' -f1 "$a/rows.txt") <(cut -d'|' -f1 "$b/rows.txt")
+    # The one expected difference is asserted, not skipped: it must be there, exactly.
+    grep -q -x -F "$ACCEPTED_ROW_DIFFERENCE" "$b/3-rows.all" || echo "expected and not found: $ACCEPTED_ROW_DIFFERENCE (table|rows in A|rows in B)"
+  } >"$b/3-rows.diff" 2>&1
   # Lines from `join` carry no < or >; count any line as a difference.
   if [ -s "$b/3-rows.diff" ]; then say "DIFFERENT  3. rows in every table, and the content of the reference tables  ($(wc -l <"$b/3-rows.diff" | tr -d ' ') lines; see $b/3-rows.diff)"; head -20 "$b/3-rows.diff"; failed=1
   else say "identical  3. rows in every table, and the content of the reference tables ($(wc -l <"$a/rows.txt" | tr -d ' ') lines; accepted: $ACCEPTED_ROW_DIFFERENCE; not counted: $UNCOUNTED_TABLE)"; fi

@@ -9,6 +9,8 @@
 # supabase/migrations/, B on 55441 from the baseline alone. Then, in order,
 # and stopping at the first that fails:
 #
+#   0. applied by psql to A, which has tables, the baseline refuses and A is
+#      unchanged
 #   1. the four comparisons of A and B are empty      (scripts/baseline/compare.sh)
 #   2. the comparison can fail: every deliberate fault is reported, and B is
 #      whole again after each                          (scripts/baseline/fault-drill.sh)
@@ -28,14 +30,19 @@ out="${2:-$(mktemp -d)}"
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 mkdir -p "$out"
 export PGPASSWORD=postgres
-A="postgresql://supabase_admin:postgres@127.0.0.1:55440/postgres"
-B="postgresql://supabase_admin:postgres@127.0.0.1:55441/postgres"
+# Ports: A on 55440, B on 55441. Another session on the same machine may hold
+# one; DRVN_BASELINE_A_PORT and DRVN_BASELINE_B_PORT pick among 55440 to 55442.
+port_a="${DRVN_BASELINE_A_PORT:-55440}"
+port_b="${DRVN_BASELINE_B_PORT:-55441}"
+[ "$port_a" != "$port_b" ] || { echo "prove: A and B need different ports" >&2; exit 2; }
+A="postgresql://supabase_admin:postgres@127.0.0.1:$port_a/postgres"
+B="postgresql://supabase_admin:postgres@127.0.0.1:$port_b/postgres"
 
 step() { printf '\n== %s\n' "$*"; }
 fail() { printf 'prove: %s\n' "$*" >&2; exit 1; }
 
 step "A: every migration file"
-bash "$root/scripts/disposable-db.sh" start 55440 >"$out/build-A.log" 2>&1 || { cat "$out/build-A.log"; fail "database A did not build"; }
+bash "$root/scripts/disposable-db.sh" start "$port_a" >"$out/build-A.log" 2>&1 || { cat "$out/build-A.log"; fail "database A did not build"; }
 head -1 "$out/build-A.log"
 
 if [ "$generate" = 1 ]; then
@@ -45,8 +52,18 @@ fi
 [ -f "$baseline" ] || fail "no baseline at $baseline"
 shasum -a 256 "$baseline" | tee "$out/baseline.sha256"
 
+step "0. The baseline refuses a database that already has tables, and changes nothing"
+bash "$root/scripts/baseline/compare.sh" capture "$A" "$out/refusal/before" >/dev/null || fail "could not read A before the refusal run"
+if psql "$A" -X -q -v ON_ERROR_STOP=1 -f "$baseline" >"$out/0-refusal.log" 2>&1; then fail "the baseline ran on a database that has tables"; fi
+grep -F "DRVN baseline: this database already has tables" "$out/0-refusal.log" || { cat "$out/0-refusal.log"; fail "the baseline failed on A, but not with its own refusal"; }
+bash "$root/scripts/baseline/compare.sh" capture "$A" "$out/refusal/after" >/dev/null || fail "could not read A after the refusal run"
+for part in snapshot outside.txt rows.txt dump.sorted; do
+  diff -r "$out/refusal/before/$part" "$out/refusal/after/$part" >/dev/null || fail "the refused baseline changed A ($part differs)"
+done
+echo "Refused by psql, and A is unchanged in all four captures."
+
 step "B: the baseline alone"
-bash "$root/scripts/disposable-db.sh" start 55441 "$baseline" >"$out/build-B.log" 2>&1 || { cat "$out/build-B.log"; fail "database B did not build from the baseline"; }
+bash "$root/scripts/disposable-db.sh" start "$port_b" "$baseline" >"$out/build-B.log" 2>&1 || { cat "$out/build-B.log"; fail "database B did not build from the baseline"; }
 head -1 "$out/build-B.log"
 
 step "1. Is B the database A?"
@@ -66,7 +83,7 @@ step "4. Generated types against B"
 [ "${PIPESTATUS[0]}" -eq 0 ] || fail "the generated types differ against B"
 
 step "5. SQL guards against B"
-(cd "$root" && PGHOST=127.0.0.1 PGPORT=55441 bash scripts/test-sql-guards.sh) >"$out/5-guards.log" 2>&1; guards=$?
+(cd "$root" && PGHOST=127.0.0.1 PGPORT="$port_b" bash scripts/test-sql-guards.sh) >"$out/5-guards.log" 2>&1; guards=$?
 tail -3 "$out/5-guards.log"
 [ "$guards" -eq 0 ] || fail "a SQL guard failed against B (see $out/5-guards.log)"
 
