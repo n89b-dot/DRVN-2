@@ -15,7 +15,7 @@ import type { PartLinkFields } from "@/lib/mods/part-link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canonicalPhotoUrl } from "@/lib/photo-urls";
-import { signedPhotoUrl } from "@/lib/supabase/photo-signing";
+import { signedOwnPhotoUrl, signedPhotoUrl } from "@/lib/supabase/photo-signing";
 import { capture } from "@/lib/analytics";
 import { reportError } from "@/lib/monitoring";
 import { confirmIdentity } from "@/lib/confirm-identity";
@@ -553,7 +553,8 @@ export async function readPartLink(url: string): Promise<
   const { ok, fetched_url: fetchedUrl, ...part } = result;
   void fetchedUrl;
   // #105: the thumbnail was just stored in a private bucket; the editor shows it signed.
-  return { ok, part: { ...part, image_url: await signedPhotoUrl(part.image_url) } };
+  // Their own folder only: this signs what the fetch handed back, not a guarded read (N940).
+  return { ok, part: { ...part, image_url: await signedOwnPhotoUrl(part.image_url, user.id) } };
 }
 
 /**
