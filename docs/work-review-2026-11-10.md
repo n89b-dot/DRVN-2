@@ -220,7 +220,7 @@ One row per finding in this review, read exactly by the Intelligence OS. Where a
 | new | #149 | after launch | #207 | engineer | The chargeback write-off can record the same loss twice (decision D1) |
 | new | #150 | after launch | #209 | engineer | A counter-notice can unblock a photo another notice still covers (decision D2) |
 | new | #151 | open | #199 | engineer | After a takedown the blocklist read still stops at 1,000 rows and the same file can be uploaded again |
-| new | #152 | open | #217 | engineer | The 18+ confirmation asks on a page load but holds no action |
+| new | #152 | open | #222 | engineer | The earlier-member 18+ check is removed by Neil's ruling of 10 November; new accounts still confirm at sign-up |
 | new | #153 | open | #206 | engineer | A deleted member's listing titles remain in saved-search emails |
 | new | #154 | open | #198 | engineer | The deletion runbook says no state needs SQL, and three do |
 | N718 | #155 | open | #199 | engineer | Counts that stop at 1,000 rows: four reads remain and nothing stops the next |
