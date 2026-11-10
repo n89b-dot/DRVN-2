@@ -19,7 +19,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { reportError } from "@/lib/monitoring";
-import { chunks, pagedRows } from "@/lib/supabase/paged-rows";
 import { scheduleMediaCleanup } from "@/lib/media-lifecycle";
 import { takedownTargets } from "@/lib/copyright/notice";
 import { copyrightHosts } from "@/lib/copyright/hosts";
@@ -543,34 +542,17 @@ export async function adminSuspendUser(
         if (!suspended?.length) throw new Error("Already suspended.");
 
         // Pause their live stock; record which listings, so unsuspend can
-        // restore exactly this set and nothing else. N718: the live ids are
-        // read a page at a time and paused a group at a time, so a shop past
-        // PostgREST's 1,000 rows is paused, and recorded, in full.
-        const live = await pagedRows<{ id: string }, "id">(
-          (after, size) => {
-            const query = ctx.admin.from("listings").select("id").eq("seller_id", userId).eq("status", "active").order("id").limit(size);
-            return after === null ? query : query.gt("id", after);
-          },
-          "id",
-        );
-        if (live.error || !live.rows) {
+        // restore exactly this set and nothing else.
+        const { data: paused, error: pauseError } = await ctx.admin
+          .from("listings")
+          .update({ status: "paused" })
+          .eq("seller_id", userId)
+          .eq("status", "active")
+          .select("id");
+        if (pauseError) {
           throw new Error("The user is suspended, but their listings couldn't be paused. Pause them before retrying.");
         }
-        const pausedListingIds: string[] = [];
-        for (const group of chunks(live.rows.map((row) => row.id))) {
-          const { data: paused, error: pauseError } = await ctx.admin
-            .from("listings")
-            .update({ status: "paused" })
-            .in("id", group)
-            .eq("seller_id", userId)
-            .eq("status", "active")
-            .select("id");
-          if (pauseError) {
-            throw new Error("The user is suspended, but their listings couldn't be paused. Pause them before retrying.");
-          }
-          pausedListingIds.push(...(paused ?? []).map((l) => l.id));
-        }
-        return { pausedListingIds };
+        return { pausedListingIds: (paused ?? []).map((l) => l.id) };
       }
     );
     const paused = Array.isArray(result?.pausedListingIds) ? result.pausedListingIds.length : null;
@@ -643,20 +625,18 @@ export async function adminUnsuspendUser(
         const meta = lastSuspend?.metadata as { result?: { pausedListingIds?: string[] } } | null;
         const pausedIds = meta?.result?.pausedListingIds ?? [];
         let reactivated: string[] = [];
-        // A group at a time (N718): past 1,000 ids one request's URL and
-        // answer were both too small for the set.
-        for (const group of chunks(pausedIds)) {
+        if (pausedIds.length) {
           const { data: restored, error: restoreError } = await ctx.admin
             .from("listings")
             .update({ status: "active" })
-            .in("id", group)
+            .in("id", pausedIds)
             .eq("seller_id", userId)
             .eq("status", "paused")
             .select("id");
           if (restoreError) {
             throw new Error("The suspension is lifted, but its paused listings couldn't be reactivated. Reactivate them by hand.");
           }
-          reactivated = [...reactivated, ...(restored ?? []).map((l) => l.id)];
+          reactivated = (restored ?? []).map((l) => l.id);
         }
         return { reactivatedListingIds: reactivated };
       }
