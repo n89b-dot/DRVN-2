@@ -45,6 +45,7 @@ import {
   KindBadge,
   SheetTabs,
   Icon,
+  PhotoImage,
 } from "@/components/ui";
 
 import { DocsJumprow, DocsPagehead, Specimen, SpecimenGroup } from "../../_components/docs-page";
@@ -1323,6 +1324,21 @@ export default function ComponentsPage() {
 
       {/* ============ 09 STATES ============ */}
       <SpecimenGroup id="states" index="09" title="States">
+        <Specimen
+          name="PhotoImage — a member photo that can't be shown"
+          klass=".bg-img-fallback"
+          note="A member photo whose link the storage layer refuses (unsigned, expired, or failed to load) draws the no-photo plate instead of a broken image. Other images are untouched. Media follows the same rule (usePhotoFallback)."
+        >
+          <span className="relative block h-24 w-36 overflow-hidden rounded-ctl">
+            <PhotoImage
+              src="https://example.supabase.co/storage/v1/object/public/car-images/00000000-0000-4000-8000-000000000000/unsigned.webp"
+              alt="An unsigned member photo"
+              fill
+              sizes="144px"
+              className="object-cover"
+            />
+          </span>
+        </Specimen>
         <Specimen
           name="Undrawn plate"
           klass=".undrawn / --hero"

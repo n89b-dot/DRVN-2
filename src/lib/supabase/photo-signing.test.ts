@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ sign: vi.fn(), reportError: vi.fn() }));
+const mocks = vi.hoisted(() => ({ sign: vi.fn(), rpc: vi.fn(), reportError: vi.fn(), signals: [] as AbortSignal[] }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
 vi.mock("@supabase/supabase-js", () => ({
-  createClient: () => ({ storage: { from: (bucket: string) => ({ createSignedUrls: (paths: string[], expiresIn: number) => mocks.sign(bucket, paths, expiresIn) }) } }),
+  createClient: () => ({
+    storage: { from: (bucket: string) => ({ createSignedUrls: (paths: string[], expiresIn: number) => mocks.sign(bucket, paths, expiresIn) }) },
+    // The shared memo's calls carry a time budget (abortSignal), as supabase-js builders do.
+    rpc: (fn: string, args: unknown) => ({ abortSignal: (signal: AbortSignal) => { mocks.signals.push(signal); return mocks.rpc(fn, args); } }),
+  }),
 }));
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://proj.supabase.co";
@@ -20,6 +24,8 @@ const signedFor = (bucket: string, path: string) => `${O}/storage/v1/object/sign
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // No shared memo by default: the read finds nothing and the offer keeps this instance's URL.
+  mocks.rpc.mockImplementation(async (fn: string, args: { p_signed?: unknown[] }) => ({ data: fn === "photo_signatures_offer" ? args.p_signed : [], error: null }));
   mocks.sign.mockImplementation(async (bucket: string, paths: string[]) => ({
     data: paths.map((path) => ({ path, signedUrl: signedFor(bucket, path), error: null })),
     error: null,
@@ -90,10 +96,196 @@ describe("photo signing at the database boundary (N455)", () => {
     const url = canonical("car-images", "export.webp");
     await signedPhotoUrls([url]);
     mocks.sign.mockClear();
-    const rows = await signPhotosForExport([{ url, alt: "x" }, { avatar_url: canonical("avatars", "me.webp") }]);
+    const rows = await signPhotosForExport([{ url, alt: "x" }, { avatar_url: canonical("avatars", "me.webp") }], ME);
     expect(rows[0]).toEqual({ url: signedFor("car-images", `${ME}/export.webp`), alt: "x" });
     expect(rows[1]).toEqual({ avatar_url: canonical("avatars", "me.webp") });
     expect(mocks.sign).toHaveBeenCalledWith("car-images", [`${ME}/export.webp`], EXPORT_PHOTO_LINK_SECONDS);
     expect(EXPORT_PHOTO_LINK_SECONDS).toBe(604_800);
+  });
+});
+
+describe("one signed URL per photo per window across instances (N954, report five #117)", () => {
+  const at = (minute: number) => Date.UTC(2026, 10, 10, 9, minute);
+
+  it("uses the URL another instance already signed, without minting", async () => {
+    const url = canonical("car-images", "shared-hit.webp");
+    const theirs = `${O}/storage/v1/object/sign/car-images/${ME}/shared-hit.webp?token=other-instance`;
+    mocks.rpc.mockImplementation(async (fn: string) => ({
+      data: fn === "photo_signatures_read" ? [{ bucket: "car-images", path: `${ME}/shared-hit.webp`, signed_url: theirs }] : [],
+      error: null,
+    }));
+    expect((await signedPhotoUrls([url], at(1))).get(url)).toBe(theirs);
+    expect(mocks.sign).not.toHaveBeenCalled();
+    expect(mocks.rpc).toHaveBeenCalledWith("photo_signatures_read", { p_window: expect.any(Number), p_objects: [{ bucket: "car-images", path: `${ME}/shared-hit.webp` }] });
+  });
+
+  it("offers what it minted and shows the race's winner", async () => {
+    const url = canonical("listing-images", "race.webp");
+    const winner = `${O}/storage/v1/object/sign/listing-images/${ME}/race.webp?token=won-first`;
+    mocks.rpc.mockImplementation(async (fn: string) => ({
+      data: fn === "photo_signatures_offer" ? [{ bucket: "listing-images", path: `${ME}/race.webp`, signed_url: winner }] : [],
+      error: null,
+    }));
+    expect((await signedPhotoUrls([url], at(2))).get(url)).toBe(winner);
+    expect(mocks.sign).toHaveBeenCalledTimes(1);
+    expect(mocks.rpc).toHaveBeenCalledWith("photo_signatures_offer", {
+      p_window: expect.any(Number),
+      p_signed: [{ bucket: "listing-images", path: `${ME}/race.webp`, signed_url: signedFor("listing-images", `${ME}/race.webp`) }],
+    });
+  });
+
+  it("the export's fixed-life links never touch the shared memo", async () => {
+    await signPhotosForExport({ url: canonical("car-images", "export-shared.webp") }, ME, at(3));
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("signs on its own when the shared memo is unavailable, reports it, and remembers nothing it couldn't share", async () => {
+    mocks.rpc.mockImplementation(async () => ({ data: null, error: { message: "function public.photo_signatures_read does not exist" } }));
+    const url = canonical("activity-images", "no-shared.webp");
+    expect((await signedPhotoUrls([url], at(4))).get(url)).toBe(signedFor("activity-images", `${ME}/no-shared.webp`));
+    expect(mocks.reportError).toHaveBeenCalledWith("[photos] shared signing memo failed; signing per response", expect.objectContaining({ failures: 1 }));
+    expect(mocks.signals.at(-1)).toBeInstanceOf(AbortSignal);
+  });
+});
+
+
+describe("only photo fields are signed, never a URL a member wrote (N940, #178 review)", () => {
+  const other = canonical("car-images", "someone-elses-private.webp");
+  const mine = canonical("car-images", "my-cover.webp");
+  const json = (value: unknown) => new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } });
+  const read = async (value: unknown) => {
+    const res = await photoFetch((async () => json(value)) as unknown as typeof fetch, { sign: true })(`${O}/rest/v1/rpc/x`, { method: "POST" });
+    return res.json();
+  };
+
+  it("leaves a photo URL pasted into a comment, a description, a bio or a whole-value comment canonical", async () => {
+    const out = await read([
+      { body: `look at this ${other} nice` },
+      { body: other },
+      { description: other, bio: `${other}`, title: other },
+    ]);
+    expect(JSON.stringify(out)).not.toContain("/object/sign/");
+    expect(mocks.sign).not.toHaveBeenCalled();
+  });
+
+  it("leaves a profile link, a product link and a video link canonical", async () => {
+    const out = await read({ links: [{ label: "website", url: other }], product_url: other, video_url: other, source_url: other });
+    expect(JSON.stringify(out)).not.toContain("/object/sign/");
+    expect(mocks.sign).not.toHaveBeenCalled();
+  });
+
+  it("signs the photo fields: url rows, cover and image columns, post image and before/after blocks", async () => {
+    const out = await read({
+      cover_image_url: mine,
+      car_images: [{ url: canonical("car-images", "g1.webp") }],
+      image: canonical("listing-images", "card.webp"),
+      body: [
+        { type: "images", urls: [canonical("activity-images", "p1.webp")] },
+        { type: "before_after", beforeUrl: canonical("activity-images", "b.webp"), afterUrl: canonical("activity-images", "a.webp") },
+        { type: "text", text: `see ${other}` },
+      ],
+    });
+    expect(out.cover_image_url).toBe(signedFor("car-images", `${ME}/my-cover.webp`));
+    expect(out.car_images[0].url).toBe(signedFor("car-images", `${ME}/g1.webp`));
+    expect(out.image).toBe(signedFor("listing-images", `${ME}/card.webp`));
+    expect(out.body[0].urls[0]).toBe(signedFor("activity-images", `${ME}/p1.webp`));
+    expect(out.body[1].beforeUrl).toBe(signedFor("activity-images", `${ME}/b.webp`));
+    expect(out.body[2].text).toBe(`see ${other}`);
+  });
+
+  it("the export links the member's photo fields for seven days and not a URL they wrote in a comment", async () => {
+    const out = await signPhotosForExport({ cars: [{ cover_image_url: mine }], comments: [{ body: other }] }, ME);
+    expect(out.cars[0].cover_image_url).toBe(signedFor("car-images", `${ME}/my-cover.webp`));
+    expect(out.comments[0].body).toBe(other);
+  });
+});
+
+describe("a failed offer is not remembered locally (N954, review of #196)", () => {
+  it("the next response asks the shared memo again rather than keeping this instance's URL", async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 10, 10, 10, 0) });
+    try {
+      const url = canonical("car-images", "offer-fails.webp");
+      mocks.rpc.mockImplementation(async (fn: string) => (fn === "photo_signatures_offer" ? { data: null, error: { code: "40P01", message: "deadlock detected" } } : { data: [], error: null }));
+      await signedPhotoUrls([url], Date.now());
+      expect(mocks.sign).toHaveBeenCalledTimes(1);
+      // Past the short pause, the shared memo has the winner; this instance shows it, not its own.
+      vi.advanceTimersByTime(31_000);
+      const theirs = `${O}/storage/v1/object/sign/car-images/${ME}/offer-fails.webp?token=winner`;
+      mocks.rpc.mockImplementation(async (fn: string) => ({ data: fn === "photo_signatures_read" ? [{ bucket: "car-images", path: `${ME}/offer-fails.webp`, signed_url: theirs }] : [], error: null }));
+      expect((await signedPhotoUrls([url], Date.now())).get(url)).toBe(theirs);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+
+describe("each leak route stays closed (N940, #178 review)", () => {
+  const STRANGER = "22222222-2222-4222-8222-222222222222";
+  const theirs = `${O}/storage/v1/object/public/car-images/${STRANGER}/private-car.webp`;
+  const read = async (value: unknown) => {
+    const res = await photoFetch((async () => new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } })) as unknown as typeof fetch, { sign: true })(`${O}/rest/v1/x`, { method: "GET" });
+    return JSON.stringify(await res.json());
+  };
+
+  it.each([
+    ["a comment", { body: `nice ${theirs}` }],
+    ["a comment that is only the link", { body: theirs }],
+    ["a bio", { bio: theirs }],
+    ["a listing description", { description: theirs }],
+    ["a profile link", { links: [{ label: "website", url: theirs }] }],
+    ["a mod's product link", { product_url: theirs }],
+  ])("%s naming another member's private photo comes back canonical, which Storage refuses", async (_route, value) => {
+    const out = await read(value);
+    expect(out).toContain(theirs);
+    expect(out).not.toContain("/object/sign/");
+    expect(mocks.sign).not.toHaveBeenCalled();
+  });
+
+  it("the export links only the member's own objects, even in a photo field", async () => {
+    const out = await signPhotosForExport({ cars: [{ cover_image_url: canonical("car-images", "mine.webp") }], conversation: { listing: { image_url: theirs } }, comments: [{ body: theirs }] }, ME);
+    expect(out.cars[0].cover_image_url).toContain("/object/sign/");
+    expect(out.conversation.listing.image_url).toBe(theirs);
+    expect(out.comments[0].body).toBe(theirs);
+  });
+});
+
+describe("only database-guarded places are signed (N940, #196 review)", () => {
+  const STRANGER = "22222222-2222-4222-8222-222222222222";
+  const theirs = `${O}/storage/v1/object/public/car-images/${STRANGER}/private-car.webp`;
+  const read = async (value: unknown) => {
+    const res = await photoFetch((async () => new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } })) as unknown as typeof fetch, { sign: true })(`${O}/rest/v1/x`, { method: "GET" });
+    return res.json();
+  };
+
+  it.each([
+    ["an embed block's url in a post body", { body: [{ type: "embed", videoId: "x", url: theirs }] }],
+    ["a label-less profile link", { links: [{ url: theirs }] }],
+    ["an import's image entry", { imported_images: [{ sourceUrl: "https://shop.example/a.jpg", url: theirs, path: "x" }] }],
+    ["a guarded column on a row owned by someone else", { owner_id: ME, cover_image_url: theirs }],
+  ])("%s stays canonical", async (_route, value) => {
+    expect(JSON.stringify(await read(value))).not.toContain("/object/sign/");
+    expect(mocks.sign).not.toHaveBeenCalled();
+  });
+
+  it("a guarded column whose photo is the row owner's own is signed", async () => {
+    const out = await read({ owner_id: ME, cover_image_url: canonical("car-images", "mine-owned.webp") });
+    expect(out.cover_image_url).toBe(signedFor("car-images", `${ME}/mine-owned.webp`));
+  });
+});
+
+describe("while the shared memo is down, the process memo still works (N954, #196 review)", () => {
+  it("reuses this process's link until the shared memo is tried again", async () => {
+    vi.useFakeTimers({ now: Date.UTC(2026, 10, 11, 10, 0) });
+    try {
+      mocks.rpc.mockImplementation(async () => ({ data: null, error: { message: "down" } }));
+      const url = canonical("listing-images", "outage.webp");
+      const first = (await signedPhotoUrls([url], Date.now())).get(url);
+      vi.advanceTimersByTime(5_000);
+      expect((await signedPhotoUrls([url], Date.now())).get(url)).toBe(first);
+      expect(mocks.sign).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
