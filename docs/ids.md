@@ -59,6 +59,13 @@ A report or review tells the OS what it found through one table, which the OS re
 
 A row's State is a claim like any other: the OS still closes an item only on evidence (a merged pull request that names it, and a green run on `main`).
 
+**The remediation record's table.** One file outside the reports carries the same heading and header: `docs/plans/2026-11-remediation-record.md`, where the OS reads both remediation plans step by step. The same check holds it, with these differences:
+
+- **Finding** is the plan and the step, as in `#1-2.7` (plan 1 step 2.7), or a key for an item that is not a step (`#1-AL1`, `#1-H2`). One row per step.
+- **State `step`** marks a step that already has OS items. Its OS id cell names them, separated by single spaces, and its Finding is the step key. The row is a progress marker, never a second item: the step reads finished exactly when every id it names is settled. More than one id in a cell is allowed only on a `step` row, and `step` is read only from this file.
+- **A `new` row** keeps a report's rules (a Finding, a State from the list, For and Note) and is the one item for something with no id yet.
+- The record has no findings written up in prose, so its rows are not matched against prose.
+
 ## What CI publishes per commit
 
 All artifacts are keyed by the commit sha and kept 30 days.
