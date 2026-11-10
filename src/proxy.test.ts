@@ -9,7 +9,11 @@ const blocked = vi.hoisted(() => ({ keys: vi.fn() }));
 vi.mock("@/lib/supabase/proxy", () => ({ updateSession: session.update }));
 vi.mock("@/lib/copyright/blocked-media", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/copyright/blocked-media")>()),
-  blockedMediaKeys: blocked.keys,
+  // The proxy asks about one object; these tests still say which objects are blocked (null: unknown).
+  mediaIsBlocked: async (key: string) => {
+    const keys: Set<string> | null | undefined = await blocked.keys();
+    return keys === null ? null : (keys?.has(key) ?? false);
+  },
 }));
 session.update.mockImplementation(async () => NextResponse.next());
 
@@ -99,6 +103,16 @@ describe("copyright image gate", () => {
     expect(response.status).toBe(451);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(session.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses storage photos, not site images, while no blocklist has been read (N718)", async () => {
+    blocked.keys.mockResolvedValue(null);
+    const response = await proxy(imageRequest("own-photo.webp"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("15");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    const site = await proxy(new NextRequest("https://drvn.example/_next/image?url=%2Fhero.png&w=640&q=75"));
+    expect(site.status).toBe(200);
   });
 
   it("passes every other image straight through, with no session work", async () => {

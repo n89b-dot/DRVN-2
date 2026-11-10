@@ -11,9 +11,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ tables: new Map<string, { data: unknown; error: unknown }>() }));
 
 function query(table: string) {
-  const result = () => mocks.tables.get(table) ?? { data: [], error: null };
+  // The live switches are read a page at a time by id (N718): limit(n), gt(id, after).
+  const page: { limit?: number; after?: string } = {};
+  const result = () => {
+    const found = mocks.tables.get(table) ?? { data: [], error: null };
+    if (!Array.isArray(found.data)) return found;
+    let rows = found.data as { id?: string }[];
+    if (page.after !== undefined) rows = rows.filter((row) => String(row.id) > page.after!);
+    if (page.limit !== undefined) rows = rows.slice(0, page.limit);
+    return { data: rows, error: found.error };
+  };
   const builder: Record<string, unknown> = {};
   for (const method of ["select", "is", "order", "gte"]) builder[method] = () => builder;
+  builder.limit = (n: number) => { page.limit = n; return builder; };
+  builder.gt = (_column: string, after: string) => { page.after = after; return builder; };
   builder.maybeSingle = async () => result();
   builder.then = (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => Promise.resolve(result()).then(resolve, reject);
   return builder;
@@ -87,5 +98,13 @@ describe("/admin/agent kill switch state (R-audit-killstate)", () => {
     const html = await render();
     expect(html).toContain("A3a · Seller negotiation · unknown");
     expect(html).not.toMatch(/data-form="action">(Open|Close)</);
+  });
+
+  it("still reads Paused when the all switch is the 1,001st live control (N718)", async () => {
+    const targeted = Array.from({ length: 1000 }, (_, i) => ({ id: `c-${String(i).padStart(5, "0")}`, scope: "member", subject_id: `m-${i}`, reason: "spam", set_at: "2026-11-07T09:00:00Z" }));
+    mocks.tables.set("agent_controls", { data: [...targeted, { id: "c-99999", scope: "all", subject_id: null, reason: "incident", set_at: "2026-11-07T10:00:00Z" }], error: null });
+    const html = await render();
+    expect(html).not.toMatch(/>Running</);
+    expect(html).toContain(">Lift<");
   });
 });

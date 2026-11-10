@@ -1025,14 +1025,14 @@ longer self-skips; it runs on a local stack in CI; `e2e-launch`, added
 November 2026, is the browser lane for the launch configuration and needs the
 Actions variable `STRIPE_TEST_PUBLISHABLE_KEY`). One exception since
 November 2026: a pull request that changes documents only skips the two
-browser jobs, and the gate accepts those skips and no other; a push to `main` always runs
+browser jobs and `stripe-integration`, and the gate accepts those skips and no other; a push to `main` always runs
 everything (`docs/owner/branch-protection.md`, "Documents-only pull
 requests"). `secrets` scans only the
 commits a PR or push adds (first-parent, no merges); `secrets-full` is the
 full-history lane — every reachable commit, merges included, plus the tracked
 tree — and is what fails a key committed and later deleted (added 3 October
 2026). `stripe-integration` needs the repository secret
-`STRIPE_TEST_SECRET_KEY` (a Stripe **test-mode** secret key, `sk_test_…`);
+`STRIPE_TEST_SECRET_KEY` (the secret key, `sk_test_…`, of the Stripe sandbox kept for CI alone; one sandbox per deployment, `docs/staging-setup.md` §5);
 without it that job fails on purpose, so `release-gate` cannot pass. Enforce the same check at the deployment boundary too: a
 protected branch doesn't stop a deploy of an unchecked commit.
 

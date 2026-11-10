@@ -59,6 +59,13 @@ A report or review tells the OS what it found through one table, which the OS re
 
 A row's State is a claim like any other: the OS still closes an item only on evidence (a merged pull request that names it, and a green run on `main`).
 
+**The remediation record's table.** One file outside the reports carries the same heading and header: `docs/plans/2026-11-remediation-record.md`, where the OS reads both remediation plans step by step. The same check holds it, with these differences:
+
+- **Finding** is the plan and the step, as in `#1-2.7` (plan 1 step 2.7), or a key for an item that is not a step (`#1-AL1`, `#1-H2`). One row per step.
+- **State `step`** marks a step that already has OS items. Its OS id cell names them, separated by single spaces, and its Finding is the step key. The row is a progress marker, never a second item: the step reads finished exactly when every id it names is settled. More than one id in a cell is allowed only on a `step` row, and `step` is read only from this file.
+- **A `new` row** keeps a report's rules (a Finding, a State from the list, For and Note) and is the one item for something with no id yet.
+- The record has no findings written up in prose, so its rows are not matched against prose.
+
 ## What CI publishes per commit
 
 All artifacts are keyed by the commit sha and kept 30 days.
@@ -72,7 +79,7 @@ All artifacts are keyed by the commit sha and kept 30 days.
 | `test-results-<sha>-stripe-integration` | stripe-integration | `test-results/stripe.xml` (JUnit, `test:stripe`) |
 | `browser-release-summary-<sha>` | e2e | `browser-release-<sha>.json`, the browser suite's counts, summed over the four parts; `releaseStatus` is `passed` only when every part's was; `parts` says how many parts reported |
 | `e2e-part-<n>-<sha>` (n = 1 to 4) | e2e-parts | One part's own results before merging: `part.json` (`ran`, `first_attempt_passed`), its `playwright.xml`, its browser summary, and `operations.xml` from the one part that runs the drills. A reader that wants the whole suite uses the two merged artifacts above |
-| `release-gate-<sha>` | release-gate | `release-gate-<sha>.json`: the gate's result and each requirement's outcome, written even when the gate fails. `scope` is `full`, or `documents-only` on a pull request that changed documents only and so skipped the browser suite (`docs/owner/branch-protection.md`); a run on `main` is always `full` |
+| `release-gate-<sha>` | release-gate | `release-gate-<sha>.json`: the gate's result and each requirement's outcome, written even when the gate fails. `scope` is `full`, or `documents-only` on a pull request that changed documents only and so skipped the browser suite and the Stripe test-mode lane (`docs/owner/branch-protection.md`); a run on `main` is always `full` |
 
 To collect every JUnit file for a run, list the run's artifacts and take every name that starts with `test-results-<sha>-`.
 

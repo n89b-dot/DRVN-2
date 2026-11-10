@@ -6919,6 +6919,7 @@ export type Database = {
           role: string
         }[]
       }
+      admin_open_operations: { Args: { p_limit?: number }; Returns: Json }
       admin_order_money_window: {
         Args: { p_from: string; p_to: string }
         Returns: Json

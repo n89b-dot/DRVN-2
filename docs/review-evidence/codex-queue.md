@@ -145,11 +145,13 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #196 | 2026-11-10 | OS-W41 N954: member photo links are stable across servers, and a refused link s… | waived | — | waived (ruling, 10 Nov) |
 | #197 | 2026-11-10 | OS-W42 N943: audit query for agent ids mangled before PR #158 (report five #107) | waived | — | waived (ruling, 10 Nov) |
 | #198 | 2026-11-10 | OS-W42 N944 N734 N1038 N1039 N1070 N1073: account deletions: a runbook for every state, an audited Resume deletion… (batch 2, #230) | waived | — | waived (ruling, 10 Nov) |
+| #199 | 2026-11-10 | N718: counts and sets that silently stopped at 1,000 rows, the four reads left on main, and a ratchet… (batch 5, #240) | waived | — | waived (ruling, 10 Nov) |
 | #200 | 2026-11-10 | OS-W42: a copyright takedown stays taken down (report five #109) | waived | — | waived (ruling, 10 Nov) |
 | #201 | 2026-11-10 | OS-W42: earlier members confirm 18+ on their next visit, however long their ses… | waived | — | waived (ruling, 10 Nov) |
 | #202 | 2026-11-10 | OS-W40 N951: the pooler route is refused for record-only and dry runs too (foll… | waived | — | waived (ruling, 10 Nov) |
 | #203 | 2026-11-10 | OS-W41 N955 N1074: photo uploads stay under what a serverless host accepts, and shrink a second way… (batch 2, #230) | waived | — | waived (ruling, 10 Nov) |
 | #205 | 2026-11-10 | N717: decision defaults for N786 and R-retention, deleted-photo caching closed… | skipped | — | docs only (ruling, 7 Nov) |
+| #210 | 2026-11-10 | OS-W41 N940 N1062: photo signing signs only what the database guards, and a slow readiness check no longer blanks photos… (batch 4, #237) | waived | — | waived (ruling, 10 Nov) |
 | #212 | 2026-11-10 | docs(review): 10 Nov review of the work of 9 November | skipped | — | docs only (ruling, 7 Nov) |
 | #213 | 2026-11-10 | docs(plans): two remediation plans from the 10 November review | skipped | — | docs only (ruling, 7 Nov) |
 | #214 | 2026-11-10 | N725: owed Codex reviews are waived by ruling, and the queue test accepts a waived row (work… | waived | — | waived (ruling, 10 Nov) |
@@ -173,3 +175,6 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #234 | 2026-11-10 | N1074: a camera photo chosen as a profile photo is shrunk to an avatar's size… (batch 3, #235) | waived | — | waived (ruling, 10 Nov) |
 | #235 | 2026-11-10 | Batch 3: #233 #234 #188 #195 #190 | waived | — | waived (ruling, 10 Nov) |
 | #236 | 2026-11-10 | Plan 2 batch 1: #227 #229 #231 #232 | waived | — | waived (ruling, 10 Nov) |
+| #237 | 2026-11-10 | Batch 4: #210 | waived | — | waived (ruling, 10 Nov) |
+| #238 | 2026-11-10 | docs+test: the plan 1 record after batch 4, a current Needs Neil, and the table the Intelligence OS reads (batch 5, #240) | waived | — | waived (ruling, 10 Nov) |
+| #240 | 2026-11-10 | Batch 5: #238 #199 | waived | — | waived (ruling, 10 Nov) |
