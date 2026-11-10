@@ -1,43 +1,16 @@
 -- Plan 2 item A1: one JSON document describing the database as it stands,
 -- read by scripts/schema-snapshot.mjs, which writes it as supabase/schema/.
 --
--- Read-only apart from two session-local helper functions in pg_temp. Run it
--- only against a disposable database built from supabase/tests/ci_shim.sql and
--- every file in supabase/migrations/ (the sql-guard job's recipe).
+-- It is one SELECT and changes nothing: the generator runs it in a session
+-- where every transaction is read-only. ACL(acl, 'kind', owner) and
+-- COLUMN_ACL(acl) are not SQL: the generator replaces each with a subquery
+-- (aclSql in scripts/schema-snapshot.mjs) before running the file, because a
+-- helper function could not be created in a read-only session.
 --
 -- What is deliberately left out, because it differs by environment and not by
 -- migration: object owners, who granted a privilege, grants to the two
 -- platform administrator roles (postgres, supabase_admin), extension versions,
 -- oids, and anything that belongs to an extension.
-
-set search_path = pg_catalog;
-
--- An ACL as [{grantee, privilege, grantable}], sorted. A null ACL is the
--- built-in default for that kind of object (for a function: PUBLIC may execute).
-create function pg_temp.acl(acl aclitem[], kind "char", owner oid) returns jsonb
-language sql stable as $$
-  select coalesce(jsonb_agg(jsonb_build_object(
-           'grantee', case when a.grantee = 0 then 'public' else g.rolname end,
-           'privilege', lower(a.privilege_type),
-           'grantable', a.is_grantable)
-         order by case when a.grantee = 0 then 'public' else g.rolname end, lower(a.privilege_type)), '[]'::jsonb)
-  from aclexplode(coalesce(acl, acldefault(kind, owner))) a
-  left join pg_roles g on g.oid = a.grantee
-  where a.grantee = 0 or g.rolname not in ('postgres', 'supabase_admin');
-$$;
-
--- Column privileges have no default: a null ACL is no grant at all.
-create function pg_temp.column_acl(acl aclitem[]) returns jsonb
-language sql stable as $$
-  select coalesce(jsonb_agg(jsonb_build_object(
-           'grantee', case when a.grantee = 0 then 'public' else g.rolname end,
-           'privilege', lower(a.privilege_type),
-           'grantable', a.is_grantable)
-         order by case when a.grantee = 0 then 'public' else g.rolname end, lower(a.privilege_type)), '[]'::jsonb)
-  from aclexplode(acl) a
-  left join pg_roles g on g.oid = a.grantee
-  where a.grantee = 0 or g.rolname not in ('postgres', 'supabase_admin');
-$$;
 
 with
 ns as (select oid, nspname from pg_namespace where nspname in ('public', 'private')),
@@ -57,6 +30,10 @@ rel as (
 select jsonb_build_object(
 
 'server', jsonb_build_object('major', current_setting('server_version_num')::int / 10000),
+
+-- The generator refuses the document unless it was read as it requires.
+'session', jsonb_build_object('search_path', current_setting('search_path'),
+                              'read_only', current_setting('transaction_read_only')),
 
 -- Kinds of object this script does not render. Each must stay at zero; the
 -- generator refuses to write a snapshot that would silently omit one.
@@ -82,7 +59,7 @@ select jsonb_build_object(
 ),
 
 'schemas', (
-  select jsonb_agg(jsonb_build_object('name', n.nspname, 'acl', pg_temp.acl(n.nspacl, 'n', n.nspowner),
+  select jsonb_agg(jsonb_build_object('name', n.nspname, 'acl', ACL(n.nspacl, 'n', n.nspowner),
                                       'comment', obj_description(n.oid, 'pg_namespace')) order by n.nspname)
   from pg_namespace n where n.nspname in ('public', 'private')),
 
@@ -165,7 +142,7 @@ select jsonb_build_object(
                     from pg_constraint c where c.contypid = t.oid),
     'attributes', (select jsonb_agg(jsonb_build_object('name', a.attname, 'type', format_type(a.atttypid, a.atttypmod)) order by a.attnum)
                    from pg_attribute a where a.attrelid = t.typrelid and a.attnum > 0 and not a.attisdropped),
-    'acl', pg_temp.acl(t.typacl, 'T', t.typowner),
+    'acl', ACL(t.typacl, 'T', t.typowner),
     'comment', obj_description(t.oid, 'pg_type')
   ) order by n.nspname, t.typname), '[]'::jsonb)
   from pg_type t join ns n on n.oid = t.typnamespace
@@ -180,7 +157,7 @@ select jsonb_build_object(
     'owned_by', (select d.refobjid::regclass::text || '.' || a.attname
                  from pg_depend d join pg_attribute a on a.attrelid = d.refobjid and a.attnum = d.refobjsubid
                  where d.classid = 'pg_class'::regclass and d.objid = r.oid and d.deptype in ('a', 'i') limit 1),
-    'acl', pg_temp.acl(r.relacl, 's', r.relowner)
+    'acl', ACL(r.relacl, 's', r.relowner)
   ) order by r.nspname, r.relname), '[]'::jsonb)
   from rel r join pg_sequence s on s.seqrelid = r.oid
   where r.relkind = 'S'),
@@ -193,7 +170,7 @@ select jsonb_build_object(
     'replica_identity', r.relreplident,
     'options', to_jsonb(r.reloptions),
     'comment', obj_description(r.oid, 'pg_class'),
-    'acl', pg_temp.acl(r.relacl, 'r', r.relowner),
+    'acl', ACL(r.relacl, 'r', r.relowner),
     'columns', (
       select jsonb_agg(jsonb_build_object(
         'name', a.attname,
@@ -206,7 +183,7 @@ select jsonb_build_object(
                           then (select quote_ident(cn.nspname) || '.' || quote_ident(co.collname)
                                 from pg_collation co join pg_namespace cn on cn.oid = co.collnamespace where co.oid = a.attcollation) end,
         'comment', col_description(a.attrelid, a.attnum),
-        'acl', pg_temp.column_acl(a.attacl)
+        'acl', COLUMN_ACL(a.attacl)
       ) order by a.attnum)
       from pg_attribute a
       join pg_type t on t.oid = a.atttypid
@@ -231,7 +208,7 @@ select jsonb_build_object(
     'def', pg_get_viewdef(r.oid, true),
     'options', to_jsonb(r.reloptions),
     'comment', obj_description(r.oid, 'pg_class'),
-    'acl', pg_temp.acl(r.relacl, 'r', r.relowner)
+    'acl', ACL(r.relacl, 'r', r.relowner)
   ) order by r.nspname, r.relname), '[]'::jsonb)
   from rel r where r.relkind = 'v'),
 
@@ -241,7 +218,7 @@ select jsonb_build_object(
     'identity', pg_get_function_identity_arguments(p.oid),
     'def', pg_get_functiondef(p.oid),
     'comment', obj_description(p.oid, 'pg_proc'),
-    'acl', pg_temp.acl(p.proacl, 'f', p.proowner)
+    'acl', ACL(p.proacl, 'f', p.proowner)
   ) order by n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)), '[]'::jsonb)
   from pg_proc p join ns n on n.oid = p.pronamespace
   where p.prokind in ('f', 'p', 'w')

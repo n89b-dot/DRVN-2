@@ -259,6 +259,12 @@ differing. Also left out: columns a clock or a random id fills in on insert.
  * reference table to its rows.
  */
 export function renderSnapshot(doc, rows = {}) {
+  if (doc.session?.search_path !== "pg_catalog" || doc.session?.read_only !== "on") {
+    throw new Error(
+      `The snapshot must be read in a read-only session with search_path = pg_catalog (got search_path '${doc.session?.search_path}', read-only '${doc.session?.read_only}'). ` +
+        "Names would be printed with or without their schema depending on the reader.",
+    );
+  }
   const unsupported = Object.entries(doc.unsupported ?? {}).filter(([, n]) => Number(n) > 0);
   if (unsupported.length) {
     throw new Error(
@@ -416,16 +422,57 @@ export function assertDisposable(databaseUrl, env = process.env) {
   }
 }
 
-function psql(databaseUrl, args) {
-  return execFileSync("psql", [databaseUrl, "-X", "-At", "-q", "-v", "ON_ERROR_STOP=1", ...args], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+/**
+ * An ACL as [{grantee, privilege, grantable}], as a subquery. A null ACL is
+ * the built-in default for that kind of object (for a function: PUBLIC may
+ * execute); a null column ACL is no grant at all. The two platform
+ * administrators are left out: they hold everything in every environment.
+ */
+function aclSql(expression) {
+  return `(select coalesce(jsonb_agg(jsonb_build_object(
+      'grantee', case when a.grantee = 0 then 'public' else g.rolname end,
+      'privilege', lower(a.privilege_type),
+      'grantable', a.is_grantable)), '[]'::jsonb)
+    from aclexplode(${expression}) a
+    left join pg_roles g on g.oid = a.grantee
+    where a.grantee = 0 or g.rolname not in ('postgres', 'supabase_admin'))`;
+}
+
+/** scripts/schema-snapshot.sql with its ACL(...) and COLUMN_ACL(...) markers replaced by subqueries. */
+export function snapshotSql(template = fs.readFileSync(path.join(here, "schema-snapshot.sql"), "utf8")) {
+  // Comments go first: the file's own header names the markers.
+  const sql = template
+    .replace(/--[^\n]*/g, "")
+    .replace(/\bCOLUMN_ACL\(([^()]+)\)/g, (_, acl) => aclSql(acl.trim()))
+    .replace(/\bACL\(([^(),]+),\s*('[a-zA-Z]')\s*,\s*([^(),]+)\)/g, (_, acl, kind, owner) => aclSql(`coalesce(${acl.trim()}, acldefault(${kind}, ${owner.trim()}))`));
+  const left = sql.match(/\b(COLUMN_ACL|ACL)\(/);
+  if (left) throw new Error(`scripts/schema-snapshot.sql has an ${left[1]}(...) marker the generator could not expand`);
+  return sql;
+}
+
+// Every transaction read-only, and an empty search path. Postgres prints a
+// name without its schema when the schema is on the search path, and each
+// role has its own default path (supabase_admin's includes auth, postgres's
+// does not), so without the pin the same database would print differently
+// depending on who asked.
+export const SESSION_OPTIONS = "-c default_transaction_read_only=on -c search_path=pg_catalog";
+
+/** Runs SQL through psql in that session. */
+function psql(databaseUrl, sql) {
+  return execFileSync("psql", [databaseUrl, "-X", "-At", "-q", "-v", "ON_ERROR_STOP=1", "-f", "-"], {
+    input: sql,
+    encoding: "utf8",
+    maxBuffer: 256 * 1024 * 1024,
+    env: { ...process.env, PGOPTIONS: SESSION_OPTIONS },
+  });
 }
 
 function main() {
   const check = process.argv.includes("--check");
   const databaseUrl = process.env.DRVN_SCHEMA_DATABASE_URL || "postgresql://supabase_admin:postgres@127.0.0.1:55440/postgres";
   assertDisposable(databaseUrl);
-  const doc = JSON.parse(psql(databaseUrl, ["-f", path.join(here, "schema-snapshot.sql")]).trim().split("\n").pop());
-  const rows = JSON.parse(psql(databaseUrl, ["-c", referenceRowsSql()]).trim());
+  const doc = JSON.parse(psql(databaseUrl, snapshotSql()).trim().split("\n").pop());
+  const rows = JSON.parse(psql(databaseUrl, referenceRowsSql()).trim());
   const files = renderSnapshot(doc, rows);
   const counts = `${doc.functions.length} functions, ${doc.tables.length} tables, ${doc.policies.length} policies, ${doc.triggers.length} triggers, ${doc.cron_jobs.length} scheduled jobs`;
 

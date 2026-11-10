@@ -14,12 +14,14 @@ import {
   REFERENCE_TABLES,
   RUN_LOG_TABLES,
   SCHEMA_DIR,
+  SESSION_OPTIONS,
   assertDisposable,
   compareSnapshot,
   grantLines,
   referenceRowsSql,
   renderSnapshot,
   slug,
+  snapshotSql,
 } from "../../scripts/schema-snapshot.mjs";
 
 const root = path.resolve(__dirname, "../..");
@@ -31,6 +33,7 @@ const grant = (grantee: string, ...privileges: string[]): Acl => privileges.map(
 function fixture() {
   return {
     server: { major: 17 },
+    session: { search_path: "pg_catalog", read_only: "on" },
     unsupported: { aggregates: 0, "materialized views": 0 },
     schemas: [{ name: "public", acl: grant("authenticated", "usage"), comment: null }, { name: "private", acl: [], comment: null }],
     extensions: [{ name: "pg_trgm", schema: "public" }],
@@ -138,6 +141,27 @@ describe("schema snapshot rendering (plan 2 A1, finding #159)", () => {
 });
 
 describe("schema snapshot refuses to leave something out (plan 2 A1, finding #159)", () => {
+  it("refuses a document read with a search path or in a session that could write", () => {
+    // With a role's own search path Postgres prints `orders`, not `public.orders`,
+    // and the same database gives a different folder depending on who read it.
+    const withPath = fixture();
+    withPath.session.search_path = '"$user", public, extensions';
+    expect(() => renderSnapshot(withPath)).toThrow(/search_path = pg_catalog/);
+    const writable = fixture();
+    writable.session.read_only = "off";
+    expect(() => renderSnapshot(writable)).toThrow(/read-only/);
+    expect(SESSION_OPTIONS).toContain("default_transaction_read_only=on");
+    expect(SESSION_OPTIONS).toContain("search_path=pg_catalog");
+  });
+
+  it("expands every ACL marker in the query and leaves none behind", () => {
+    const sql = snapshotSql();
+    expect(sql).not.toMatch(/\b(COLUMN_ACL|ACL)\(/);
+    expect(sql).not.toMatch(/pg_temp|create\s+function|^\s*set\s/im);
+    expect(sql.match(/from aclexplode\(/g)?.length).toBeGreaterThanOrEqual(7);
+    expect(() => snapshotSql("select ACL(a.b(), 'f', c)")).toThrow(/could not expand/);
+  });
+
   it("refuses a kind of object it does not render", () => {
     const doc = fixture();
     doc.unsupported["materialized views"] = 2;
