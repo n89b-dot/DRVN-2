@@ -122,9 +122,13 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #172 | 2026-11-08 | OS-W37 R-rcconfig R-staging-behind: guest hold caps is the 15th release … | full | 2026-11-08 | P2 found (N694, recorded only) |
 | #173 | 2026-11-08 | OS-W38 N540: the sandbox payment override can never be on a hosted deployment | owed | owed | — |
 | #174 | 2026-11-08 | OS-W38 N686: members from before the 18+ confirmation confirm it once at their next sign-in | owed | owed | — |
-| #175 | 2026-11-08 | OS-W39 N634 N528 N224: deploy pipeline gated on release-gate and migrations; infrastructure… | owed | owed | — |
-| #176 | 2026-11-08 | N499: crash recovery finds an orphaned transfer past the newest 1,000, and never re-issues… | owed | owed | — |
-| #178 | 2026-11-08 | OS-W38 N455: member photos are private objects, shown through signed URLs | owed | owed | — |
+| #175 | 2026-11-08 | OS-W39 N634 N528 N224: deploy pipeline gated on release-gate and migrations; infrastructure… | full | 2026-11-10 | P2 found |
+| #176 | 2026-11-08 | N499: crash recovery finds an orphaned transfer past the newest 1,000, and never re-issues… | full | 2026-11-10 | clean |
+| #178 | 2026-11-08 | OS-W38 N455: member photos are private objects, shown through signed URLs | full | 2026-11-10 | P1 found |
 | #179 | 2026-11-08 | docs: remediation record brought current; branch protection requires up-to-date… | skipped | — | docs only (ruling, 7 Nov) |
 | #180 | 2026-11-08 | OS-W36 N677: FAIL 7 is null-safe and FAIL 0 always includes a mangled id (Codex review… | owed | owed | — |
-| #181 | 2026-11-08 | OS-W34 N418: late holds after the scrub, notification previews, handle lock, old retained… | owed | owed | — |
+| #181 | 2026-11-08 | OS-W34 N418: late holds after the scrub, notification previews, handle lock, old retained… | full | 2026-11-10 | P1 found |
+| #185 | 2026-11-09 | R-password: browser fixtures take a random password per account; seed-password doc records… | owed | owed | — |
+| #186 | 2026-11-10 | docs(readiness): report five, 9 November 2026 | skipped | — | docs only (ruling, 7 Nov) |
+| #189 | 2026-11-10 | OS-W40 N951: the deploy's migration check reaches staging through the session pooler | owed | owed | — |
+| #194 | 2026-11-10 | N715: the proxy also gates the admin console | owed | owed | — |
