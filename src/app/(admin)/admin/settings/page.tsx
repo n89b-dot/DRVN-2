@@ -36,6 +36,7 @@ const JOB_LABEL: Record<string, string> = {
   returns: "Advance return timers",
   disputes: "Dispute deadlines and auto-refunds",
   payoutDeadlines: "Payout setup deadline (14 days)",
+  orderEmails: "Order emails",
   alerts: "Deliver admin alerts",
   receipts: "Send guest receipts",
   analytics: "Purchase analytics",

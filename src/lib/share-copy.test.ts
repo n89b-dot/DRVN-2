@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   EXPLORE_DESCRIPTION,
@@ -11,6 +11,7 @@ import {
   MARKETPLACE_SHARE_DESCRIPTION,
   MARKETPLACE_SHARE_TITLE,
   SITE_DESCRIPTION,
+  listingShareCard,
   listingShareDescription,
 } from "./share-copy";
 
@@ -108,3 +109,44 @@ describe("listing share-preview fallback (N80)", () => {
     expect(listingShareDescription({ description: null, condition: null, price_cents: 5000 }, null)).toBe("$50 · for sale on DRVN.");
   });
 });
+
+describe("N1048: a listing's share card (work review #132)", () => {
+  const ORIGIN = "https://proj.supabase.co";
+  const SELLER = "11111111-1111-4111-8111-111111111111";
+  const signed = `${ORIGIN}/storage/v1/object/sign/listing-images/${SELLER}/l-1/photo.webp?token=abc.def-ghi`;
+  const canonical = `${ORIGIN}/storage/v1/object/public/listing-images/${SELLER}/l-1/photo.webp`;
+  const listing = { title: "  Garrett  GTX3076R\nturbo ", price_cents: 145_000, status: "active" };
+  let saved: string | undefined;
+  beforeEach(() => { saved = process.env.NEXT_PUBLIC_SUPABASE_URL; process.env.NEXT_PUBLIC_SUPABASE_URL = ORIGIN; });
+  afterEach(() => { process.env.NEXT_PUBLIC_SUPABASE_URL = saved; });
+
+  it("N1048: a listing on sale shows its title on one line, its price and its photo; a reserved or sold one says so and keeps them", () => {
+    expect(listingShareCard(listing, signed)).toEqual({ title: "Garrett GTX3076R turbo", price: "$1,450", label: "For sale", photo: signed });
+    expect(listingShareCard({ ...listing, status: "sold" }, signed)).toEqual({ title: "Garrett GTX3076R turbo", price: "$1,450", label: "Sold", photo: signed });
+    // In someone's checkout or held by an accepted offer: a visitor can open it, and the page shows it with a Reserved badge.
+    expect(listingShareCard({ ...listing, status: "reserved" }, signed)).toEqual({ title: "Garrett GTX3076R turbo", price: "$1,450", label: "Reserved", photo: signed });
+  });
+
+  it("N1048: a listing a visitor cannot open shows no photo and no price, and does not say it is for sale", () => {
+    for (const status of ["draft", "paused", "archived", "removed", "constructor", "toString"]) {
+      expect(listingShareCard({ ...listing, status }, signed), status).toMatchObject({ photo: null, price: "", label: "On DRVN" });
+    }
+    expect(listingShareCard(null, signed)).toEqual({ title: "A part on DRVN", price: "", label: "On DRVN", photo: null });
+  });
+
+  it("N1048: the photo is drawn only from a link signed for this render, on our own storage", () => {
+    // The stored address of a private photo cannot be fetched; nor can anything that is not ours.
+    expect(listingShareCard(listing, canonical).photo).toBeNull();
+    expect(listingShareCard(listing, "http://169.254.169.254/latest/meta-data/").photo).toBeNull();
+    expect(listingShareCard(listing, signed.replace(ORIGIN, "https://evil.example")).photo).toBeNull();
+    expect(listingShareCard(listing, null).photo).toBeNull();
+    expect(listingShareCard(listing, undefined).photo).toBeNull();
+  });
+
+  it("N1048: a long or empty title still makes a card", () => {
+    expect(listingShareCard({ ...listing, title: "x".repeat(200) }, null).title).toBe(`${"x".repeat(89)}…`);
+    expect(listingShareCard({ ...listing, title: "   " }, null).title).toBe("A part on DRVN");
+    expect(listingShareCard({ ...listing, title: null }, null).title).toBe("A part on DRVN");
+  });
+});
+

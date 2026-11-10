@@ -35,6 +35,11 @@ export const RATE_LIMITS = {
    *  one ceiling across everyone so a broken policy can't flood monitoring. */
   cspReport: { action: "csp-report", limit: 20, windowSeconds: 60, failClosed: true },
   cspReportCeiling: { action: "csp-report-all", limit: 120, windowSeconds: 60, failClosed: true },
+  /** "A member photo reached a page unsigned" (src/app/api/monitoring/photo):
+   *  per visitor, plus one ceiling across everyone, because these arrive in
+   *  numbers exactly when photo signing is failing for everybody. */
+  photoReport: { action: "photo-report", limit: 6, windowSeconds: 60, failClosed: true },
+  photoReportCeiling: { action: "photo-report-all", limit: 30, windowSeconds: 60, failClosed: true },
   makeOffer: { action: "offer", limit: 10, windowSeconds: 60 * 10 },
   askQuestion: { action: "question", limit: 10, windowSeconds: 60 * 10 },
   addComment: { action: "comment", limit: 20, windowSeconds: 60 * 10 },

@@ -12,7 +12,7 @@ const jobs = vi.hoisted(() => {
   const ok = () => vi.fn<() => Promise<unknown>>(async () => ({ failed: 0 }));
   return {
     expiries: ok(), captures: ok(), transfers: ok(), carry: ok(), transferReconciliation: ok(), refunds: ok(),
-    labelVoids: ok(), trackers: ok(), returns: ok(), disputes: ok(), payoutDeadlines: ok(), alerts: ok(), analytics: ok(), receipts: ok(), autoConfirm: ok(),
+    labelVoids: ok(), trackers: ok(), returns: ok(), disputes: ok(), payoutDeadlines: ok(), alerts: ok(), analytics: ok(), receipts: ok(), autoConfirm: ok(), orderEmails: ok(),
   };
 });
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
@@ -31,6 +31,8 @@ vi.mock("@/lib/payments/transfer-worker", () => ({
 }));
 vi.mock("@/lib/purchase-analytics", () => ({ processPurchaseAnalytics: () => jobs.analytics() }));
 vi.mock("@/lib/receipt-worker", () => ({ processReceiptJobs: () => jobs.receipts() }));
+// #116: the order-email family runs last in the pass; these tests are about the others.
+vi.mock("@/lib/order-emails", () => ({ processOrderEmails: () => jobs.orderEmails() }));
 vi.mock("@/lib/shipping/outbound-label-void", () => ({ reconcileOutboundLabelVoids: () => jobs.labelVoids() }));
 vi.mock("@/lib/shipping/tracker-registration", () => ({ processTrackerRegistrations: () => jobs.trackers() }));
 
@@ -138,3 +140,19 @@ describe("the money worker pass", () => {
     expect(peak).toBeGreaterThan(1);
   });
 });
+
+describe("order emails never slow money (OS-W41, report five #116)", () => {
+  it("run only after every money family has finished, and their failure leaves every money family succeeded", async () => {
+    jobs.orderEmails.mockRejectedValue(new Error("email provider down"));
+    const pass = await runMoneyWorkerPass(admin);
+    const firstEmail = runs.findIndex((r) => r.family === "orderEmails");
+    const lastMoney = Math.max(...runs.map((r, i) => (r.family !== "orderEmails" && r.status !== "running" ? i : -1)));
+    expect(firstEmail).toBeGreaterThan(lastMoney);
+    expect(statuses("orderEmails")).toEqual(["running", "failed"]);
+    for (const family of ["transfers", "refunds", "payoutDeadlines", "captures", "expiries"]) {
+      expect(statuses(family)).toEqual(["running", "succeeded"]);
+    }
+    expect(pass.failed).toBe(true);
+  });
+});
+
