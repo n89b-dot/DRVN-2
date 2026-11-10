@@ -301,6 +301,19 @@ jobs:
             psql -h localhost -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -q -f "$f"
           done
 
+      # Plan 2 item A1: supabase/schema/ is the database as it stands, one
+      # file per function, table, policy and trigger. It is read here, on the
+      # database the migrations have just built and before the guards run
+      # (they leave rows behind). A stale folder fails the job at its end, so
+      # the guards and the types check still report their own results.
+      - name: Schema snapshot matches migrations
+        id: snapshot
+        continue-on-error: true
+        env:
+          DRVN_SCHEMA_DATABASE_URL: postgresql://supabase_admin:postgres@127.0.0.1:5432/postgres
+          DRVN_SCHEMA_MISMATCH_OUT: ${{ runner.temp }}/schema-snapshot
+        run: node scripts/schema-snapshot.mjs --check
+
       - name: All SQL guards (independent results)
         env:
           PGHOST: 127.0.0.1
@@ -354,6 +367,24 @@ jobs:
           path: ${{ runner.temp }}/database.generated.ts
           if-no-files-found: ignore
           retention-days: 7
+
+      # On a mismatch, keep the folder the generator produced so a branch can
+      # take it as it is (download the artifact, replace supabase/schema/
+      # with it) without running a local database.
+      - name: Keep the generated snapshot when it differs
+        if: always() && steps.snapshot.outcome == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: schema-snapshot-${{ github.sha }}
+          path: ${{ runner.temp }}/schema-snapshot/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Schema snapshot is current
+        if: always() && steps.snapshot.outcome == 'failure'
+        run: |
+          echo "::error title=supabase/schema is out of date::The database the migrations build differs from supabase/schema/. Run 'npm run db:schema' (see supabase/schema/README.md), or take this run's schema-snapshot artifact, and commit the result. The step 'Schema snapshot matches migrations' lists the files."
+          exit 1
 
   # Each runner owns local Supabase/Auth/Storage/Mailpit and synthetic fixtures.
   e2e:
