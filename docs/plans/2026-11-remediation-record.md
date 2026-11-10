@@ -112,7 +112,7 @@ Status words: **merged** (on `main`, CI green) · **in review** (PR up, waiting 
 
 | Step | Findings | Ids | PR | Merge commit | Status |
 |---|---|---|---|---|---|
-| 0 / 3.4 Codex reviews waived | `#129` | N725 | this PR | | in review: every owed row waived by Neil's ruling of 10 November; `tests/ci/codex-queue.test.ts` accepts `waived` and refuses `owed` |
+| 0 / 3.4 Codex reviews waived | `#129` | N725 | #214 | | in review: every owed row waived by Neil's ruling of 10 November; `tests/ci/codex-queue.test.ts` accepts `waived` and refuses `owed` |
 | 2.1 Deletion runbook and Resume | `#126`, `#154`, `#157` | N944, N734 | #198 | | not started (waiting for the previous session's hand-over) |
 | 2.2 18+ on the actions that matter | `#152` | N662 | #201 merged as written; follow-up to come | `58b4ad7` (#201) | not started |
 | 2.3 Upload size | `#158` | N955 | #203 | | not started (hand-over) |
