@@ -1019,11 +1019,13 @@ the JSON above leaves out, `non_fast_forward` (block force pushes) and
 also verifies the result (`docs/owner/branch-protection.md`).
 
 Require `release-gate` alone: it is the aggregate check, and it fails unless
-`verify`, `secrets`, `secrets-full`, `sql-guard`, `e2e` and
+`verify`, `secrets`, `secrets-full`, `sql-guard`, `e2e`, `e2e-launch` and
 `stripe-integration` all ran and passed (updated 1 October 2026 — e2e no
-longer self-skips; it runs on a local stack in CI). One exception since
-November 2026: a pull request that changes documents only skips `e2e`, and
-the gate accepts that skip and no other; a push to `main` always runs
+longer self-skips; it runs on a local stack in CI; `e2e-launch`, added
+November 2026, is the browser lane for the launch configuration and needs the
+Actions variable `STRIPE_TEST_PUBLISHABLE_KEY`). One exception since
+November 2026: a pull request that changes documents only skips the two
+browser jobs, and the gate accepts those skips and no other; a push to `main` always runs
 everything (`docs/owner/branch-protection.md`, "Documents-only pull
 requests"). `secrets` scans only the
 commits a PR or push adds (first-parent, no merges); `secrets-full` is the

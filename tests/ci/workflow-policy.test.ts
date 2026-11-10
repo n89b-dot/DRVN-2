@@ -131,7 +131,7 @@ describe("public-repository workflow hardening", () => {
 describe("release-gate", () => {
   it("keeps its exact job name (branch protection requires it) and every need", () => {
     const gate = job("release-gate");
-    expect(gate.needs).toEqual(["changes", "verify", "secrets", "secrets-full", "sql-guard", "e2e-parts", "e2e", "stripe-integration"]);
+    expect(gate.needs).toEqual(["changes", "verify", "secrets", "secrets-full", "sql-guard", "e2e-parts", "e2e", "e2e-launch", "stripe-integration"]);
     expect(gate.if).toBe("always()");
   });
 

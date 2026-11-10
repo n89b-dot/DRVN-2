@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { clientAddressSource, databaseKeyProblems, resolvePaymentsMode, stubOverrideProblem, supabaseKeyKind, validatePaymentsEnv, PaymentsConfigError } from "./env";
+import { clientAddressSource, databaseKeyProblems, hostedReasons, isolatedStripeTestStack, resolvePaymentsMode, stubOverrideProblem, supabaseKeyKind, validatePaymentsEnv, PaymentsConfigError } from "./env";
 
 /**
  * The fail-closed matrix. The one behavior these exist to pin down forever:
@@ -202,6 +202,78 @@ describe("the database keys are checked at boot (N962, report five #123)", () =>
   it("accepts either generation of key", () => {
     const legacy = { ...LIVE, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: undefined, SUPABASE_SECRET_KEY: undefined, NEXT_PUBLIC_SUPABASE_ANON_KEY: legacyKey("anon"), SUPABASE_SERVICE_ROLE_KEY: legacyKey("service_role") };
     expect(() => validatePaymentsEnv(legacy)).not.toThrow();
+  });
+});
+
+// Plan 2 item A4 (R-unproven): the launch configuration (Stripe, not the stub)
+// has to boot under `next start` on the isolated loopback stack, or it can
+// never run in a browser before a host exists. Only the site URL's https rule
+// is relaxed, and only there, with a test key.
+describe("Stripe test mode boots on the isolated loopback stack, and nowhere else (N1078)", () => {
+  const LANE = {
+    ...LIVE,
+    STRIPE_SECRET_KEY: "sk_test_x",
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_x",
+    NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3000",
+    NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+    E2E_TEST_PROJECT_REF: "local-drvn-remediation",
+  };
+
+  it("boots in Stripe mode over http on the loopback stack with a test key", () => {
+    expect(validatePaymentsEnv(LANE).mode).toBe("stripe");
+    expect(validatePaymentsEnv({ ...LANE, NEXT_PUBLIC_SITE_URL: "http://localhost:3000" }).mode).toBe("stripe");
+  });
+
+  it.each([
+    ["without the isolated-stack marker", { E2E_TEST_PROJECT_REF: undefined }],
+    ["with another project's marker", { E2E_TEST_PROJECT_REF: "zubstjuviwourzgrziqc" }],
+    ["with an http site URL that is not loopback", { NEXT_PUBLIC_SITE_URL: "http://drvn.example" }],
+    ["with a hosted database", { NEXT_PUBLIC_SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co" }],
+    ["with the local database on another port", { NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:5432" }],
+    // A hosted project names itself (src/lib/deployment.ts); a named deployment is never the isolated stack.
+    ["on a deployment that names itself staging", { DRVN_DEPLOY_ENV: "staging" }],
+    ["on a deployment that names itself production", { DRVN_DEPLOY_ENV: "production" }],
+  ])("still refuses an http site URL %s", (_, change) => {
+    expect(isolatedStripeTestStack({ ...LANE, ...change })).toBe(false);
+    expect(() => validatePaymentsEnv({ ...LANE, ...change })).toThrow(/Production operations configuration is invalid: NEXT_PUBLIC_SITE_URL\./);
+  });
+
+  // The case that matters most: a hosted deployment. Each environment below is
+  // a correctly configured hosted production (so no earlier check is what
+  // stops it) with every sign of the lane forged onto it: the stack's marker
+  // and a plain-http loopback site URL. The https rule must be what refuses.
+  const FORGED = { E2E_TEST_PROJECT_REF: "local-drvn-remediation", NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3000" };
+  const TEST_KEYS = { STRIPE_SECRET_KEY: "sk_test_x", NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_x" };
+  it.each([
+    ["on Vercel, with test keys", { ...LIVE, ...TEST_KEYS, ...FORGED, VERCEL: "1" }],
+    ["on Vercel's production environment, with test keys", { ...LIVE, ...TEST_KEYS, ...FORGED, VERCEL: "1", VERCEL_ENV: "production" }],
+    ["with a live key", { ...LIVE, ...FORGED }],
+    ["with a restricted live key", { ...LIVE, ...FORGED, STRIPE_SECRET_KEY: "rk_live_x" }],
+    ["on Vercel with a live key", { ...LIVE, ...FORGED, VERCEL: "1" }],
+  ])("a hosted boot still refuses http %s, with the lane's marker and a loopback site URL forged", (_, env) => {
+    expect(hostedReasons(env).length).toBeGreaterThan(0);
+    expect(databaseKeyProblems(env)).toEqual([]);
+    expect(isolatedStripeTestStack(env)).toBe(false);
+    expect(() => validatePaymentsEnv(env)).toThrow(/Production operations configuration is invalid: NEXT_PUBLIC_SITE_URL\./);
+    // The same deployment with its real https address boots, so the address was the only thing wrong.
+    expect(() => validatePaymentsEnv({ ...env, NEXT_PUBLIC_SITE_URL: "https://drvn.example" })).not.toThrow();
+  });
+
+  it.each([
+    ["on Vercel", { VERCEL: "1" }],
+    ["with a live key", { STRIPE_SECRET_KEY: "sk_live_x" }],
+    ["with a restricted live key", { STRIPE_SECRET_KEY: "rk_live_x" }],
+  ])("the lane's own environment does not boot at all %s", (_, change) => {
+    // Refused before the site URL is even looked at: a hosted deployment's database must be an https origin (N962).
+    expect(isolatedStripeTestStack({ ...LANE, ...change })).toBe(false);
+    expect(() => validatePaymentsEnv({ ...LANE, ...change })).toThrow(PaymentsConfigError);
+  });
+
+  it("relaxes nothing else: the other live-money requirements still apply on the loopback stack", () => {
+    expect(() => validatePaymentsEnv({ ...LANE, STRIPE_WEBHOOK_SECRET: undefined })).toThrow(/STRIPE_WEBHOOK_SECRET/);
+    expect(() => validatePaymentsEnv({ ...LANE, SENTRY_DSN: "http://k@sentry.example/1" })).toThrow(/SENTRY_DSN/);
+    expect(() => validatePaymentsEnv({ ...LANE, ADMIN_ALERT_WEBHOOK_URL: "http://127.0.0.1:9/hook" })).toThrow(/ADMIN_ALERT_WEBHOOK_URL/);
+    expect(() => validatePaymentsEnv({ ...LANE, CRON_SECRET: "short" })).toThrow(/CRON_SECRET/);
   });
 });
 
