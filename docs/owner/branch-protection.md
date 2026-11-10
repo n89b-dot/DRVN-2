@@ -135,6 +135,12 @@ minutes, not twenty to forty-five.
   `pdf`, `png`, `jpg`, `jpeg`, `gif`, `webp`, `svg`). Nothing under
   `.github/workflows/` counts, and a script kept under `docs/` does not count.
   The list is `scripts/ci-change-scope.mjs`.
+- **Only pull requests into `main`.** A pull request based on another branch
+  always gets the full suite. A check's result belongs to the head commit, and
+  GitHub does not rerun CI when a pull request's base is changed, so a
+  documents-only answer worked out against another branch would still stand
+  after the pull request was moved onto `main`, carrying that branch's code in
+  with it.
 - **What decides it:** the `changes` job, from the diff between the pull
   request's merge commit and its base. A moved file is read as a deletion plus
   an addition, so moving code into `docs/` is still a code change.

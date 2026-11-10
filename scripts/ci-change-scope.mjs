@@ -6,13 +6,18 @@
 // The answer is "documents only" only when all of these hold:
 //   - the event is a pull request (a push to main and a manual run always get
 //     the full suite, so every commit on main is proven by the browser tests);
+//   - the pull request's base is the repository's default branch. The answer
+//     is attached to the head commit, and GitHub does not rerun CI when a
+//     pull request's base is changed. A pull request stacked on another
+//     branch is compared with that branch; moved onto main later it would
+//     carry that branch's code in under an answer that never looked at it;
 //   - the diff against the base lists at least one path;
 //   - every path in it is a document (isDocument below).
 // Anything else, including any error reading the diff, answers "full".
 //
 // No dependencies: it runs on the runner's own Node before `npm ci`.
 import { execFileSync } from "node:child_process";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 // What a file under docs/ may be and still count as a document. A script kept
@@ -39,12 +44,20 @@ export function isDocument(file) {
 }
 
 /**
- * @param {{ event: string, files: string[] }} input
+ * @param {{ event: string, files: string[], baseRef?: string, defaultBranch?: string }} input
+ *   `baseRef` is the branch the pull request merges into; `defaultBranch` is
+ *   the repository's (main).
  * @returns {{ docsOnly: boolean, reason: string }}
  */
-export function classify({ event, files }) {
+export function classify({ event, files, baseRef, defaultBranch }) {
   if (event !== "pull_request") {
     return { docsOnly: false, reason: `event is '${event}', not a pull request: the full suite runs` };
+  }
+  if (!defaultBranch || !baseRef || baseRef !== defaultBranch) {
+    return {
+      docsOnly: false,
+      reason: `the pull request's base is '${baseRef || "unknown"}', not the default branch '${defaultBranch || "unknown"}': the full suite runs`,
+    };
   }
   if (!Array.isArray(files) || files.length === 0) {
     return { docsOnly: false, reason: "the diff lists no files: the full suite runs" };
@@ -77,12 +90,22 @@ export function changedFiles(base = "HEAD^1", head = "HEAD") {
   return out.split("\0").filter(Boolean);
 }
 
+/** The repository's default branch, from the event payload the runner writes. Unknown is "". */
+export function defaultBranchFromEvent(eventPath = process.env.GITHUB_EVENT_PATH) {
+  try {
+    const branch = JSON.parse(readFileSync(eventPath ?? "", "utf8"))?.repository?.default_branch;
+    return typeof branch === "string" ? branch : "";
+  } catch {
+    return "";
+  }
+}
+
 function main() {
   const event = process.env.GITHUB_EVENT_NAME ?? "";
   let result;
   try {
     const files = event === "pull_request" ? changedFiles(process.env.CHANGE_SCOPE_BASE || "HEAD^1") : [];
-    result = classify({ event, files });
+    result = classify({ event, files, baseRef: process.env.GITHUB_BASE_REF ?? "", defaultBranch: defaultBranchFromEvent() });
   } catch (error) {
     result = { docsOnly: false, reason: `could not read the diff (${error instanceof Error ? error.message.split("\n")[0] : error}): the full suite runs` };
   }
