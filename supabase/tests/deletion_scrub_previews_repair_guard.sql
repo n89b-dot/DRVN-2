@@ -85,13 +85,15 @@ begin
      or (select body from public.notifications where user_id = buyer and kind = 'offer_agent_deal_reached') is distinct from 'A listing by a member who has since left DRVN' then
     fails := fails || 'FAIL O3: an offer notice was left with no subject, or lost its amount (Codex #181)'::text;
   end if;
-  if (select body from public.notifications where user_id = fan and kind = 'offer_new') is distinct from '$200.00'
-     or (select body from public.notifications where user_id = fan and kind = 'offer_withdrawn') is distinct from 'Fan''s exhaust'
-     or (select body from public.notifications where user_id = fan and kind = 'order_cancelled') is distinct from 'checkout abandoned' then
+  -- (The offer's own trigger also notified fan; only the fixtures' bodies are checked.)
+  if not exists (select 1 from public.notifications where user_id = fan and kind = 'offer_new' and body = '$200.00')
+     or exists (select 1 from public.notifications where user_id = fan and kind in ('offer_new', 'offer_withdrawn') and body like '%has since left DRVN%')
+     or not exists (select 1 from public.notifications where user_id = fan and kind = 'offer_withdrawn' and body = 'Fan''s exhaust')
+     or not exists (select 1 from public.notifications where user_id = fan and kind = 'order_cancelled' and body = 'checkout abandoned') then
     fails := fails || 'FAIL K1: a body with none of the leaver''s words was cleared (Codex #181)'::text;
   end if;
-  if (select body from public.notifications where user_id = fan and kind = 'order_disputed') not like 'The description of the problem was removed%'
-     or (select body from public.notifications where user_id = fan and kind = 'order_refunded') not like 'The reason was removed%' then
+  if not exists (select 1 from public.notifications where user_id = fan and kind = 'order_disputed' and body like 'The description of the problem was removed%')
+     or not exists (select 1 from public.notifications where user_id = fan and kind = 'order_refunded' and body like 'The reason was removed%') then
     fails := fails || 'FAIL D1: a leaving buyer''s dispute text or reason was not replaced by a line pointing to the order (Codex #181)'::text;
   end if;
   if not exists (select 1 from public.notifications where user_id = buyer and kind = 'offer_declined' and title = 'Your offer was declined' and href = '/offers/' || offer and actor_id is null) then
