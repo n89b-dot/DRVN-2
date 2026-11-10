@@ -420,7 +420,7 @@ first, then open `/admin`: since N715 a signed-out visit gets the ordinary
 
 Every money queue is durable and visible in **Admin → Payments**:
 
-**A chargeback held for review** (#108, 20261110170000). A bank chargeback
+**A chargeback held for review** (#108, 20261110230000). A bank chargeback
 that doesn't match its payment basket is held: its orders are disputed, a
 recovery case opens ("Card dispute requires reconciliation") and the seller's
 payout and any deletion of either party wait. Its case has **Retry** in place

@@ -1,4 +1,4 @@
--- 20261110170000 (report five #108, OS id N944): Retry a chargeback held for
+-- 20261110230000 (report five #108, OS id N944): Retry a chargeback held for
 -- review, done right.
 --   E  the event that held it is recorded, and a later event while held
 --      replaces it; Retry names that event

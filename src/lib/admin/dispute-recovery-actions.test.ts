@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Report five #108 (20261110170000): a chargeback held for review is retried
+// Report five #108 (20261110230000): a chargeback held for review is retried
 // from the console, audited, never decided by hand. A dry run first, so a
 // refusal journals nothing; the event replayed is the one the database names;
 // only "committed" is reported as done.

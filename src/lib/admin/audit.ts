@@ -41,7 +41,7 @@ export class RefusedOperationError extends Error {
 const RELEASABLE_ON_REFUSAL = new Map<string, "release_refused_admin_refund" | "release_refused_dispute_retry" | "release_refused_deletion_resume">([
   ["order.force_refund", "release_refused_admin_refund"],
   // A refused chargeback retry is released while the chargeback is still
-  // held for review (20261110170000).
+  // held for review (20261110230000).
   ["recovery.retry_dispute", "release_refused_dispute_retry"],
   // A refused or failed resume (a hold that committed after the dry run, a
   // transient error) is released when the job isn't queued (#198).

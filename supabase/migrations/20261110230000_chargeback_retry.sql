@@ -1,5 +1,5 @@
 -- ============================================================================
--- 20261110170000 — Retry a chargeback held for review, done right (report
+-- 20261110230000 — Retry a chargeback held for review, done right (report
 -- five #108, the chargeback half; the reviewer's review of #207, part A)
 --
 -- A chargeback that doesn't exactly match its payment basket is held
@@ -62,11 +62,11 @@ alter table public.stripe_dispute_journal
   add column if not exists retry_until timestamptz;
 
 comment on column public.stripe_dispute_journal.held_event_id is
-  'The newest Stripe event seen since the entry was held for review (20261110170000): what Retry replays.';
+  'The newest Stripe event seen since the entry was held for review (20261110230000): what Retry replays.';
 comment on column public.stripe_dispute_journal.retry_until is
-  'Until when one replay of held_event_id may reopen this held entry (20261110170000). Set by an admin''s Retry, cleared by the replay or by a new hold.';
+  'Until when one replay of held_event_id may reopen this held entry (20261110230000). Set by an admin''s Retry, cleared by the replay or by a new hold.';
 comment on column public.stripe_dispute_journal.held_from_state is
-  'The state the entry was in when it was held (20261110170000). A settled one is never retried.';
+  'The state the entry was in when it was held (20261110230000). A settled one is never retried.';
 
 -- Entering 'recovery': remember where from, and start the held event afresh.
 create or replace function private.dispute_journal_held_state()
@@ -153,7 +153,7 @@ begin
  prior_exists:=found;
  if prior_exists then
   if entry.payment_reference<>p_intent or entry.amount_cents<>p_amount or entry.currency<>p_currency then return public.hold_stripe_dispute(p_dispute,p_event,p_created,'Provider dispute identity, amount or currency changed. Reconcile against the original journal.'); end if;
-  -- 20261110170000: a later event while held is remembered, so Retry
+  -- 20261110230000: a later event while held is remembered, so Retry
   -- replays the newest Stripe knows.
   if entry.state='recovery' then
    if entry.retry_until is not null and entry.retry_until>now() and p_event=entry.held_event_id
@@ -364,9 +364,9 @@ begin
      or has_function_privilege('anon', 'public.admin_retry_dispute_recovery(text, uuid, boolean)', 'execute')
      or has_function_privilege('authenticated', 'public.release_refused_dispute_retry(uuid, uuid, text)', 'execute')
      or has_function_privilege('authenticated', 'public.hold_stripe_dispute(text, text, bigint, text)', 'execute') then
-    raise exception '20261110170000: a member can reach the chargeback retry';
+    raise exception '20261110230000: a member can reach the chargeback retry';
   end if;
-  raise notice 'PASS: 20261110170000 self-checks';
+  raise notice 'PASS: 20261110230000 self-checks';
 end $$;
 
 notify pgrst, 'reload schema';
