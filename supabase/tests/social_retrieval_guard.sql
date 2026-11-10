@@ -378,7 +378,7 @@ begin
   -- its subject are the server's, so a private build can't be probed by
   -- pointing a notification at a guessed slug.
   insert into public.notifications(user_id, kind, section, title, href)
-    values (v_owner, 'guard', 'engagement', 'Guard', '/orders/' || gen_random_uuid()) returning id into note;
+    values (v_owner, 'policy_updated', 'engagement', 'Guard', '/orders/' || gen_random_uuid()) returning id into note;
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims', jsonb_build_object('sub', v_owner, 'role', 'authenticated')::text, true);
   update public.notifications set read_at = now() where id = note;
