@@ -43,7 +43,7 @@ TLS. Details: "Recording without running" below.
 
 | File | Applied to |
 |---|---|
-| `20261110230000_chargeback_retry.sql` | not applied |
+| `20261110230000_chargeback_retry.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
 
 Adds `held_event_id`, `held_event_created` and `held_from_state` to `public.stripe_dispute_journal` (a trigger fills `held_from_state` on entering `recovery`), `private.note_held_dispute_event`, a four-argument `public.hold_stripe_dispute` that records the event, a trigger that closes a held chargeback's recovery case when the journal reaches won, warning closed or lost, `public.admin_retry_dispute_recovery(p_dispute, p_actor, p_dry_run)` and `public.release_refused_dispute_retry`, all service role only. Restates `public.apply_stripe_dispute_event` (from `20261107130000`) with only its hold calls given the event and the held branch remembering a later one. No new journal state. After the 10 November work review (#148, N1064): a fourth column, `retry_until`. Retry no longer reopens the entry; it allows one replay of the held event for five minutes and leaves the chargeback held, and `apply_stripe_dispute_event` reopens and replays in its own one transaction, always running the basket check on a replay (it used to return `committed` for the event that caused the hold, checking nothing). The four-argument `hold_stripe_dispute` opens a closed recovery case again, with an alert, when a later event holds the chargeback again. Apply with the app from the same PR.
 
