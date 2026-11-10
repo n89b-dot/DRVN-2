@@ -133,7 +133,12 @@ export type PhotoSignerDeps = {
  * and a client it controls, so no test depends on what ran before it or on
  * the date (the cause of work review #124).
  */
-export function createPhotoSigner({ now = Date.now, client = defaultSigningClient, report = reportError }: PhotoSignerDeps = {}) {
+export function createPhotoSigner({
+  now = Date.now,
+  client = defaultSigningClient,
+  // Looked up when something is reported, not when the signer is made: the app's signer is made as this module loads.
+  report = (message, detail) => reportError(message, detail),
+}: PhotoSignerDeps = {}) {
   const memo = new Map<string, Signed>();
   /** No Storage signing call before this time: set after one fails or runs past its budget. */
   let signRetryAt = 0;
