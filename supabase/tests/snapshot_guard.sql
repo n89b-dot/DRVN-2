@@ -119,6 +119,12 @@ begin
   if v_images <> 2 then
     raise exception 'FAIL: expected 2 frozen images, found %', v_images;
   end if;
+  -- 20261110190000: a frozen gallery is the seller's own photos, the only
+  -- ones its owner-folder guard admits on an order.
+  if exists (select 1 from public.order_item_snapshot_images
+              where order_item_id = v_item.id and split_part(private.media_object_key(url), '/', 2) <> v_seller::text) then
+    raise exception 'FAIL: a frozen image is not in the seller''s own folder (N940)';
+  end if;
   raise notice 'PASS: purchase freezes a complete snapshot + gallery';
 
   -- ---------- 2. later edits change nothing on the order ----------

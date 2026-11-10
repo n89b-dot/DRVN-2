@@ -185,6 +185,26 @@ export const PHOTO_POSITIONS: readonly PhotoPosition[] = [
   { kind: "rpc", relation: "car_update_page", field: "body", source: "activity_posts.body" },
 ];
 
+/**
+ * Columns whose name looks like a photo but that the signer never signs, and
+ * why. src/lib/photo-urls.test.ts fails when the schema gains a photo-like
+ * column (url, urls, image_url, cover_…, photo…, avatar_url…) that is in
+ * neither this list nor PHOTO_POSITIONS (N940).
+ */
+export const NOT_SIGNED_PHOTO_LIKE_COLUMNS: Readonly<Record<string, string>> = {
+  "activity_posts.video_url": "a video link, not a member object",
+  "agent_messages.images": "agent-chat-photos objects, signed for their owner by signChatPhotos",
+  "copyright_notices.content_urls": "the URLs a notice names, shown to staff as text",
+  "dispute_evidence.url": "dispute-evidence objects, signed for the case's parties by evidence-urls",
+  "listing_imports.canonical_url": "the external page an import read",
+  "listing_imports.imported_images": "what an import copied in; not owner-checked by the database (the member saves chosen ones as listing_images)",
+  "listing_imports.source_url": "the external page an import read",
+  "messages.attachments": "message-photos objects, signed for the conversation by conversations.ts",
+  "mod_items.product_url": "an external product page",
+  "profiles.avatar_url": "avatars are a public bucket",
+  "staged_uploads.url": "the upload ledger, read by the server only",
+};
+
 const BODY_SOURCES = new Set(PHOTO_POSITIONS.filter((p) => p.kind === "body").map((p) => `${p.relation}.${p.field}`));
 const positionKind = (relation: string, field: string): "column" | "body" | null => {
   const found = PHOTO_POSITIONS.find((p) => p.kind !== "rpc" && p.relation === relation && p.field === field);
@@ -312,34 +332,43 @@ export type SigningContext = { table: string; selection: Selection } | { rpc: st
 
 const NAME = /^[a-z_][a-z0-9_]*$/;
 
-/** The answer's context from its request URL (`/rest/v1/<table>` or `/rest/v1/rpc/<fn>`), or null: then nothing is signed. */
-export function signingContext(requestUrl: string): SigningContext | null {
+/** Why an answer has no signing context. `not-rest` is ordinary (Storage, Auth); the others mean a read the signer can't place, and are reported. */
+export type NoContextReason = "not-rest" | "bad-path" | "two-selects" | "unparsable-select";
+
+/** The answer's context from its request URL (`/rest/v1/<table>` or `/rest/v1/rpc/<fn>`), or why there is none: then nothing is signed. */
+export function signingContextFor(requestUrl: string): { context: SigningContext } | { reason: NoContextReason } {
   let url: URL;
   try {
     url = new URL(requestUrl);
   } catch {
-    return null;
+    return { reason: "not-rest" };
   }
   const at = url.pathname.indexOf("/rest/v1/");
-  if (at < 0) return null;
+  if (at < 0) return { reason: "not-rest" };
   let rest: string;
   try {
     rest = decodeURIComponent(url.pathname.slice(at + "/rest/v1/".length));
   } catch {
-    return null;
+    return { reason: "bad-path" };
   }
   const select = url.searchParams.getAll("select");
-  if (select.length > 1) return null;
+  if (select.length > 1) return { reason: "two-selects" };
   if (rest.startsWith("rpc/")) {
     const fn = rest.slice(4);
-    if (!NAME.test(fn)) return null;
-    if (!select.length) return { rpc: fn, selection: null };
+    if (!NAME.test(fn)) return { reason: "bad-path" };
+    if (!select.length) return { context: { rpc: fn, selection: null } };
     const selection = parseSelect(select[0]);
-    return selection ? { rpc: fn, selection } : null;
+    return selection ? { context: { rpc: fn, selection } } : { reason: "unparsable-select" };
   }
-  if (!NAME.test(rest)) return null;
+  if (!NAME.test(rest)) return { reason: "bad-path" };
   const selection = parseSelect(select[0] ?? "*");
-  return selection ? { table: rest, selection } : null;
+  return selection ? { context: { table: rest, selection } } : { reason: "unparsable-select" };
+}
+
+/** The answer's context, or null when there is none. */
+export function signingContext(requestUrl: string): SigningContext | null {
+  const found = signingContextFor(requestUrl);
+  return "context" in found ? found.context : null;
 }
 
 /** A table read's context from its name and select (an export section's projection). */
@@ -352,27 +381,55 @@ function isWholeCanonicalPhoto(value: string, origin: string): boolean {
   return value.startsWith(origin) && signedPhotoObject(value, origin) !== null;
 }
 
-type OnPhoto = (url: string) => string | void;
+/**
+ * The owner column of the tables that own photos (#196 review, P2-2). The
+ * database guarantees a listed photo is in its row owner's folder, but only
+ * once 20261110190000 is applied; where a read carries the owner anyway, the
+ * signer checks it too, cheaply, so a row the database never checked can't
+ * have someone else's photo signed. A photo table without its own owner
+ * (car_images, listing_images…) takes its parent's; an owning table read
+ * without its owner column has no known owner, and a null owner is never
+ * treated as a mismatch.
+ */
+const OWNER_COLUMN: Readonly<Record<string, string>> = { cars: "owner_id", listings: "seller_id", activity_posts: "author_id", orders: "seller_id" };
+const RPC_OWNER_KEYS = ["owner_id", "seller_id", "author_id"] as const;
 
-function walkRows(node: unknown, table: string, selection: Selection, photo: OnPhoto): unknown {
-  if (Array.isArray(node)) return node.map((row) => walkRows(row, table, selection, photo));
+type OnPhoto = (url: string, owner: string | undefined) => string | void;
+
+function ownerOfRow(row: Record<string, unknown>, table: string, selection: Selection, inherited: string | undefined): string | undefined {
+  const column = OWNER_COLUMN[table];
+  if (!column) return inherited;
+  for (const [key, value] of Object.entries(row)) {
+    const at = resolveKey(selection, key);
+    if (at && "column" in at && at.column === column) return typeof value === "string" ? value : undefined;
+  }
+  return undefined;
+}
+
+function walkRows(node: unknown, table: string, selection: Selection, photo: OnPhoto, inherited: string | undefined): unknown {
+  if (Array.isArray(node)) return node.map((row) => walkRows(row, table, selection, photo, inherited));
   if (!isPlainObject(node)) return node;
+  const owner = ownerOfRow(node, table, selection, inherited);
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(node)) {
     const at = resolveKey(selection, key);
-    if (at && "relation" in at) out[key] = walkRows(value, at.relation, at.selection, photo);
-    else if (at?.column && positionKind(table, at.column) === "column") out[key] = typeof value === "string" ? (photo(value) ?? value) : value;
-    else if (at?.column && positionKind(table, at.column) === "body") out[key] = mapBodyPhotos(value, photo);
+    if (at && "relation" in at) out[key] = walkRows(value, at.relation, at.selection, photo, owner);
+    else if (at?.column && positionKind(table, at.column) === "column") out[key] = typeof value === "string" ? (photo(value, owner) ?? value) : value;
+    else if (at?.column && positionKind(table, at.column) === "body") out[key] = mapBodyPhotos(value, (url) => photo(url, owner));
     else out[key] = value;
   }
   return out;
 }
 
-function walkPath(node: unknown, path: string[], body: boolean, photo: OnPhoto): unknown {
-  if (Array.isArray(node)) return node.map((item) => walkPath(item, path, body, photo));
-  if (!path.length) return body ? mapBodyPhotos(node, photo) : typeof node === "string" ? (photo(node) ?? node) : node;
+function walkPath(node: unknown, path: string[], body: boolean, photo: OnPhoto, owner: string | undefined): unknown {
+  // The leaf first: a body is itself an array, walked in its own shape.
+  if (!path.length && body) return mapBodyPhotos(node, (url) => photo(url, owner));
+  if (Array.isArray(node)) return node.map((item) => walkPath(item, path, body, photo, owner));
+  if (!path.length) return typeof node === "string" ? (photo(node, owner) ?? node) : node;
   if (!isPlainObject(node) || !(path[0] in node)) return node;
-  return { ...node, [path[0]]: walkPath(node[path[0]], path.slice(1), body, photo) };
+  const key = RPC_OWNER_KEYS.find((k) => typeof node[k] === "string");
+  const here = key ? (node[key] as string) : owner;
+  return { ...node, [path[0]]: walkPath(node[path[0]], path.slice(1), body, photo, here) };
 }
 
 function walkRpc(node: unknown, fn: string, selection: Selection | null, photo: OnPhoto): unknown {
@@ -384,14 +441,18 @@ function walkRpc(node: unknown, fn: string, selection: Selection | null, photo: 
           selection.star && !selection.spread && !selection.keys.has(path[0]) ? [path[0]] : [],
         )
       : [path[0]];
-    for (const key of keys) out = walkPath(out, [key, ...path.slice(1)], body, photo);
+    for (const key of keys) out = walkPath(out, [key, ...path.slice(1)], body, photo, undefined);
   }
   return out;
 }
 
 function walk(value: unknown, context: SigningContext, origin: string, onPhoto: (url: string) => string | void): unknown {
-  const photo: OnPhoto = (url) => (isWholeCanonicalPhoto(url, origin) ? onPhoto(url) : undefined);
-  return "table" in context ? walkRows(value, context.table, context.selection, photo) : walkRpc(value, context.rpc, context.selection, photo);
+  const photo: OnPhoto = (url, owner) => {
+    if (!isWholeCanonicalPhoto(url, origin)) return undefined;
+    if (owner !== undefined && signedPhotoObject(url, origin)?.path.split("/")[0] !== owner) return undefined;
+    return onPhoto(url);
+  };
+  return "table" in context ? walkRows(value, context.table, context.selection, photo, undefined) : walkRpc(value, context.rpc, context.selection, photo);
 }
 
 /** The canonical photo URLs held at signable places of a parsed answer. */

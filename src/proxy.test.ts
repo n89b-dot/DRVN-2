@@ -204,6 +204,17 @@ describe("a signed link is judged as Storage reads it, however it is spelled (N9
     expect(response.status).toBe(404);
   });
 
+  it("refuses the same expired link on a HEAD request and at every width and quality (each is its own cached copy)", async () => {
+    blocked.keys.mockResolvedValue(new Set());
+    const source = encodeURIComponent(`${base}?token=${token(now - 60)}`);
+    const head = await proxy(new NextRequest(`https://drvn.example/_next/image?url=${source}&w=640&q=75`, { method: "HEAD" }));
+    expect(head.status).toBe(404);
+    for (const [w, q] of [["16", "1"], ["3840", "100"], ["640", ""]]) {
+      const response = await proxy(new NextRequest(`https://drvn.example/_next/image?w=${w}&q=${q}&url=${source}`));
+      expect(response.status, `w=${w} q=${q}`).toBe(404);
+    }
+  });
+
   it("still passes a live link, its token percent-encoded or not", async () => {
     blocked.keys.mockResolvedValue(new Set());
     for (const source of [`${base}?token=${token(now + 3600)}`, `${base}?token=%65${token(now + 3600).slice(1)}`]) {

@@ -10,6 +10,7 @@ import {
   canonicalPhotoUrl,
   canonicalPhotoUrlsInText,
   memberPhotoSourceRefused,
+  NOT_SIGNED_PHOTO_LIKE_COLUMNS,
   parseSelect,
   PHOTO_POSITIONS,
   photoFieldUrls,
@@ -17,6 +18,7 @@ import {
   signedPhotoLinkExpired,
   signedPhotoObject,
   signingContext,
+  signingContextFor,
   signingWindow,
   SIGNING_WINDOW_SECONDS,
 } from "./photo-urls";
@@ -259,5 +261,153 @@ describe("expired, unreadable and respelled signed links are refused at the imag
     expect(memberPhotoSourceRefused(`${base}/public/avatars/u/a.webp`, at)).toBe(false);
     expect(memberPhotoSourceRefused("/hero.png", at)).toBe(false);
     expect(memberPhotoSourceRefused(null, at)).toBe(false);
+  });
+});
+
+describe("where a read carries its owner, a photo outside the owner's folder isn't signed (N940, #196 review P2-2)", () => {
+  const mine = `${O}/storage/v1/object/public/car-images/${ME}/mine.webp`;
+
+  it("checks a row's own owner column, and a photo table takes its parent's", () => {
+    expect(signedAt("cars?select=owner_id,cover_image_url", [{ owner_id: ME, cover_image_url: theirs }])).toEqual([]);
+    expect(signedAt("cars?select=owner_id,cover_image_url", [{ owner_id: ME, cover_image_url: mine }])).toEqual([mine]);
+    const select = encodeURIComponent("owner_id,car_images(url)");
+    expect(signedAt(`cars?select=${select}`, [{ owner_id: ME, car_images: [{ url: mine }, { url: theirs }] }])).toEqual([mine]);
+    const order = encodeURIComponent("seller_id,order_items(order_item_snapshot_images(url))");
+    expect(signedAt(`orders?select=${order}`, [{ seller_id: STRANGER, order_items: [{ order_item_snapshot_images: [{ url: mine }, { url: theirs }] }] }])).toEqual([theirs]);
+  });
+
+  it("an owning table read without its owner, or with a null owner, isn't checked (the database is)", () => {
+    expect(signedAt("cars?select=cover_image_url", [{ cover_image_url: theirs }])).toEqual([theirs]);
+    expect(signedAt("cars?select=owner_id,cover_image_url", [{ owner_id: null, cover_image_url: theirs }])).toEqual([theirs]);
+    expect(signedAt("orders?select=seller_id,order_items(order_item_snapshot_images(url))", [{ seller_id: null, order_items: [{ order_item_snapshot_images: [{ url: theirs }] }] }])).toEqual([theirs]);
+  });
+
+  it("an embedded owning table answers for itself, never for its parent's owner", () => {
+    // A listing (seller ME) embedding a post by someone else: the post's photo is its author's.
+    const select = encodeURIComponent("seller_id,activity_posts(author_id,activity_images(url))");
+    expect(signedAt(`listings?select=${select}`, [{ seller_id: ME, activity_posts: [{ author_id: STRANGER, activity_images: [{ url: theirs }] }] }])).toEqual([theirs]);
+    const noAuthor = encodeURIComponent("seller_id,activity_posts(activity_images(url))");
+    expect(signedAt(`listings?select=${noAuthor}`, [{ seller_id: ME, activity_posts: [{ activity_images: [{ url: theirs }] }] }])).toEqual([theirs]);
+    // An alias of the owner column still counts.
+    expect(signedAt(`cars?select=${encodeURIComponent("who:owner_id,cover_image_url")}`, [{ who: ME, cover_image_url: theirs }])).toEqual([]);
+  });
+
+  it("an RPC path checks the owner on the object that holds it", () => {
+    expect(signedAt("rpc/feed_hydration", { posts: [{ author_id: ME, cover_url: theirs }], cars: [{ owner_id: STRANGER, cover_image_url: theirs }] })).toEqual([theirs]);
+    expect(signedAt("rpc/feed_hydration", { posts: [{ author_id: ME, body: [{ type: "images", urls: [theirs, mine] }] }] })).toEqual([mine]);
+  });
+
+  it("says why an answer has no context, so the boundary can report it", () => {
+    expect(signingContextFor(`${O}/rest/v1/car_images?select=url(`)).toEqual({ reason: "unparsable-select" });
+    expect(signingContextFor(`${O}/rest/v1/car_images?select=url&select=id`)).toEqual({ reason: "two-selects" });
+    expect(signingContextFor(`${O}/rest/v1/rpc/Bad-Name`)).toEqual({ reason: "bad-path" });
+    expect(signingContextFor(`${O}/auth/v1/user`)).toEqual({ reason: "not-rest" });
+  });
+});
+
+describe("every photo-like column is signed or named as not signed (N940, #196 review P3)", () => {
+  it("fails on a new url, image_url, cover_… or photo column that neither list names", () => {
+    const types = read("database.generated.ts");
+    const tables = types.slice(types.indexOf("    Tables: {"), types.indexOf("    Views: {"));
+    const found: string[] = [];
+    for (const table of tables.matchAll(/\n {6}([a-z_]+): \{\n {8}Row: \{\n([\s\S]*?)\n {8}\}/g)) {
+      for (const column of table[2].matchAll(/^ {10}([a-z_]+): (?:string|string\[\]|Json)(?: \| null)?$/gm)) {
+        if (/(^|_)(url|urls|image|images|photo|photos|thumbnail|attachments)$|^cover|_cover|photo/.test(column[1])) found.push(`${table[1]}.${column[1]}`);
+      }
+    }
+    expect(found.length).toBeGreaterThan(10);
+    const signed = new Set(PHOTO_POSITIONS.filter((p) => p.kind === "column").map((p) => `${p.relation}.${p.field}`));
+    expect(found.filter((c) => !signed.has(c) && !(c in NOT_SIGNED_PHOTO_LIKE_COLUMNS)), "add these to PHOTO_POSITIONS (with a guard) or NOT_SIGNED_PHOTO_LIKE_COLUMNS").toEqual([]);
+    for (const c of Object.keys(NOT_SIGNED_PHOTO_LIKE_COLUMNS)) expect(found, `${c} is no longer in the schema`).toContain(c);
+    for (const c of signed) expect(found).toContain(c);
+  });
+});
+
+describe("every select the app sends, constant and template ones too, parses and signs its photos (N940, #196 review P3)", () => {
+  const SRC = path.resolve(__dirname, "..");
+  const files: string[] = [];
+  (function walk(dir: string) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.tsx?$/.test(entry.name) && !/\.test\./.test(entry.name)) files.push(full);
+    }
+  })(SRC);
+  const sources = new Map(files.map((f) => [f, fs.readFileSync(f, "utf8")]));
+  /** A string constant's value: in the file, else wherever it is exported; `${X}` filled in. */
+  const constant = (name: string, file: string, depth = 0): string | null => {
+    const def = new RegExp(String.raw`(?:^|\n)\s*(?:export\s+)?const\s+${name}\s*=\s*(?:"([^"]*)"|\x60([^\x60]*)\x60)`);
+    const hit = def.exec(sources.get(file)!) ?? [...sources.values()].map((t) => (/export\s+const/.test(t) ? def.exec(t) : null)).find(Boolean) ?? null;
+    if (!hit) return null;
+    const text = hit[1] ?? hit[2];
+    if (depth > 3) return null;
+    return text.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, inner: string) => constant(inner, file, depth + 1) ?? "\u0000");
+  };
+  // Parameters of generic helpers, not selects of their own: the callers' projections are checked elsewhere.
+  const PARAMETERS: Record<string, string> = {
+    projection: "the account export's section projections (checked below)",
+    field: "the account export's id column for a related table",
+    columns: "generic money-table readers (ledger reconciliation, admin queries); no photo tables",
+  };
+  type Found = { file: string; table: string | null; select: string };
+  const selects: Found[] = [];
+  const unresolved: string[] = [];
+  for (const [file, text] of sources) {
+    for (const m of text.matchAll(/\.select\(\s*(?:"([^"]*)"|'([^']*)'|\x60([^\x60]*)\x60|([A-Za-z_][A-Za-z0-9_]*)\s*[,)])/g)) {
+      let select: string | null = m[1] ?? m[2] ?? m[3] ?? null;
+      if (m[3] !== undefined) select = m[3].replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, n: string) => constant(n, file) ?? "\u0000");
+      if (m[4] !== undefined) {
+        if (m[4] in PARAMETERS) continue;
+        select = constant(m[4], file);
+      }
+      if (select === null || select.includes("\u0000")) { unresolved.push(`${path.relative(SRC, file)}: ${m[0]}`); continue; }
+      const before = text.slice(Math.max(0, m.index! - 600), m.index!);
+      const from = [...before.matchAll(/\.(from|rpc)\(\s*"([a-z_]+)"/g)].pop();
+      selects.push({ file: path.relative(SRC, file), table: from && from[1] === "from" ? from[2] : null, select });
+    }
+  }
+
+  it("finds them all, and every one parses", () => {
+    expect(unresolved, "a select whose text the test can't find; add it to PARAMETERS with a reason only if it is a helper's parameter").toEqual([]);
+    expect(selects.length).toBeGreaterThan(120);
+    for (const s of selects) expect(parseSelect(s.select), `${s.file}: ${s.select}`).not.toBeNull();
+  });
+
+  it("each select that reads a photo place signs a photo there", () => {
+    let checked = 0;
+    for (const s of selects) {
+      if (!s.table) continue;
+      const selection = parseSelect(s.select)!;
+      let n = 0;
+      const sample = (table: string, sel: typeof selection): Record<string, unknown> => {
+        const row: Record<string, unknown> = {};
+        const columns = new Set<string>([...sel.keys].flatMap(([, at]) => ("column" in at && at.column ? [at.column] : [])));
+        if (sel.star) for (const p of PHOTO_POSITIONS) if (p.kind !== "rpc" && p.relation === table) columns.add(p.field);
+        for (const [key, at] of sel.keys) {
+          if ("relation" in at) row[key] = [sample(at.relation, at.selection)];
+        }
+        for (const p of PHOTO_POSITIONS) {
+          if (p.kind === "rpc" || p.relation !== table || !columns.has(p.field)) continue;
+          const key = [...sel.keys].find(([, at]) => "column" in at && at.column === p.field)?.[0] ?? p.field;
+          const url = `${O}/storage/v1/object/public/car-images/${ME}/sample-${n++}.webp`;
+          row[key] = p.kind === "body" ? [{ type: "images", urls: [url] }] : url;
+        }
+        return row;
+      };
+      const value = [sample(s.table, selection)];
+      if (!n) continue;
+      checked++;
+      expect(photoFieldUrls(value, signingContext(`${O}/rest/v1/${s.table}?select=${encodeURIComponent(s.select)}`), O).length, `${s.file}: ${s.table} ${s.select}`).toBe(n);
+    }
+    expect(checked).toBeGreaterThan(30);
+  });
+});
+
+describe("an RPC's body path is walked as a body (N940, review of #210)", () => {
+  it("signs the photos in car_update_page's and garage_car_stats' bodies, which are arrays themselves", () => {
+    const mine = `${O}/storage/v1/object/public/activity-images/${ME}/update.webp`;
+    expect(signedAt("rpc/car_update_page", [{ id: "p", body: [{ type: "images", urls: [mine] }, { type: "text", text: theirs }] }])).toEqual([mine]);
+    expect(signedAt("rpc/garage_car_stats", [{ latest_update: { body: [{ type: "before_after", beforeUrl: mine }] } }])).toEqual([mine]);
+    expect(signedAt("rpc/car_update_page", [{ id: "p", body: [{ type: "text", x: { type: "images", urls: [theirs] } }] }])).toEqual([]);
   });
 });

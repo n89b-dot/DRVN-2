@@ -14,7 +14,13 @@
 --   4. a post body's photos are the shape the signer walks (the body-cases
 --      block below, which the vitest also runs through bodyPhotoUrls);
 --   5. a write naming another member's object is refused for every writer;
---   6. rows that already broke the rule are moved aside, whole.
+--   6. rows that already broke the rule are moved aside, whole; a row whose
+--      owner is unknown (a deleted seller) is counted and left alone, and
+--      takes no new photo;
+--   7. a real moved row comes back only where the rule now holds, into the
+--      post's current body, and never over an edit made since;
+--   8. moved rows last 90 days and go with either member's deletion scrub;
+--   9. photo_signing_ready() says the guards are there.
 --
 -- Everything happens inside a transaction that is rolled back.
 -- ============================================================================
@@ -180,6 +186,11 @@ declare
   n integer;
   v_body jsonb;
   t text;
+  post2 uuid;
+  listing2 uuid;
+  item2 uuid;
+  order2 uuid;
+  deletion uuid;
 begin
   photo := 'https://proj.supabase.co/storage/v1/object/public/car-images/' || seller || '/mine.webp';
   foreign_photo := 'https://proj.supabase.co/storage/v1/object/public/car-images/' || other || '/private.webp';
@@ -194,6 +205,10 @@ begin
     values (seller, car, 'Rules part', 'A part', 'performance', 'used', 10000, 0, true, 'active', 'USD') returning id into listing;
   insert into public.activity_posts (author_id, car_id, title, body, published_at)
     values (seller, car, 'Rules update', '[]'::jsonb, now()) returning id into post;
+  insert into public.listings (seller_id, source_car_id, title, description, category, condition, price_cents, shipping_cents, allows_collection, status, currency)
+    values (seller, car, 'Rules part two', 'A part', 'performance', 'used', 10000, 0, true, 'active', 'USD') returning id into listing2;
+  insert into public.listing_images (listing_id, url, position)
+    values (listing2, 'https://proj.supabase.co/storage/v1/object/public/listing-images/' || seller || '/two.webp', 0);
 
   -- The server, a seed or a script: not a member, so only this rule applies.
   perform set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
@@ -236,6 +251,14 @@ begin
   exception when insufficient_privilege then refused := true;
   end;
   if not refused then raise exception 'FAIL 5b: a photo moved onto another member''s car (N940)'; end if;
+  -- Handing a car to someone else with the old owner's cover is the same thing.
+  update public.cars set cover_image_url = photo where id = car;
+  refused := false;
+  begin
+    update public.cars set owner_id = other where id = car;
+  exception when insufficient_privilege then refused := true;
+  end;
+  if not refused then raise exception 'FAIL 5e: a car changed owner keeping the old owner''s cover (N940)'; end if;
 
   -- A buyer's frozen copy belongs to the order's seller.
   perform set_config('request.jwt.claims', '', true);
@@ -253,7 +276,11 @@ begin
   end;
   if not refused then raise exception 'FAIL 5d: a snapshot image named someone other than the seller (N940)'; end if;
 
-  -- 6. Rows from before the rule are moved aside, whole, and nothing else is.
+  -- 6. Rows from before the rule are moved aside, whole, and nothing else is;
+  --    a row whose owner is unknown is counted and left alone.
+  v_result := public.purchase_begin(buyer, array[listing2], 'photo-rules-2-' || left(buyer::text, 8));
+  select oi.id, oi.order_id into item2, order2 from public.order_items oi where oi.order_id = (v_result -> 'orders' -> 0 ->> 'order_id')::uuid;
+  if item2 is null then raise exception 'FAIL 6h: no second order item: % (N940)', v_result; end if;
   -- Written with triggers off, as rows from before the rule were.
   perform set_config('session_replication_role', 'replica', true);
   insert into public.car_images (car_id, url, position) values (car, foreign_photo, 5);
@@ -267,14 +294,28 @@ begin
    where id = post;
   insert into public.order_item_snapshot_images (order_item_id, url, alt, position)
     values (item, replace(foreign_photo, 'car-images', 'listing-images'), 'x', 9);
+  -- A second post, both of whose photos are someone else's (section 7 restores them).
+  insert into public.activity_posts (author_id, car_id, title, body, published_at)
+    values (seller, car, 'Two foreign', jsonb_build_array(
+      jsonb_build_object('type', 'images', 'urls', jsonb_build_array(foreign_photo)),
+      jsonb_build_object('type', 'text', 'text', 'between'),
+      jsonb_build_object('type', 'before_after', 'beforeUrl', replace(foreign_photo, 'private', 'before'), 'afterUrl', replace(foreign_photo, 'private', 'after'))),
+      now())
+    returning id into post2;
+  -- An order whose seller account is gone (orders.seller_id is set null on
+  -- delete): its frozen gallery has no known owner.
+  update public.orders set seller_id = null where id = order2;
   perform set_config('session_replication_role', 'origin', true);
 
   v_result := private.foreign_photo_ref_counts();
-  if (select sum(value::integer) from jsonb_each_text(v_result)) <> 4 or (v_result ->> 'car_images')::int <> 1 then
+  -- car_images 1, cover 1, the first post's body 1, snapshot 1, the second post's body 3.
+  if (select sum(value::integer) from jsonb_each_text(v_result) where key <> 'owner_unknown') <> 7
+     or (v_result ->> 'car_images')::int <> 1 or (v_result ->> 'activity_posts.body')::int <> 4
+     or (v_result ->> 'owner_unknown')::int <> (select count(*) from public.order_item_snapshot_images where order_item_id = item2) then
     raise exception 'FAIL 6f: the counts before the move were wrong: % (N940)', v_result;
   end if;
   n := private.quarantine_foreign_photo_refs();
-  if n <> 4 then raise exception 'FAIL 6: expected 4 references moved aside, got % (N940)', n; end if;
+  if n <> 7 then raise exception 'FAIL 6: expected 7 references moved aside, got % (N940)', n; end if;
   if exists (select 1 from public.car_images where url = foreign_photo)
      or (select cover_image_url from public.cars where id = car) is not null
      or exists (select 1 from public.order_item_snapshot_images where url like '%' || other || '%') then
@@ -289,28 +330,95 @@ begin
        jsonb_build_object('type', 'text', 'text', foreign_photo)) then
     raise exception 'FAIL 6d: the body was not stripped of just the foreign photos: % (N940)', v_body;
   end if;
-  if (select count(*) from private.photo_refs_quarantined where value like '%' || other || '%' and row_data ? 'id') <> 4 then
-    raise exception 'FAIL 6e: the moved rows were not kept whole (N940)';
+  if (select count(*) from private.photo_refs_quarantined where folder_owner = other::text and row_data ? 'id' and owner_id = seller
+        and expires_at > now() + interval '89 days') <> 7 then
+    raise exception 'FAIL 6e: the moved rows were not kept whole, with both members and a 90-day expiry (N940)';
   end if;
-
-  if private.foreign_photo_ref_counts() <> '{}'::jsonb then
-    raise exception 'FAIL 6g: a second count found more to move (N940)';
+  if not exists (select 1 from public.order_item_snapshot_images where order_item_id = item2) then
+    raise exception 'FAIL 6i: a snapshot whose seller is unknown was moved; an unknown owner is never foreign (N940)';
   end if;
-  -- 7. A row moved aside wrongly comes back exactly; one that still breaks
-  --    the rule is refused by the triggers.
-  delete from public.car_images where car_id = car and url = photo returning to_jsonb(car_images.*) into v_result;
-  insert into private.photo_refs_quarantined (relation, field, value, row_data, action)
-    values ('car_images', 'url', photo, v_result, 'deleted');
-  t := private.restore_quarantined_photo_ref((select max(id) from private.photo_refs_quarantined));
-  if (select to_jsonb(ci.*) from public.car_images ci where ci.id = (v_result ->> 'id')::uuid) is distinct from v_result then
-    raise exception 'FAIL 7: a restored row did not come back exactly (N940)';
+  if private.foreign_photo_ref_counts() - 'owner_unknown' <> '{}'::jsonb then
+    raise exception 'FAIL 6g: a second count found more to move: % (N940)', private.foreign_photo_ref_counts();
   end if;
+  -- A new photo on a row with no known owner is refused, as any foreign one is.
   refused := false;
   begin
-    perform private.restore_quarantined_photo_ref((select min(id) from private.photo_refs_quarantined where relation = 'car_images'));
+    insert into public.order_item_snapshot_images (order_item_id, url, alt, position)
+      values (item2, replace(photo, 'car-images', 'listing-images'), 'x', 10);
+  exception when insufficient_privilege then refused := true;
+  end;
+  if not refused then raise exception 'FAIL 6j: a photo went onto an order with no known seller (N940)'; end if;
+
+  -- 7. Restore: a REAL moved row comes back only where the rule now holds.
+  -- Still foreign: refused by the triggers.
+  refused := false;
+  begin
+    perform private.restore_quarantined_photo_ref((select id from private.photo_refs_quarantined where relation = 'car_images'));
   exception when insufficient_privilege then refused := true;
   end;
   if not refused then raise exception 'FAIL 7b: restoring a foreign photo was not refused (N940)'; end if;
+  -- The second post passes to the photos' owner (the rule now holds for it).
+  update public.activity_posts set author_id = other where id = post2;
+  -- An edit since the move: refused, nothing changes.
+  perform set_config('drvn.activity_write', 'v1', true);
+  update public.activity_posts set body = body || jsonb_build_array(jsonb_build_object('type', 'text', 'text', 'edited')) where id = post2;
+  refused := false;
+  begin
+    perform private.restore_quarantined_photo_ref((select min(id) from private.photo_refs_quarantined where row_data ->> 'id' = post2::text));
+  exception when object_not_in_prerequisite_state then refused := true;
+  end;
+  if not refused then raise exception 'FAIL 7c: a restore overwrote a post edited since the move (N940)'; end if;
+  update public.activity_posts set body = body - (jsonb_array_length(body) - 1) where id = post2;
+  -- One photo back: only it returns; the before/after pair stays out.
+  t := private.restore_quarantined_photo_ref((select id from private.photo_refs_quarantined where row_data ->> 'id' = post2::text and value = foreign_photo));
+  if (select body from public.activity_posts where id = post2) is distinct from jsonb_build_array(
+       jsonb_build_object('type', 'images', 'urls', jsonb_build_array(foreign_photo)),
+       jsonb_build_object('type', 'text', 'text', 'between')) then
+    raise exception 'FAIL 7d: restoring one photo did not put back exactly that photo: % (N940)', (select body from public.activity_posts where id = post2);
+  end if;
+  -- One half of the pair back: the pair stays out until both are.
+  t := private.restore_quarantined_photo_ref((select id from private.photo_refs_quarantined where row_data ->> 'id' = post2::text and value like '%/before.webp'));
+  if jsonb_array_length((select body from public.activity_posts where id = post2)) <> 2 then
+    raise exception 'FAIL 7e: half a before/after pair came back (N940)';
+  end if;
+  t := private.restore_quarantined_photo_ref((select id from private.photo_refs_quarantined where row_data ->> 'id' = post2::text));
+  select body into v_body from public.activity_posts where id = post2;
+  if v_body is distinct from jsonb_build_array(
+       jsonb_build_object('type', 'images', 'urls', jsonb_build_array(foreign_photo)),
+       jsonb_build_object('type', 'text', 'text', 'between'),
+       jsonb_build_object('type', 'before_after', 'beforeUrl', replace(foreign_photo, 'private', 'before'), 'afterUrl', replace(foreign_photo, 'private', 'after'))) then
+    raise exception 'FAIL 7f: the post did not come back exactly as it was: % (N940)', v_body;
+  end if;
+  if exists (select 1 from private.photo_refs_quarantined where row_data ->> 'id' = post2::text) then
+    raise exception 'FAIL 7g: a restored reference stayed in quarantine (N940)';
+  end if;
+  -- A cleared cover comes back only while the column is still empty.
+  update public.cars set cover_image_url = photo where id = car;
+  refused := false;
+  begin
+    perform private.restore_quarantined_photo_ref((select id from private.photo_refs_quarantined where relation = 'cars'));
+  exception when object_not_in_prerequisite_state then refused := true;
+  end;
+  if not refused then raise exception 'FAIL 7h: a restore overwrote a cover set since the move (N940)'; end if;
+
+  -- 8. Retention: 90 days, and gone with either member's deletion scrub.
+  update private.photo_refs_quarantined set expires_at = now() - interval '1 day' where relation = 'cars';
+  perform private.prune_cron_history();
+  if exists (select 1 from private.photo_refs_quarantined where relation = 'cars') then
+    raise exception 'FAIL 8: an expired quarantined reference was not pruned (N940)';
+  end if;
+  insert into public.account_deletion_requests (user_id, outcome, next_action) values (other, 'cleanup_pending', 'x') returning id into deletion;
+  update public.account_deletion_requests set scrubbed_at = now() where id = deletion;
+  if exists (select 1 from private.photo_refs_quarantined where folder_owner = other::text or owner_id = other) then
+    raise exception 'FAIL 8b: a scrubbed member''s quarantined references stayed (N940)';
+  end if;
+  if has_table_privilege('service_role', 'private.photo_refs_quarantined', 'select')
+     or has_table_privilege('authenticated', 'private.photo_refs_quarantined', 'select') then
+    raise exception 'FAIL 8c: the quarantine is readable outside the database owner (N940)';
+  end if;
+  if not public.photo_signing_ready() then
+    raise exception 'FAIL 9: photo_signing_ready says the guards are missing (N940)';
+  end if;
 
   raise notice 'PASS: photo_signing_rules_guard — all checks green (rolling back)';
 end $$;

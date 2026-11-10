@@ -26,7 +26,7 @@ const signedFor = (bucket: string, path: string) => `${O}/storage/v1/object/sign
 beforeEach(() => {
   vi.clearAllMocks();
   // No shared memo by default: the read finds nothing and the offer keeps this instance's URL.
-  mocks.rpc.mockImplementation(async (fn: string, args: { p_signed?: unknown[] }) => ({ data: fn === "photo_signatures_offer" ? args.p_signed : [], error: null }));
+  mocks.rpc.mockImplementation(async (fn: string, args: { p_signed?: unknown[] }) => ({ data: fn === "photo_signing_ready" ? true : fn === "photo_signatures_offer" ? args.p_signed : [], error: null }));
   mocks.sign.mockImplementation(async (bucket: string, paths: string[]) => ({
     data: paths.map((path) => ({ path, signedUrl: signedFor(bucket, path), error: null })),
     error: null,

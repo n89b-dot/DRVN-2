@@ -8,7 +8,7 @@ import {
   photoFieldUrls,
   replacePhotoFields,
   signedPhotoObject,
-  signingContext,
+  signingContextFor,
   signingWindow,
   storageOrigin,
   type SigningContext,
@@ -218,6 +218,7 @@ export async function signedPhotoUrl<T extends string | null | undefined>(url: T
  */
 export async function signPhotoUrlsInText(text: string, context: SigningContext | null): Promise<string> {
   if (!context || !text.includes("/storage/v1/object/public/")) return text;
+  if (!(await photoSigningReady())) return text;
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -243,10 +244,60 @@ export const EXPORT_PHOTO_LINK_SECONDS = 7 * 24 * 60 * 60;
  */
 export async function signPhotosForExport<T>(value: T, ownerId: string, context: SigningContext | null, nowMs = Date.now()): Promise<T> {
   if (value == null || !context) return value;
+  if (!(await photoSigningReady())) return value;
   // The member's own objects only: their folder is the path's first segment.
   const urls = photoFieldUrls(value, context).filter((url) => signedPhotoObject(url)?.path.split("/")[0] === ownerId);
   if (!urls.length) return value;
   return replacePhotoFields(value, context, await signedPhotoUrls(urls, nowMs, EXPORT_PHOTO_LINK_SECONDS));
+}
+
+/** How long a "the guards are there" answer is trusted, and a "they aren't" one. */
+const READY_FOR_MS = 5 * 60_000;
+const NOT_READY_FOR_MS = 30_000;
+let ready: { value: boolean; until: number } | null = null;
+let readyAsk: Promise<boolean> | null = null;
+
+/**
+ * Whether the database guards every place the signer signs (N940,
+ * public.photo_signing_ready, 20261110190000). Until it says so, nothing is
+ * signed at the boundary or in an export: code deployed ahead of its
+ * migration fails safe (photos show the no-photo plate) rather than signing
+ * places nothing has checked. Asked once per instance every five minutes;
+ * a failure counts as not ready and is asked again after thirty seconds.
+ * (deploy.yml's migration-status step also stops a deploy whose migrations
+ * are behind, but this does not depend on it.)
+ */
+export async function photoSigningReady(): Promise<boolean> {
+  if (ready && Date.now() < ready.until) return ready.value;
+  readyAsk ??= (async () => {
+    let value = false;
+    try {
+      type Call = { abortSignal: (signal: AbortSignal) => PromiseLike<{ data: unknown; error: unknown }> };
+      const call = (signingClient() as unknown as { rpc: (f: string) => Call }).rpc("photo_signing_ready");
+      const { data, error } = await call.abortSignal(AbortSignal.timeout(SHARED_BUDGET_MS));
+      if (error) throw error;
+      value = data === true;
+      if (!value) reportBounded("not-ready", "[photos] the database's photo guards are missing (20261110190000); signing nothing", {});
+    } catch (error) {
+      reportBounded("ready-check-failed", "[photos] could not check the database's photo guards; signing nothing", { error });
+    }
+    ready = { value, until: Date.now() + (value ? READY_FOR_MS : NOT_READY_FOR_MS) };
+    return value;
+  })().finally(() => { readyAsk = null; });
+  return readyAsk;
+}
+
+/** Each reason is reported at most once per ten minutes, with how many times it happened since. */
+const REPORT_EVERY_MS = 10 * 60_000;
+const reported = new Map<string, { at: number; since: number }>();
+function reportBounded(reason: string, message: string, detail: Record<string, unknown>) {
+  const seen = reported.get(reason);
+  if (seen && Date.now() - seen.at < REPORT_EVERY_MS) {
+    seen.since += 1;
+    return;
+  }
+  reportError(message, { reason, since: seen?.since ?? 0, ...detail });
+  reported.set(reason, { at: Date.now(), since: 0 });
 }
 
 function requestUrl(input: RequestInfo | URL): string {
@@ -269,8 +320,18 @@ export function photoFetch(base: typeof fetch, options: { sign: boolean }): type
     // schema's same-named table isn't the one the guards cover).
     const headers0 = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
     const profile = headers0.get("accept-profile") ?? headers0.get("content-profile");
-    const context = profile && profile !== "public" ? null : signingContext(requestUrl(input));
-    if (!context) return response;
+    if (profile && profile !== "public") {
+      reportBounded("non-public-profile", "[photos] a read of another schema came back unsigned", { profile });
+      return response;
+    }
+    const found = signingContextFor(requestUrl(input));
+    if (!("context" in found)) {
+      // A read the signer can't place stays unsigned; that is safe, but a
+      // page may lose its photos, so it is said (once per ten minutes).
+      if (found.reason !== "not-rest") reportBounded(found.reason, "[photos] a read the signer can't place came back unsigned", { reason: found.reason });
+      return response;
+    }
+    const context = found.context;
     const text = await response.text();
     const signed = await signPhotoUrlsInText(text, context);
     const headers = new Headers(response.headers);
