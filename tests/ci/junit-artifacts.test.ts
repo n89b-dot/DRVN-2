@@ -35,6 +35,13 @@ describe("JUnit artifacts (OS-signals)", () => {
     for (const file of files) expect(String(upload!.with?.path)).toContain(file);
   });
 
+  it("the launch-configuration lane's results are kept under their own name, never the main suite's (N1078)", () => {
+    const named = (job: string, name: string) => (ci.jobs[job]?.steps ?? []).find((s) => s.with?.name === name);
+    expect(String(named("e2e-launch", "test-results-${{ github.sha }}-e2e-launch")?.with?.path)).toContain("test-results/playwright-launch.xml");
+    // A reader of test-results-<sha>-e2e must never find the launch lane's file there.
+    expect(String(named("e2e", "test-results-${{ github.sha }}-e2e")?.with?.path)).not.toContain("playwright-launch.xml");
+  });
+
   it("vitest lanes write JUnit only in GitHub Actions, keeping the default and annotation reporters", () => {
     expect(junitInCi("vitest.xml", {})).toEqual({});
     expect(junitInCi("vitest.xml", { GITHUB_ACTIONS: "true" })).toEqual({

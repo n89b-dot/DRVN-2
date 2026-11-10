@@ -31,6 +31,19 @@ describe("release-gate record (OS-signals)", () => {
     expect(upload.with).toMatchObject({ name: "release-gate-${{ github.sha }}", "retention-days": 30, "if-no-files-found": "error" });
   });
 
+  it("the launch lane's three requirements are in the gate's script, so each is in its record (N1078)", () => {
+    const script = String(steps[0].run);
+    for (const requirement of [
+      'require e2e-launch "$LAUNCH" success',
+      'require "e2e-launch executed" "$LAUNCH_RAN" true',
+      'require "e2e-launch passed (launch configuration, no retries)" "$LAUNCH_PASSED" true',
+    ]) {
+      expect(script).toContain(requirement);
+    }
+    // On a documents-only pull request the lane must have been skipped, not passed over.
+    expect(script).toContain('require "e2e-launch (documents-only pull request: skipped by design)" "$LAUNCH" skipped');
+  });
+
   it.skipIf(!hasJq)("writes every requirement's outcome and the browser counts, red gate included", () => {
     fs.mkdirSync(path.join(tmp, "browser-summary"), { recursive: true });
     fs.writeFileSync(path.join(tmp, "browser-summary/browser-release-abc.json"), JSON.stringify({ counts: { selected: 3, expected: 3 } }));

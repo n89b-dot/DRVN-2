@@ -209,7 +209,7 @@ describe("the database keys are checked at boot (N962, report five #123)", () =>
 // has to boot under `next start` on the isolated loopback stack, or it can
 // never run in a browser before a host exists. Only the site URL's https rule
 // is relaxed, and only there, with a test key.
-describe("Stripe test mode boots on the isolated loopback stack, and nowhere else (R-unproven)", () => {
+describe("Stripe test mode boots on the isolated loopback stack, and nowhere else (N1078)", () => {
   const LANE = {
     ...LIVE,
     STRIPE_SECRET_KEY: "sk_test_x",

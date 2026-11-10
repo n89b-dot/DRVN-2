@@ -170,7 +170,7 @@ describe("the workflow wires the scope to the browser suite only (plan 2 A0)", (
     expect(changes.steps[0].uses).toMatch(/^actions\/checkout@[0-9a-f]{40}$/);
   });
 
-  it("only the two browser lanes are conditional on it, and the Stripe lane no longer waits on e2e", () => {
+  it("only the two browser lanes are conditional on it, the launch lane among them (N1078), and the Stripe lane no longer waits on e2e", () => {
     for (const lane of ["e2e", "e2e-launch"]) {
       expect(ci.jobs[lane].needs, lane).toEqual(["changes"]);
       expect(ci.jobs[lane].if, lane).toBe("needs.changes.outputs.docs_only != 'true'");
