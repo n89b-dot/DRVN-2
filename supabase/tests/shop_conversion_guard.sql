@@ -10,7 +10,7 @@ create function pg_temp.back_to_admin() returns void language sql as $$
 $$;
 
 -- This guard's own helpers are called while acting as other roles. A new
--- function is closed by default (20261110170000), so they are opened here.
+-- function is closed by default (architecture plan 2, item A3), so they are opened here.
 grant execute on all routines in schema pg_temp to public;
 
 create function public.reject_shop_guard_fixture() returns trigger language plpgsql as $$

@@ -65,8 +65,9 @@ runs don't collide.
 
 ## In CI
 
-The `e2e` job runs the whole suite on every push to `main` and on every pull
-request that changes anything other than documents, against its
+The whole suite runs on every push to `main` and on every pull
+request that changes anything other than documents, as **four parts side by
+side** (the `e2e-parts` jobs, "e2e part 1" to "e2e part 4"), each against its
 own `supabase start` stack (Auth, Storage, Mailpit and Realtime; migrations
 applied by `scripts/prepare-ci-supabase.mjs`), first attempt only. The
 `release-gate` job fails unless it ran and passed, with zero unexpected or
@@ -76,6 +77,87 @@ changed file is a document skips the job, and the gate accepts that skip only
 by `realtime-delivery.spec.ts`, which waits less than the 20-second fallback
 refresh so polling can't pass it. (Until 1 October 2026 this section said E2E
 wasn't in CI; it has been since September.)
+
+### The four parts
+
+One job took about 20 minutes, twelve of them the suite itself on one worker.
+`e2e/parts.json` splits the spec files into four parts of near-equal measured
+time. Each part has its own fresh database and its own build, and one worker
+inside it, because the tests share database state. The job named `e2e` then
+judges the four (every part must have run and passed on its first attempt; a
+part that is missing, skipped, cancelled or failed fails it) and merges their
+results into the files one job used to write.
+
+- **Adding a spec file:** add it to exactly one part in `e2e/parts.json`,
+  under `chromium`; put it in the lightest part. `npm test` fails until you do
+  (`tests/ci/e2e-parts.test.ts` asks Playwright to list the whole suite and
+  each part and compares them test by test), because a file in no part would
+  never run in CI.
+- **Rebalancing:** `npm run e2e:parts -- balance <playwright.xml>` proposes a
+  split from a run's measured times (take `playwright.xml` from a run's
+  `test-results-<sha>-e2e` artifact).
+- **The recovery drills** (`npm run test:operations`) run once, in the part
+  the manifest names (`operationsPart`). Firefox and WebKit run their two
+  specs in one part, the only one that installs them.
+- **The two named exclusions** (two importer tests that need the production
+  network guard, and are the only tests allowed to be skipped) live in one
+  part. The rule "the suite has exactly those two, skipped" is about the whole
+  suite, so one part cannot hold it: each part reports how many it saw, and
+  the `e2e` job fails unless the four add up to exactly two. Every other rule
+  of `e2e/release-reporter.ts` (no other skip, no flaky test, no failure, at
+  least one test) holds inside each part as it does in the whole suite.
+- **Locally nothing changes:** with `E2E_PART` unset, `npm run test:e2e` runs
+  the whole suite and holds every rule itself. `E2E_PART=2 npm run test:e2e`
+  runs one part.
+
+### The launch-configuration lane
+
+A second, small browser lane runs the settings DRVN launches with, which the
+main suite does not: Stripe in test mode, the public data cache on, the agent
+off and DRVN Shipping off. Its specs are in `e2e-launch/`, its config is
+`playwright.launch.config.ts`, and its environment is built from the recorded
+launch configuration (`docs/release-evidence/launch-configuration.json`), so a
+variable left over from the main suite cannot leak in. The CI job is
+`e2e-launch`; `release-gate` requires it on every change that is not
+documents-only.
+
+What it checks:
+
+- the sell form offers no DRVN Shipping, and the agent is nowhere a member can
+  see even with every beta step opened in the database;
+- a signed-out visitor's second read comes from the shared copy: a row changed
+  underneath the app is not shown;
+- a seller's edit shows to visitors at once;
+- a guest reaches Stripe's own card form, pays with Stripe's test Visa, and the
+  order is settled only when the webhook arrives; a second delivery of the same
+  event answers `duplicate`;
+- after that sale the label, label-refund and cost-carrying tables are empty.
+
+Two things it does that need saying. **The card is presented through Stripe's
+API, not typed into Stripe's form.** The lane checks the form has mounted and
+offers card payment, then confirms the same payment intent with `pm_card_visa`
+and visits the address Stripe sends a buyer back to. Stripe changes what its
+form shows from visit to visit (Link, bank and Klarna options come and go) and
+asks integrators not to automate it. **Stripe cannot call a loopback server**,
+so the lane reads the payment's event from Stripe's API and posts it to the
+app's webhook route itself, signed with the secret the app was started with
+(`e2e-launch/stripe-forward.ts`). The app verifies the signature as usual.
+
+It needs the Actions secret `STRIPE_TEST_SECRET_KEY` and the Actions variable
+`STRIPE_TEST_PUBLISHABLE_KEY` (the `pk_test_…` key of the same Stripe account),
+and fails by name if either is missing. It refuses any key that is not a test
+key.
+
+To run it locally, start the isolated stack and give it the two test keys:
+
+```bash
+STRIPE_SECRET_KEY=sk_test_… NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_… npm run test:e2e:launch
+```
+
+It builds into `.next-launch/` and serves on `http://localhost:3000`. Use
+`localhost`, not `127.0.0.1`: under `next start` the app's own redirects are
+built on `localhost`, so a guest returning from Stripe to `127.0.0.1` would
+lose the cookie that holds their order.
 
 Run local Supabase CLI commands as `npx --yes supabase@2.116.0 …` (the
 version CI pins). The globally installed CLI (2.98.2 as of October 2026)

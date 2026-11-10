@@ -258,6 +258,60 @@ describe("photos stay under what a serverless host accepts (N955, report five #1
     expect(bitmap.close).toHaveBeenCalledOnce();
   });
 
+  it("N1074: a camera photo chosen as a profile photo is shrunk to an avatar's size and uploaded, not refused for being over 2 MB (work review #158)", async () => {
+    const sizes: Array<{ width: number; height: number }> = [];
+    vi.stubGlobal("createImageBitmap", vi.fn(async () => ({ width: 4032, height: 3024, close: vi.fn() })));
+    vi.stubGlobal("document", {
+      createElement: () => {
+        const canvas = {
+          width: 0,
+          height: 0,
+          getContext: () => ({ drawImage: () => sizes.push({ width: canvas.width, height: canvas.height }) }),
+          // A 1024px JPEG is a few hundred kilobytes.
+          toBlob: (done: (blob: Blob) => void, type: string) => done(new Blob([new Uint8Array(300_000)], { type })),
+        };
+        return canvas;
+      },
+    });
+    const fetch = vi.fn(async () => Response.json({ url: "https://cdn.test/u1/me.webp", path: "u1/me.webp" }));
+    vi.stubGlobal("fetch", fetch);
+    // Called the way the profile editor calls it: no `normalize`. A profile photo is shrunk regardless.
+    const result = await uploadImages({ files: [big("IMG_0001.jpg", 6 * 1024 * 1024)], bucket: "avatars", pathPrefix: "u1", maxBytes: 2 * 1024 * 1024 });
+    expect(result.failed).toEqual([]);
+    // Cut to a 1024px long edge, keeping the shape.
+    expect(sizes).toEqual([{ width: 1024, height: 768 }]);
+    const sent = (fetch.mock.calls[0] as unknown as [string, { body: FormData }])[1].body.get("file") as File;
+    expect(sent.size).toBe(300_000);
+    expect(sent.type).toBe("image/jpeg");
+  });
+
+  it("N1074: a detailed avatar steps its quality down to stay under the avatar target, and a small one is left alone", async () => {
+    const qualities: number[] = [];
+    vi.stubGlobal("createImageBitmap", vi.fn(async () => ({ width: 800, height: 800, close: vi.fn() })));
+    vi.stubGlobal("document", {
+      createElement: () => ({
+        width: 0,
+        height: 0,
+        getContext: () => ({ drawImage: vi.fn() }),
+        toBlob: (done: (blob: Blob) => void, type: string, quality: number) => {
+          qualities.push(quality);
+          done(new Blob([new Uint8Array(quality > 0.8 ? 1_700_000 : 900_000)], { type }));
+        },
+      }),
+    });
+    const fetch = vi.fn(async () => Response.json({ url: "https://cdn.test/u1/me.webp", path: "u1/me.webp" }));
+    vi.stubGlobal("fetch", fetch);
+    // 1.9 MB at 800px: within the edge limit but over the avatar target, so it is re-encoded.
+    await uploadImages({ files: [big("detail.jpg", 1_900_000)], bucket: "avatars", pathPrefix: "u1", maxBytes: 2 * 1024 * 1024 });
+    expect(qualities).toEqual([0.85, 0.75]);
+    expect(((fetch.mock.calls[0] as unknown as [string, { body: FormData }])[1].body.get("file") as File).size).toBe(900_000);
+    // 400 KB at 800px: sent as it is.
+    qualities.length = 0;
+    await uploadImages({ files: [big("small.jpg", 400_000)], bucket: "avatars", pathPrefix: "u1", maxBytes: 2 * 1024 * 1024 });
+    expect(qualities).toEqual([]);
+    expect(((fetch.mock.calls[1] as unknown as [string, { body: FormData }])[1].body.get("file") as File).size).toBe(400_000);
+  });
+
   it("steps the JPEG quality down until a detailed photo fits, leaving headroom", async () => {
     const qualities: number[] = [];
     vi.stubGlobal("createImageBitmap", vi.fn(async () => ({ width: 4032, height: 3024, close: vi.fn() })));

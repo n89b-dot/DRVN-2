@@ -217,6 +217,7 @@ if any is missing or invalid.
 | `SENTRY_DSN` | required (live) | must be an `https:` DSN with a key and a numeric project path (`https://<key>@<host>/<project id>`) |
 | `ADMIN_ALERT_WEBHOOK_URL` | required (live), `https:` | operator alerts (Slack-compatible body). Outside live-money mode it may be unset; alerts then accumulate as `disabled` outbox rows in Admin → Payments |
 | `NEXT_PUBLIC_SITE_URL` | required (live), `https:` | the canonical origin only — no path, query, fragment or credentials. Unset, links fall back to `https://` + Vercel's `VERCEL_PROJECT_PRODUCTION_URL` (set by the platform), then `http://localhost:3000` |
+| `DRVN_DEPLOY_ENV` | required (hosted) | `production` on the production project, `staging` on staging. Only `production` is indexable by search engines; any other value but those two refuses boot, and so does a hosted deploy without it (`src/lib/deployment.ts`). Fixed at build, like `NEXT_PUBLIC_*` (the build reads it through `vercel pull`, so it must not be marked Sensitive), and the build fails on the same shapes. Sitemaps are served only where it is `production`; everywhere else they answer 404. After each deploy the workflow checks the served `/robots.txt`, `X-Robots-Tag` and sitemaps against the deployment it meant to ship (`scripts/deploy.mjs version <origin> <sha> staging|production`) and fails the deploy if they disagree |
 | `CRON_SECRET` | required (live), ≥ 32 chars | bearer for every `/api/jobs/*` route and `/api/health/workers`; the same value goes in `job_config.transfer_worker_secret` and the monitor's `DRVN_MONITOR_SECRET` |
 | `GUEST_RECEIPT_SECRET` | required (live), ≥ 32 chars | signs guest receipt and checkout-identity cookies and keys the hashed network identity used for guest abuse limits. Any production build without it throws on the first guest checkout or anonymous rate-limit check. Rotating it invalidates outstanding guest receipts |
 | `ACCOUNT_EMAIL_DIGEST_KEY` | optional (recommended before launch), ≥ 32 chars | keys the HMAC kept in place of a deleted account's email (N16, `account_deletion_requests.email_digest`). Unset, a key derived from `GUEST_RECEIPT_SECRET` is used and recorded as `derived-v1`, so rotating that secret changes later digests; each digest records which key made it. Never rotate it once set |
@@ -1015,11 +1016,13 @@ the JSON above leaves out, `non_fast_forward` (block force pushes) and
 also verifies the result (`docs/owner/branch-protection.md`).
 
 Require `release-gate` alone: it is the aggregate check, and it fails unless
-`verify`, `secrets`, `secrets-full`, `sql-guard`, `e2e` and
+`verify`, `secrets`, `secrets-full`, `sql-guard`, `e2e`, `e2e-launch` and
 `stripe-integration` all ran and passed (updated 1 October 2026 — e2e no
-longer self-skips; it runs on a local stack in CI). One exception since
-November 2026: a pull request that changes documents only skips `e2e`, and
-the gate accepts that skip and no other; a push to `main` always runs
+longer self-skips; it runs on a local stack in CI; `e2e-launch`, added
+November 2026, is the browser lane for the launch configuration and needs the
+Actions variable `STRIPE_TEST_PUBLISHABLE_KEY`). One exception since
+November 2026: a pull request that changes documents only skips the two
+browser jobs, and the gate accepts those skips and no other; a push to `main` always runs
 everything (`docs/owner/branch-protection.md`, "Documents-only pull
 requests"). `secrets` scans only the
 commits a PR or push adds (first-parent, no merges); `secrets-full` is the

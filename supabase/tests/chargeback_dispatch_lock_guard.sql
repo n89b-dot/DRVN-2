@@ -145,7 +145,7 @@ begin
 end $$;
 
 -- This guard's own helpers are called while acting as other roles. A new
--- function is closed by default (20261110170000), so they are opened here.
+-- function is closed by default (architecture plan 2, item A3), so they are opened here.
 grant execute on all routines in schema pg_temp to public;
 
 -- 1. Lock order, read from the definitions.

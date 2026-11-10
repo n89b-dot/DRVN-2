@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { defineConfig, devices } from "@playwright/test";
+import { partProjects } from "./e2e/parts";
 import { assertIsolatedTestTarget } from "./tests/support/test-target";
 
 // Make the Supabase URL + service key visible to the test process (admin
@@ -47,6 +48,31 @@ if (!Number.isInteger(diagnosticRetries) || diagnosticRetries < 0 || diagnosticR
 }
 const diagnosticLane = diagnosticRetries > 0;
 
+// Every project of the whole suite. chromium runs every spec; the other two
+// run the two specs whose behaviour differs by browser.
+const CROSS_BROWSER = /(?:golden-path|remediation-security)\.spec\.ts/;
+const BROWSERS = {
+  chromium: devices["Desktop Chrome"],
+  firefox: devices["Desktop Firefox"],
+  webkit: devices["Desktop Safari"],
+} as const;
+const WHOLE_SUITE = [
+  { name: "chromium", use: { ...BROWSERS.chromium } },
+  { name: "firefox", testMatch: CROSS_BROWSER, use: { ...BROWSERS.firefox } },
+  { name: "webkit", testMatch: CROSS_BROWSER, use: { ...BROWSERS.webkit } },
+];
+// Plan 2 item A0b: CI runs the suite as four parts side by side (E2E_PART=1…4,
+// e2e/parts.json), each a list of whole spec files per project. Unset, as on a
+// developer's machine, the suite is whole. tests/ci/e2e-parts.test.ts proves
+// the parts together are exactly the whole suite, each test once.
+const part = process.env.E2E_PART;
+const projects = part
+  ? partProjects(part).map(({ name, files }) => {
+      if (!(name in BROWSERS)) throw new Error(`e2e/parts.json names a project this config does not have: ${name}`);
+      return { name, testMatch: files.map((file) => `**/${file}`), use: { ...BROWSERS[name as keyof typeof BROWSERS] } };
+    })
+  : WHOLE_SUITE;
+
 export default defineConfig({
   testDir: "./e2e",
   // A diagnostic rerun must retain the original first-attempt artifacts.
@@ -78,11 +104,7 @@ export default defineConfig({
     // starves Playwright's stability check; the app honours the OS setting.
     contextOptions: { reducedMotion: "reduce" },
   },
-  projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "firefox", testMatch: /(?:golden-path|remediation-security)\.spec\.ts/, use: { ...devices["Desktop Firefox"] } },
-    { name: "webkit", testMatch: /(?:golden-path|remediation-security)\.spec\.ts/, use: { ...devices["Desktop Safari"] } },
-  ],
+  projects,
   webServer: {
     command: "npm run build && npm run start",
     url: baseURL,

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Architecture remediation plan 2, item A3: a new function is closed by
-// default (20261110170000), a SQL guard's own `pg_temp` helpers included, and
+// default (20261111000000), a SQL guard's own `pg_temp` helpers included, and
 // a guard calls its helpers while acting as other roles. This adds, after the
 // last top-level `create function pg_temp.…` (or procedure) of each guard in
 // supabase/tests/ that has one and lacks it, the line that opens them:
@@ -20,7 +20,7 @@ import path from "node:path";
 import { splitStatements } from "./lib/sql-statements.mjs";
 
 const LINE = "grant execute on all routines in schema pg_temp to public;";
-const NOTE = "-- This guard's own helpers are called while acting as other roles. A new\n-- function is closed by default (20261110170000), so they are opened here.";
+const NOTE = "-- This guard's own helpers are called while acting as other roles. A new\n-- function is closed by default (architecture plan 2, item A3), so they are opened here.";
 const HELPER = /^create (or replace )?(function|procedure) pg_temp\./i;
 const GRANT = /^grant execute on all routines in schema pg_temp to public$/i;
 const dir = "supabase/tests";
