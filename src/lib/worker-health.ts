@@ -4,7 +4,7 @@ import { JOB_NAMES, WORKER_FAMILIES } from "./job-inventory";
 export { WORKER_FAMILIES } from "./job-inventory";
 
 type Family = { family: string; stale: boolean; reason?: string | null; last_success?: string | null; disabled?: boolean };
-type Job = { job: string; stale: boolean; reason?: string | null; last_success?: string | null; families?: string[] };
+type Job = { job: string; stale: boolean; reason?: string | null; last_success?: string | null; families?: string[]; disabled?: boolean };
 type Queue = { kind: string; status: string; overdue: boolean; count?: number; oldest?: string | null; attempts_max?: number | null; disabled?: boolean };
 type RawConfig = {
   scheduler?: boolean;
@@ -50,6 +50,11 @@ export function workerUrlStatus(value: string | null | undefined): HealthConfigS
 
 const isText = (value: unknown): value is string => typeof value === "string" && value.length > 0;
 
+// The one job, and the one family it drives, that exist only to send email.
+// job-inventory.test.ts would fail if the inventory stopped pairing them.
+export const EMAIL_ONLY_JOB = "drvn-saved-search-digests";
+export const EMAIL_ONLY_FAMILY = "savedSearchDigests";
+
 /**
  * Validates worker_health_snapshot() against the inventory this deployment
  * expects and turns it into problems. Throws when the snapshot is incomplete,
@@ -57,10 +62,17 @@ const isText = (value: unknown): value is string => typeof value === "string" &&
  * CRON_SECRET: the scheduler's copy (job_config) is compared with it as a
  * digest, so a scheduler sending the wrong bearer shows up as configuration,
  * not as every HTTP worker going quiet at once.
+ *
+ * Work whose provider this deployment has not configured is listed but not
+ * judged (`disabled: true`): the search and analytics families and their
+ * queues, and, with no email provider, the saved-search digest job and its
+ * family (plan 2 item A5: the hourly job has nothing to send until a provider
+ * is chosen, so it must not page). Configure the provider and the same rows
+ * are judged again.
  */
 export function evaluateWorkerHealth(
   value: unknown,
-  config: { searchEnabled: boolean; analyticsEnabled: boolean; cronSecret?: string },
+  config: { searchEnabled: boolean; analyticsEnabled: boolean; emailEnabled: boolean; cronSecret?: string },
 ) {
   const health = value as { families?: Family[]; jobs?: Job[]; queues?: Queue[]; config?: RawConfig } | null;
   const complete = <T, K extends keyof T>(rows: T[] | undefined, key: K, required: readonly string[]) =>
@@ -81,8 +93,13 @@ export function evaluateWorkerHealth(
   const disabled = new Set<string>();
   if (!config.searchEnabled) disabled.add("search");
   if (!config.analyticsEnabled) disabled.add("analytics");
+  const disabledJobs = new Set<string>();
+  if (!config.emailEnabled) {
+    disabled.add(EMAIL_ONLY_FAMILY);
+    disabledJobs.add(EMAIL_ONLY_JOB);
+  }
   const families = health.families!.map((f) => (disabled.has(f.family) ? { ...f, stale: false, disabled: true } : f));
-  const jobs = health.jobs!;
+  const jobs = health.jobs!.map((j) => (disabledJobs.has(j.job) ? { ...j, stale: false, disabled: true } : j));
   const queues = health.queues.map((q) => (disabled.has(q.kind) ? { ...q, disabled: true } : q));
 
   const raw = health.config;
