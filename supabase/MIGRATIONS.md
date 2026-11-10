@@ -41,7 +41,7 @@ TLS. Details: "Recording without running" below.
 
 ## November 11 — the database owns every change to an order's status (architecture plan 2, item A2, first of two)
 
-Three functions take over the four changes to `orders.status` and `orders.pre_dispute_status` that the application made with its own updates: `order_mark_shipped_from_tracking`, `order_mark_delivered_from_tracking` and `order_close_dispute`. Same conditions as the updates they replace; service role only. Nothing is changed or backfilled in existing rows. Guard: `supabase/tests/order_status_moves_guard.sql`.
+Three functions take over the six updates of `orders.status` or `orders.pre_dispute_status` the application made itself (tracking, the admin console's dispute resolution, the buyer closing a case; the two in `applyDisputeEvent` were unreachable and are removed): `order_mark_shipped_from_tracking`, `order_mark_delivered_from_tracking` and `order_close_dispute`. Same conditions as the updates they replace; service role only. Nothing is changed or backfilled in existing rows. Guard: `supabase/tests/order_status_moves_guard.sql`.
 
 | File | Applied to |
 |---|---|
