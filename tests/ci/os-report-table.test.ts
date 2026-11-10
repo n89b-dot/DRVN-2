@@ -287,6 +287,14 @@ describe("the record's table: both remediation plans, step by step (plan 1 step 
     expect(steps.filter((step) => !findings.has(`#1-${step}`))).toEqual([]);
   });
 
+  it("the record on this branch has one row for every item of plan 2, Part A", () => {
+    const text = fs.readFileSync(path.join(root, RECORD_FILE), "utf8");
+    expect(osTableProblems(text, RECORD_FILE)).toEqual([]);
+    const findings = new Set([...text.matchAll(/^\|[^|]*\| (#\d-[A-Za-z0-9.]+) \|/gm)].map((m) => m[1]));
+    const items = ["A0", "A0b", "A1", "A2", "A3", "A4", "A5", "A6"];
+    expect(items.filter((item) => !findings.has(`#2-${item}`))).toEqual([]);
+  });
+
   it("N718: plan 1 step 2.8 is in the record as a step that names it, so the OS reads its progress from one row", () => {
     const text = fs.readFileSync(path.join(root, RECORD_FILE), "utf8");
     const row = text.split("\n").find((line) => /^\|[^|]*\| #1-2\.8 \|/.test(line));

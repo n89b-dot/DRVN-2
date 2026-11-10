@@ -22,6 +22,7 @@
     "storybook:build": "storybook build",
     "docs:systems": "UPDATE_DOCS=1 vitest run src/lib/docs/system-docs.test.ts",
     "db:types": "node scripts/generate-database-types.mjs",
+    "db:schema": "node scripts/schema-snapshot.mjs",
     "db:types:check": "node scripts/generate-database-types.mjs --check",
     "test:operations": "vitest run --config vitest.operations.config.ts",
     "test:monitor": "node --test scripts/check-worker-health.test.mjs scripts/release-candidate.test.mjs scripts/owner/stripe-webhooks.test.mjs scripts/owner/rotate-seed-password.test.mjs scripts/owner/stripe-negative-balances.test.mjs scripts/owner/scrub-photo-metadata.test.mjs scripts/owner/storage-reference-check.test.mjs",

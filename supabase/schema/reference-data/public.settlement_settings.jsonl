@@ -1,0 +1,1 @@
+{"id":true,"payout_hold_days":2,"payout_hold_mode":"fixed","auto_confirm_after_days":21,"auto_confirm_notice_days":3,"receipt_release_after_days":3,"card_verification_from_cents":50000,"tracking_required_from_cents":null}
