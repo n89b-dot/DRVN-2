@@ -183,3 +183,5 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #241 | 2026-11-10 | docs: the plan 1 record after batch 5, the OS's rows, and B1 marked fixed in the 3 November report (batch 7, #245) | skipped | — | docs only (ruling, 7 Nov) |
 | #243 | 2026-11-10 | Batch 6: #206 | waived | — | waived (ruling, 10 Nov) |
 | #245 | 2026-11-10 | Batch 7: #241 #208 | waived | — | waived (ruling, 10 Nov) |
+| #246 | 2026-11-10 | OS-W42 N944: Resume deletion names the acting admin, and the database checks them before it reads anything… (batch 8, #248) | waived | — | waived (ruling, 10 Nov) |
+| #248 | 2026-11-10 | Batch 8: #246 | waived | — | waived (ruling, 10 Nov) |
