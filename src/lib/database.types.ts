@@ -1146,6 +1146,8 @@ export type PaymentRecovery = {
   amount_cents: number | null;
   detail: string | null;
   status: "open" | "recovered" | "written_off";
+  /** What the case is about, e.g. `stripe:dispute:<id>` for a chargeback held for review (#108). */
+  recovery_key: string;
   created_at: string;
   resolved_by: string | null;
   resolved_at: string | null;
