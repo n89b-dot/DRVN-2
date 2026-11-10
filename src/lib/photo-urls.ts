@@ -391,7 +391,8 @@ function isWholeCanonicalPhoto(value: string, origin: string): boolean {
  * without its owner column has no known owner, and a null owner is never
  * treated as a mismatch.
  */
-const OWNER_COLUMN: Readonly<Record<string, string>> = { cars: "owner_id", listings: "seller_id", activity_posts: "author_id", orders: "seller_id" };
+/** The tables whose rows carry their owner, and the column that does. A photo table's rows take the owner of the row they hang from. */
+export const OWNER_COLUMN: Readonly<Record<string, string>> = { cars: "owner_id", listings: "seller_id", activity_posts: "author_id", orders: "seller_id" };
 const RPC_OWNER_KEYS = ["owner_id", "seller_id", "author_id"] as const;
 
 type OnPhoto = (url: string, owner: string | undefined) => string | void;
@@ -456,6 +457,7 @@ function walk(value: unknown, context: SigningContext, origin: string, onPhoto: 
   // column, 30 read an owning table without it, and 42 read a photo table
   // directly, whose rows have no owner column at all. A photo whose owner the
   // answer does not carry is signed on the database's word (review of #210).
+  // The 30 may only go down: tests/ci/photo-owner-reads.test.ts (review of #244).
   const photo: OnPhoto = (url, owner) => {
     if (!isWholeCanonicalPhoto(url, origin)) return undefined;
     if (owner !== undefined && signedPhotoObject(url, origin)?.path.split("/")[0] !== owner) return undefined;
