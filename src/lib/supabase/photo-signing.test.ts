@@ -16,7 +16,7 @@ process.env.NEXT_PUBLIC_SUPABASE_URL = "https://proj.supabase.co";
 process.env.SUPABASE_SECRET_KEY = "unit-test-key";
 
 const { EXPORT_PHOTO_LINK_SECONDS, SIGN_BUDGET_MS, SIGN_RETRY_MS, createPhotoSigner } = await import("./photo-signing");
-const { tableContext } = await import("@/lib/photo-urls");
+const { NOT_SIGNED_PHOTO_LIKE_COLUMNS, tableContext } = await import("@/lib/photo-urls");
 type Signer = ReturnType<typeof createPhotoSigner>;
 
 /**
@@ -199,24 +199,41 @@ describe("only photo fields are signed, never a URL a member wrote (N940, #178 r
   const other = canonical("car-images", "someone-elses-private.webp");
   const mine = canonical("car-images", "my-cover.webp");
   const json = (value: unknown) => new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } });
-  const read = async (value: unknown) => {
-    const res = await photoFetch((async () => json(value)) as unknown as typeof fetch, { sign: true })(`${O}/rest/v1/rpc/x`, { method: "POST" });
+  /** An answer read at a real place: a table with its select, or a database function. */
+  const readAt = async (at: string, value: unknown) => {
+    const res = await photoFetch((async () => json(value)) as unknown as typeof fetch, { sign: true })(`${O}/rest/v1/${at}`, { method: at.startsWith("rpc/") ? "POST" : "GET" });
     return res.json();
   };
 
-  it("leaves a photo URL pasted into a comment, a description, a bio or a whole-value comment canonical", async () => {
-    const out = await read([
-      { body: `look at this ${other} nice` },
-      { body: other },
-      { description: other, bio: `${other}`, title: other },
-    ]);
-    expect(JSON.stringify(out)).not.toContain("/object/sign/");
+  it("N940: leaves a photo URL a member wrote canonical, in each place members write: a comment, a question, a listing, a profile", async () => {
+    const written: [at: string, value: unknown][] = [
+      ["activity_comments?select=id,body", [{ id: 1, body: `look at this ${other} nice` }, { id: 2, body: other }]],
+      ["listing_questions?select=id,body,parent_id", [{ id: 1, body: other, parent_id: null }, { id: 2, body: `${other}`, parent_id: 1 }]],
+      ["listings?select=id,title,description", [{ id: 1, title: other, description: `see ${other}` }]],
+      ["profiles?select=id,bio,links", [{ id: 1, bio: other, links: [{ label: "website", url: other }] }]],
+      // The same through `*`, and through a database function that answers with comments.
+      ["activity_comments?select=*", [{ id: 1, body: other }]],
+      ["rpc/post_comment_page", { comments: [{ id: 1, body: other, author: { bio: other } }] }],
+    ];
+    for (const [at, value] of written) {
+      const out = await readAt(at, value);
+      expect(out, at).toEqual(value);
+    }
     expect(mocks.sign).not.toHaveBeenCalled();
   });
 
-  it("leaves a profile link, a product link and a video link canonical", async () => {
-    const out = await read({ links: [{ label: "website", url: other }], product_url: other, video_url: other, source_url: other });
-    expect(JSON.stringify(out)).not.toContain("/object/sign/");
+  it("N940: leaves every column the signer lists as not signed canonical, read by name and through *", async () => {
+    const places = Object.keys(NOT_SIGNED_PHOTO_LIKE_COLUMNS);
+    expect(places.length).toBeGreaterThan(5);
+    for (const place of places) {
+      const [table, column] = place.split(".");
+      for (const select of [`id,${column}`, "*"]) {
+        // As one address, and as a list of them (some of these columns are arrays).
+        const value = [{ id: 1, [column]: other }, { id: 2, [column]: [other, { url: other }] }];
+        const out = await readAt(`${table}?select=${select}`, value);
+        expect(out, `${place} read as ${select}`).toEqual(value);
+      }
+    }
     expect(mocks.sign).not.toHaveBeenCalled();
   });
 
@@ -403,6 +420,44 @@ describe("N1052: a slow or failing photo store does not hold every page (work re
     clock.now = START + 5_000;
     expect((await signedPhotoUrls([known, fresh])).get(known)).toBe(first);
     expect(mocks.sign).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("N1062: the shared copy of public data never holds a result of failed signing (review of #210)", () => {
+  it("N1062: what is stored is the database's canonical answer, so a reader after the signer recovers gets the photo from the same copy", async () => {
+    const { cachedPublicFetch } = await import("./public-cache");
+    const url = canonical("car-images", "kept.webp");
+    const stored = JSON.stringify([{ owner_id: ME, cover_image_url: url }]);
+    // Next's data cache, reduced to what matters here: the first answer is kept and handed out again.
+    const copies = new Map<string, string>();
+    let databaseReads = 0;
+    const dataCache = (async (input: RequestInfo | URL) => {
+      const key = String(input);
+      if (!copies.has(key)) {
+        databaseReads += 1;
+        copies.set(key, stored);
+      }
+      return new Response(copies.get(key), { headers: { "content-type": "application/json", date: new Date().toUTCString() } });
+    }) as typeof fetch;
+    const before = process.env.DRVN_PUBLIC_CACHE;
+    process.env.DRVN_PUBLIC_CACHE = "on";
+    try {
+      const read = async () => (await photoFetch(cachedPublicFetch({ maxAge: 300, tags: [] }, dataCache), { sign: true })(`${O}/rest/v1/cars?select=owner_id,cover_image_url`, { method: "GET" })).json();
+      // The photo store is down: this reader gets the photo unsigned (the page shows its plate).
+      mocks.sign.mockResolvedValue({ data: null, error: { message: "storage unavailable" } });
+      expect(await read()).toEqual([{ owner_id: ME, cover_image_url: url }]);
+      expect([...copies.values()]).toEqual([stored]);
+      // It recovers. The next reader is answered from the same stored copy, with the photo signed.
+      mocks.sign.mockImplementation(async (bucket: string, paths: string[]) => ({ data: paths.map((path) => ({ path, signedUrl: signedFor(bucket, path), error: null })), error: null }));
+      clock.now = START + SIGN_RETRY_MS;
+      expect(await read()).toEqual([{ owner_id: ME, cover_image_url: signedFor("car-images", `${ME}/kept.webp`) }]);
+      expect(databaseReads).toBe(1);
+      // And the copy is still the canonical answer: no signed link, good or failed, was ever put in it.
+      expect([...copies.values()]).toEqual([stored]);
+    } finally {
+      if (before === undefined) delete process.env.DRVN_PUBLIC_CACHE;
+      else process.env.DRVN_PUBLIC_CACHE = before;
+    }
   });
 });
 

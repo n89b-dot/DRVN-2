@@ -4,6 +4,7 @@ import { Suspense, type ReactNode } from "react";
 
 import { ListingCard, Mosaic, MosaicCell } from "@/components/ui";
 import { hydrateListingCards } from "@/lib/marketplace/query";
+import { storedUnlessUnsigned } from "@/lib/photo-copies";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { vehicleSubline } from "@/lib/vehicles/label";
 import { AuthClose } from "./auth-close";
@@ -17,9 +18,10 @@ import { AuthClose } from "./auth-close";
  * a cached scope (and anon visibility is what we're rendering anyway —
  * active listings are public).
  */
-const getBackdropCards = unstable_cache(
+const getBackdropCards = storedUnlessUnsigned(
   async () => {
     // N455: cached for a minute, so the signed photo URLs (an hour or more) outlive the copy.
+    // A result read while the signer had no answer is shown and not kept (src/lib/photo-copies.ts).
     const supabase = createAdminClient({ signPhotos: true });
     // Five parts and three builds — eight cards close a 4×2 desktop wall
     // (six left a ragged second row), and DRVN is builds and parts, not a
@@ -57,8 +59,7 @@ const getBackdropCards = unstable_cache(
     }
     return cards;
   },
-  ["auth-backdrop-cards-v2"],
-  { revalidate: 60 }
+  (load) => unstable_cache(load, ["auth-backdrop-cards-v2"], { revalidate: 60 })
 );
 
 /**

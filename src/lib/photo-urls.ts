@@ -447,6 +447,15 @@ function walkRpc(node: unknown, fn: string, selection: Selection | null, photo: 
 }
 
 function walk(value: unknown, context: SigningContext, origin: string, onPhoto: (url: string) => string | void): unknown {
+  // The owner check below is a second look, not the rule. The rule is the
+  // database's: every signable place has a trigger that refuses a photo
+  // outside its owner's folder, and nothing is signed until every one of
+  // those triggers is in place (photo_signing_ready). Here the check can only
+  // run where the answer carries the owner, and most don't: counted on 10 Nov
+  // 2026, 7 of the app's 79 photo reads select their owning row's owner
+  // column, 30 read an owning table without it, and 42 read a photo table
+  // directly, whose rows have no owner column at all. A photo whose owner the
+  // answer does not carry is signed on the database's word (review of #210).
   const photo: OnPhoto = (url, owner) => {
     if (!isWholeCanonicalPhoto(url, origin)) return undefined;
     if (owner !== undefined && signedPhotoObject(url, origin)?.path.split("/")[0] !== owner) return undefined;

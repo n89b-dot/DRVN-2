@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { connection } from "next/server";
 
 import { ogImageSource } from "@/lib/media-url";
 import { postHeadline } from "@/lib/activity/headline";
@@ -14,6 +15,10 @@ export default async function UpdateCard({
 }: {
   params: Promise<{ slug: string; postId: string }>;
 }) {
+  // Made for each request and never stored by the framework: a card drawn
+  // while the photo signer had no answer has no photo, and must not be the
+  // card everyone gets afterwards (src/lib/photo-copies.ts).
+  await connection();
   const { slug, postId } = await params;
   const supabase = createPublicClient({ maxAge: 300, kinds: ["cars", "posts", "profiles"] });
   const { data: car } = await supabase

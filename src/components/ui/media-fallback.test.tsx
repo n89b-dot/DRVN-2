@@ -72,7 +72,7 @@ describe("N1053: an unsigned member photo that reaches a page is reported, not o
       host.querySelector("img")!.dispatchEvent(new Event("error"));
     });
     act(() => root.render(<Media src="/seed/cars/1.webp" alt="Cover" />));
-    act(() => root.render(<Media src={null} alt="Cover" />));
+    act(() => root.render(<Media src={undefined} alt="Cover" />));
     expect(mocks.reportUnsignedPhoto).not.toHaveBeenCalled();
   });
 });

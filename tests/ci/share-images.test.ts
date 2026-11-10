@@ -76,4 +76,16 @@ describe("N1048: a share image is an address that does not run out (work review 
       expect(source, route).toMatch(/export const contentType = "image\/png"/);
     }
   });
+
+  it("N1048: a share card is made for each request, so one drawn without its photo is never the stored card", () => {
+    for (const route of files("src/app", /^(opengraph|twitter)-image\.tsx$/)) {
+      const source = fs.readFileSync(path.join(root, route), "utf8");
+      if (!source.includes("createPublicClient(")) continue;
+      const body = source.slice(source.indexOf("export default async function"));
+      // The first thing the card does, before it reads anything.
+      expect(body, route).toMatch(/^export default async function \w+\([^)]*\)[^{]*\{\s*(?:\/\/[^\n]*\n\s*)*await connection\(\);/);
+      expect(source, route).toContain('import { connection } from "next/server";');
+      expect(source, route).not.toMatch(/export const (?:revalidate|dynamic)\b|unstable_cache|"use cache"/);
+    }
+  });
 });
