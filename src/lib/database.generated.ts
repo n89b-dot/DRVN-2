@@ -8427,6 +8427,22 @@ export type Database = {
           reason: string
         }[]
       }
+      photo_signatures_offer: {
+        Args: { p_signed: Json; p_window: number }
+        Returns: {
+          bucket: string
+          path: string
+          signed_url: string
+        }[]
+      }
+      photo_signatures_read: {
+        Args: { p_objects: Json; p_window: number }
+        Returns: {
+          bucket: string
+          path: string
+          signed_url: string
+        }[]
+      }
       pickup_mint_pass: {
         Args: {
           p_buyer_id: string

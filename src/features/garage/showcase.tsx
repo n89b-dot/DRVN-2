@@ -1,10 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 
-import { Button, MEDIA_SIZES } from "@/components/ui";
+import { Button, MEDIA_SIZES, PhotoImage } from "@/components/ui";
 import { cx } from "@/lib/format";
 
 /**
@@ -44,7 +43,7 @@ export function ShowcaseExplorer({
         {/* Resized, not the original. The width/height pair is only an
             aspect hint for layout: `height: auto` lets the photo keep its own
             proportions once it loads, which the pins are positioned against. */}
-        <Image
+        <PhotoImage
           src={imageUrl}
           alt={alt}
           width={1600}
