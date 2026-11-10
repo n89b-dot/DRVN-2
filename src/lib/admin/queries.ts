@@ -22,6 +22,7 @@ import { signEvidenceUrls } from "@/lib/evidence-urls";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { adminReadClient } from "./guard";
 import { reportError } from "@/lib/monitoring";
+import { pagedRows } from "@/lib/supabase/paged-rows";
 import { postHeadline } from "@/lib/activity/headline";
 
 /**
@@ -1949,36 +1950,56 @@ export type OpenOperation = {
 
 export async function getOpenOperations(limit = 50): Promise<OpenOperation[]> {
   const a = await admin();
-  const { data: requested, error } = await a
-    .from("admin_audit_log")
-    .select("id, action, subject_type, subject_id, order_id, reason, created_at, actor_id, metadata")
-    .eq("metadata->>phase", "requested")
-    .order("created_at", { ascending: false })
-    .limit(200);
-  if (error) throw new Error(`Could not load pending operations: ${error.message}`);
   const opId = (m: unknown) =>
     m && typeof m === "object" && "operationId" in m ? String((m as { operationId: unknown }).operationId) : null;
-  const ids = (requested ?? []).map((r) => opId(r.metadata)).filter((id): id is string => Boolean(id));
-  if (!ids.length) return [];
-  const { data: later, error: laterError } = await a
-    .from("admin_audit_log")
-    .select("id, metadata")
-    .in("metadata->>operationId", ids)
-    .neq("metadata->>phase", "requested");
-  if (laterError) throw new Error(`Could not load pending operations: ${laterError.message}`);
+  // N718: the requests are read newest first, a page at a time (keyset on
+  // id), until `limit` open ones are found or none are left. Reading only the
+  // newest 200 requests hid every open one older than the 200th.
+  type Requested = { id: number; action: string; subject_type: AdminAuditLogEntry["subject_type"]; subject_id: string; order_id: string | null; reason: string; created_at: string; actor_id: string; metadata: unknown };
   const phases = new Map<string, Set<string>>();
   const latest = new Map<string, number>();
-  for (const row of later ?? []) {
-    const id = opId(row.metadata);
-    const phase = (row.metadata as { phase?: string } | null)?.phase;
-    if (!id || !phase) continue;
-    phases.set(id, (phases.get(id) ?? new Set()).add(phase));
-    latest.set(id, Math.max(latest.get(id) ?? 0, row.id));
+  const open: { r: Requested; id: string | null }[] = [];
+  let before: number | null = null;
+  for (;;) {
+    let page = a
+      .from("admin_audit_log")
+      .select("id, action, subject_type, subject_id, order_id, reason, created_at, actor_id, metadata")
+      .eq("metadata->>phase", "requested")
+      .order("id", { ascending: false })
+      .limit(200);
+    if (before !== null) page = page.lt("id", before);
+    const { data: requested, error } = await page;
+    if (error) throw new Error(`Could not load pending operations: ${error.message}`);
+    const rows = (requested ?? []) as Requested[];
+    if (!rows.length) break;
+    before = rows[rows.length - 1].id;
+    const ids = rows.map((r) => opId(r.metadata)).filter((id): id is string => Boolean(id));
+    if (ids.length) {
+      // At most a few later phases per operation; paged anyway by id.
+      const later = await pagedRows<{ id: number; metadata: unknown }, "id">(
+        (after, size) => {
+          const query = a.from("admin_audit_log").select("id, metadata").in("metadata->>operationId", ids).neq("metadata->>phase", "requested").order("id").limit(size);
+          return (after === null ? query : query.gt("id", after)) as unknown as PromiseLike<{ data: { id: number; metadata: unknown }[] | null; error: unknown }>;
+        },
+        "id",
+      );
+      if (later.error || !later.rows) throw new Error("Could not load pending operations: later phases unreadable");
+      for (const row of later.rows) {
+        const id = opId(row.metadata);
+        const phase = (row.metadata as { phase?: string } | null)?.phase;
+        if (!id || !phase) continue;
+        phases.set(id, (phases.get(id) ?? new Set()).add(phase));
+        latest.set(id, Math.max(latest.get(id) ?? 0, row.id));
+      }
+    }
+    for (const r of rows) {
+      const id = opId(r.metadata);
+      if (id && !phases.get(id)?.has("completed") && !phases.get(id)?.has("reconciled")) open.push({ r, id });
+    }
+    if (open.length >= limit || rows.length < 200) break;
   }
-  const open = (requested ?? [])
-    .map((r) => ({ r, id: opId(r.metadata) }))
-    .filter(({ id }) => id && !phases.get(id)?.has("completed") && !phases.get(id)?.has("reconciled"))
-    .slice(0, limit);
+  open.splice(limit);
+  if (!open.length) return [];
 
   // Refund records created by these requests (same rule as the database's
   // reconciliation: this admin's refunds on the order since the request).

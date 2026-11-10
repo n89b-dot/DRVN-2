@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Result = { data?: unknown; count?: number | null; error: { message: string } | null };
+/** What a query asked for, for a table answered by a function. */
+type Query = { eq: Record<string, unknown>; neq: Record<string, unknown>; lt?: unknown; gt?: unknown; limit?: number };
 
 const state = vi.hoisted(() => ({
   /** Answer per table; every query on that table gets it. */
-  tables: {} as Record<string, Result>,
+  tables: {} as Record<string, Result | ((query: Query) => Result)>,
   rpc: vi.fn(),
 }));
 
@@ -20,17 +22,24 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     rpc: state.rpc,
     from: (table: string) => {
-      const result = state.tables[table] ?? { data: [], count: 0, error: null };
+      const answer = state.tables[table] ?? { data: [], count: 0, error: null };
+      const query: Query = { eq: {}, neq: {} };
+      const result = () => (typeof answer === "function" ? answer(query) : answer);
       const builder: Record<string, unknown> = {};
-      for (const m of ["select", "eq", "neq", "lt", "gte", "in", "is", "not", "order", "limit"]) builder[m] = () => builder;
-      builder.maybeSingle = async () => result;
-      builder.then = (resolve: (value: Result) => unknown) => resolve(result);
+      for (const m of ["select", "gte", "in", "is", "not", "order"]) builder[m] = () => builder;
+      builder.eq = (column: string, value: unknown) => { query.eq[column] = value; return builder; };
+      builder.neq = (column: string, value: unknown) => { query.neq[column] = value; return builder; };
+      builder.lt = (_column: string, value: unknown) => { query.lt = value; return builder; };
+      builder.gt = (_column: string, value: unknown) => { query.gt = value; return builder; };
+      builder.limit = (n: number) => { query.limit = n; return builder; };
+      builder.maybeSingle = async () => result();
+      builder.then = (resolve: (value: Result) => unknown) => resolve(result());
       return builder;
     },
   }),
 }));
 
-import { getNavCounts, getOverview, getPaymentsOps, listOpsCases } from "./queries";
+import { getNavCounts, getOpenOperations, getOverview, getPaymentsOps, listOpsCases } from "./queries";
 
 const week = { orders: 1500, gmv_cents: 1_500_000, fee_cents: 150_000, refunded_cents: 2_000, fee_refunded_cents: 200 };
 
@@ -90,6 +99,32 @@ describe("queues", () => {
     const ops = await getPaymentsOps();
     expect(ops.stuckCarryPayouts).toHaveLength(1);
     expect(ops.stuckCarryPayouts[0]).toMatchObject({ id: "p1", attempts: 8, seller: { username: "kaito" } });
+  });
+
+  it("getPaymentsOps counts all 1,001 open recovery cases in the database, not the 200 it lists (N718)", async () => {
+    const open = Array.from({ length: 200 }, (_, i) => ({ id: `r${i}`, status: "open", order_id: null, created_at: "2026-11-01T00:00:00Z" }));
+    state.tables.payment_recoveries = { data: open, count: 1001, error: null };
+    const ops = await getPaymentsOps();
+    expect(ops.openRecoveryTotal).toBe(1001);
+  });
+
+  it("getOpenOperations finds an open request older than the newest 200 (N718)", async () => {
+    // 450 requests, newest first by id; all but the oldest are completed.
+    const requested = Array.from({ length: 450 }, (_, i) => ({
+      id: 450 - i, action: "order.force_refund", subject_type: "order", subject_id: `o${i}`, order_id: null, reason: "r",
+      created_at: "2026-11-01T00:00:00Z", actor_id: "admin-1", metadata: { operationId: `op-${450 - i}`, phase: "requested" },
+    }));
+    state.tables.admin_audit_log = (query) => {
+      if (query.eq["metadata->>phase"] === "requested") {
+        const rows = requested.filter((r) => query.lt === undefined || r.id < Number(query.lt)).slice(0, query.limit);
+        return { data: rows, error: null };
+      }
+      // Later phases: every operation completed except op-1.
+      const done = requested.filter((r) => r.id !== 1).map((r) => ({ id: 10_000 + r.id, metadata: { operationId: r.metadata.operationId, phase: "completed" } })).reverse();
+      return { data: done.filter((r) => query.gt === undefined || r.id > Number(query.gt)).slice(0, query.limit), error: null };
+    };
+    const open = await getOpenOperations();
+    expect(open.map((op) => op.operationId)).toEqual(["op-1"]);
   });
 
   it("listOpsCases throws when the cases can't be read", async () => {

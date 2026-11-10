@@ -17,9 +17,22 @@ function fakeClient(tables: Record<string, Result>) {
     from(table: string) {
       const result = tables[table] ?? { data: [], error: null };
       const builder: Record<string, unknown> = {};
-      // `range`: the line and adjustment reads page (N718).
-      for (const method of ["select", "eq", "in", "order", "limit", "range"]) builder[method] = () => builder;
-      builder.then = (resolve: (value: Result) => unknown) => resolve(result);
+      // Keyset paging (N718): order(id) → limit(n) → gt(id, after), and the
+      // paid/unpaid split on transfer_reference. Rows without an id get one.
+      const state: { limit?: number; gt?: [string, string]; filters: ((row: Record<string, unknown>) => boolean)[] } = { filters: [] };
+      for (const method of ["select", "eq", "in", "order"]) builder[method] = () => builder;
+      builder.limit = (n: number) => { state.limit = n; return builder; };
+      builder.gt = (column: string, after: string) => { state.gt = [column, after]; return builder; };
+      builder.is = (column: string) => { state.filters.push((row) => row[column] == null); return builder; };
+      builder.not = (column: string) => { state.filters.push((row) => row[column] != null); return builder; };
+      builder.then = (resolve: (value: Result) => unknown) => {
+        if (!Array.isArray(result.data)) return resolve(result);
+        let rows = (result.data as Record<string, unknown>[]).map((row, i) => ("id" in row ? row : { id: `row-${String(i).padStart(6, "0")}`, ...row }));
+        for (const keep of state.filters) rows = rows.filter(keep);
+        if (state.gt) { const [column, after] = state.gt; rows = rows.filter((row) => String(row[column]) > after); }
+        if (state.limit !== undefined) rows = rows.slice(0, state.limit);
+        return resolve({ data: rows, error: result.error });
+      };
       return builder;
     },
   } as never;
@@ -248,23 +261,32 @@ describe("a seller's lines past PostgREST's 1,000 rows (N718)", () => {
       ...Array.from({ length: 1000 }, (_, i) => ({ order_id: "order-1", title: `Bolt ${i}`, quantity: 1, return_policy: { returns_accepted: false } })),
       { order_id: "order-1", title: "Intake", quantity: 1, return_policy: { returns_accepted: true, window_days: 60 } },
     ];
-    const base = fakeClient({
+    const client = fakeClient({
       orders: { data: [{ ...order, refunded_cents: 0 }], error: null },
       settlement_hold_policy: { data: [{ payout_hold_days: 7, payout_hold_mode: "claim_window" }], error: null },
-    }) as unknown as { from: (t: string) => unknown; rpc: (n: string) => unknown };
-    const client = {
-      rpc: base.rpc,
-      from(table: string) {
-        if (table !== "order_items") return base.from(table);
-        let range: [number, number] = [0, 999];
-        const builder: Record<string, unknown> = {};
-        for (const method of ["select", "in", "order"]) builder[method] = () => builder;
-        builder.range = (from: number, to: number) => { range = [from, to]; return builder; };
-        builder.then = (resolve: (value: Result) => unknown) => resolve({ data: lines.slice(range[0], range[1] + 1), error: null });
-        return builder;
-      },
-    } as never;
+      order_items: { data: lines, error: null },
+    });
     const result = await getSellerLedger(client, "seller");
     expect(result).toMatchObject({ status: "ok", ledger: { lines: [{ availableAt: "2026-11-01T00:00:00.000Z" }] } });
+  });
+
+  it("counts all 1,001 adjustments of a seller's orders, so the net is not short (N718)", async () => {
+    const adjustments = Array.from({ length: 1001 }, () => ({ order_id: "order-1", amount_cents: -1, voided_at: null }));
+    const result = await getSellerLedger(
+      fakeClient({ orders: { data: [{ ...order, refunded_cents: 0 }], error: null }, seller_adjustments: { data: adjustments, error: null } }),
+      "seller",
+    );
+    expect(result.status === "ok" && result.ledger.lines[0].adjustmentsCents).toBe(-1001);
+  });
+
+  it("holds every unpaid sale, however many paid ones are newer (N718)", async () => {
+    const paid = Array.from({ length: 500 }, (_, i) => ({ ...order, id: `paid-${i}`, refunded_cents: 0, transfer_reference: `tr_${i}`, created_at: "2026-10-01T00:00:00Z" }));
+    const old = { ...order, id: "old-disputed", status: "disputed", refunded_cents: 0, created_at: "2025-01-01T00:00:00Z" };
+    const result = await getSellerLedger(fakeClient({ orders: { data: [...paid, old], error: null } }), "seller");
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.ledger.lines.find((line) => line.orderId === "old-disputed")?.state).toBe("held");
+    expect(result.ledger.heldCents).toBeGreaterThan(0);
+    expect(result.ledger.truncated).toBe(true);
   });
 });

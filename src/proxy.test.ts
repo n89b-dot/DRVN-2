@@ -95,6 +95,16 @@ describe("copyright image gate", () => {
     expect(session.update).not.toHaveBeenCalled();
   });
 
+  it("refuses storage photos, not site images, while no blocklist has been read (N718)", async () => {
+    blocked.keys.mockResolvedValue(null);
+    const response = await proxy(imageRequest("own-photo.webp"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("15");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    const site = await proxy(new NextRequest("https://drvn.example/_next/image?url=%2Fhero.png&w=640&q=75"));
+    expect(site.status).toBe(200);
+  });
+
   it("passes every other image straight through, with no session work", async () => {
     blocked.keys.mockResolvedValue(new Set([`listing-images/${OWNER}/rehosted.webp`]));
     session.update.mockClear();

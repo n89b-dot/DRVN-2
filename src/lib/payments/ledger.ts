@@ -96,8 +96,10 @@ export type SellerLedger = {
   /** The clearing rule the dates above were worked out with (the owner's
    *  settlement_settings, 20261006100000) — the tile states it. */
   hold: PayoutHoldPolicy;
-  /** True if the fetch hit its cap: the totals cover only the latest
-   *  FETCH_CAP sales and must be labelled that way, not as a lifetime. */
+  /** True if the paid-out history hit its cap: the paid-out and lifetime
+   *  totals cover only the latest FETCH_CAP paid-out sales and must be
+   *  labelled that way. Held, clearing and available always cover every
+   *  unpaid sale (N718). */
   truncated: boolean;
 };
 
@@ -114,9 +116,12 @@ export type SellerLedgerResult =
 /** The cap on the ledger's read, exported so the page can say what it covers. */
 export const LEDGER_FETCH_CAP = 500;
 
-// Bounded the same way /listings and /orders bound their reads — a seller's
-// full order history, not literally everything ever.
+// The paid-out history is bounded the same way /listings and /orders bound
+// their reads. What is still owed to the seller is not: every unpaid sale is
+// read, however old (N718), so Held, Clearing and Available are never short.
 const FETCH_CAP = LEDGER_FETCH_CAP;
+
+const ORDER_COLUMNS = "id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, refunded_cents, currency, created_at, delivered_at, transfer_reference";
 
 function lineState(order: {
   status: OrderStatus;
@@ -159,20 +164,36 @@ export async function getSellerLedger(
 ): Promise<SellerLedgerResult> {
   const nowMs = new Date().getTime();
 
-  const { data: orders, error } = await supabase
-    .from("orders")
-    .select("id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, refunded_cents, currency, created_at, delivered_at, transfer_reference")
-    .eq("seller_id", sellerId)
-    .in("status", CAPTURED_STATUSES)
-    .order("created_at", { ascending: false })
-    .limit(FETCH_CAP);
+  type OrderRow = {
+    id: string; status: OrderStatus; subtotal_cents: number; shipping_cents: number; platform_fee_cents: number; total_cents: number;
+    refunded_cents: number; currency: string; created_at: string; delivered_at: string | null; transfer_reference: string | null;
+  };
+  const [unpaid, paid] = await Promise.all([
+    // Every sale not yet paid out, by id (keyset), however many and however old.
+    pagedRows<OrderRow, "id">(
+      (after, size) => {
+        const query = supabase.from("orders").select(ORDER_COLUMNS).eq("seller_id", sellerId).in("status", CAPTURED_STATUSES).is("transfer_reference", null).order("id").limit(size);
+        return (after === null ? query : query.gt("id", after)) as unknown as PromiseLike<{ data: OrderRow[] | null; error: unknown }>;
+      },
+      "id",
+    ),
+    // The newest paid-out sales: history, labelled as such when capped.
+    supabase
+      .from("orders")
+      .select(ORDER_COLUMNS)
+      .eq("seller_id", sellerId)
+      .in("status", CAPTURED_STATUSES)
+      .not("transfer_reference", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(FETCH_CAP) as unknown as PromiseLike<{ data: OrderRow[] | null; error: unknown }>,
+  ]);
 
-  if (error || !orders) {
-    reportError("[payouts] failed to load orders", { sellerId, error });
+  if (unpaid.error || !unpaid.rows || paid.error || !paid.data) {
+    reportError("[payouts] failed to load orders", { sellerId, error: unpaid.error ?? paid.error });
     return { status: "unavailable" };
   }
 
-  const captured = orders;
+  const captured = [...unpaid.rows, ...paid.data].sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0));
   const orderIds = captured.map((o) => o.id);
 
   const [{ rows: items, error: itemsError }, adjustments, carry, hold, { data: payoutDates, error: payoutDatesError }] = await Promise.all([
@@ -185,9 +206,7 @@ export async function getSellerLedger(
     readPayoutHoldPolicy(supabase),
     // The payout dates already set, for the signed-in seller's own orders
     // (seller_payout_dates, 20261006100300).
-    orderIds.length
-      ? supabase.rpc("seller_payout_dates", { p_orders: orderIds })
-      : Promise.resolve({ data: [] as { order_id: string; available_at: string }[], error: null }),
+    payoutDatesFor(supabase, orderIds),
   ]);
   // Without the carry-forward entries a refunded order's labels, or what a
   // payout kept back, would be missing — the same confident wrong answer.
@@ -315,12 +334,26 @@ export async function getSellerLedger(
       owedCents: carry.owedCents,
       creditCents: carry.creditCents,
       hold,
-      truncated: captured.length === FETCH_CAP,
+      truncated: paid.data.length === FETCH_CAP,
     },
   };
 }
 
-type OrderLine = { order_id: string; title: string | null; quantity: number; return_policy: Json };
+/** The payout dates already set, a group of orders at a time (the list can now be long). */
+async function payoutDatesFor(
+  supabase: SupabaseClient<Database>,
+  orderIds: string[],
+): Promise<{ data: { order_id: string; available_at: string }[] | null; error: unknown }> {
+  const data: { order_id: string; available_at: string }[] = [];
+  for (const group of chunks(orderIds)) {
+    const { data: rows, error } = await supabase.rpc("seller_payout_dates", { p_orders: group });
+    if (error || !rows) return { data: null, error };
+    data.push(...rows);
+  }
+  return { data, error: null };
+}
+
+type OrderLine = { id: string; order_id: string; title: string | null; quantity: number; return_policy: Json };
 
 /** Every line of these orders (N718): paged, so none is lost past 1,000. Null rows and the error on a failed read. */
 async function orderLines(
@@ -329,13 +362,17 @@ async function orderLines(
 ): Promise<{ rows: OrderLine[] | null; error: unknown }> {
   const rows: OrderLine[] = [];
   for (const group of chunks(orderIds)) {
-    const page = await pagedRows<OrderLine>((from, to) =>
-      supabase
-        .from("order_items")
-        .select("order_id, title, quantity, return_policy:commercial_snapshot->commercial->return_policy")
-        .in("order_id", group)
-        .order("id")
-        .range(from, to) as unknown as PromiseLike<{ data: OrderLine[] | null; error: unknown }>,
+    const page = await pagedRows<OrderLine, "id">(
+      (after, size) => {
+        const query = supabase
+          .from("order_items")
+          .select("id, order_id, title, quantity, return_policy:commercial_snapshot->commercial->return_policy")
+          .in("order_id", group)
+          .order("id")
+          .limit(size);
+        return (after === null ? query : query.gt("id", after)) as unknown as PromiseLike<{ data: OrderLine[] | null; error: unknown }>;
+      },
+      "id",
     );
     if (page.error || !page.rows) return { rows: null, error: page.error };
     rows.push(...page.rows);

@@ -122,11 +122,17 @@ export async function adjustmentsByOrder(
   if (!orderIds.length) return map;
   // N718: an order can carry several adjustments (labels, refunds, returns),
   // so 500 orders can pass PostgREST's 1,000-row answer. Read every row, a
-  // page at a time per group of orders.
-  const data: { order_id: string | null; amount_cents: number; voided_at: string | null }[] = [];
+  // page at a time by id (keyset: a row added mid-read is never counted
+  // twice) per group of orders.
+  type Row = { id: string; order_id: string | null; amount_cents: number; voided_at: string | null };
+  const data: Row[] = [];
   for (const group of chunks(orderIds)) {
-    const page = await pagedRows((from, to) =>
-      client.from("seller_adjustments").select("order_id, amount_cents, voided_at").in("order_id", group).order("id").range(from, to),
+    const page = await pagedRows<Row, "id">(
+      (after, size) => {
+        const query = client.from("seller_adjustments").select("id, order_id, amount_cents, voided_at").in("order_id", group).order("id").limit(size);
+        return after === null ? query : query.gt("id", after);
+      },
+      "id",
     );
     if (page.error || !page.rows) {
       reportError("[adjustments] ledger read failed", { error: page.error });

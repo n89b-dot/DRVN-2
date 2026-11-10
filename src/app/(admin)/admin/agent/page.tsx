@@ -63,9 +63,13 @@ export default async function AdminAgentPage() {
   const [controls, health, steps, limits, spend, metrics] = await Promise.all([
     // N718: every live control, paged. Past PostgREST's 1,000 rows a single
     // read could drop the global switch and show "Running" while paused.
-    pagedRows((from, to) =>
-      admin.from("agent_controls").select("id, scope, subject_id, reason, set_at").is("cleared_at", null).order("set_at", { ascending: false }).order("id").range(from, to),
-    ).then(({ rows, error }) => ({ data: rows, error })),
+    pagedRows<{ id: string; scope: string; subject_id: string | null; reason: string | null; set_at: string }, "id">(
+      (after, size) => {
+        const query = admin.from("agent_controls").select("id, scope, subject_id, reason, set_at").is("cleared_at", null).order("id").limit(size);
+        return after === null ? query : query.gt("id", after);
+      },
+      "id",
+    ).then(({ rows, error }) => ({ data: rows && [...rows].sort((a, b) => (a.set_at < b.set_at ? 1 : a.set_at > b.set_at ? -1 : 0)), error })),
     admin.rpc("agent_health"),
     admin.from("agent_beta_steps").select("step, open, changed_at, reason"),
     admin.from("agent_spend_limits").select("per_member_daily_usd, global_daily_usd").maybeSingle(),

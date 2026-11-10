@@ -87,6 +87,7 @@ Set in the host's environment for each project (never in the repository). `job_c
 | `job_config.media_storage_origin` = the project's `https://<ref>.supabase.co` | 2026-11-07 (`https://zubstjuviwourzgrziqc.supabase.co`) | | `docs/staging-setup.md` |
 | `job_config.transfer_worker_url` and `transfer_worker_secret` | | | |
 | `select count(*) from cron.job where jobname like 'drvn-%'` returns 21 | | | |
+| PostgREST max rows (Supabase → Project settings → Data API → Max rows) is **1000 or more**; 1000 is the default and `supabase/config.toml`'s value. Reads page by key until an empty page, so a lower value is still read in full, only slower; a higher one changes nothing (N718, `src/lib/supabase/paged-rows.ts`) | | | |
 | Vehicle catalogue imported; row count matches staging (D4) | | | |
 | No seeded members on production (D4) | n/a | | |
 | `PAYMENTS_ALLOW_STUB_IN_PRODUCTION` and `SHIPPING_ALLOW_STUB_IN_PRODUCTION` absent: `node scripts/release-candidate.mjs hosted-env` passes (N540) | | | |

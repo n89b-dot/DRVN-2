@@ -31,7 +31,16 @@ export async function proxy(request: NextRequest) {
  */
 async function imageGate(request: NextRequest) {
   const key = imageRequestObjectKey(request.nextUrl);
-  if (key && (await blockedMediaKeys()).has(key)) {
+  const blocked = key ? await blockedMediaKeys() : null;
+  // No list read yet (a cold instance, the database unreachable): refuse
+  // storage photos for now rather than serve every taken-down one (N718).
+  if (key && blocked === null) {
+    return new NextResponse("Photos are briefly unavailable. Try again in a moment.", {
+      status: 503,
+      headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8", "Retry-After": "15" },
+    });
+  }
+  if (key && blocked?.has(key)) {
     return new NextResponse("This image was removed after a copyright notice.", {
       status: 451,
       headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" },
