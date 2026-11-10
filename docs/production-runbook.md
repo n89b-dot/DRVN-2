@@ -470,6 +470,36 @@ separate control, still to come. Never edit `stripe_dispute_journal` by hand.
   URL unauthenticated must 400/403. (0027 self-checks assert this at apply
   time.)
 
+## 5b1. An order's status the database refuses to change (plan 2 A2)
+
+Every change of `orders.status` (and of `pre_dispute_status`) is judged by the
+trigger `guard_order_status` against `private.order_status_transitions`, for
+every role (20261111120000). A refused change fails with SQLSTATE 23514 and a
+message ending `guard_order_status`, naming the order and the two statuses.
+The table lists each legal move and the functions that make it; to move an
+order, call the function that owns the move, never an `update`.
+
+If an order truly must be moved outside the table (a data repair agreed in
+writing), do it in one transaction from an owner session (`postgres` in the
+SQL editor, or a migration applied with `scripts/apply-migration.mjs`), never
+through the server key:
+
+```sql
+begin;
+set local drvn.order_status_override = 'why, and who agreed it';
+update public.orders set status = '<to>' where id = '<order>';
+commit;
+```
+
+It is honoured only when both `current_user` and `session_user` are
+`postgres` or `supabase_admin`; the server key, even inside a database
+function, is refused. Each change made under it is written to
+`private.order_status_overrides` (old and new status, the reason, both roles,
+the time) in the same transaction. Scheduled jobs also run as `postgres`, so
+they could set it; none does, and a SQL guard checks every job's command.
+Read `private.order_status_overrides` after any repair; it should be empty in
+normal running.
+
 ## 5c0. Deleted photos and cached copies (N717)
 
 Removing a member photo deletes the storage object; nothing purges copies by

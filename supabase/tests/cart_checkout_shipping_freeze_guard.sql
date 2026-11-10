@@ -162,7 +162,10 @@ begin
      or (select shipping_quote->0->>'provider_shipment_id' from public.orders where id=oid) <> 'shp_atomic' then
     raise exception 'FAIL: settled exact projection could not replay read-only';
   end if;
+  -- A fixture move the order status guard refuses (plan 2 A2); made under its audited override.
+  perform set_config('drvn.order_status_override', 'guard fixture: a paid order made payment_failed', true);
   update public.orders set status='payment_failed' where id=oid;
+  perform set_config('drvn.order_status_override', '', true);
   result := public.freeze_cart_checkout_shipping(buyer,attempt_key,oid);
   if coalesce((result->>'replayed')::boolean,false) is not true then
     raise exception 'FAIL: released sibling order blocked failed-payment basket recovery';

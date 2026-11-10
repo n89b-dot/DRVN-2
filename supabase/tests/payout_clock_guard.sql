@@ -39,7 +39,7 @@ begin
   -- 3. A disputed order isn't released by the clock (mark_due requires
   --    delivered/completed), even once the date has passed.
   update public.orders set status = 'delivered', delivered_at = now() - interval '30 days' where id = disputed;
-  update public.orders set status = 'disputed' where id = disputed;
+  update public.orders set status = 'disputed', pre_dispute_status = status where id = disputed;
   perform public.mark_due_transfer_intents();
   if (select status from public.transfer_intents where order_id = disputed) <> 'holding' then
     raise exception 'FAIL 3: a disputed order''s payout was released';

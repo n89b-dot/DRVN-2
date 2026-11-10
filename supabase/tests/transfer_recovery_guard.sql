@@ -303,7 +303,7 @@ begin
     v_dispute_order, 'dispute-owner', 'transfer:' || v_dispute_order::text,
     4500, 'usd', 'acct_transfer_guard', 'ch_dispute', 'pi_dispute'
   );
-  update public.orders set status = 'disputed' where id = v_dispute_order;
+  update public.orders set status = 'disputed', pre_dispute_status = status where id = v_dispute_order;
   v_completion := public.complete_transfer_intent(
     v_dispute_order, 'dispute-owner',
     'transfer:' || v_dispute_order::text, 'tr_dispute'

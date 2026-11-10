@@ -26,21 +26,26 @@ import type {
 
 export type TransitionMap<S extends string> = Record<S, S[]>;
 
-/** Orders (0007 lifecycle + 0014 disputes). `pre_dispute_status` restores the
- *  paused state on resolution, which is why disputed fans back out wide.
- *  disputed → paid (20261107210300, N6): a not-received case on an order
- *  that was never dispatched resolves back to paid. Dispatch during a case
- *  keeps it disputed and moves pre_dispute_status to shipped instead. */
+/** Orders. The database enforces this map: private.order_status_transitions
+ *  (20261111120000, plan 2 A2) holds the same moves, with the functions that
+ *  make each one, and the trigger guard_order_status refuses any other change
+ *  of status, for every role. tests/ci/order-status-transitions.test.ts fails
+ *  when this map and the table's rows (supabase/schema/reference-data) differ.
+ *  Leaving `disputed` is its own rule: only back to `pre_dispute_status` (paid
+ *  or delivered when none was recorded), or to refunded. A full refund settles
+ *  whatever the status, which is why every non-refunded state reaches
+ *  `refunded`. Nothing sets `requires_action` or `completed` today; the moves
+ *  out of them are the ones the functions would make. */
 export const ORDER_TRANSITIONS: TransitionMap<OrderStatus> = {
-  pending: ["requires_action", "paid", "payment_failed", "cancelled"],
-  requires_action: ["paid", "payment_failed", "cancelled"],
-  payment_failed: ["cancelled"],
-  paid: ["shipped", "cancelled", "refunded", "disputed"],
+  pending: ["paid", "payment_failed", "cancelled", "refunded"],
+  requires_action: ["paid", "payment_failed", "refunded"],
+  payment_failed: ["refunded"],
+  paid: ["shipped", "delivered", "disputed", "refunded"],
   shipped: ["delivered", "disputed", "refunded"],
-  delivered: ["completed", "disputed", "refunded"],
+  delivered: ["disputed", "refunded"],
   completed: ["disputed", "refunded"],
   disputed: ["paid", "shipped", "delivered", "completed", "refunded"],
-  cancelled: [],
+  cancelled: ["refunded"],
   refunded: [],
 };
 
@@ -245,7 +250,7 @@ export const DOMAIN_STATES: {
     domain: "order",
     title: "Orders",
     authority:
-      "CHECK constraint (0007) + purchase RPCs + dispute paths (0014/0021) + open_order_dispute and the orders_guard_dispute finality trigger (20261107210300)",
+      "private.order_status_transitions + the guard_order_status trigger on every role (20261111120000, plan 2 A2); the orders_guard_dispute finality trigger (20261107210300)",
     transitions: ORDER_TRANSITIONS,
   },
   {

@@ -8571,6 +8571,15 @@ export type Database = {
         }
         Returns: string
       }
+      order_status_change_problem: {
+        Args: {
+          p_new: string
+          p_new_pre: string
+          p_old: string
+          p_old_pre: string
+        }
+        Returns: string
+      }
       pause_account_deletion_hold: {
         Args: { p_job: string; p_lease: string; p_user: string }
         Returns: undefined
