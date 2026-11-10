@@ -99,3 +99,33 @@ One line each: what to do and where.
 
 - **N694 (#172's Codex finding):** older prose rows sit outside the two-day staging rule. Recorded only, by design: all 120 are in the frozen baseline and on staging.
 - **#53 design docs reconcile (A7):** 82 files, conflicting with `main` since October, touching components that have changed since. Resolving it is a design session of its own; the brand assets (favicon, icons, manifest, OG cards in `src/lib/og/card.tsx`) are the part worth splitting out. Left open.
+
+---
+
+# Plan 2 record: simplify the architecture (Part A)
+
+The running record of `docs/plans/2026-11-architecture-remediation-plan.md`, Part A (A0 to A6), kept by the plan 2 building session. Started 10 November 2026 from `main` at `58b4ad7` (merge of #201). Neil approved the plan and decisions DA1, DA2 and D5 on 10 November. Every pull request here is reviewed by the orchestrating session before it merges; no pull request that carries a migration is opened, and neither shared database is touched, before the orchestrator declares the quiet point (rules R1 to R7 in plan 1). The plain-language work log is https://claude.ai/artifact/FHHyhbxUXLVz45bXSDpHZw.
+
+Status words: **merged** (on `main`, CI green) · **in review** (PR up, waiting for the orchestrator or for checks) · **prepared** (built and proven on a branch, not opened for merge) · **not started**.
+
+## Plan 2 items
+
+| Item | Findings | Ids | PR | Merge commit | Status |
+|---|---|---|---|---|---|
+| A0 Documents-only pull requests skip the browser suite | | | #215 | | in review: `changes` job and `scripts/ci-change-scope.mjs`; `release-gate` accepts a skipped `e2e` only on a documents-only pull request; the Stripe lane no longer waits on `e2e`. Edits a workflow, so the orchestrator merges it |
+| A1 A checked-in copy of the database | `#159` | | | | not started: prepared on a branch before the quiet point, opened at it |
+| A2 The database owns every change to an order | | | | | not started (quiet point) |
+| A3 New functions closed by default | | | | | not started (quiet point) |
+| A4 Launch-configuration browser lane | `#162` | R-unproven | | | not started (after A0) |
+| A5 Launch switches recorded | | | | | not started |
+| A6 One baseline in place of 286 files | `#159` | N786 | | | not started: analysis only until the orchestrator freezes the database |
+
+## Plan 2: needs Neil
+
+Nothing.
+
+## Plan 2: judgement calls
+
+- **A0, what a document is:** any `.md` file, and text, data or image files under `docs/`. A script under `docs/` and anything under `.github/workflows/` is code. The Stripe lane still runs on a documents-only pull request (about two minutes); only `e2e` is skipped, as the plan says.
+- **A0, `main` is never documents-only:** the skip applies to pull requests alone. A push to `main` runs the whole suite, so the deploy workflow and the Intelligence OS read the same proof on `main` as before.
+- **A0, no OS id:** plan 2's items have no OS id yet, so #215 has a plain title and `Resolves: none`.
