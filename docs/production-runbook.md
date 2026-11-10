@@ -148,6 +148,31 @@ runner only runs files from `supabase/migrations/`, so it won't run this one.
 `on conflict do nothing` makes it safe to repeat. Keep `supabase/MIGRATIONS.md`
 as the human record of what was applied where and when.
 
+### 3a. Vehicle catalogue
+
+A new project starts with an empty catalogue and no generations: `0041` seeds
+from cache tables that are empty on a new project, and the generations
+migration joins to the catalogue (#119). After the schema, before launch, run
+`scripts/import-vehiclesdb.mjs` against the target, dry run first. `production`
+is not in `supabase/migration-targets.json` yet: a reviewed PR adds it before
+its first migration (§3), and this step needs it too.
+
+```bash
+node scripts/import-vehiclesdb.mjs --target production
+node scripts/import-vehiclesdb.mjs --target production --apply --confirm <code from the dry run>
+```
+
+It imports VehiclesDB's car catalogue at the release pinned in
+`scripts/lib/vehicle-catalog.mjs` (commit and per-file sha256), then re-runs
+the curated generations seed and its backfill from
+`20261020100000_vehicle_generations.sql`, in one transaction. Moving to a
+newer VehiclesDB release is a reviewed PR that changes the commit, the release
+name and both hashes together; then re-run the script on each project. A
+release that renames a make or model onto an existing name aborts the run on
+a unique index and changes nothing; resolve the clash first. Licence: CC BY
+4.0 (`LICENSE` at the pinned commit; GitHub detects none).
+Record the run in `docs/release-evidence/infrastructure.md`.
+
 ## 4. Wire the app
 
 Environment (deployment platform). Boot-time validation:
