@@ -497,12 +497,18 @@ or a search engine that fetched the card earlier keeps its own copy for as
 long as it chooses; we cannot call that back.
 
 If photos are missing on a page: a member photo that reaches the browser
-unsigned is reported to monitoring as "A member photo reached a page unsigned
-(bucket)", once for each page address. One page means a read that skipped the
-signing wrapper (`tests/ci/unsigned-photo-reads.test.ts` is the check for the
-service-role kind). Every page at once, together with "signing failed" from
-the server, means the photo store did not answer: signing pauses for thirty
-seconds after a failure and tries again by itself.
+unsigned is reported to monitoring as a warning, "A member photo reached a
+page unsigned (bucket)", tagged with the bucket and the first part of the
+page's address (never the rest of it), at most once for each such area in a
+page load and at most thirty a minute across all visitors. One area means a
+read that skipped the signing wrapper (`tests/ci/unsigned-photo-reads.test.ts`
+is the check for the service-role kind). Many areas at once, together with
+"signing failed" or "signing ran past its budget" from the server, means the
+photo store is failing or slow for that bucket: a page waits at most two and
+a half seconds for it, that bucket alone is paused (two seconds, doubling to
+thirty while it keeps failing) and tried again by itself, and links signed in
+the last hour go on being shown meanwhile. An export page is not written
+while the store does not answer; its job is tried again.
 
 ## 5d. Account deletions: every state and the safe action (#106, #108)
 

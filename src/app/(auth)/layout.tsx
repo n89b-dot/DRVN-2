@@ -3,10 +3,11 @@ import { Suspense, type ReactNode } from "react";
 
 import { ListingCard, Mosaic, MosaicCell } from "@/components/ui";
 import { hydrateListingCards } from "@/lib/marketplace/query";
-import { anyUnsignedMemberPhoto, timedCopy } from "@/lib/photo-copies";
+import { timedCopy } from "@/lib/photo-copies";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { vehicleSubline } from "@/lib/vehicles/label";
 import { AuthClose } from "./auth-close";
+import { backdropKeepable } from "./backdrop-photos";
 
 /**
  * The backdrop's data is public and identical for every visitor, and layouts
@@ -63,8 +64,7 @@ const getBackdropCards = timedCopy(
   },
   {
     maxAgeMs: 60_000,
-    // The photo fields themselves, not a search of the whole value: a seller can write an address into a title.
-    keep: (cards) => !anyUnsignedMemberPhoto(cards.map((card) => (card.kind === "listing" ? card.listing.cover_url : card.build.cover_image_url))),
+    keep: backdropKeepable,
   },
 );
 
