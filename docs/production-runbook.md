@@ -98,6 +98,14 @@ node scripts/apply-migration.mjs --target production supabase/migrations/*.sql
 node scripts/apply-migration.mjs --target production --apply --confirm <code> supabase/migrations/*.sql
 ```
 
+`--status` reads one table and changes nothing, so it does not need the
+owner's password. When the env file carries `SUPABASE_DB_READER_USER` and
+`SUPABASE_DB_READER_PASSWORD`, `--status` signs in with that read-only login
+and ignores any owner password in the file. The deploy workflow does this
+with `deploy_reader` (`docs/staging-setup.md` §11.4) and holds no owner
+password. The runner refuses a login given as read-only that could write.
+Every other mode still signs in as the owner.
+
 Each file runs in one transaction with its row in
 `supabase_migrations.schema_migrations`; a failing self-check raises, rolls
 back that file (and its row) and stops the run. Rerunning the same command
@@ -147,6 +155,46 @@ infer from the file list), review it, then run it in the SQL editor. The
 runner only runs files from `supabase/migrations/`, so it won't run this one.
 `on conflict do nothing` makes it safe to repeat. Keep `supabase/MIGRATIONS.md`
 as the human record of what was applied where and when.
+
+### 3a. Vehicle catalogue
+
+A new project starts with an empty catalogue and no generations: `0041` seeds
+from cache tables that are empty on a new project, and the generations
+migration joins to the catalogue (#119). After the schema, before launch, run
+`scripts/import-vehiclesdb.mjs` against the target, dry run first. `production`
+is not in `supabase/migration-targets.json` yet: a reviewed PR adds it before
+its first migration (§3), and this step needs it too.
+
+```bash
+node scripts/import-vehiclesdb.mjs --target production
+node scripts/import-vehiclesdb.mjs --target production --apply --confirm <code from the dry run>
+```
+
+It imports VehiclesDB's car catalogue at the release pinned in
+`scripts/lib/vehicle-catalog.mjs` (commit and per-file sha256), then re-runs
+the curated generations seed and its backfill from
+`20261020100000_vehicle_generations.sql`, in one transaction. Moving to a
+newer VehiclesDB release is a reviewed PR that changes the commit, the release
+name and both hashes together; then re-run the script on each project. A
+release that renames a make or model onto an existing name aborts the run on
+a unique index and changes nothing; resolve the clash first. Licence: CC BY
+4.0 (`LICENSE` at the pinned commit; GitHub detects none).
+
+The seed joins the curated list to the catalogue, so a curated make or model
+the catalogue lacks is dropped without an error. Both runs say what happened
+(work review #141): the dry run prints how many curated generations will find
+a catalogue model after the import and lists each curated model that will
+not, with its generations; the apply prints the same for the catalogue as it
+then stands. Neither changes the exit code. On a database filled only from
+the pinned release (staging, 10 November 2026 dry run), 175 of 194 curated
+generations match: VehiclesDB files the Golf GTI and Golf R under Golf, so the
+curated rows for `Golf GTI`, `GTI` and `Golf R` (19 generations) have no model
+to attach to. A car entered as a Golf still resolves its generation. Shared
+dev matches all 194, because its catalogue also holds models from the
+earlier vPIC seed.
+
+Record the run in `docs/release-evidence/infrastructure.md`: the closing
+counts and the coverage line, with any misses.
 
 ## 4. Wire the app
 
@@ -363,7 +411,9 @@ If the confirmed factor is ever removed (a lost phone: the recovery steps in
 operator repeats steps 2–4 for the new factor. Members confirmed by the
 migration itself were those with exactly one verified authenticator on file
 when it ran (`mfa_confirmed_by` says so); anyone else is pending until
-confirmed. The console is at `/admin`; it 404s for everyone else.
+confirmed. The console is at `/admin`; it 404s for everyone else. Sign in
+first, then open `/admin`: since N715 a signed-out visit gets the ordinary
+"Not found" page straight from the proxy, with no sign-in redirect.
 
 ## 5b. Money reconciliation & recovery (run these when things go wrong)
 
@@ -402,6 +452,20 @@ Every money queue is durable and visible in **Admin → Payments**:
   URL unauthenticated must 400/403. (0027 self-checks assert this at apply
   time.)
 
+## 5c0. Deleted photos and cached copies (N717)
+
+Removing a member photo deletes the storage object; nothing purges copies by
+hand. That is enough, because since N455 every member photo is a private
+object reached through a signed link that lives at most two hours. The image
+optimiser's copy is keyed by that link: new uploads carry an hour's
+Cache-Control, and the proxy refuses an expired or unsigned member-photo
+source before the optimiser can answer (#196). Supabase's Smart CDN drops
+its own cached copy when an object is deleted. A copyright takedown is
+refused at `/_next/image` straight away (451). So a deleted photo stays
+reachable for at most about two hours, and only to someone who already held
+its live link. Photos uploaded before 10 Nov 2026 carry a year's
+Cache-Control on their object, but the proxy's expiry check covers them too.
+
 ## 5c. Old photos that still carry metadata (one-off, N627)
 
 Message photos sent before 20261005100000 went into `message-photos` straight
@@ -430,6 +494,86 @@ it won't re-encode) are listed for a person to look at. Dispute evidence is
 never touched (kept as uploaded); public buckets use
 `scripts/public-media-backfill.mjs`. Not scheduled: new uploads can't carry
 metadata, so there is nothing for a repeat run to find.
+
+## 5e. A copyright counter-notice, handled by hand (decision D2)
+
+The console can take content down after a copyright notice. It cannot yet put
+it back: the control for that
+([#209](https://github.com/n89b-dot/DRVN-2/pull/209)) is set aside until
+after launch (decision D2 of
+`docs/plans/2026-11-work-review-remediation-plan.md`). Until it returns, a
+counter-notice is handled by hand, as below. This is the procedure of the US
+DMCA (17 U.S.C. §512(g)); counsel confirms it for the entity and its market
+before the first real one (owner item F4), and decides anything this section
+calls a judgement.
+
+1. **Receive it and keep it.** A counter-notice comes to the copyright
+   agent's address. It should give the member's name, address and phone
+   number; say what was removed and where it was; state, under penalty of
+   perjury, that it was removed by mistake or misidentification; consent to
+   the jurisdiction of the federal court for their address; and be signed.
+   Whether it is valid is counsel's call, not the operator's. File the
+   message itself with the copyright agent's records and open a line in the
+   takedown log (below) the day it arrives. The database has nowhere for it:
+   do not write it into the notice.
+2. **Send it to the person who complained**, promptly, with a line saying the
+   content will be restored in ten business days unless they tell the
+   copyright agent they have filed a court action to stop it. Log the date
+   sent.
+3. **Wait ten business days from the day the counter-notice arrived, and no
+   more than fourteen.** Business days, not calendar days: count them on a
+   calendar and write the two dates in the log. If, in that time, the
+   complainant says they have filed a court action, stop here and hand it to
+   counsel; nothing is restored.
+4. **Restore it: the member lists the part again.** Tell the member they may
+   list it again and add its photos again. Nothing in the product stops
+   them: a takedown blocks the stored files it removed, not the member and
+   not the picture, and a photo uploaded again is a new file. The same goes
+   for a garage photo or a post: the member adds it again.
+   - The original listing stays removed, and its photos are gone. A takedown
+     deletes the files; they cannot be brought back.
+   - **Do not** change the notice (`copyright_notices.status` or its
+     `takedown` record), delete rows from `copyright_blocked_media`, or set
+     the removed listing's status with SQL. The database refuses to put back
+     a listing an acted-on notice holds, by design. And the blocklist is
+     kept by file, not by notice, so removing one notice's row can unblock a
+     file that a second notice still covers (work review #150).
+5. **Finish the line in the takedown log**, so the whole event can be read
+   from it later.
+6. **A second notice about the restored content**, after the complainant has
+   gone to court or otherwise, goes to counsel before anything is taken down
+   again.
+
+**The takedown log.** No code stands behind this procedure, so the log is
+the audit record. **It does not exist yet**, and no admin screen holds it.
+The owner creates it when the copyright agent is registered (owner item F4):
+one private spreadsheet named "DRVN takedown log", in the business's own
+document storage beside the copyright inbox, backed up with the business's
+other records (the restore procedure in §6 reads from it). Never in this
+repository, which is public, and never in the database. **Until it exists**,
+the line is written as an email from the copyright agent's address to
+itself, subject `Takedown log: <notice id>`, replied to as each step
+happens, so the dates are stamped by the mail system and stay in one thread;
+copy those threads into the spreadsheet when it is made. One line per
+counter-notice, filled in as the steps happen, never rewritten afterwards:
+
+| What | Where it comes from |
+|---|---|
+| The notice it answers | the notice's id, from its page in Admin (the id in the address) |
+| Who sent the counter-notice | the member's handle and account id, and the address it came from |
+| When it arrived | the date and time on the message, with the time zone |
+| Who recorded it | the operator's name |
+| Who judged it valid, and when | counsel's name and the date of their answer |
+| When it was sent to the complainant | the date and time, and the address it went to |
+| The two dates of the wait | the tenth and the fourteenth business day after it arrived |
+| Whether a court action was notified | yes or no, with the date and the message if yes |
+| When the member was told they may list again | the date and time |
+| What came back | the new listing's id, or the garage photo or post the member added again |
+
+What the set-aside control will add when it returns: a record of the
+counter-notice in the database, the waiting period counted in business days
+from a checked date, the original listing restored with its photos, and a
+blocklist kept by file and notice.
 
 ## 6. Backups, and the rehearsed restore
 
@@ -689,6 +833,30 @@ forward with a new migration through the runner. Restoring a backup (§6) is
 the last resort, because it loses every order, payment and message since the
 backup.
 
+**What a rollback does not bring back (work review #142).** Two things about
+a rollback are today's, not the old release's, and one is the reverse:
+
+- **The host's settings are today's.** The job builds the old code with the
+  environment variables the host holds now (`vercel pull` reads them at
+  build time). A release that went bad because of a settings change (a
+  rotated key, a wrong origin, a switched flag) is still bad after a
+  rollback. Put the setting right in the host's project settings, then
+  dispatch the tag again so the build picks it up. The same holds the other
+  way: an old release reads a variable that has since been removed as
+  unset, and ignores one added since.
+- **The workflow is today's.** A dispatch runs `.github/workflows/deploy.yml`
+  from `main`, so the steps, their order and the secrets they read are the
+  current ones.
+- **The scripts the steps run are the old tag's.** The job checks out the
+  tag, so `scripts/deploy.mjs` (the gate, migration and version checks),
+  `scripts/apply-migration.mjs --status`, `scripts/release-candidate.mjs`
+  and the allow-list of databases in `supabase/migration-targets.json` are
+  the versions that release shipped with. A check fixed or tightened since
+  that tag is not in force during the rollback, and a tag from before a
+  database or its pooler host was added to the allow-list cannot check it:
+  the migration step fails and nothing is deployed. If that happens, roll
+  back to a newer tag that has the entry, or fix forward.
+
 **After any rollback:** confirm `/api/version` reports the commit you meant,
 check Admin → Settings → Background jobs and `/api/health/workers`, and
 write down in the release packet which tag was rolled back and why.
@@ -730,7 +898,11 @@ also verifies the result (`docs/owner/branch-protection.md`).
 Require `release-gate` alone: it is the aggregate check, and it fails unless
 `verify`, `secrets`, `secrets-full`, `sql-guard`, `e2e` and
 `stripe-integration` all ran and passed (updated 1 October 2026 — e2e no
-longer self-skips; it runs on a local stack in CI). `secrets` scans only the
+longer self-skips; it runs on a local stack in CI). One exception since
+November 2026: a pull request that changes documents only skips `e2e`, and
+the gate accepts that skip and no other; a push to `main` always runs
+everything (`docs/owner/branch-protection.md`, "Documents-only pull
+requests"). `secrets` scans only the
 commits a PR or push adds (first-parent, no merges); `secrets-full` is the
 full-history lane — every reachable commit, merges included, plus the tracked
 tree — and is what fails a key committed and later deleted (added 3 October
@@ -774,6 +946,12 @@ are kept 90 days. Sending goes
 through `src/lib/email/send.ts`, selected by `EMAIL_PROVIDER` and sent from
 `EMAIL_FROM`. No provider is chosen yet (R-email): until one is, digests are
 recorded and nothing is sent, and the route logs and returns `provider: null`.
+While `EMAIL_PROVIDER` is unset, `/api/health/workers` lists the job
+`drvn-saved-search-digests` and its family `savedSearchDigests` with
+`disabled: true` and does not judge them, as it does the `search` and
+`analytics` families without their providers: a job with nothing to send
+cannot page anyone. Setting `EMAIL_PROVIDER` puts both back in the check, and
+a provider that is set but misconfigured stays in it.
 
 `/api/jobs/media-gc` and `/api/jobs/listing-imports` are scheduled the same
 way. To run any of them by hand:
@@ -1094,7 +1272,14 @@ Until PR #158 the card-number redactor could corrupt about 0.3% of UUIDs it
 passed over, leaving text like `70e95888-a[card number removed]b5e67f70ec`
 in agent rows. New rows are safe. Before promoting any database that held agent
 activity from before 8 November, run `supabase/audits/agent_mangled_ids.sql`
-(read-only). Shared dev counted 0 on 9 November 2026; staging and production
-were created after the fix, or hold no agent rows. A non-zero count needs a
-backfill decision, because the original id can't be recovered from the row
-alone.
+(read-only). A non-zero count needs a backfill decision, because the original
+id can't be recovered from the row alone.
+
+The audit counts a marker with a hex digit or a dash touching it on either
+side. Its first version (9 November) asked for one on both sides and missed
+an id whose removed digits ran to its first or last character, about one
+mangled id in five (work review #145). The corrected audit counted 0 in every
+agent table on shared dev and on staging on 10 November 2026; neither holds
+any `agent_events` or `agent_messages` rows. Staging is not exempt by date: it
+was created on 7 November, a day before the fix merged. Production does not
+exist yet and will be created after the fix.

@@ -139,6 +139,39 @@ every table in `public`.
    config declares this as `"guestCheckout": "capped"` (§13), and the
    `guest-hold-caps` gate proves it on staging.
 
+## 2a. Fill the vehicle catalogue [ENGINEER]
+
+A new project's catalogue is empty. `0041_vehicle_catalog.sql` seeds makes
+and models from cache tables that are empty on a new project, and
+`20261020100000_vehicle_generations.sql` joins its curated generations to that
+catalogue, so it inserts nothing. Until this step runs, the Add Car dialog,
+the sell form's fitment fields and the Marketplace's make filters have
+nothing to offer (#119).
+
+From the same staging-only checkout as step 2, after the schema and before
+any tester signs up:
+
+```bash
+node scripts/import-vehiclesdb.mjs --target staging            # dry run: fetches, verifies, counts
+node scripts/import-vehiclesdb.mjs --target staging --apply --confirm <code from the dry run>   # imports, then re-runs the generations seed
+```
+
+The script reads the env file the way the migration runner does
+(`--env-file`, default `.env.local`). It fetches VehiclesDB's car catalogue
+**at the pinned release** (`scripts/lib/vehicle-catalog.mjs`: a commit, and a
+sha256 per file; other bytes are refused). It upserts makes and models, then
+runs the generations migration's own curated seed and backfill again, all in
+one transaction. Expect about 300 makes, about 5,500 models and a non-zero
+generation count. Re-running the same release is idempotent. A VehiclesDB
+upgrade (a PR that changes the pin) is safe to try, but a release that
+renames a make or model to a name another row already has fails on the
+`lower(name)` or `vdb_id` unique index, and the whole run rolls back. Read the
+error, fix the clash in a reviewed PR, then run again. Attribution ("Vehicle
+data by VehiclesDB") is already in the Add Car dialog. **Licence:** CC BY 4.0,
+read on 9 Nov 2026 from `LICENSE` at the pinned commit `d0e40c9`, which covers
+`catalog/**`. GitHub's own licence detector reports none, because the file's
+wording isn't one it matches.
+
 ## 3. Supabase Auth [OWNER clicks, ENGINEER can drive]
 
 Authentication → URL configuration:
@@ -338,8 +371,10 @@ on a separate host (`docs/remediation-release-and-monitoring.md`).
    `rc-YYYYMMDD` tag on `main`, through the `production` environment.
    - Repository secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`,
      `VERCEL_STAGING_PROJECT_ID`, `VERCEL_PRODUCTION_PROJECT_ID`,
-     `STAGING_SUPABASE_DB_PASSWORD`, `PRODUCTION_SUPABASE_DB_PASSWORD`,
-     `ADMIN_ALERT_WEBHOOK_URL`.
+     `STAGING_SUPABASE_READER_PASSWORD`, `PRODUCTION_SUPABASE_READER_PASSWORD`,
+     `ADMIN_ALERT_WEBHOOK_URL`. The two database secrets are the password of
+     `deploy_reader`, a read-only login made as below. The workflow holds no
+     database owner's password (work review #138).
    - Repository variables: `DRVN_STAGING_ORIGIN`, `DRVN_PRODUCTION_ORIGIN`,
      `DRVN_STAGING_SUPABASE_URL`, `DRVN_PRODUCTION_SUPABASE_URL`, and
      `DRVN_DEPLOY_STAGING = true` to switch the staging job on.
@@ -348,6 +383,36 @@ on a separate host (`docs/remediation-release-and-monitoring.md`).
      a person's approval as well as the tag.
    - The pipeline never applies a migration. If staging or production lacks
      one, the deploy stops and names it; apply it with the runner (§2).
+   - **The read-only login `deploy_reader`.** The deploy's migration check
+     reads one table, `supabase_migrations.schema_migrations`, so it signs in
+     with a login that can do nothing else. Make it once on each database
+     (staging, then production when it exists), as the owner, in the
+     dashboard's SQL editor, with a new password of 32 or more characters
+     for each database:
+
+     ```sql
+     create role deploy_reader login password '<new password>' connection limit 3;
+     alter role deploy_reader set default_transaction_read_only = on;
+     alter role deploy_reader set statement_timeout = '10s';
+     grant usage on schema supabase_migrations to deploy_reader;
+     grant select on supabase_migrations.schema_migrations to deploy_reader;
+     ```
+
+     Put each password in its secret above and nowhere else. To rotate one,
+     run `alter role deploy_reader password '<new password>';` and update the
+     secret. Grant it nothing else, and never make it a member of another
+     role (a member inherits that role's rights). The runner checks the
+     login on every use and refuses it if it is a superuser, can create
+     roles, bypasses row-level security, is a member of any role, is not
+     read-only by default, or can write the history table, so a wrong
+     password pasted here cannot quietly be an owner's. What keeps it from
+     writing is what it holds, not the read-only default, which a session
+     can switch off. These five statements were run on a new Supabase
+     Postgres 17 on 10 November 2026 and are enough for `--status`. To try it by hand,
+     put `SUPABASE_DB_READER_USER=deploy_reader` and
+     `SUPABASE_DB_READER_PASSWORD=…` in an env file beside
+     `NEXT_PUBLIC_SUPABASE_URL` and run
+     `node scripts/apply-migration.mjs --target staging --env-file <file> --status`.
 
 ## 12. First admin [ENGINEER]
 
@@ -366,6 +431,13 @@ sign up themselves; there are no invitations (the invite-only beta was removed
 by #126).
 
 ## 13. Release-candidate evidence — the 15 gates [ENGINEER, OWNER reviews]
+
+**Staging proofs that need two server instances (before the gates).** One
+signed link per photo across instances (#117, N954): with staging serving
+from at least two instances, open one public car page twice in different
+browsers. Every photo's `/object/sign/…?token=` must be the same in both,
+and `select count(*) from private.photo_signatures` must grow once per
+photo per hour, not once per instance.
 
 1. Write the candidate config **outside the checkout** (no secrets in it):
    ```json

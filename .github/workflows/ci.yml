@@ -30,6 +30,30 @@ permissions:
   contents: read
 
 jobs:
+  # Plan 2 item A0: does this pull request change documents only? If it does,
+  # the browser suite (`e2e`, 20 to 30 minutes) is skipped and release-gate
+  # accepts the skip. Only a pull request can be documents-only: a push to main
+  # and a manual run always get the full suite, so every commit on main is
+  # still proven by the browser tests. The rules are in
+  # scripts/ci-change-scope.mjs (tests/ci/change-scope.test.ts); on any doubt
+  # or error the answer is "full".
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          # On a pull request HEAD is the merge commit; depth 2 brings its
+          # base parent (HEAD^1), which the script diffs against.
+          fetch-depth: 2
+      # The runner's own Node: the script has no dependencies, so no npm ci.
+      - name: Decide the change scope
+        id: scope
+        run: node scripts/ci-change-scope.mjs
+
   verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -356,7 +380,13 @@ jobs:
           retention-days: 7
 
   # Each runner owns local Supabase/Auth/Storage/Mailpit and synthetic fixtures.
+  #
+  # Skipped on a documents-only pull request (the `changes` job, plan 2 item
+  # A0). release-gate accepts a skipped e2e only when `changes` succeeded and
+  # said so; a skip for any other reason keeps the gate red.
   e2e:
+    needs: [changes]
+    if: needs.changes.outputs.docs_only != 'true'
     outputs:
       ran: ${{ steps.executed.outputs.ran }}
       # Set only by the required step, after its first-attempt run passes.
@@ -474,8 +504,9 @@ jobs:
   # Stripe test API. The suite itself refuses non-sk_test_ keys, and a missing
   # required secret fails this lane explicitly.
   stripe-integration:
-    # Keep provider verification behind the mandatory browser gate.
-    needs: [e2e]
+    # Runs beside the browser suite, not after it (plan 2 item A0): it takes
+    # about two minutes and release-gate requires both, so waiting on e2e only
+    # delayed the answer.
     outputs:
       ran: ${{ steps.gate.outputs.run }}
     runs-on: ubuntu-24.04
@@ -547,11 +578,14 @@ jobs:
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    needs: [verify, secrets, secrets-full, sql-guard, e2e, stripe-integration]
+    needs: [changes, verify, secrets, secrets-full, sql-guard, e2e, stripe-integration]
     steps:
       - name: Require executed verification
         id: require
         env:
+          EVENT: ${{ github.event_name }}
+          CHANGES: ${{ needs.changes.result }}
+          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
           VERIFY: ${{ needs.verify.result }}
           SECRETS: ${{ needs.secrets.result }}
           SECRETS_FULL: ${{ needs.secrets-full.result }}
@@ -579,13 +613,29 @@ jobs:
             jq -cn --arg name "$1" --arg value "${2:-unset}" --arg needs "$3" --argjson ok "$ok" \
               '{($name): {value: $value, needs: $needs, ok: $ok}}' >> "$RUNNER_TEMP/requirements.jsonl"
           }
+          # Plan 2 item A0. The browser suite may be skipped for exactly one
+          # reason: this is a pull request, the `changes` job succeeded, and it
+          # said the diff is documents only. Then e2e must be 'skipped', never
+          # failed or cancelled. In every other case e2e must have run and
+          # passed on its first attempt, as before.
+          scope=full
+          if [ "$EVENT" = pull_request ] && [ "$CHANGES" = success ] && [ "$DOCS_ONLY" = true ]; then
+            scope=documents-only
+          fi
+          echo "$scope" > "$RUNNER_TEMP/change-scope"
+          echo "change scope: $scope"
+          require "change scope decided" "$CHANGES" success
           require verify "$VERIFY" success
           require secrets "$SECRETS" success
           require secrets-full "$SECRETS_FULL" success
           require sql-guard "$SQL" success
-          require e2e "$E2E" success
-          require "e2e executed" "$E2E_RAN" true
-          require "e2e first attempt passed (diagnostic retries never count)" "$E2E_FIRST_ATTEMPT" true
+          if [ "$scope" = documents-only ]; then
+            require "e2e (documents-only pull request: skipped by design)" "$E2E" skipped
+          else
+            require e2e "$E2E" success
+            require "e2e executed" "$E2E_RAN" true
+            require "e2e first attempt passed (diagnostic retries never count)" "$E2E_FIRST_ATTEMPT" true
+          fi
           require stripe-integration "$STRIPE" success
           require "stripe-integration executed" "$STRIPE_RAN" true
           exit "$failed"
@@ -619,14 +669,18 @@ jobs:
           if [ -s "$summary" ]; then counts=$(jq -c '.counts' "$summary"); fi
           requirements='{}'
           if [ -s "$RUNNER_TEMP/requirements.jsonl" ]; then requirements=$(jq -cs 'add' "$RUNNER_TEMP/requirements.jsonl"); fi
+          # "documents-only" means the browser suite was skipped by design
+          # (plan 2 item A0); only a pull request can carry it.
+          scope=unknown
+          if [ -s "$RUNNER_TEMP/change-scope" ]; then scope=$(cat "$RUNNER_TEMP/change-scope"); fi
           jq -n \
-            --arg sha "$SHA" --arg head_sha "$HEAD_SHA" --arg ref "$REF" --arg event "$EVENT" \
+            --arg sha "$SHA" --arg head_sha "$HEAD_SHA" --arg ref "$REF" --arg event "$EVENT" --arg scope "$scope" \
             --arg result "${RESULT:-unknown}" --argjson run_id "$RUN_ID" --argjson run_attempt "$RUN_ATTEMPT" \
             --argjson requirements "$requirements" \
             --argjson first_attempt_passed "$([ "$E2E_FIRST_ATTEMPT" = true ] && echo true || echo false)" \
             --argjson browser_counts "$counts" \
             '{sha: $sha, head_sha: $head_sha, ref: $ref, event: $event, run_id: $run_id, run_attempt: $run_attempt,
-              result: $result, requirements: $requirements, first_attempt_passed: $first_attempt_passed,
+              scope: $scope, result: $result, requirements: $requirements, first_attempt_passed: $first_attempt_passed,
               browser_counts: $browser_counts}' > "$RUNNER_TEMP/release-gate/release-gate-$SHA.json"
           cat "$RUNNER_TEMP/release-gate/release-gate-$SHA.json"
 
@@ -644,7 +698,7 @@ jobs:
   summary:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    needs: [verify, secrets, secrets-full, sql-guard, e2e, stripe-integration]
+    needs: [changes, verify, secrets, secrets-full, sql-guard, e2e, stripe-integration]
     if: always()
     steps:
       - name: Coverage summary
@@ -658,7 +712,8 @@ jobs:
             echo "| Secret scan, incremental (this PR's / push's first-parent, non-merge commits) | ${{ needs.secrets.result }} |"
             echo "| Secret scan, full (all reachable commits incl. merges + tracked tree) | ${{ needs.secrets-full.result }} |"
             echo "| SQL guards (all registered suites) | ${{ needs.sql-guard.result }} |"
-            echo "| Required browser regression suite | ${{ needs.e2e.result }}; executed=${{ needs.e2e.outputs.ran }}; first attempt passed=${{ needs.e2e.outputs.first_attempt_passed || 'false' }} |"
+            echo "| Change scope (documents-only pull requests skip the browser suite) | ${{ needs.changes.result }}; documents only=${{ needs.changes.outputs.docs_only || 'false' }} |"
+            echo "| Required browser regression suite | ${{ needs.e2e.result }}; executed=${{ needs.e2e.outputs.ran || 'false' }}; first attempt passed=${{ needs.e2e.outputs.first_attempt_passed || 'false' }} |"
             echo "| Stripe test-mode integration | ${{ needs.stripe-integration.result }}; executed=${{ needs.stripe-integration.outputs.ran }} |"
             echo "| JUnit results (one artifact per job, prefix \`test-results-${{ github.sha }}-\`) | verify, sql-guard, e2e, stripe-integration; see docs/ids.md |"
             echo "| Provider coverage | Stripe test API covers multi-seller capture and late compensation; browser checkout uses stubs. Connected payout/dispute and 3DS browser proof remain open |"

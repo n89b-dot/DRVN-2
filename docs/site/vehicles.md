@@ -183,7 +183,7 @@ probe at any volume (2M-part timings in `docs/performance/query-plans.md`).
 | Source | Role | License |
 | --- | --- | --- |
 | NHTSA vPIC (`src/lib/vehicles/vpic.ts`) | VIN decoding; US make/model cache (`vehicle_makes`/`vehicle_models`, feeding the sell fitment datalists) | US public data, keyless API |
-| [VehiclesDB](https://vehiclesdb.com) (`scripts/import-vehiclesdb.mjs`) | Global make/model breadth (277 car makes / ~4,900 models from 14 countries' registers), aliases ("Rabbit" ↔ Golf), popularity deciles | CC-BY 4.0 — **attribution required**: "Vehicle data by VehiclesDB" with a link, shown in the Add Car dialog foot and here |
+| [VehiclesDB](https://vehiclesdb.com) (`scripts/import-vehiclesdb.mjs`, pinned release in `scripts/lib/vehicle-catalog.mjs`) | Global make/model breadth (277 car makes / ~4,900 models from 14 countries' registers), aliases ("Rabbit" ↔ Golf), popularity deciles | CC-BY 4.0 — **attribution required**: "Vehicle data by VehiclesDB" with a link, shown in the Add Car dialog foot and here |
 
 Make ranking is model-weighted (how many broadly popular models a make has) —
 computed at import; "best single model decile" made one-hit small-market

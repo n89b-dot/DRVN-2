@@ -19,14 +19,19 @@
 # Off until the owner sets it up (docs/staging-setup.md §4, §11): the staging
 # job runs only when the repository variable DRVN_DEPLOY_STAGING is 'true'.
 # Secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_STAGING_PROJECT_ID,
-# VERCEL_PRODUCTION_PROJECT_ID, STAGING_SUPABASE_DB_PASSWORD,
-# PRODUCTION_SUPABASE_DB_PASSWORD, ADMIN_ALERT_WEBHOOK_URL. Variables:
+# VERCEL_PRODUCTION_PROJECT_ID, STAGING_SUPABASE_READER_PASSWORD,
+# PRODUCTION_SUPABASE_READER_PASSWORD, ADMIN_ALERT_WEBHOOK_URL. Variables:
 # DRVN_DEPLOY_STAGING, DRVN_STAGING_ORIGIN, DRVN_PRODUCTION_ORIGIN,
 # DRVN_STAGING_SUPABASE_URL, DRVN_PRODUCTION_SUPABASE_URL. The two database
-# passwords belong on the staging and production environments, not the
+# secrets belong on the staging and production environments, not the
 # repository (#123). On each hosting project (not here): DRVN_DEPLOY_ENV =
 # staging or production, read at build through `vercel pull` (#121); the
 # build refuses a hosted production build without it.
+#
+# The migration check only reads one table, so it signs in as deploy_reader, a
+# read-only database login (docs/staging-setup.md §11.4), and this workflow
+# holds no database owner's password. The runner refuses that login if it
+# could write.
 name: Deploy
 
 on:
@@ -77,10 +82,10 @@ jobs:
       - name: Staging has every migration
         env:
           SUPABASE_URL: ${{ vars.DRVN_STAGING_SUPABASE_URL }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.STAGING_SUPABASE_DB_PASSWORD }}
+          SUPABASE_DB_READER_PASSWORD: ${{ secrets.STAGING_SUPABASE_READER_PASSWORD }}
         run: |
           umask 077
-          printf 'NEXT_PUBLIC_SUPABASE_URL=%s\nSUPABASE_DB_PASSWORD=%s\n' "$SUPABASE_URL" "$SUPABASE_DB_PASSWORD" > "$RUNNER_TEMP/target.env"
+          printf 'NEXT_PUBLIC_SUPABASE_URL=%s\nSUPABASE_DB_READER_USER=deploy_reader\nSUPABASE_DB_READER_PASSWORD=%s\n' "$SUPABASE_URL" "$SUPABASE_DB_READER_PASSWORD" > "$RUNNER_TEMP/target.env"
           node scripts/apply-migration.mjs --target staging --env-file "$RUNNER_TEMP/target.env" --status > "$RUNNER_TEMP/status.json"
           rm -f "$RUNNER_TEMP/target.env"
           node scripts/deploy.mjs migrations "$RUNNER_TEMP/status.json"
@@ -164,10 +169,10 @@ jobs:
       - name: Production has every migration
         env:
           SUPABASE_URL: ${{ vars.DRVN_PRODUCTION_SUPABASE_URL }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.PRODUCTION_SUPABASE_DB_PASSWORD }}
+          SUPABASE_DB_READER_PASSWORD: ${{ secrets.PRODUCTION_SUPABASE_READER_PASSWORD }}
         run: |
           umask 077
-          printf 'NEXT_PUBLIC_SUPABASE_URL=%s\nSUPABASE_DB_PASSWORD=%s\n' "$SUPABASE_URL" "$SUPABASE_DB_PASSWORD" > "$RUNNER_TEMP/target.env"
+          printf 'NEXT_PUBLIC_SUPABASE_URL=%s\nSUPABASE_DB_READER_USER=deploy_reader\nSUPABASE_DB_READER_PASSWORD=%s\n' "$SUPABASE_URL" "$SUPABASE_DB_READER_PASSWORD" > "$RUNNER_TEMP/target.env"
           node scripts/apply-migration.mjs --target production --env-file "$RUNNER_TEMP/target.env" --status > "$RUNNER_TEMP/status.json"
           rm -f "$RUNNER_TEMP/target.env"
           node scripts/deploy.mjs migrations "$RUNNER_TEMP/status.json"

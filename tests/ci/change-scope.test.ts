@@ -1,0 +1,243 @@
+// Plan 2 item A0: a pull request that changes documents only skips the browser
+// suite, and release-gate accepts that skip and no other. Two directions are
+// proven here, by running the real code:
+//   1. a documents-only pull request can reach a green gate without e2e;
+//   2. nothing else can: any code path in the diff, any event that is not a
+//      pull request, a `changes` job that did not succeed, or an e2e that was
+//      skipped for another reason leaves the gate red.
+// The classifier is scripts/ci-change-scope.mjs; the gate's script is run from
+// .github/workflows/ci.yml itself with bash and jq, as release-gate-record does.
+import { execFileSync, spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+import yaml from "js-yaml";
+import { afterAll, describe, expect, it } from "vitest";
+
+import { changedFiles, classify, isDocument } from "../../scripts/ci-change-scope.mjs";
+
+type Step = { id?: string; name?: string; if?: string; uses?: string; run?: string; env?: Record<string, string> };
+type Job = { if?: string; needs?: string[]; outputs?: Record<string, string>; steps: Step[] };
+const root = path.resolve(__dirname, "../..");
+const ci = yaml.load(fs.readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf8")) as { jobs: Record<string, Job> };
+
+const hasJq = spawnSync("jq", ["--version"]).status === 0;
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "drvn-change-scope-"));
+afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
+
+describe("which paths are documents (plan 2 A0)", () => {
+  it.each([
+    "docs/plans/2026-11-remediation-record.md",
+    "docs/release-evidence/launch-configuration.json",
+    "docs/design/agent-a3/buyer-760.png",
+    "docs/remediation-evidence/2026-09-05/csp-browsers.jsonl",
+    "docs/readiness-progress/index.html",
+    "README.md",
+    "CLAUDE.md",
+    "supabase/MIGRATIONS.md",
+    "e2e/README.md",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    ".claude/skills/taste-skill/SKILL.md",
+    "docs/UPPER.MD",
+  ])("%s is a document", (file) => {
+    expect(isDocument(file)).toBe(true);
+  });
+
+  it.each([
+    "src/app/page.tsx",
+    "src/lib/docs/site.ts",
+    "e2e/golden-path.spec.ts",
+    "supabase/migrations/20261110190000_photo_rules.sql",
+    "supabase/tests/orders_guard.sql",
+    "package.json",
+    "package-lock.json",
+    "next.config.ts",
+    "playwright.config.ts",
+    "scripts/ci-change-scope.mjs",
+    ".github/workflows/ci.yml",
+    ".github/workflows/notes.md",
+    "docs/review-evidence/2026-09-04/control-flow-probes.cjs",
+    "docs/site/example.ts",
+    "docs/Makefile",
+    "docs/.env",
+    "public/logo.png",
+    "design-mockups/atlas/index.html",
+    ".env.example",
+    "../outside.md",
+    "/etc/notes.md",
+    "",
+  ])("%s is not a document", (file) => {
+    expect(isDocument(file)).toBe(false);
+  });
+});
+
+describe("change scope of an event (plan 2 A0)", () => {
+  const docs = ["docs/a.md", "README.md"];
+
+  it("a pull request whose every path is a document is documents-only", () => {
+    expect(classify({ event: "pull_request", files: docs })).toMatchObject({ docsOnly: true });
+  });
+
+  it("one code path among many documents makes it a full run", () => {
+    const result = classify({ event: "pull_request", files: [...docs, "src/lib/payments/settlement.ts"] });
+    expect(result.docsOnly).toBe(false);
+    expect(result.reason).toContain("src/lib/payments/settlement.ts");
+  });
+
+  it.each(["push", "workflow_dispatch", "merge_group", "schedule", ""])("event '%s' is always a full run, documents or not", (event) => {
+    expect(classify({ event, files: docs }).docsOnly).toBe(false);
+  });
+
+  it("an empty diff is a full run", () => {
+    expect(classify({ event: "pull_request", files: [] }).docsOnly).toBe(false);
+  });
+});
+
+describe("the diff the scope is read from (plan 2 A0)", () => {
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8" });
+
+  function repo(name: string, change: (dir: string) => void): string {
+    const dir = path.join(tmp, name);
+    fs.mkdirSync(path.join(dir, "src"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "docs"), { recursive: true });
+    git(dir, "init", "-q", "-b", "main");
+    fs.writeFileSync(path.join(dir, "src/notes.ts"), "export const notes = `a long enough body to be detected as a rename when moved`;\n");
+    fs.writeFileSync(path.join(dir, "docs/a.md"), "# a\n");
+    git(dir, "add", "-A");
+    git(dir, "commit", "-q", "-m", "base");
+    change(dir);
+    git(dir, "add", "-A");
+    git(dir, "commit", "-q", "-m", "change");
+    return dir;
+  }
+
+  it("a code file moved into docs/ is still seen as a code change", () => {
+    const dir = repo("rename", (d) => fs.renameSync(path.join(d, "src/notes.ts"), path.join(d, "docs/notes.md")));
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+      const files = changedFiles("HEAD^1", "HEAD");
+      expect(files.sort()).toEqual(["docs/notes.md", "src/notes.ts"]);
+      expect(classify({ event: "pull_request", files }).docsOnly).toBe(false);
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("the script answers docs_only=true for a documents-only commit and false for a code commit", () => {
+    const run = (dir: string, event: string) => {
+      const output = path.join(dir, "..", `${path.basename(dir)}-${event}.out`);
+      execFileSync("node", [path.join(root, "scripts/ci-change-scope.mjs")], {
+        cwd: dir,
+        env: { NODE_ENV: "test", PATH: process.env.PATH, GITHUB_EVENT_NAME: event, GITHUB_OUTPUT: output },
+        encoding: "utf8",
+      });
+      return fs.readFileSync(output, "utf8").trim();
+    };
+    const docsOnly = repo("docs-only", (d) => fs.writeFileSync(path.join(d, "docs/a.md"), "# a, edited\n"));
+    const mixed = repo("mixed", (d) => {
+      fs.writeFileSync(path.join(d, "docs/a.md"), "# a, edited\n");
+      fs.writeFileSync(path.join(d, "src/notes.ts"), "export const notes = 1;\n");
+    });
+    expect(run(docsOnly, "pull_request")).toBe("docs_only=true");
+    expect(run(docsOnly, "push")).toBe("docs_only=false");
+    expect(run(mixed, "pull_request")).toBe("docs_only=false");
+  });
+
+  it("answers full when the diff cannot be read", () => {
+    const dir = path.join(tmp, "not-a-repo");
+    fs.mkdirSync(dir, { recursive: true });
+    const output = path.join(tmp, "not-a-repo.out");
+    execFileSync("node", [path.join(root, "scripts/ci-change-scope.mjs")], {
+      cwd: dir,
+      // GIT_CEILING_DIRECTORIES stops git finding a repository above the temp dir.
+      env: { NODE_ENV: "test", PATH: process.env.PATH, GITHUB_EVENT_NAME: "pull_request", GITHUB_OUTPUT: output, GIT_CEILING_DIRECTORIES: tmp },
+      encoding: "utf8",
+    });
+    expect(fs.readFileSync(output, "utf8").trim()).toBe("docs_only=false");
+  });
+});
+
+describe("the workflow wires the scope to the browser suite only (plan 2 A0)", () => {
+  it("the changes job always runs and publishes the script's answer", () => {
+    const changes = ci.jobs.changes;
+    expect(changes.if).toBeUndefined();
+    expect(changes.needs).toBeUndefined();
+    expect(changes.outputs).toEqual({ docs_only: "${{ steps.scope.outputs.docs_only }}" });
+    expect(changes.steps.find((s) => s.id === "scope")?.run).toBe("node scripts/ci-change-scope.mjs");
+    expect(changes.steps[0].uses).toMatch(/^actions\/checkout@[0-9a-f]{40}$/);
+  });
+
+  it("only e2e is conditional on it, and the Stripe lane no longer waits on e2e", () => {
+    expect(ci.jobs.e2e.needs).toEqual(["changes"]);
+    expect(ci.jobs.e2e.if).toBe("needs.changes.outputs.docs_only != 'true'");
+    expect(ci.jobs["stripe-integration"].needs).toBeUndefined();
+    for (const name of ["verify", "secrets", "secrets-full", "sql-guard", "stripe-integration"]) {
+      expect(ci.jobs[name].if, `${name} runs on every change`).toBeUndefined();
+    }
+  });
+
+  it("release-gate reads the scope from the changes job's result and output", () => {
+    const env = ci.jobs["release-gate"].steps[0].env ?? {};
+    expect(env.EVENT).toBe("${{ github.event_name }}");
+    expect(env.CHANGES).toBe("${{ needs.changes.result }}");
+    expect(env.DOCS_ONLY).toBe("${{ needs.changes.outputs.docs_only }}");
+  });
+});
+
+describe.skipIf(!hasJq)("release-gate with a change scope (plan 2 A0)", () => {
+  const gateScript = ci.jobs["release-gate"].steps[0].run!;
+  const green = {
+    EVENT: "pull_request", CHANGES: "success", DOCS_ONLY: "false",
+    VERIFY: "success", SECRETS: "success", SECRETS_FULL: "success", SQL: "success",
+    E2E: "success", E2E_RAN: "true", E2E_FIRST_ATTEMPT: "true",
+    STRIPE: "success", STRIPE_RAN: "true",
+  };
+  // What GitHub hands the gate when e2e was skipped: no result but 'skipped', no outputs.
+  const skipped = { E2E: "skipped", E2E_RAN: "", E2E_FIRST_ATTEMPT: "" };
+  const docsOnly = { ...green, DOCS_ONLY: "true", ...skipped };
+
+  let n = 0;
+  function gate(env: Record<string, string>) {
+    const dir = path.join(tmp, `gate-${n++}`);
+    fs.mkdirSync(dir, { recursive: true });
+    const run = spawnSync("bash", ["-e", "-c", gateScript], {
+      env: { NODE_ENV: "test", PATH: process.env.PATH, RUNNER_TEMP: dir, ...env },
+      encoding: "utf8",
+    });
+    return { status: run.status, out: run.stdout, scope: fs.readFileSync(path.join(dir, "change-scope"), "utf8").trim() };
+  }
+
+  it("a code change with every suite green passes, as before", () => {
+    expect(gate(green)).toMatchObject({ status: 0, scope: "full" });
+  });
+
+  it("a documents-only pull request passes with the browser suite skipped", () => {
+    const result = gate(docsOnly);
+    expect(result).toMatchObject({ status: 0, scope: "documents-only" });
+    expect(result.out).toContain("ok: e2e (documents-only pull request: skipped by design)");
+  });
+
+  it.each([
+    ["a code change whose e2e was skipped", { ...green, ...skipped }],
+    ["a code change whose e2e failed", { ...green, E2E: "failure", E2E_FIRST_ATTEMPT: "" }],
+    ["a code change whose e2e was cancelled", { ...green, E2E: "cancelled", E2E_RAN: "", E2E_FIRST_ATTEMPT: "" }],
+    ["a skipped e2e when the changes job failed", { ...docsOnly, CHANGES: "failure", DOCS_ONLY: "" }],
+    ["a skipped e2e when the changes job was cancelled", { ...docsOnly, CHANGES: "cancelled", DOCS_ONLY: "" }],
+    ["a skipped e2e when the changes job was itself skipped", { ...docsOnly, CHANGES: "skipped", DOCS_ONLY: "" }],
+    ["a documents-only answer from a failed changes job", { ...docsOnly, CHANGES: "failure" }],
+    ["a skipped e2e on a push to main", { ...docsOnly, EVENT: "push" }],
+    ["a skipped e2e on a manual run", { ...docsOnly, EVENT: "workflow_dispatch" }],
+    ["a documents-only pull request whose e2e failed", { ...docsOnly, E2E: "failure" }],
+    ["a documents-only pull request whose e2e was cancelled", { ...docsOnly, E2E: "cancelled" }],
+    ["a documents-only pull request whose verify failed", { ...docsOnly, VERIFY: "failure" }],
+    ["a documents-only pull request whose SQL guards failed", { ...docsOnly, SQL: "failure" }],
+    ["a documents-only pull request whose Stripe lane did not run", { ...docsOnly, STRIPE: "failure", STRIPE_RAN: "false" }],
+    ["a documents-only pull request whose secret scan failed", { ...docsOnly, SECRETS_FULL: "failure" }],
+    ["an answer that is not exactly 'true'", { ...docsOnly, DOCS_ONLY: "True" }],
+  ])("refuses %s", (_, env) => {
+    expect(gate(env).status).toBe(1);
+  });
+});
