@@ -184,6 +184,21 @@ describe("the database keys are checked at boot (N962, report five #123)", () =>
     }
   });
 
+  it("a hosted deployment can't boot in stub mode at all, and in Stripe mode is checked for the keys outside the live-money block", () => {
+    const hostedStub = { NODE_ENV: "production", VERCEL: "1", PAYMENTS_MODE: "stub", NEXT_PUBLIC_SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_x" };
+    expect(() => validatePaymentsEnv(hostedStub)).toThrow(PaymentsConfigError);
+    expect(() => validatePaymentsEnv({ ...LIVE, VERCEL: "1", SUPABASE_SECRET_KEY: undefined })).toThrow(/hosted production deployment is missing its database configuration: SUPABASE_SECRET_KEY/);
+  });
+
+  it("never fires in CI's or a local production build (loopback, no Vercel, no live key)", () => {
+    const local = { NODE_ENV: "production", PAYMENTS_MODE: "stub", PAYMENTS_ALLOW_STUB_IN_PRODUCTION: "true", NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3000" };
+    expect(() => validatePaymentsEnv(local)).not.toThrow();
+  });
+
+  it("refuses a guest receipt secret equal to the cron secret", () => {
+    expect(() => validatePaymentsEnv({ ...LIVE, GUEST_RECEIPT_SECRET: LIVE.CRON_SECRET })).toThrow(/GUEST_RECEIPT_SECRET \(must differ from CRON_SECRET\)/);
+  });
+
   it("accepts either generation of key", () => {
     const legacy = { ...LIVE, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: undefined, SUPABASE_SECRET_KEY: undefined, NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon", SUPABASE_SERVICE_ROLE_KEY: "service" };
     expect(() => validatePaymentsEnv(legacy)).not.toThrow();

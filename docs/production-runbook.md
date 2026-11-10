@@ -660,6 +660,21 @@ carries. An older tag carries fewer files, so this passes. The job then waits
 for the `production` environment's reviewer, deploys, waits until
 `/api/version` reports the tag's commit, and tells the alert channel.
 
+**The first release has nothing to roll back to.** Until a second `rc-` tag
+exists there is no earlier release to dispatch. If the first production
+deploy is bad, fix forward (a PR, a new `rc-` tag, a dispatch), or take the
+site down while you do. In the host's project settings, pause the production
+deployment, or point the domain at a maintenance page. Pausing serves nothing,
+so the scheduled jobs and Stripe's webhooks stop reaching the app too. Stripe
+retries webhooks for three days, and the jobs catch up on their next run.
+
+**How long it takes.** About 10–15 minutes from dispatch to the old release
+serving: a minute or two to approve the `production` environment's reviewer
+(longer if they aren't at hand), then the gate check and migration check
+(under a minute), the build on the runner (about 5–8 minutes), the deploy
+(1–2 minutes) and the version check (seconds once it's serving). Plan
+for the reviewer: a rollback needs them as much as a release does.
+
 **Staging.** Staging deploys every green `main`, so roll it back by merging a
 revert of the bad change. The revert passes the release gate, and the next
 push deploys it.
