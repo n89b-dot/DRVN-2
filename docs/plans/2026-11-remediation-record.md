@@ -99,3 +99,42 @@ One line each: what to do and where.
 
 - **N694 (#172's Codex finding):** older prose rows sit outside the two-day staging rule. Recorded only, by design: all 120 are in the frozen baseline and on staging.
 - **#53 design docs reconcile (A7):** 82 files, conflicting with `main` since October, touching components that have changed since. Resolving it is a design session of its own; the brand assets (favicon, icons, manifest, OG cards in `src/lib/og/card.tsx`) are the part worth splitting out. Left open.
+
+---
+
+# Plan 1 record: finish and fix (work review of 10 November 2026)
+
+The running record of `docs/plans/2026-11-work-review-remediation-plan.md`, kept by the plan 1 building session. Started 10 November 2026 from `main` at `58b4ad7` (merge of #201). Neil approved the plan and decisions D1 to D6 on 10 November. Every pull request here is reviewed by the orchestrating session before it merges and before its migration reaches shared dev or staging (rules R1 to R7 in the plan). The plain-language work log is https://claude.ai/artifact/LAtUiGKYfLQnvCj5doebFU.
+
+Status words: **merged** (on `main`, CI green) · **in review** (PR up, waiting for the orchestrator or for checks) · **set aside** (a recorded decision) · **not started**.
+
+## Plan 1 items
+
+| Step | Findings | Ids | PR | Merge commit | Status |
+|---|---|---|---|---|---|
+| 0 / 3.4 Codex reviews waived | `#129` | N725 | #214 | | in review: every owed row waived by Neil's ruling of 10 November; `tests/ci/codex-queue.test.ts` accepts `waived` and refuses `owed` |
+| 2.1 Deletion runbook and Resume | `#126`, `#154`, `#157` | N944, N734 | #198 | | not started (waiting for the previous session's hand-over) |
+| 2.2 18+ on the actions that matter | `#152` | N662 | #201 merged as written; follow-up to come | `58b4ad7` (#201) | not started |
+| 2.3 Upload size | `#158` | N955 | #203 | | not started (hand-over) |
+| 2.4 Staging out of search | `#156` | N958, N961 | #188 | | not started (hand-over) |
+| 2.5 Set-up order | `#156` | N952 | #190 | | not started (hand-over) |
+| 2.6 Protection watch, and its follow-up | `#156`, `#139` | N949, N950 | #195 | | not started (hand-over; the orchestrator merges #195 in the browser) |
+| 2.7 Photo signing rules | `#131`, `#146` | N940 | #210 | | not started (hand-over) |
+| 2.8 1,000-row limits | `#155` | N718 | #199 | | not started (hand-over) |
+| 2.9 A deleted member's words | `#153` | | #206 | | not started (hand-over) |
+| 2.10 Chargeback retry | `#148` | N944 | #208 | | not started (hand-over) |
+| 2.11 Order emails | `#147` | | #204 | | not started (hand-over) |
+| 2.12 Chargeback write-off | `#149` | N944 | #207 | | to be set aside as a draft (decision D1) |
+| 2.13 Copyright counter-notice | `#150` | | #209 | | to be set aside as a draft with a by-hand runbook entry (decision D2) |
+| Duplicate test fix | `#124` | | #211 | | to be closed: the fix merged with #200 |
+| 3.1 Photos on `main` | `#132`, `#135`, `#136`, `#137` | | | | not started (after step 2.7 merges) |
+| 3.2 The deploy path | `#138`, `#140`, `#142`, `#143`, `#144` | N715 | | | not started |
+| 3.3 Data set-up | `#141`, `#145` | N667, N943 | | | not started |
+
+## Plan 1: needs Neil
+
+Nothing.
+
+## Plan 1: judgement calls
+
+- **Step 0:** an `owed` row is now refused by the test, not only tolerated, so a later pull request cannot quietly restart the debt the ruling ended. A docs-only pull request stays `skipped`. Thirteen merged pull requests that had no row (#182 to #205) were given one.
