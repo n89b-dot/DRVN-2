@@ -143,7 +143,8 @@ export type PhotoSignerDeps = {
  * the date (the cause of work review #124).
  */
 export function createPhotoSigner({
-  now = Date.now,
+  // Looked up at each reading, like the reporter below: the app's signer is made as this module loads.
+  now = () => Date.now(),
   client = defaultSigningClient,
   // Looked up when something is reported, not when the signer is made: the app's signer is made as this module loads.
   report = (message, detail) => reportError(message, detail),

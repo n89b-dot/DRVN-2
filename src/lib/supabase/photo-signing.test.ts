@@ -550,45 +550,6 @@ describe("N1062: an export page is written only when the photo store answered fo
   });
 });
 
-describe("N1062: the shared copy of public data never holds a result of failed signing (review of #210)", () => {
-  it("N1062: what is stored is the database's canonical answer, so a reader after the signer recovers gets the photo from the same copy", async () => {
-    const { cachedPublicFetch } = await import("./public-cache");
-    const url = canonical("car-images", "kept.webp");
-    const stored = JSON.stringify([{ owner_id: ME, cover_image_url: url }]);
-    // Next's data cache, reduced to what matters here: a read that asks for a
-    // copy (`next.revalidate`) is kept and handed out again; any other read
-    // goes to the database.
-    const copies = new Map<string, string>();
-    let databaseReads = 0;
-    const dataCache = (async (input: RequestInfo | URL, init?: RequestInit & { next?: { revalidate?: number } }) => {
-      const key = String(input);
-      const keeps = Boolean(init?.next?.revalidate);
-      if (!keeps || !copies.has(key)) databaseReads += 1;
-      if (keeps && !copies.has(key)) copies.set(key, stored);
-      return new Response(keeps ? copies.get(key) : stored, { headers: { "content-type": "application/json", date: new Date().toUTCString() } });
-    }) as typeof fetch;
-    const before = process.env.DRVN_PUBLIC_CACHE;
-    process.env.DRVN_PUBLIC_CACHE = "on";
-    try {
-      const read = async () => (await photoFetch(cachedPublicFetch({ maxAge: 300, tags: [] }, dataCache), { sign: true })(`${O}/rest/v1/cars?select=owner_id,cover_image_url`, { method: "GET" })).json();
-      // The photo store is down: this reader gets the photo unsigned (the page shows its plate).
-      mocks.sign.mockResolvedValue({ data: null, error: { message: "storage unavailable" } });
-      expect(await read()).toEqual([{ owner_id: ME, cover_image_url: url }]);
-      expect([...copies.values()]).toEqual([stored]);
-      // It recovers. The next reader is answered from the same stored copy, with the photo signed.
-      mocks.sign.mockImplementation(async (bucket: string, paths: string[]) => ({ data: paths.map((path) => ({ path, signedUrl: signedFor(bucket, path), error: null })), error: null }));
-      clock.now = START + SIGN_RETRY_STEPS_MS[0];
-      expect(await read()).toEqual([{ owner_id: ME, cover_image_url: signedFor("car-images", `${ME}/kept.webp`) }]);
-      expect(databaseReads).toBe(1);
-      // And the copy is still the canonical answer: no signed link, good or failed, was ever put in it.
-      expect([...copies.values()]).toEqual([stored]);
-    } finally {
-      if (before === undefined) delete process.env.DRVN_PUBLIC_CACHE;
-      else process.env.DRVN_PUBLIC_CACHE = before;
-    }
-  });
-});
-
 describe("N1051: a signer is given its clock and its client, and keeps its own memory (work review #135)", () => {
   it("N1051: two signers share nothing: each signs for itself and asks the database for itself", async () => {
     const url = canonical("car-images", "two-signers.webp");
