@@ -84,7 +84,12 @@ recorded in `supabase/MIGRATIONS.md`.
 the project has the IPv4 add-on) over TLS verified against Supabase's root CA,
 and only to a `--target` that is listed in `supabase/migration-targets.json`
 and matches the env file. **Add the production project to that file in a
-reviewed PR before its first migration.** Then, from the repo root:
+reviewed PR before its first migration**, with its session-pooler host as
+`"pooler"` and `"statusRoute": "pooler"` unless production buys the IPv4
+add-on: the deploy workflow's read-only `--status` runs on GitHub's IPv4-only
+runners and cannot reach the direct host otherwise (#114,
+`docs/staging-setup.md` §1.4). Only `--status` may use the pooler; applies
+always connect direct. Then, from the repo root:
 
 ```bash
 # 1. dry run: checks the target, prints each file's plan and a confirmation code
