@@ -8,6 +8,10 @@ create function pg_temp.marketplace_admin() returns void language sql as $$
   select set_config('role','none',true);
   select set_config('request.jwt.claims','',true);
 $$;
+
+-- This guard's own helpers are called while acting as other roles. A new
+-- function is closed by default (20261110170000), so they are opened here.
+grant execute on all routines in schema pg_temp to public;
 do $$
 declare seller uuid:=gen_random_uuid(); buyer uuid:=gen_random_uuid(); car uuid; part uuid; n int;
 begin

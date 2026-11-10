@@ -35,6 +35,10 @@ create function pg_temp.w20_claim(p_worker text, p_batch int) returns uuid[] lan
   select coalesce(array_agg(order_id), '{}') from public.claim_transfer_intents(p_worker, p_batch, 300, 8);
 $$;
 
+-- This guard's own helpers are called while acting as other roles. A new
+-- function is closed by default (20261110170000), so they are opened here.
+grant execute on all routines in schema pg_temp to public;
+
 do $$
 declare
   unpaid uuid := gen_random_uuid();

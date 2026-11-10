@@ -38,6 +38,10 @@ create function pg_temp.run(p_job text, p_status text, p_start timestamptz, p_en
   select nextval('pg_temp.fixture_run'), j.jobid, p_status, p_start, p_end from cron.job j where j.jobname = p_job
 $$;
 
+-- This guard's own helpers are called while acting as other roles. A new
+-- function is closed by default (20261110170000), so they are opened here.
+grant execute on all routines in schema pg_temp to public;
+
 do $$
 declare
   seller uuid := gen_random_uuid();

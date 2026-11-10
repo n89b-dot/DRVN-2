@@ -9,6 +9,10 @@ create function pg_temp.back_to_admin() returns void language sql as $$
   select set_config('request.jwt.claims','',true);
 $$;
 
+-- This guard's own helpers are called while acting as other roles. A new
+-- function is closed by default (20261110170000), so they are opened here.
+grant execute on all routines in schema pg_temp to public;
+
 create function public.reject_shop_guard_fixture() returns trigger language plpgsql as $$
 begin
   if new.profile_id='00000000-0000-0000-0000-00000000f001'::uuid then

@@ -119,6 +119,10 @@ begin
   return coalesce(v_out, 'null');
 end $$;
 
+-- This guard's own helpers are called while acting as other roles. A new
+-- function is closed by default (20261110170000), so they are opened here.
+grant execute on all routines in schema pg_temp to public;
+
 -- Runs outside an explicit transaction block, so this session can commit its
 -- half of the race while the other session waits. A failed check is held
 -- until the committed rows are cleaned up.
