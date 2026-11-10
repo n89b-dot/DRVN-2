@@ -342,10 +342,13 @@ begin
     insert into public.order_email_outbox (notification_id, recipient_id, order_id, kind, status, attempts, lease_expires_at)
     values (gen_random_uuid(), lone, o_gone, 'dispute_resolved', 'sending', 1, now() + interval '5 minutes') returning id into v_row;
   end if;
-  insert into public.order_email_outbox (notification_id, recipient_id, order_id, kind, created_at, next_attempt_at)
-  values (gen_random_uuid(), lone, o_gone, 'admin_action', now() - interval '2 minutes', now() - interval '1 minute') returning id into v_first;
-  insert into public.order_email_outbox (notification_id, recipient_id, order_id, kind, created_at, next_attempt_at)
-  values (gen_random_uuid(), lone, o_gone, 'admin_action', now() - interval '3 minutes', now() - interval '30 seconds') returning id into v_oldest;
+  -- Their ids are chosen so that the oldest row is neither the lowest nor the highest: an order by id, either way, would not find it.
+  insert into public.order_email_outbox (id, notification_id, recipient_id, order_id, kind, created_at, next_attempt_at) values
+    ('00000000-0000-4000-8000-00000000a204', gen_random_uuid(), lone, o_gone, 'admin_action', now() - interval '2 minutes', now() - interval '1 minute'),
+    ('ffffffff-ffff-4fff-bfff-ffffffffa204', gen_random_uuid(), lone, o_gone, 'admin_action', now() - interval '1 minute', now() - interval '45 seconds');
+  v_first := '00000000-0000-4000-8000-00000000a204';
+  insert into public.order_email_outbox (id, notification_id, recipient_id, order_id, kind, created_at, next_attempt_at)
+  values ('80000000-0000-4000-8000-00000000a204', gen_random_uuid(), lone, o_gone, 'admin_action', now() - interval '3 minutes', now() - interval '30 seconds') returning id into v_oldest;
   insert into public.order_email_outbox (notification_id, recipient_id, order_id, kind, next_attempt_at)
   values (gen_random_uuid(), lone, o_gone, 'admin_action', now() + interval '2 hours') returning id into v_later;
   v_text := public.complete_order_email(v_row, 1, 'rate_limited', null, 'resend: 429 rate_limit_exceeded', null, 7);
@@ -361,7 +364,7 @@ begin
     fails := fails || 'FAIL L3: a row set for later was pulled forward by a rate limit (N1063)'::text;
   end if;
   -- The wait over, the queue is taken in the order it was written, though every row now carries the same time.
-  update public.order_email_outbox set next_attempt_at = now() - interval '1 second' where id in (v_row, v_first, v_oldest);
+  update public.order_email_outbox set next_attempt_at = now() - interval '1 second' where id in (v_row, v_first, v_oldest, 'ffffffff-ffff-4fff-bfff-ffffffffa204');
   if (select c.id from public.claim_order_emails(1) c) is distinct from v_oldest then
     fails := fails || 'FAIL L4: after a rate limit the queue was not taken oldest first (N1063)'::text;
   end if;

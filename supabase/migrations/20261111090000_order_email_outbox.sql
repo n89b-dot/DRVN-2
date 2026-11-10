@@ -650,7 +650,8 @@ begin
      or has_function_privilege('authenticated', 'public.skip_order_emails_email_off()', 'execute')
      or has_function_privilege('authenticated', 'public.raise_dispatch_reminders()', 'execute')
      or has_function_privilege('anon', 'public.raise_dispatch_reminders()', 'execute')
-     or has_function_privilege('authenticated', 'public.complete_order_email(uuid, integer, text, text, text, text)', 'execute') then
+     or has_function_privilege('authenticated', 'public.complete_order_email(uuid, integer, text, text, text, text, integer)', 'execute')
+     or has_function_privilege('anon', 'public.complete_order_email(uuid, integer, text, text, text, text, integer)', 'execute') then
     raise exception '20261111090000: the order email outbox is reachable by a member (N1063)';
   end if;
   -- A trigger function runs as the role that writes the row: every one here is SECURITY DEFINER.
