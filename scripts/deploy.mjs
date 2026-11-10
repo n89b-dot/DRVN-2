@@ -109,6 +109,26 @@ export function alertPayload(text) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Whether `sha` is still main's head (Codex on #175). Concurrency serialises
+ * staging runs but doesn't order them: a delayed or re-run older run that
+ * gets the lock after a newer one would deploy the older commit over it.
+ */
+export function stillHead(headSha, sha) {
+  return typeof headSha === 'string' && typeof sha === 'string' && headSha.length >= 7 && headSha === sha;
+}
+
+async function mainHead() {
+  const repo = process.env.GITHUB_REPOSITORY;
+  const token = process.env.GITHUB_TOKEN;
+  if (!repo || !token) throw new Error('GITHUB_REPOSITORY and GITHUB_TOKEN are required');
+  const res = await fetch(`https://api.github.com/repos/${repo}/commits/main`, {
+    headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' },
+  });
+  if (!res.ok) throw new Error(`GitHub commits answered ${res.status}`);
+  return (await res.json()).sha;
+}
+
 async function waitForGate(sha, { timeoutMinutes = 90, intervalSeconds = 60 } = {}) {
   const repo = process.env.GITHUB_REPOSITORY;
   const token = process.env.GITHUB_TOKEN;
@@ -173,6 +193,13 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [command, a, b, c] = process.argv.slice(2);
   try {
     if (command === 'gate' && a) await waitForGate(a);
+    else if (command === 'current' && a) {
+      // Prints current=true|false for $GITHUB_OUTPUT; a superseded run skips its deploy, not fails.
+      const head = await mainHead();
+      const current = stillHead(head, a);
+      if (!current) console.error(`main is now at ${head}: ${a} is superseded, so this run deploys nothing`);
+      console.log(`current=${current}`);
+    }
     else if (command === 'migrations' && a) {
       const missing = missingMigrations(JSON.parse(readFileSync(a, 'utf8')));
       if (missing.length) {
@@ -188,7 +215,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       if (!validReleaseTag(a)) throw new Error(`"${a}" is not a release tag (rc-YYYYMMDD or rc-YYYYMMDD-n)`);
       console.log(`${a} is a release tag`);
     } else if (command === 'alert' && a) await postAlert(a);
-    else throw new Error('Usage: deploy.mjs gate SHA | migrations STATUS.json | version ORIGIN SHA [staging|production] | tag NAME | alert TEXT');
+    else throw new Error('Usage: deploy.mjs gate SHA | current SHA | migrations STATUS.json | version ORIGIN SHA [staging|production] | tag NAME | alert TEXT');
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;

@@ -10,7 +10,7 @@ import path from "node:path";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
-import { alertPayload, gateVerdict, indexingProblems, missingMigrations, validReleaseTag, versionMatches } from "../../scripts/deploy.mjs";
+import { alertPayload, gateVerdict, indexingProblems, missingMigrations, stillHead, validReleaseTag, versionMatches } from "../../scripts/deploy.mjs";
 
 type Step = { name?: string; uses?: string; run?: string; if?: string; env?: Record<string, string>; with?: Record<string, unknown> };
 type Job = { if?: string; environment?: string; permissions?: Record<string, string>; steps: Step[] };
@@ -94,9 +94,11 @@ describe("the deploy workflow (N634, N528)", () => {
   });
 
   it("N634: tells the alert channel on every outcome", () => {
-    for (const job of Object.values(deploy.jobs)) {
+    for (const [name, job] of Object.entries(deploy.jobs)) {
       const alert = job.steps.at(-1)!;
-      expect(alert.if).toBe("always()");
+      // The two deploy jobs report every outcome. The guard before production reports only a refusal:
+      // when it passes, the production job that follows reports the deploy itself.
+      expect(alert.if, name).toBe(name === "production-guard" ? "failure()" : "always()");
       expect(alert.run).toContain("scripts/deploy.mjs alert");
     }
   });
@@ -139,6 +141,31 @@ describe("the deploy decisions (N528)", () => {
   it("N634: the alert is plain text, bounded", () => {
     expect(alertPayload("deployed")).toEqual({ text: "deployed" });
     expect(alertPayload("x".repeat(5000)).text).toHaveLength(3000);
+  });
+});
+
+describe("a superseded staging run deploys nothing (N634, Codex on #175)", () => {
+  it("asks whether its commit is still main's head just before the build, and gates the deploy and version check on it", () => {
+    const staging = deploy.jobs.staging;
+    const head = indexOf(staging, runs("scripts/deploy.mjs current"));
+    const ship = indexOf(staging, runs("vercel@65.2.0 deploy --prebuilt --prod"));
+    const version = indexOf(staging, runs("scripts/deploy.mjs version"));
+    expect(head).toBeLessThan(ship);
+    expect(staging.steps[head].run).toContain('>> "$GITHUB_OUTPUT"');
+    expect(staging.steps[ship].if).toBe("steps.head.outputs.current == 'true'");
+    expect(staging.steps[version].if).toBe("steps.head.outputs.current == 'true'");
+    // A superseded run ends "success" having deployed nothing: the alert says that, not "deploy: success".
+    const alert = staging.steps.at(-1)!;
+    expect(alert.env?.CURRENT).toBe("${{ steps.head.outputs.current }}");
+    expect(alert.run).toMatch(/if \[ "\$STATUS" = "success" \] && \[ "\$CURRENT" != "true" \]; then\s+node scripts\/deploy\.mjs alert "[^"]*superseded[^"]*deployed nothing"\s+else\s+node scripts\/deploy\.mjs alert "DRVN staging deploy of \$\{GITHUB_SHA::7\}: \$STATUS"/);
+  });
+
+  it("only main's exact head counts as current", () => {
+    const sha = "aee656d9aee656d9aee656d9aee656d9aee656d9";
+    expect(stillHead(sha, sha)).toBe(true);
+    expect(stillHead("b".repeat(40), sha)).toBe(false);
+    expect(stillHead(undefined, sha)).toBe(false);
+    expect(stillHead("", "")).toBe(false);
   });
 });
 
