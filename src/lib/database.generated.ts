@@ -6829,7 +6829,7 @@ export type Database = {
         Returns: Json
       }
       admin_resume_account_deletion: {
-        Args: { p_dry_run?: boolean; p_user: string }
+        Args: { p_actor: string; p_dry_run?: boolean; p_user: string }
         Returns: Json
       }
       admin_retry_dispute_recovery: {

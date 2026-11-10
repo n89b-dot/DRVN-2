@@ -39,6 +39,13 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 11 — Resume deletion checks the admin in the database: N944 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261111080000_resume_deletion_actor.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
+
+Follow-up owed from the review of #198. `public.admin_resume_account_deletion` now takes the acting admin first (`p_actor, p_user, p_dry_run`) and calls `public.assert_admin_actor` before it reads anything, on a dry run too; the rest of the function is `20261110110000`'s, unchanged. The two-argument function is dropped so it cannot be the way round the check. Service role only, as before. **Apply together with the app from the same PR:** the older app calls the two-argument function, so its Resume deletion button fails with "function not found" (and changes nothing) against a database that has this migration.
 ## November 10 — Retry a chargeback held for review: N944 (report five #108, part A)
 
 | File | Applied to |

@@ -545,9 +545,10 @@ held for an operator.
 
 **Resume deletion** (`deletion.resume`) is audited like every other console
 action and needs a reason. The database decides, under the deletion lock
-(`admin_resume_account_deletion`, 20261110110000). It acts only on a failed
-job, or on a late hold whose order has settled, and refuses everything else in
-words. The next pass runs every hold check again, and a member whose data is
+(`admin_resume_account_deletion`, 20261110110000), and checks for itself that
+the caller acts for a full admin before it reads anything (20261111080000).
+It acts only on a failed job, or on a late hold whose order has settled, and
+refuses everything else in words. The next pass runs every hold check again, and a member whose data is
 already removed is never let back in.
 
 ### What the console cannot finish
