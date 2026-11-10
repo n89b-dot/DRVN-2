@@ -126,10 +126,22 @@ begin
   if (r->>'released')::boolean or r->>'status' is distinct from 'job_queued' then
     fails := fails || format('FAIL L2: a resume whose job is queued was released (%s) (N944)', r);
   end if;
+  -- Only the refusal itself passes: assert_admin_actor turns away an actor
+  -- who is not a full admin (42501). Any other error is a failure, not a pass
+  -- (work review #157: `when others then null` passed on anything, a typo
+  -- included).
   begin
     perform public.release_refused_deletion_resume(buyer, (op->>'operationId')::uuid, 'not an admin');
     fails := fails || 'FAIL L3: a non-admin released a resume (N944)'::text;
-  exception when others then null;
+  exception
+    when insufficient_privilege then
+      get stacked diagnostics msg = message_text;
+      if msg not like '%is not a full admin%' then
+        fails := fails || format('FAIL L3b: the refusal to a non-admin did not say why (%s) (N944)', msg);
+      end if;
+    when others then
+      get stacked diagnostics msg = message_text;
+      fails := fails || format('FAIL L3c: releasing as a non-admin failed for another reason (%s: %s) (N944)', sqlstate, msg);
   end;
 
   -- R: everything else is refused and left as it was.
