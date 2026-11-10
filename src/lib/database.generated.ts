@@ -6395,12 +6395,16 @@ export type Database = {
           created_at: string
           currency: string
           dispute_id: string
+          held_event_created: number | null
+          held_event_id: string | null
+          held_from_state: string | null
           last_event_created: number
           last_event_id: string
           lease_expires_at: string | null
           lease_id: string | null
           order_ids: string[]
           payment_reference: string
+          retry_until: string | null
           state: string
           updated_at: string
         }
@@ -6409,12 +6413,16 @@ export type Database = {
           created_at?: string
           currency: string
           dispute_id: string
+          held_event_created?: number | null
+          held_event_id?: string | null
+          held_from_state?: string | null
           last_event_created: number
           last_event_id: string
           lease_expires_at?: string | null
           lease_id?: string | null
           order_ids?: string[]
           payment_reference: string
+          retry_until?: string | null
           state: string
           updated_at?: string
         }
@@ -6423,12 +6431,16 @@ export type Database = {
           created_at?: string
           currency?: string
           dispute_id?: string
+          held_event_created?: number | null
+          held_event_id?: string | null
+          held_from_state?: string | null
           last_event_created?: number
           last_event_id?: string
           lease_expires_at?: string | null
           lease_id?: string | null
           order_ids?: string[]
           payment_reference?: string
+          retry_until?: string | null
           state?: string
           updated_at?: string
         }
@@ -6818,6 +6830,10 @@ export type Database = {
       }
       admin_resume_account_deletion: {
         Args: { p_actor: string; p_dry_run?: boolean; p_user: string }
+        Returns: Json
+      }
+      admin_retry_dispute_recovery: {
+        Args: { p_actor: string; p_dispute: string; p_dry_run?: boolean }
         Returns: Json
       }
       admin_retry_seller_carry_payout: { Args: { p_id: string }; Returns: Json }
@@ -7756,10 +7772,17 @@ export type Database = {
         }
         Returns: string
       }
-      hold_stripe_dispute: {
-        Args: { p_detail: string; p_dispute: string }
-        Returns: string
-      }
+      hold_stripe_dispute:
+        | { Args: { p_detail: string; p_dispute: string }; Returns: string }
+        | {
+            Args: {
+              p_created: number
+              p_detail: string
+              p_dispute: string
+              p_event: string
+            }
+            Returns: string
+          }
       identifier_matches_listing: {
         Args: { p_compact: string; p_id: string }
         Returns: boolean
@@ -8783,6 +8806,10 @@ export type Database = {
         Returns: Json
       }
       release_refused_deletion_resume: {
+        Args: { p_actor: string; p_detail: string; p_operation: string }
+        Returns: Json
+      }
+      release_refused_dispute_retry: {
         Args: { p_actor: string; p_detail: string; p_operation: string }
         Returns: Json
       }

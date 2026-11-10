@@ -100,4 +100,23 @@ end $$;
 revoke all on function public.admin_resume_account_deletion(uuid, uuid, boolean) from public, anon, authenticated;
 grant execute on function public.admin_resume_account_deletion(uuid, uuid, boolean) to service_role;
 
+do $$
+begin
+  if to_regprocedure('public.admin_resume_account_deletion(uuid, boolean)') is not null then
+    raise exception '20261111080000: the two-argument resume, which names no admin, still exists (N944)';
+  end if;
+  if to_regprocedure('public.admin_resume_account_deletion(uuid, uuid, boolean)') is null then
+    raise exception '20261111080000: the resume that names its admin was not created (N944)';
+  end if;
+  if not (select p.prosecdef from pg_proc p where p.oid = to_regprocedure('public.admin_resume_account_deletion(uuid, uuid, boolean)')) then
+    raise exception '20261111080000: the resume function is not SECURITY DEFINER (N944)';
+  end if;
+  if has_function_privilege('authenticated', 'public.admin_resume_account_deletion(uuid, uuid, boolean)', 'execute')
+     or has_function_privilege('anon', 'public.admin_resume_account_deletion(uuid, uuid, boolean)', 'execute')
+     or not has_function_privilege('service_role', 'public.admin_resume_account_deletion(uuid, uuid, boolean)', 'execute') then
+    raise exception '20261111080000: resuming a deletion is not service-role only (N944)';
+  end if;
+  raise notice 'PASS: 20261111080000 self-checks';
+end $$;
+
 commit;
