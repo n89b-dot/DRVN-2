@@ -6,7 +6,17 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { VEHICLESDB, generationSeedSql, makePopularity, verifiedJson, vehiclesDbUrl } from "../../scripts/lib/vehicle-catalog.mjs";
+import {
+  VEHICLESDB,
+  coverageLines,
+  curatedCoverageSql,
+  generationSeedSql,
+  incomingPairs,
+  makePopularity,
+  summariseCoverage,
+  verifiedJson,
+  vehiclesDbUrl,
+} from "../../scripts/lib/vehicle-catalog.mjs";
 
 const repo = path.resolve(__dirname, "../..");
 
@@ -74,5 +84,77 @@ describe("an import needs the dry run's code (N667, #119 review)", () => {
     const firstWrite = script.indexOf('await client.query("begin")');
     expect(refusal).toBeGreaterThan(0);
     expect(refusal).toBeLessThan(firstWrite);
+  });
+});
+
+describe("N667: the import says which curated generations found a catalogue model, and lists the misses (work review #141)", () => {
+  it("asks the database with the seed's own rows and join, in one read-only statement", () => {
+    const sql = curatedCoverageSql();
+    const seed = generationSeedSql();
+    // Every curated row of the seed, and nothing else from it.
+    const curatedRows = (text: string) => [...text.matchAll(/^\s*\('(?:[^']|'')*', '(?:[^']|'')*', '(?:[^']|'')*', /gm)].length;
+    expect(curatedRows(seed)).toBeGreaterThan(150);
+    expect(curatedRows(sql)).toBe(curatedRows(seed));
+    expect(sql).toContain("('Volkswagen', 'Golf', 'Mk8', 'CD', 2019, null)");
+    // The seed's join: lower(make) and lower(model) against the catalogue.
+    expect(sql).toContain("lower(mk.name) as make, lower(cm.name) as model");
+    expect(sql).toContain("h.make = lower(s.make) and h.model = lower(s.model)");
+    expect(sql).toContain("jsonb_to_recordset($1::jsonb)");
+    expect(sql.trimStart()).toMatch(/^with incoming as/);
+    expect(sql).not.toMatch(/\b(insert|update|delete|create|alter|drop|truncate)\b/i);
+    expect(sql).not.toContain(";");
+    expect(() => curatedCoverageSql("select 1")).toThrow(/no longer lists its curated rows/);
+  });
+
+  it("offers the pairs a release will add, skipping a model whose make is not in it, as the import does", () => {
+    const makes = [{ id: "vw", name: "Volkswagen" }, { id: "bmw", name: "BMW" }];
+    const models = [{ make_id: "vw", name: "Golf" }, { make_id: "bmw", name: "M3" }, { make_id: "gone", name: "Orphan" }];
+    expect(incomingPairs(makes, models)).toEqual([{ make: "Volkswagen", model: "Golf" }, { make: "BMW", model: "M3" }]);
+  });
+
+  it("counts matched rows and models, and names each missing model with the generations it would have had", () => {
+    const rows = [
+      { make: "Volkswagen", model: "Golf", name: "Mk7", matched: true },
+      { make: "Volkswagen", model: "Golf", name: "Mk8", matched: true },
+      { make: "Toyota", model: "86", name: "ZN6", matched: false },
+      { make: "Volkswagen", model: "GTI", name: "Mk7", matched: false },
+      { make: "Volkswagen", model: "GTI", name: "Mk8", matched: false },
+    ];
+    const coverage = summariseCoverage(rows);
+    expect(coverage).toEqual({
+      rows: 5,
+      matchedRows: 2,
+      models: 3,
+      matchedModels: 1,
+      missed: [
+        { make: "Toyota", model: "86", generations: ["ZN6"] },
+        { make: "Volkswagen", model: "GTI", generations: ["Mk7", "Mk8"] },
+      ],
+    });
+    expect(coverageLines(coverage, "after this import")).toEqual([
+      "curated generations: 2 of 5 match a catalogue model after this import (1 of 3 curated models)",
+      "no catalogue model after this import for 2 curated model(s); their 3 generation(s) are not seeded:",
+      "  Toyota 86: ZN6",
+      "  Volkswagen GTI: Mk7, Mk8",
+    ]);
+  });
+
+  it("says so in one line when every curated row matched", () => {
+    const coverage = summariseCoverage([{ make: "BMW", model: "M3", name: "E46", matched: true }]);
+    expect(coverage.missed).toEqual([]);
+    expect(coverageLines(coverage, "now")).toEqual(["curated generations: 1 of 1 match a catalogue model now (1 of 1 curated models)"]);
+  });
+
+  it("the import prints the coverage on a dry run and again after an apply, and no longer warns only at zero", () => {
+    const script = fs.readFileSync(path.join(repo, "scripts/import-vehiclesdb.mjs"), "utf8");
+    const dryRun = script.slice(script.indexOf("if (!values.apply) {"), script.indexOf("if (values.confirm !== code)"));
+    expect(dryRun).toContain('coverageLines(await coverage(incomingPairs(makes, models)), "after this import")');
+    const afterApply = script.slice(script.indexOf("const after = await totals();"));
+    expect(afterApply).toContain("coverage([])");
+    expect(afterApply).toContain("seeded.missed.length");
+    // The coverage query runs in a read-only transaction that is always rolled back.
+    const helper = script.slice(script.indexOf("async function coverage("), script.indexOf("const before = await totals();"));
+    expect(helper).toContain('"begin transaction read only"');
+    expect(helper).toContain('"rollback"');
   });
 });

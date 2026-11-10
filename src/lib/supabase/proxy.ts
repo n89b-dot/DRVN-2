@@ -77,6 +77,21 @@ export function isConsolePath(pathname: string) {
 }
 
 /**
+ * N715: the answer to a request for the console from someone who cannot be
+ * an admin: the same 404 any unknown route gives, with whatever cookies the
+ * session check wrote. Used when the visitor is signed out, and (work review
+ * #143) when who they are cannot be established at all.
+ */
+function consoleNotFound(request: NextRequest, forwarded: Headers, from: NextResponse) {
+  const notFound = request.nextUrl.clone();
+  notFound.pathname = CONSOLE_NOT_FOUND;
+  notFound.search = "";
+  const response = NextResponse.rewrite(notFound, { request: { headers: forwarded } });
+  for (const cookie of from.cookies.getAll()) response.cookies.set(cookie);
+  return response;
+}
+
+/**
  * A redirect that keeps the session (RR-06). A refresh inside getClaims()
  * rotates the refresh token and writes the new cookies onto the pass-through
  * response; a fresh NextResponse.redirect() would drop them, leaving the
@@ -141,6 +156,9 @@ export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request: { headers: forwarded } });
 
   if (!hasSupabaseConfig()) {
+    // Work review #143: with no way to tell who is asking, nobody is an
+    // admin. The console answers as it does to a signed-out visitor.
+    if (isConsolePath(request.nextUrl.pathname)) return consoleNotFound(request, forwarded, supabaseResponse);
     // Local dev without env vars should stay browsable; a deployed environment
     // missing its credentials is a misconfiguration, not a mode of operation.
     if (isProduction) {
@@ -182,6 +200,9 @@ export async function updateSession(request: NextRequest) {
     user = data?.claims ?? null;
   } catch (error) {
     reportError("[proxy] unable to verify session", error);
+    // Work review #143: an auth outage must not leave the console to its
+    // layout alone.
+    if (isConsolePath(request.nextUrl.pathname)) return consoleNotFound(request, forwarded, supabaseResponse);
     return denyProductRoutes(request, supabaseResponse, "Supabase was unreachable");
   }
 
@@ -201,14 +222,7 @@ export async function updateSession(request: NextRequest) {
   // confirmed and no console code runs. Membership itself is still checked
   // beside every read and action (src/lib/admin/guard.ts); this only turns
   // away the requests that cannot possibly be an admin.
-  if (!user && isConsolePath(pathname)) {
-    const notFound = request.nextUrl.clone();
-    notFound.pathname = CONSOLE_NOT_FOUND;
-    notFound.search = "";
-    const response = NextResponse.rewrite(notFound, { request: { headers: forwarded } });
-    for (const cookie of supabaseResponse.cookies.getAll()) response.cookies.set(cookie);
-    return response;
-  }
+  if (!user && isConsolePath(pathname)) return consoleNotFound(request, forwarded, supabaseResponse);
 
   if (!user && isProductRoute) {
     const url = request.nextUrl.clone();

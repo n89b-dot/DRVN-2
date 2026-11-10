@@ -92,6 +92,101 @@ export function generationSeedSql(text = readFileSync(GENERATIONS_MIGRATION, "ut
   return sql;
 }
 
+const CURATED_VALUES_START = "from (values";
+const CURATED_VALUES_END = ") as s(make, model, name, platform_code, year_start, year_end)";
+
+/**
+ * Work review #141: which curated generations find a catalogue model, asked
+ * of the database with the seed's own join (`lower(make)`, `lower(model)`),
+ * so the answer is the one the seed will get. The seed is an inner join: a
+ * curated row whose make or model the catalogue lacks is dropped without a
+ * word, and the import used to warn only when nothing at all was seeded.
+ *
+ * One read-only statement. `$1` is a JSON array of `{make, model}` the
+ * catalogue is about to gain (the VehiclesDB release, on a dry run), or `[]`
+ * to ask about the catalogue as it stands (after an import). Returns one row
+ * per curated generation: make, model, name, matched.
+ */
+export function curatedCoverageSql(seedSql = generationSeedSql()) {
+  const start = seedSql.indexOf(CURATED_VALUES_START);
+  const end = seedSql.indexOf(CURATED_VALUES_END);
+  if (start < 0 || end < 0 || end < start) {
+    throw new Error("the generations seed no longer lists its curated rows as `from (values …) as s(make, model, name, platform_code, year_start, year_end)`");
+  }
+  const values = seedSql.slice(start + CURATED_VALUES_START.length, end).trim();
+  return `with incoming as (
+  select lower(v.make) as make, lower(v.model) as model
+    from jsonb_to_recordset($1::jsonb) as v(make text, model text)
+), have as (
+  select lower(mk.name) as make, lower(cm.name) as model
+    from public.catalog_models cm join public.catalog_makes mk on mk.id = cm.make_id
+  union
+  select make, model from incoming
+)
+select s.make, s.model, s.name,
+       exists (select 1 from have h where h.make = lower(s.make) and h.model = lower(s.model)) as matched
+  from (values
+${values}
+) as s(make, model, name, platform_code, year_start, year_end)
+ order by s.make, s.model, s.year_start, s.name`;
+}
+
+/**
+ * The `{make, model}` pairs a VehiclesDB release will add, by the same rule
+ * the import applies: a model whose make is not in the release is skipped.
+ *
+ * @param {Array<{ id: unknown, name: string }>} makes
+ * @param {Array<{ make_id: unknown, name: string }>} models
+ */
+export function incomingPairs(makes, models) {
+  const makeName = new Map(makes.map((make) => [make.id, make.name]));
+  return models.filter((model) => makeName.has(model.make_id)).map((model) => ({ make: makeName.get(model.make_id), model: model.name }));
+}
+
+/**
+ * Sums the coverage query's rows: how many curated generations matched, and
+ * the catalogue models that are missing with the generations each would
+ * have had, in the order the query returned them.
+ *
+ * @param {Array<{ make: string, model: string, name: string, matched: boolean }>} rows
+ */
+export function summariseCoverage(rows) {
+  const models = new Map();
+  for (const row of rows) {
+    const key = `${row.make}\u0000${row.model}`;
+    const entry = models.get(key) ?? { make: row.make, model: row.model, matched: row.matched === true, generations: [] };
+    entry.generations.push(row.name);
+    models.set(key, entry);
+  }
+  const all = [...models.values()];
+  const missed = all.filter((entry) => !entry.matched);
+  return {
+    rows: rows.length,
+    matchedRows: rows.filter((row) => row.matched === true).length,
+    models: all.length,
+    matchedModels: all.length - missed.length,
+    missed: missed.map(({ make, model, generations }) => ({ make, model, generations })),
+  };
+}
+
+/**
+ * The coverage as the lines the import prints. `when` says which catalogue
+ * was asked: "after this import" on a dry run, "now" after an apply.
+ *
+ * @param {ReturnType<typeof summariseCoverage>} coverage
+ * @param {string} when
+ */
+export function coverageLines(coverage, when) {
+  const lines = [
+    `curated generations: ${coverage.matchedRows} of ${coverage.rows} match a catalogue model ${when} (${coverage.matchedModels} of ${coverage.models} curated models)`,
+  ];
+  if (coverage.missed.length) {
+    lines.push(`no catalogue model ${when} for ${coverage.missed.length} curated model(s); their ${coverage.rows - coverage.matchedRows} generation(s) are not seeded:`);
+    for (const miss of coverage.missed) lines.push(`  ${miss.make} ${miss.model}: ${miss.generations.join(", ")}`);
+  }
+  return lines;
+}
+
 /**
  * The code a dry run prints and `--apply --confirm <code>` must repeat, as
  * scripts/apply-migration.mjs does (#119 review): bound to the project and
