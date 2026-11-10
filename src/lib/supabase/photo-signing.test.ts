@@ -15,7 +15,7 @@ vi.mock("@supabase/supabase-js", () => ({
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://proj.supabase.co";
 process.env.SUPABASE_SECRET_KEY = "unit-test-key";
 
-const { EXPORT_PHOTO_LINK_SECONDS, SIGN_BUDGET_MS, SIGN_RETRY_MS, createPhotoSigner } = await import("./photo-signing");
+const { EXPORT_NOT_SIGNED, EXPORT_PHOTO_LINK_SECONDS, SIGN_BUDGET_MS, SIGN_RETRY_STEPS_MS, createPhotoSigner } = await import("./photo-signing");
 const { NOT_SIGNED_PHOTO_LIKE_COLUMNS, tableContext } = await import("@/lib/photo-urls");
 type Signer = ReturnType<typeof createPhotoSigner>;
 
@@ -366,32 +366,71 @@ describe("while the shared memo is down, the process memo still works (N954, #19
   });
 });
 
-describe("N1052: a slow or failing photo store does not hold every page (work review #136)", () => {
-  it("N1052: after a signing call fails, none is made for thirty seconds; the photo shows as missing at once, then signs", async () => {
+describe("N1052: a slow or failing photo store does not hold every page, or blank what could be shown (work review #136, review of #244)", () => {
+  const working = async (bucket: string, paths: string[]) => ({ data: paths.map((path) => ({ path, signedUrl: signedFor(bucket, path), error: null })), error: null });
+  const down = async () => ({ data: null, error: { message: "storage unavailable" } });
+
+  it("N1052: after a bucket's signing call fails it is paused two seconds, doubling to thirty; a success ends it", async () => {
     const url = canonical("car-images", "store-down.webp");
-    mocks.sign.mockResolvedValue({ data: null, error: { message: "storage unavailable" } });
+    mocks.sign.mockImplementation(down);
     expect((await signedPhotoUrls([url])).has(url)).toBe(false);
     expect(mocks.sign).toHaveBeenCalledTimes(1);
-    // Twenty-nine seconds of pages: no call each, no wait each.
-    for (const later of [1, 10_000, SIGN_RETRY_MS - 1]) {
-      clock.now = START + later;
-      expect((await signedPhotoUrls([url, canonical("listing-images", `other-${later}.webp`)])).size).toBe(0);
+    expect(SIGN_RETRY_STEPS_MS).toEqual([2_000, 4_000, 8_000, 16_000, 30_000]);
+    // Each failure in a row: no call until its pause is over (no wait either), then one more try. The last step repeats.
+    let at = START;
+    let calls = 1;
+    for (const pause of [...SIGN_RETRY_STEPS_MS, 30_000]) {
+      clock.now = at + pause - 1;
+      expect((await signedPhotoUrls([url, canonical("car-images", `other-${pause}-${calls}.webp`)])).size).toBe(0);
+      expect(mocks.sign).toHaveBeenCalledTimes(calls);
+      at += pause;
+      clock.now = at;
+      await signedPhotoUrls([url]);
+      calls += 1;
+      expect(mocks.sign).toHaveBeenCalledTimes(calls);
     }
-    expect(mocks.sign).toHaveBeenCalledTimes(1);
-    // Then it is tried again, and works.
-    mocks.sign.mockImplementation(async (bucket: string, paths: string[]) => ({ data: paths.map((path) => ({ path, signedUrl: signedFor(bucket, path), error: null })), error: null }));
-    clock.now = START + SIGN_RETRY_MS;
+    // It answers: signed at once, and the next failure starts again at two seconds, not thirty.
+    mocks.sign.mockImplementation(working);
+    clock.now = at + 30_000;
     expect((await signedPhotoUrls([url])).get(url)).toBe(signedFor("car-images", `${ME}/store-down.webp`));
-    expect(mocks.sign).toHaveBeenCalledTimes(2);
-    // Said once, not once per page.
+    mocks.sign.mockImplementation(down);
+    const later = canonical("car-images", "later.webp");
+    await signedPhotoUrls([later]);
+    const failedAt = clock.now;
+    mocks.sign.mockImplementation(working);
+    clock.now = failedAt + 1_999;
+    expect((await signedPhotoUrls([later])).has(later)).toBe(false);
+    clock.now = failedAt + 2_000;
+    expect((await signedPhotoUrls([later])).get(later)).toBe(signedFor("car-images", `${ME}/later.webp`));
+    // Said once for the bucket, not once per page.
     expect(mocks.reportError.mock.calls.filter(([message]) => String(message).includes("signing failed"))).toHaveLength(1);
   });
 
-  it("N1052: a signing call with no answer is given up after its budget, not after ten seconds", async () => {
+  it("N1052: one bucket failing does not blank the others", async () => {
+    mocks.sign.mockImplementation(async (bucket: string, paths: string[]) => (bucket === "car-images" ? down() : working(bucket, paths)));
+    const car = canonical("car-images", "cover.webp");
+    const part = canonical("listing-images", "part.webp");
+    const first = await signedPhotoUrls([car, part]);
+    expect(first.has(car)).toBe(false);
+    expect(first.get(part)).toBe(signedFor("listing-images", `${ME}/part.webp`));
+    // During the car bucket's pause, photos in the other buckets that were never signed before still are.
+    clock.now = START + 500;
+    const post = canonical("activity-images", "post.webp");
+    const second = canonical("listing-images", "second.webp");
+    const next = await signedPhotoUrls([car, post, second]);
+    expect(next.has(car)).toBe(false);
+    expect(next.get(post)).toBe(signedFor("activity-images", `${ME}/post.webp`));
+    expect(next.get(second)).toBe(signedFor("listing-images", `${ME}/second.webp`));
+    // And the paused bucket was not called again.
+    expect(mocks.sign.mock.calls.filter(([bucket]) => bucket === "car-images")).toHaveLength(1);
+  });
+
+  it("N1052: a response stops waiting at its budget, and the call's answer, when it comes, is there for the next response", async () => {
     vi.useFakeTimers();
     try {
-      const url = canonical("car-images", "store-hangs.webp");
-      mocks.sign.mockReturnValue(new Promise(() => {}));
+      const url = canonical("car-images", "store-slow.webp");
+      let answer!: (value: unknown) => void;
+      mocks.sign.mockReturnValueOnce(new Promise((resolve) => { answer = resolve; }));
       let done = false;
       const pending = signedPhotoUrls([url]).then((out) => { done = true; return out; });
       await vi.advanceTimersByTimeAsync(SIGN_BUDGET_MS - 1);
@@ -400,10 +439,17 @@ describe("N1052: a slow or failing photo store does not hold every page (work re
       expect(done).toBe(true);
       expect((await pending).has(url)).toBe(false);
       expect(SIGN_BUDGET_MS).toBeLessThanOrEqual(3_000);
-      // And the pause follows, as after any failure.
-      mocks.sign.mockClear();
+      // While it is still out, the next response does not wait for this bucket and does not call it again.
       await signedPhotoUrls([canonical("car-images", "next.webp")]);
-      expect(mocks.sign).not.toHaveBeenCalled();
+      expect(mocks.sign).toHaveBeenCalledTimes(1);
+      // The store answers after five seconds. Nothing asked for it then, but the link is kept.
+      answer({ data: [{ path: `${ME}/store-slow.webp`, signedUrl: signedFor("car-images", `${ME}/store-slow.webp`), error: null }], error: null });
+      await vi.advanceTimersByTimeAsync(0);
+      expect((await signedPhotoUrls([url])).get(url)).toBe(signedFor("car-images", `${ME}/store-slow.webp`));
+      expect(mocks.sign).toHaveBeenCalledTimes(1);
+      // And an answer ends the pause: a photo not seen before is signed straight away.
+      const fresh = canonical("car-images", "fresh.webp");
+      expect((await signedPhotoUrls([fresh])).get(fresh)).toBe(signedFor("car-images", `${ME}/fresh.webp`));
     } finally {
       vi.useRealTimers();
     }
@@ -417,9 +463,90 @@ describe("N1052: a slow or failing photo store does not hold every page (work re
     const out = await signedPhotoUrls([known, fresh]);
     expect(out.get(known)).toBe(first);
     expect(out.has(fresh)).toBe(false);
-    clock.now = START + 5_000;
+    clock.now = START + 1_000;
     expect((await signedPhotoUrls([known, fresh])).get(known)).toBe(first);
     expect(mocks.sign).toHaveBeenCalledTimes(2);
+  });
+
+  it("N1052: while the shared memo is down too, a link this process holds outlasts the time it was kept for", async () => {
+    // The shared memo fails, so the link is kept by this process only, until the memo is tried again (thirty seconds).
+    mocks.rpc.mockImplementation(async (fn: string) => (fn === "photo_signing_ready" ? { data: true, error: null } : { data: null, error: { message: "memo down" } }));
+    const url = canonical("car-images", "held.webp");
+    const link = (await signedPhotoUrls([url])).get(url);
+    expect(link).toBe(signedFor("car-images", `${ME}/held.webp`));
+    // Then the photo store fails as well. Past the thirty seconds the link is no longer the one of choice, but it still opens.
+    mocks.sign.mockImplementation(down);
+    for (const later of [31_000, 40_000, 5 * 60_000]) {
+      clock.now = START + later;
+      expect((await signedPhotoUrls([url])).get(url), `${later} ms on`).toBe(link);
+    }
+  });
+
+  it("N1052: in the first seconds of an hour, last hour's links are handed out when the store fails; older ones are not", async () => {
+    const lastHour = canonical("car-images", "last-hour.webp");
+    const twoHoursAgo = canonical("car-images", "two-hours-ago.webp");
+    clock.now = START - 2 * 3_600_000 + 60_000;
+    await signedPhotoUrls([twoHoursAgo]);
+    clock.now = START - 10 * 60_000;
+    const link = (await signedPhotoUrls([lastHour])).get(lastHour);
+    // The hour turns, and the store is down before anything has been signed in it.
+    mocks.sign.mockImplementation(down);
+    clock.now = START + 1_000;
+    const out = await signedPhotoUrls([lastHour, twoHoursAgo]);
+    expect(out.get(lastHour)).toBe(link);
+    // A link signed two hours ago ran out at the top of this hour.
+    expect(out.has(twoHoursAgo)).toBe(false);
+    // With the store working, last hour's link is not the one of choice: a new one is signed for this hour.
+    mocks.sign.mockClear();
+    mocks.sign.mockImplementation(working);
+    clock.now = START + 60_000;
+    await signedPhotoUrls([lastHour]);
+    expect(mocks.sign).toHaveBeenCalledWith("car-images", [`${ME}/last-hour.webp`], expect.any(Number));
+  });
+});
+
+describe("N1062: an export page is written only when the photo store answered for it (review of #244)", () => {
+  const context = () => tableContext("car_images", "*");
+  const down = async () => ({ data: null, error: { message: "storage unavailable" } });
+
+  it("N1062: a page read while the store is failing throws, and the next attempt signs it", async () => {
+    const url = canonical("car-images", "export-me.webp");
+    mocks.sign.mockImplementation(down);
+    await expect(signPhotosForExport([{ url }], ME, context())).rejects.toThrow(EXPORT_NOT_SIGNED);
+    mocks.sign.mockImplementation(async (bucket: string, paths: string[]) => ({ data: paths.map((path) => ({ path, signedUrl: signedFor(bucket, path), error: null })), error: null }));
+    expect(await signPhotosForExport([{ url }], ME, context())).toEqual([{ url: signedFor("car-images", `${ME}/export-me.webp`) }]);
+  });
+
+  it("N1062: a bucket's pause on the page path does not reach the export, which asks the store itself", async () => {
+    const url = canonical("car-images", "export-during-pause.webp");
+    // A page's signing call fails: the bucket is paused for pages.
+    mocks.sign.mockImplementationOnce(down);
+    expect((await signedPhotoUrls([url])).has(url)).toBe(false);
+    // Inside that pause, with the store still failing, the export throws: it is not handed the page path's empty answer.
+    mocks.sign.mockImplementationOnce(down);
+    clock.now = START + 500;
+    await expect(signPhotosForExport([{ url }], ME, context())).rejects.toThrow(EXPORT_NOT_SIGNED);
+    // Inside the same pause with the store back, the export is signed: the pause is not its to wait out.
+    clock.now = START + 1_000;
+    expect(await signPhotosForExport([{ url }], ME, context())).toEqual([{ url: signedFor("car-images", `${ME}/export-during-pause.webp`) }]);
+    expect(mocks.sign).toHaveBeenLastCalledWith("car-images", [`${ME}/export-during-pause.webp`], EXPORT_PHOTO_LINK_SECONDS);
+  });
+
+  it("N1062: one bucket failing fails the whole page; nothing half-linked is returned", async () => {
+    mocks.sign.mockImplementation(async (bucket: string, paths: string[]) =>
+      bucket === "activity-images" ? down() : { data: paths.map((path) => ({ path, signedUrl: signedFor(bucket, path), error: null })), error: null });
+    const post = [{ author_id: ME, body: [{ type: "images", urls: [canonical("activity-images", "p.webp")] }], activity_images: [{ url: canonical("activity-images", "q.webp") }] }];
+    await expect(signPhotosForExport(post, ME, tableContext("activity_posts", "author_id,body,activity_images(url)"))).rejects.toThrow(EXPORT_NOT_SIGNED);
+  });
+
+  it("N1062: a photo whose object is gone does not hold the export for ever: the store answered, and its address stays as stored", async () => {
+    const here = canonical("car-images", "here.webp");
+    const gone = canonical("car-images", "gone.webp");
+    mocks.sign.mockImplementation(async (bucket: string, paths: string[]) => ({
+      data: paths.map((path) => (path.endsWith("gone.webp") ? { path, signedUrl: null, error: "Either the object does not exist or you do not have access to it" } : { path, signedUrl: signedFor(bucket, path), error: null })),
+      error: null,
+    }));
+    expect(await signPhotosForExport([{ url: here }, { url: gone }], ME, context())).toEqual([{ url: signedFor("car-images", `${ME}/here.webp`) }, { url: gone }]);
   });
 });
 
@@ -450,7 +577,7 @@ describe("N1062: the shared copy of public data never holds a result of failed s
       expect([...copies.values()]).toEqual([stored]);
       // It recovers. The next reader is answered from the same stored copy, with the photo signed.
       mocks.sign.mockImplementation(async (bucket: string, paths: string[]) => ({ data: paths.map((path) => ({ path, signedUrl: signedFor(bucket, path), error: null })), error: null }));
-      clock.now = START + SIGN_RETRY_MS;
+      clock.now = START + SIGN_RETRY_STEPS_MS[0];
       expect(await read()).toEqual([{ owner_id: ME, cover_image_url: signedFor("car-images", `${ME}/kept.webp`) }]);
       expect(databaseReads).toBe(1);
       // And the copy is still the canonical answer: no signed link, good or failed, was ever put in it.
@@ -504,7 +631,7 @@ describe("N1051: a signer is given its clock and its client, and keeps its own m
     expect(calls).toEqual(["photo_signatures_read", "sign car-images 1"]);
     expect(mocks.sign).not.toHaveBeenCalled();
     expect(mocks.rpc).not.toHaveBeenCalled();
-    expect(report).toHaveBeenCalledWith(expect.stringContaining("signing failed"), expect.objectContaining({ reason: "signing-failed", bucket: "car-images" }));
+    expect(report).toHaveBeenCalledWith(expect.stringContaining("signing failed"), expect.objectContaining({ reason: "signing-failed:car-images", bucket: "car-images" }));
     expect(mocks.reportError).not.toHaveBeenCalled();
   });
 });

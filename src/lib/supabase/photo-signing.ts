@@ -51,13 +51,24 @@ const MAX_MEMO = 20_000;
 export type SigningClient = ReturnType<typeof createSupabaseClient>;
 
 /**
- * A Storage signing call that takes longer than this is given up for this
- * response (work review #136). It was ten seconds, the client's own limit,
- * so a slow photo store held every page with photos for ten seconds.
+ * How long a response waits for Storage to sign (work review #136). It was
+ * ten seconds, the client's own limit, so a slow photo store held every page
+ * with photos for ten seconds. Past this the response goes out without the
+ * links it was waiting for; the call itself is left to finish, and what it
+ * brings back is remembered for the next response (review of #244).
  */
 export const SIGN_BUDGET_MS = 2_500;
-/** After a signing call fails or runs out of time, the pause before the next: the shared memo's. */
-export const SIGN_RETRY_MS = 30_000;
+/** The most a signing call may take before it is given up altogether. */
+export const SIGN_CALL_TIMEOUT_MS = 10_000;
+/**
+ * After a bucket's signing call fails, or keeps a response waiting past its
+ * budget, no call is made for that bucket for this long: two seconds, doubling
+ * with each failure in a row up to thirty, as the readiness check does. One
+ * bucket's pause is its own; the other buckets go on being signed.
+ */
+export const SIGN_RETRY_STEPS_MS = [2_000, 4_000, 8_000, 16_000, 30_000];
+/** Thrown by an export page read when Storage did not answer for its photos; the export job is retried. */
+export const EXPORT_NOT_SIGNED = "The photo store did not answer for this export page's photos, so the page was not written; the job will be tried again";
 
 let processClient: SigningClient | null = null;
 /** The process's own client, made on first use from the environment. */
@@ -66,27 +77,25 @@ function defaultSigningClient(): SigningClient {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) throw new Error("Photo signing needs the Supabase URL and secret key");
-    // Bounded: a stalled Storage or memo call must not hang a render. A
-    // Storage call is cut off at its budget, so the request itself ends.
-    const timed: typeof fetch = (input, init) => {
-      const address = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-      return fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(address.includes("/storage/v1/") ? SIGN_BUDGET_MS : 10_000) });
-    };
+    // Bounded: a stalled Storage or memo call must end. A response stops
+    // waiting for Storage long before this (SIGN_BUDGET_MS); the call is let
+    // run so its answer can still be used.
+    const timed: typeof fetch = (input, init) => fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(SIGN_CALL_TIMEOUT_MS) });
     processClient = createSupabaseClient(url, key, { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: timed } });
   }
   return processClient;
 }
 
-/** The answer, or a rejection once `ms` has passed, whichever comes first. */
-function withinBudget<T>(call: PromiseLike<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`no answer within ${ms} ms`)), ms);
-    Promise.resolve(call).then(
-      (value) => { clearTimeout(timer); resolve(value); },
-      (error) => { clearTimeout(timer); reject(error); },
-    );
+/** Resolves when every call has settled or `ms` has passed, whichever comes first. The calls are not stopped. */
+function settledWithin(calls: readonly Promise<unknown>[], ms: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    void Promise.allSettled(calls).then(() => { clearTimeout(timer); resolve(); });
   });
 }
+
+type Wanted = { path: string; url: string };
+type Minted = { bucket: string; path: string; signed_url: string };
 
 type SharedRow = { bucket: string; path: string; signed_url: string };
 /** A shared-memo call that takes longer than this is given up for this response. */
@@ -140,31 +149,83 @@ export function createPhotoSigner({
   report = (message, detail) => reportError(message, detail),
 }: PhotoSignerDeps = {}) {
   const memo = new Map<string, Signed>();
-  /** No Storage signing call before this time: set after one fails or runs past its budget. */
-  let signRetryAt = 0;
+  /** Per bucket: no signing call before `until`; `failures` in a row set how long the next pause is. */
+  const pauses = new Map<string, { until: number; failures: number }>();
+  const pauseBucket = (bucket: string) => {
+    const failures = (pauses.get(bucket)?.failures ?? 0) + 1;
+    pauses.set(bucket, { until: now() + SIGN_RETRY_STEPS_MS[Math.min(failures, SIGN_RETRY_STEPS_MS.length) - 1], failures });
+  };
+
+  /**
+   * One bucket's signing call, whole: the links Storage gave, or a throw when
+   * the call failed. A path Storage answered for and would not sign (the
+   * object is gone) is left out and said; that is an answer, not a failure.
+   * No budget and no pause here: the two callers decide those.
+   */
+  async function mint(bucket: string, objects: readonly Wanted[], expiresIn: number): Promise<Minted[]> {
+    const { data, error } = await client().storage.from(bucket).createSignedUrls(objects.map((o) => o.path), expiresIn);
+    if (error) throw error;
+    const byPath = new Map((data ?? []).filter((d) => d.signedUrl && !d.error).map((d) => [d.path, d.signedUrl]));
+    const refused = objects.filter((o) => !byPath.has(o.path));
+    if (refused.length) report("[photos] storage would not sign some photos", { bucket, count: refused.length });
+    return objects.flatMap((o) => (byPath.has(o.path) ? [{ bucket, path: o.path, signed_url: byPath.get(o.path)! }] : []));
+  }
+
+  /** Puts freshly minted links in the shared memo and in this process's, for `window`. */
+  async function remember(window: number, minted: readonly Minted[], urlByObject: ReadonlyMap<string, string>): Promise<void> {
+    if (!minted.length) return;
+    // Offer what this instance minted; where another instance won the race, its URL is the one shown.
+    const offered = await sharedSignatures("photo_signatures_offer", window, minted);
+    if (!offered) {
+      // Not stored in the shared memo: preferred here only until the shared
+      // memo is tried again (#196 review), so an outage doesn't mean signing
+      // afresh on every render, and once it's back this process adopts the
+      // shared link rather than keeping its own for the rest of the window.
+      const localUntil = Math.max(sharedRetryAt, now() + 1);
+      for (const m of minted) memo.set(urlByObject.get(`${m.bucket}/${m.path}`)!, { window, url: m.signed_url, localUntil });
+      return;
+    }
+    const winners = new Map(offered.map((row) => [`${row.bucket}/${row.path}`, row.signed_url]));
+    for (const m of minted) {
+      const key = `${m.bucket}/${m.path}`;
+      memo.set(urlByObject.get(key)!, { window, url: winners.get(key) ?? m.signed_url });
+    }
+  }
 
   /**
    * Signed URLs for canonical photo URLs, keyed by the canonical URL. A URL
    * that isn't a member photo, or that Storage would not sign, is left out (the
    * caller keeps the canonical URL, which renders as a missing photo rather
    * than failing the page).
+   *
+   * A response waits at most SIGN_BUDGET_MS for Storage. Three things keep a
+   * slow or failing store from blanking photos that could be shown (review of
+   * #244):
+   *  - a pause after a failure is one bucket's, and starts at two seconds;
+   *  - a call that outlasts the budget is not stopped: its links are
+   *    remembered when they come, and the next response has them;
+   *  - a link this process already holds and that still opens is used when no
+   *    fresh one could be had: one minted last hour (a link lasts to the end
+   *    of the hour after it was signed), or one this process was keeping only
+   *    until the shared memo answered again.
+   *
+   * One argument only. The links' life is the signing window's; there is no
+   * second argument to pass a time or a life in.
    */
-  async function signedPhotoUrls(
-    urls: readonly string[],
-    /** A fixed life instead of the window's, minted fresh and never shared (the account export). */
-    fixedExpiresIn?: number
-  ): Promise<Map<string, string>> {
-    const windowed = signingWindow(now());
-    const window = fixedExpiresIn ? -1 : windowed.window;
-    const expiresIn = fixedExpiresIn ?? windowed.expiresIn;
+  async function signedPhotoUrls(urls: readonly string[]): Promise<Map<string, string>> {
+    const { window, expiresIn } = signingWindow(now());
     const out = new Map<string, string>();
-    const missing = new Map<string, { path: string; url: string }[]>();
+    const standby = new Map<string, string>();
+    const missing = new Map<string, Wanted[]>();
+    const fresh = (cached: Signed | undefined) => cached && cached.window === window && (cached.localUntil === undefined || now() < cached.localUntil);
     for (const url of new Set(urls)) {
-      const cached = fixedExpiresIn ? undefined : memo.get(url);
-      if (cached && cached.window === window && (cached.localUntil === undefined || now() < cached.localUntil)) {
-        out.set(url, cached.url);
+      const cached = memo.get(url);
+      if (fresh(cached)) {
+        out.set(url, cached!.url);
         continue;
       }
+      // Not the link of choice any more, but one that still opens.
+      if (cached && (cached.window === window || cached.window === window - 1)) standby.set(url, cached.url);
       const object = signedPhotoObject(url);
       if (!object) continue;
       missing.set(object.bucket, [...(missing.get(object.bucket) ?? []), { path: object.path, url }]);
@@ -172,80 +233,87 @@ export function createPhotoSigner({
     if (!missing.size) return out;
 
     if (memo.size > MAX_MEMO) {
-      // The live window, not the export's -1, or one export page would empty the memo.
-      for (const [key, value] of memo) if (value.window !== windowed.window) memo.delete(key);
+      // This hour's and last hour's are kept: last hour's links still open.
+      for (const [key, value] of memo) if (value.window !== window && value.window !== window - 1) memo.delete(key);
       if (memo.size > MAX_MEMO) memo.clear();
     }
 
-    const keep = (url: string, signed: string) => {
-      out.set(url, signed);
-      if (!fixedExpiresIn) memo.set(url, { window, url: signed });
-    };
     const urlByObject = new Map<string, string>();
     for (const [bucket, objects] of missing) for (const o of objects) urlByObject.set(`${bucket}/${o.path}`, o.url);
 
     // The shared memo first: another instance may already have signed these.
-    if (!fixedExpiresIn) {
-      const known = await sharedSignatures("photo_signatures_read", window, [...missing].flatMap(([bucket, objects]) => objects.map((o) => ({ bucket, path: o.path }))));
-      for (const row of known ?? []) {
-        const url = urlByObject.get(`${row.bucket}/${row.path}`);
-        if (url) keep(url, row.signed_url);
-      }
+    const known = await sharedSignatures("photo_signatures_read", window, [...missing].flatMap(([bucket, objects]) => objects.map((o) => ({ bucket, path: o.path }))));
+    for (const row of known ?? []) {
+      const url = urlByObject.get(`${row.bucket}/${row.path}`);
+      if (!url) continue;
+      out.set(url, row.signed_url);
+      memo.set(url, { window, url: row.signed_url });
     }
 
-    const minted: { bucket: string; path: string; signed_url: string }[] = [];
-    // After a failed or slow signing call, none is made for thirty seconds
-    // (work review #136): the photos that would need one show the no-photo
-    // plate at once, where every page used to wait out the call again.
-    if (now() < signRetryAt) return out;
-    await Promise.all(
-      [...missing].map(async ([bucket, all]) => {
-        const objects = all.filter((o) => !out.has(o.url));
-        if (!objects.length) return;
+    const calls: { bucket: string; settled: boolean; done: Promise<void> }[] = [];
+    for (const [bucket, all] of missing) {
+      const objects = all.filter((o) => !out.has(o.url));
+      if (!objects.length) continue;
+      const pause = pauses.get(bucket);
+      if (pause && now() < pause.until) continue;
+      const call = { bucket, settled: false, done: Promise.resolve() };
+      call.done = (async () => {
         try {
-          const { data, error } = await withinBudget(
-            client().storage.from(bucket).createSignedUrls(objects.map((o) => o.path), expiresIn),
-            SIGN_BUDGET_MS,
-          );
-          if (error) throw error;
-          const byPath = new Map((data ?? []).filter((d) => d.signedUrl && !d.error).map((d) => [d.path, d.signedUrl]));
-          const refused = objects.filter((o) => !byPath.has(o.path));
-          if (refused.length) report("[photos] storage would not sign some photos", { bucket, count: refused.length });
-          for (const object of objects) {
-            const signed = byPath.get(object.path);
-            if (signed) minted.push({ bucket, path: object.path, signed_url: signed });
-          }
+          const minted = await mint(bucket, objects, expiresIn);
+          // Storage answered: this bucket is signed again, however long it took.
+          pauses.delete(bucket);
+          await remember(window, minted, urlByObject);
         } catch (error) {
-          signRetryAt = now() + SIGN_RETRY_MS;
-          reportBounded("signing-failed", "[photos] signing failed; no signing call for thirty seconds", { bucket, count: objects.length, error });
+          pauseBucket(bucket);
+          reportBounded(`signing-failed:${bucket}`, "[photos] signing failed; this bucket is paused, then tried again", { bucket, count: objects.length, failures: pauses.get(bucket)?.failures, error });
+        } finally {
+          call.settled = true;
         }
+      })();
+      calls.push(call);
+    }
+    if (calls.length) {
+      await settledWithin(calls.map((call) => call.done), SIGN_BUDGET_MS);
+      for (const call of calls) {
+        if (call.settled) continue;
+        // Still out past the budget: this response goes without it, and the
+        // next ones do not wait for this bucket until it has answered or its
+        // pause is over. The call runs on; `remember` keeps what it brings.
+        pauseBucket(call.bucket);
+        reportBounded(`signing-slow:${call.bucket}`, "[photos] signing ran past its budget; the response went out without waiting", { bucket: call.bucket, budgetMs: SIGN_BUDGET_MS });
+      }
+    }
+    for (const objects of missing.values()) {
+      for (const { url } of objects) {
+        if (out.has(url)) continue;
+        const cached = memo.get(url);
+        if (fresh(cached)) out.set(url, cached!.url);
+        else if (standby.has(url)) out.set(url, standby.get(url)!);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Links with a fixed life for a member's own export: minted fresh, never
+   * from or into either memo, and not subject to the response budget or to a
+   * bucket's pause (an export is a background job, and its page is stored for
+   * good). Throws when any bucket's call fails: the caller must not write a
+   * page some of whose links were never asked for.
+   */
+  async function mintForExport(urls: readonly string[], expiresIn: number): Promise<Map<string, string>> {
+    const byBucket = new Map<string, Wanted[]>();
+    for (const url of new Set(urls)) {
+      const object = signedPhotoObject(url);
+      if (object) byBucket.set(object.bucket, [...(byBucket.get(object.bucket) ?? []), { path: object.path, url }]);
+    }
+    const out = new Map<string, string>();
+    await Promise.all(
+      [...byBucket].map(async ([bucket, objects]) => {
+        const urlByPath = new Map(objects.map((o) => [o.path, o.url]));
+        for (const m of await mint(bucket, objects, expiresIn)) out.set(urlByPath.get(m.path)!, m.signed_url);
       })
     );
-    if (!minted.length) return out;
-    if (fixedExpiresIn) {
-      for (const m of minted) out.set(urlByObject.get(`${m.bucket}/${m.path}`)!, m.signed_url);
-      return out;
-    }
-    // Offer what this instance minted; where another instance won the race, its URL is the one shown.
-    const offered = await sharedSignatures("photo_signatures_offer", window, minted);
-    if (!offered) {
-      // Not stored in the shared memo: remembered here only until the shared
-      // memo is tried again (#196 review), so an outage doesn't mean signing
-      // afresh on every render, and once it's back this process adopts the
-      // shared link rather than keeping its own for the rest of the window.
-      const localUntil = Math.max(sharedRetryAt, now() + 1);
-      for (const m of minted) {
-        const url = urlByObject.get(`${m.bucket}/${m.path}`)!;
-        out.set(url, m.signed_url);
-        memo.set(url, { window, url: m.signed_url, localUntil });
-      }
-      return out;
-    }
-    const winners = new Map(offered.map((row) => [`${row.bucket}/${row.path}`, row.signed_url]));
-    for (const m of minted) {
-      const key = `${m.bucket}/${m.path}`;
-      keep(urlByObject.get(key)!, winners.get(key) ?? m.signed_url);
-    }
     return out;
   }
 
@@ -339,7 +407,18 @@ export function createPhotoSigner({
     // The member's own objects only: their folder is the path's first segment.
     const urls = photoFieldUrls(value, context).filter((url) => signedPhotoObject(url)?.path.split("/")[0] === ownerId);
     if (!urls.length) return value;
-    return replacePhotoFields(value, context, await signedPhotoUrls(urls, EXPORT_PHOTO_LINK_SECONDS));
+    // Every bucket's call must have answered (review of #244): a page whose
+    // links were not all asked for is not written. A photo Storage answered
+    // for and would not sign (its object is gone) keeps its stored address,
+    // which is the truth about it, and does not hold the export up for ever.
+    let signed: Map<string, string>;
+    try {
+      signed = await mintForExport(urls, EXPORT_PHOTO_LINK_SECONDS);
+    } catch (error) {
+      reportBounded("export-not-signed", "[photos] an export page was not written: the photo store did not answer", { count: urls.length, error });
+      throw new Error(EXPORT_NOT_SIGNED);
+    }
+    return replacePhotoFields(value, context, signed);
   }
 
   /**
