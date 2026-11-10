@@ -39,6 +39,44 @@ const SHRINK_TARGET_BYTES = 3_500_000;
 export const tooLargeReason = (name: string, maxMb: number) =>
   `${name} is too large to upload (over ${maxMb} MB). Save a smaller copy and try again: most phones can resize a photo from its share or edit menu, and a screenshot of it works too.`;
 
+/** A decoded photo ready to draw, the right way up, and how to let go of it. */
+type Drawable = { source: CanvasImageSource; width: number; height: number; release: () => void };
+
+/**
+ * Decodes a photo for drawing, two ways (work review #158, N955).
+ *
+ * First `createImageBitmap` with the orientation option, the fast path.
+ * Some browsers do not have it for a File, or reject the options argument
+ * (older Safari and iOS web views among them), and before this every phone
+ * photo over the server's 4 MB cap was refused there with advice to resize
+ * it by hand. So second: an ordinary `<img>` reading the same file from an
+ * object URL. Every current browser decodes its own photo formats that way
+ * and applies the photo's EXIF orientation itself when drawing it.
+ */
+async function decodeForCanvas(file: File): Promise<Drawable> {
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    return { source: bitmap, width: bitmap.width, height: bitmap.height, release: () => bitmap.close() };
+  } catch {
+    const url = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      image.decoding = "async";
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error("The photo could not be decoded."));
+        image.src = url;
+      });
+      if (!image.naturalWidth || !image.naturalHeight) throw new Error("The photo has no size.");
+      // The object URL is kept until the pixels are drawn.
+      return { source: image, width: image.naturalWidth, height: image.naturalHeight, release: () => URL.revokeObjectURL(url) };
+    } catch (error) {
+      URL.revokeObjectURL(url);
+      throw error;
+    }
+  }
+}
+
 /**
  * Client-side pre-shrink for photography (brief §S4): correct orientation,
  * cap the long edge at 2560px, re-encode as JPEG q0.85. This only saves
@@ -53,7 +91,7 @@ export async function normalizePublicPhoto(file: File): Promise<File> {
   const heic = isHeicFile(file);
   if ((!file.type.startsWith("image/") && !heic) || file.type === "image/gif") return file;
   try {
-    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const bitmap = await decodeForCanvas(file);
     const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
     // Already small in bytes and pixels → keep the original (EXIF intact is
     // acceptable only when we're not re-encoding; GPS-bearing camera files
@@ -61,7 +99,7 @@ export async function normalizePublicPhoto(file: File): Promise<File> {
     // A HEIC is always converted: the server's image library can't decode
     // the HEVC photos iPhones take (N64), so it must arrive as JPEG.
     if (!heic && file.size < SKIP_UNDER_BYTES && scale === 1) {
-      bitmap.close();
+      bitmap.release();
       return file;
     }
     const canvas = document.createElement("canvas");
@@ -69,11 +107,11 @@ export async function normalizePublicPhoto(file: File): Promise<File> {
     canvas.height = Math.round(bitmap.height * scale);
     const ctx = canvas.getContext("2d");
     if (!ctx) {
-      bitmap.close();
+      bitmap.release();
       return file;
     }
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
+    ctx.drawImage(bitmap.source, 0, 0, canvas.width, canvas.height);
+    bitmap.release();
     // q0.85 puts a 2560px phone photo at about 1–2.5 MB. A very detailed one
     // can come out larger, so step the quality down until it fits the
     // target, leaving headroom under SERVER_UPLOAD_MAX_BYTES (#118).
