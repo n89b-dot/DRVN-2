@@ -69,13 +69,26 @@ type Claimed = {
   notification_prefs: unknown;
 };
 
-async function facts(admin: Admin, orderId: string): Promise<OrderEmailFacts | null> {
-  const [{ data: order, error }, { data: items }] = await Promise.all([
-    admin.from("orders").select("id, total_cents, dispatch_by, carrier, tracking_number, cancel_reason").eq("id", orderId).maybeSingle(),
+async function facts(admin: Admin, row: Pick<Claimed, "order_id" | "recipient_id" | "kind">): Promise<OrderEmailFacts | null> {
+  const orderId = row.order_id;
+  const [{ data: order, error }, { data: items }, reminder] = await Promise.all([
+    admin.from("orders").select("id, total_cents, currency, dispatch_by, carrier, tracking_number, cancel_reason").eq("id", orderId).maybeSingle(),
     admin.from("order_items").select("title").eq("order_id", orderId).order("id").limit(20),
+    row.kind === "payout_setup_reminder"
+      ? admin
+          .from("payout_setup_reminders")
+          .select("sale_count")
+          .eq("seller_id", row.recipient_id)
+          .eq("order_id", orderId)
+          .order("reminded_on", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
   if (error || !order) return null;
   return {
+    currency: order.currency,
+    saleCount: reminder.data?.sale_count ?? 1,
     orderId: order.id,
     title: items?.[0]?.title ?? null,
     itemCount: items?.length ?? 1,
@@ -111,10 +124,14 @@ export async function processOrderEmails(
     tally.skipped = Number(data ?? 0);
     return tally;
   }
-  while (Date.now() < deadline) {
-    const { data, error } = await admin.rpc("claim_order_emails", { p_limit: batch });
+  // One row per claim: a row is leased (and its attempt counted) only when
+  // it is about to be sent, so a pass that runs out of time never leaves
+  // claimed rows waiting out a lease they were never tried under.
+  while (Date.now() < deadline && tally.claimed < batch) {
+    const { data, error } = await admin.rpc("claim_order_emails", { p_limit: 1 });
     if (error) throw new Error(`Order email claim failed: ${error.code}`);
     const claimed = (data ?? []) as unknown as Claimed[];
+    if (claimed.length === 0) break;
     for (const row of claimed) {
       tally.claimed += 1;
       try {
@@ -124,7 +141,7 @@ export async function processOrderEmails(
           tally.skipped += 1;
           continue;
         }
-        const loaded = await facts(admin, row.order_id);
+        const loaded = await facts(admin, row);
         if (!loaded) {
           await complete(admin, row, "retry", { error: "order unreadable" });
           tally.retrying += 1;
@@ -150,9 +167,7 @@ export async function processOrderEmails(
         tally.errors += 1;
         reportError("[order-emails] row not finished", { id: row.id, error: error instanceof Error ? error.message : "error" });
       }
-      if (Date.now() >= deadline) break;
     }
-    if (claimed.length < batch) break;
   }
   return tally;
 }

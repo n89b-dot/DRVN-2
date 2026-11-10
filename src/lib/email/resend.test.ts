@@ -27,6 +27,6 @@ describe("the Resend transport (OS-W41, report five #116)", () => {
   });
 
   it("refuses without a key", async () => {
-    expect(await resendTransport({ from: "f", env: {} })(message)).toEqual({ status: "rejected", reason: "resend: RESEND_API_KEY missing" });
+    expect(await resendTransport({ from: "f", env: {} })(message)).toEqual({ status: "retry", reason: "resend: RESEND_API_KEY missing" });
   });
 });

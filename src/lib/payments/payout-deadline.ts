@@ -117,8 +117,8 @@ export async function processPayoutDeadlines(
     }
   }
   // Then the reminders to set payouts up, on days 3, 7 and 12 of a sale
-  // (#116, a default Neil can change): each is an in-app notice, and so an
-  // order email, at most once a day per sale. A failure here never holds
+  // (#116, a default Neil can change): one in-app notice, and so one order
+  // email, a day per seller, covering every unpaid sale. A failure here never holds
   // back the deadline above, and isn't counted against it.
   try {
     const { error: reminderError } = await admin.rpc("raise_payout_setup_reminders");

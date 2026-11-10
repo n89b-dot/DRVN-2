@@ -20,11 +20,16 @@ describe("the email seam", () => {
     expect(reportError).not.toHaveBeenCalled();
   });
 
-  it("reports a provider it doesn't know, or one with no sender, and stays off", () => {
-    expect(emailTransport({ EMAIL_PROVIDER: "unknown", EMAIL_FROM: "alerts@drvn.example" })).toBeNull();
+  it("reports a half-configured provider and retries every send instead of dropping it as off (OS-W41)", async () => {
+    const message = { to: "member@drvn.test", subject: "s", text: "t", html: "h", idempotencyKey: "k" };
+    const unknown = emailTransport({ EMAIL_PROVIDER: "unknown", EMAIL_FROM: "alerts@drvn.example" });
+    expect(unknown).not.toBeNull();
+    await expect(unknown!.send(message)).resolves.toEqual({ status: "retry", reason: "unknown: unknown provider" });
+    expect(emailTransport({ EMAIL_PROVIDER: "toString", EMAIL_FROM: "alerts@drvn.example" })!.name).toBe("toString");
+    await expect(emailTransport({ EMAIL_PROVIDER: "toString", EMAIL_FROM: "a@drvn.example" })!.send(message)).resolves.toMatchObject({ status: "retry" });
     TRANSPORTS.fixture = () => async () => ({ status: "sent", providerId: null });
-    expect(emailTransport({ EMAIL_PROVIDER: "fixture" })).toBeNull();
-    expect(reportError).toHaveBeenCalledTimes(2);
+    await expect(emailTransport({ EMAIL_PROVIDER: "fixture" })!.send(message)).resolves.toEqual({ status: "retry", reason: "fixture: EMAIL_FROM missing" });
+    expect(reportError).toHaveBeenCalled();
   });
 
   it("hands a registered provider its sender and environment", async () => {

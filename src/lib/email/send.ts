@@ -51,17 +51,19 @@ export const TRANSPORTS: Record<string, (config: { from: string; env: EmailEnv }
   resend: ({ from, env }) => resendTransport({ from, env }),
 };
 
-/** The configured transport, or null when email is off (no provider, an
- *  unknown one, or no sender address). Only a misconfiguration is reported;
- *  "no provider" is the expected state until one is chosen. */
+/** The configured transport, or null when email is off: EMAIL_PROVIDER
+ *  unset, the expected state until one is chosen. A provider that is set but
+ *  half-configured (unknown, or no sender address) is not "off": it returns a
+ *  transport whose every send is a retry, and says so, so nothing waiting is
+ *  dropped as 'email_off' while someone fixes the setting. */
 export function emailTransport(env: EmailEnv = process.env): EmailTransport | null {
   const name = env.EMAIL_PROVIDER?.trim();
   if (!name) return null;
-  const factory = TRANSPORTS[name];
+  const factory = Object.hasOwn(TRANSPORTS, name) ? TRANSPORTS[name] : undefined;
   const from = env.EMAIL_FROM?.trim();
   if (!factory || !from) {
-    reportError("[email] EMAIL_PROVIDER is set but email is off", { provider: name, known: Boolean(factory), from: Boolean(from) });
-    return null;
+    reportError("[email] EMAIL_PROVIDER is set but not usable; sends will retry", { provider: name, known: Boolean(factory), from: Boolean(from) });
+    return { name, send: async () => ({ status: "retry", reason: `${name}: ${factory ? "EMAIL_FROM missing" : "unknown provider"}` }) };
   }
   return { name, send: factory({ from, env }) };
 }

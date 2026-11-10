@@ -18,7 +18,9 @@ export const RESEND_TIMEOUT_MS = 8_000;
 export function resendTransport({ from, env, fetchImpl = fetch }: { from: string; env: Record<string, string | undefined>; fetchImpl?: typeof fetch }) {
   const key = env.RESEND_API_KEY?.trim();
   return async (message: EmailMessage): Promise<EmailOutcome> => {
-    if (!key) return { status: "rejected", reason: "resend: RESEND_API_KEY missing" };
+    // A missing key is a setting to fix, not a message that can never go:
+    // retry, so nothing is dropped while it is fixed.
+    if (!key) return { status: "retry", reason: "resend: RESEND_API_KEY missing" };
     let response: Response;
     try {
       response = await fetchImpl("https://api.resend.com/emails", {

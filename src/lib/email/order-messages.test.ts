@@ -7,6 +7,7 @@ const facts: OrderEmailFacts = {
   title: 'Turbo <script>alert(1)</script>\nCall 07123 "now"',
   itemCount: 1,
   totalCents: 45_000,
+  currency: "USD",
   dispatchBy: "2026-11-13T00:00:00Z",
   carrier: "UPS",
   trackingNumber: "1Z<b>999",

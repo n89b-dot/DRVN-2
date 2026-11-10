@@ -7,8 +7,13 @@
 --   S  claims skip a deleted or suspended account, a stale row, a seller with
 --      no confirmed address, and anything past 20 an hour to one recipient;
 --      a guest buyer is sent their own order's emails
---   D  a deletion request skips that member's pending rows at once
+--   D  a deletion request skips that member's pending rows at once; one held
+--      for money owed doesn't, and a withdrawn one leaves nothing skipped
+--      from then on
 --   C  outcomes are fenced by attempt; no provider skips everything waiting
+--   R  payout-setup reminders: one a day per seller on days 3, 7 and 12,
+--      covering every unpaid sale; none on day 2, after set-up or after a
+--      refund; a second run the same day raises nothing
 --   P  members and visitors can't read the outbox or call its functions
 -- Every failed check is collected and reported together at the end.
 begin;
@@ -23,19 +28,35 @@ declare
   sale uuid := gen_random_uuid();
   guest_sale uuid := gen_random_uuid();
   leaver_sale uuid := gen_random_uuid();
+  holder uuid := gen_random_uuid();
+  holder_sale uuid := gen_random_uuid();
+  s_two uuid := gen_random_uuid();
+  s_many uuid := gen_random_uuid();
+  s_set uuid := gen_random_uuid();
+  s_refund uuid := gen_random_uuid();
+  s_last uuid := gen_random_uuid();
+  o_two uuid := gen_random_uuid();
+  o_three uuid := gen_random_uuid();
+  o_seven uuid := gen_random_uuid();
+  o_set uuid := gen_random_uuid();
+  o_refund uuid := gen_random_uuid();
+  o_last uuid := gen_random_uuid();
   n uuid;
   r record;
   v_count integer;
+  v_text text;
   fails text[] := '{}';
 begin
   insert into auth.users (id, email, confirmed_at, raw_user_meta_data) values
     (seller, 'n116-seller@drvn.test', now(), '{}'), (buyer, 'n116-buyer@drvn.test', now(), '{}'),
-    (stranger, 'n116-stranger@drvn.test', now(), '{}'), (leaver, 'n116-leaver@drvn.test', now(), '{}');
+    (stranger, 'n116-stranger@drvn.test', now(), '{}'), (leaver, 'n116-leaver@drvn.test', now(), '{}'),
+    (holder, 'n116-holder@drvn.test', now(), '{}');
   insert into auth.users (id, email, raw_user_meta_data) values (guest, 'n116-guest@drvn.test', '{"drvn_guest": true}');
   insert into public.orders (id, buyer_id, seller_id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, currency, completed_at) values
     (sale, buyer, seller, 'completed', 5000, 0, 500, 5000, 'USD', now()),
     (guest_sale, guest, seller, 'completed', 5000, 0, 500, 5000, 'USD', now()),
-    (leaver_sale, buyer, leaver, 'completed', 5000, 0, 500, 5000, 'USD', now());
+    (leaver_sale, buyer, leaver, 'completed', 5000, 0, 500, 5000, 'USD', now()),
+    (holder_sale, buyer, holder, 'completed', 5000, 0, 500, 5000, 'USD', now());
 
   -- ---------- Q ----------
   insert into public.notifications (user_id, kind, section, title, href) values (seller, 'order_sold', 'marketplace', 'Sold', '/orders/' || sale)
@@ -101,6 +122,19 @@ begin
     fails := fails || 'FAIL S6: the 21st email in an hour to one recipient was not skipped (OS-W41)'::text;
   end if;
 
+  -- Rows being sent count towards the cap too.
+  update public.order_email_outbox set sent_at = now() - interval '2 hours' where recipient_id = buyer and status = 'sent';
+  for v_count in 1..20 loop
+    insert into public.order_email_outbox (notification_id, recipient_id, order_id, kind, status, lease_expires_at, attempts)
+    values (gen_random_uuid(), buyer, sale, 'order_shipped', 'sending', now() + interval '5 minutes', 1);
+  end loop;
+  insert into public.notifications (user_id, kind, section, title, href) values (buyer, 'order_delivered', 'marketplace', 'Delivered', '/orders/' || sale) returning id into n;
+  perform public.claim_order_emails(50);
+  if (select skip_reason from public.order_email_outbox where notification_id = n) is distinct from 'rate_capped' then
+    fails := fails || 'FAIL S7: emails being sent did not count towards the hourly cap (OS-W41)'::text;
+  end if;
+  update public.order_email_outbox set status = 'sent', sent_at = now() - interval '2 hours', lease_expires_at = null where recipient_id = buyer and status = 'sending';
+
   -- ---------- D ----------
   insert into public.notifications (user_id, kind, section, title, href) values (leaver, 'order_sold', 'marketplace', 'Sold', '/orders/' || leaver_sale) returning id into n;
   insert into public.account_deletion_requests (user_id, outcome, next_action, responsible_owner) values (leaver, 'cleanup_pending', 'Automated cleanup is in progress.', 'privacy worker');
@@ -113,6 +147,23 @@ begin
     fails := fails || 'FAIL D2: a deleted account''s email was claimed instead of skipped (OS-W41)'::text;
   end if;
 
+  -- A deletion held for money owed: the member still settles the order, so
+  -- the emails still go.
+  insert into public.account_deletion_requests (user_id, outcome, next_action, responsible_owner)
+  values (holder, 'temporary_financial_hold', 'Settle the open order.', 'privacy worker');
+  insert into public.notifications (user_id, kind, section, title, href) values (holder, 'order_sold', 'marketplace', 'Sold', '/orders/' || holder_sale) returning id into n;
+  select * into r from public.claim_order_emails(50) c where c.recipient_id = holder limit 1;
+  if r.id is null or (select status from public.order_email_outbox where notification_id = n) <> 'sending' then
+    fails := fails || 'FAIL D3: a deletion held for money owed stopped the member''s order emails (OS-W41)'::text;
+  end if;
+  -- Withdrawn (the request row is gone): nothing from then on is skipped.
+  delete from public.account_deletion_requests where user_id = leaver;
+  insert into public.notifications (user_id, kind, section, title, href) values (leaver, 'order_shipped', 'marketplace', 'Shipped', '/orders/' || leaver_sale) returning id into n;
+  perform public.claim_order_emails(50);
+  if (select status from public.order_email_outbox where notification_id = n) <> 'sending' then
+    fails := fails || 'FAIL D4: a withdrawn deletion request left the member skipped (OS-W41)'::text;
+  end if;
+
   -- ---------- C ----------
   update auth.users set confirmed_at = now() where id = seller;
   insert into public.notifications (user_id, kind, section, title, href) values (seller, 'order_delivered', 'marketplace', 'Delivered', '/orders/' || sale) returning id into n;
@@ -120,13 +171,64 @@ begin
   if public.complete_order_email(r.id, r.attempt + 1, 'sent') <> 'stale' then
     fails := fails || 'FAIL C1: an outcome for another attempt was recorded (OS-W41)'::text;
   end if;
-  if public.complete_order_email(r.id, r.attempt, 'retry', null, 'resend: 503') <> 'pending'
+  -- Call, then read the row in a separate statement: a volatile call and a
+  -- read of its effect in one expression need not see each other.
+  v_text := public.complete_order_email(r.id, r.attempt, 'retry', null, 'resend: 503');
+  if v_text is distinct from 'pending'
      or (select next_attempt_at from public.order_email_outbox where id = r.id) <= now() then
     fails := fails || 'FAIL C2: a retry was not backed off (OS-W41)'::text;
   end if;
   update public.order_email_outbox set next_attempt_at = now() where id = r.id;
-  if public.skip_order_emails_email_off() < 1 or (select skip_reason from public.order_email_outbox where id = r.id) is distinct from 'email_off' then
+  v_count := public.skip_order_emails_email_off();
+  if v_count < 1 or (select skip_reason from public.order_email_outbox where id = r.id) is distinct from 'email_off' then
     fails := fails || 'FAIL C3: with no provider, a waiting email was not skipped (OS-W41)'::text;
+  end if;
+
+  -- ---------- R ----------
+  insert into auth.users (id, email, confirmed_at, raw_user_meta_data) values
+    (s_two, 'n116-r2@drvn.test', now(), '{}'), (s_many, 'n116-rmany@drvn.test', now(), '{}'), (s_set, 'n116-rset@drvn.test', now(), '{}'),
+    (s_refund, 'n116-rrefund@drvn.test', now(), '{}'), (s_last, 'n116-rlast@drvn.test', now(), '{}');
+  update public.profiles set payouts_enabled = false where id in (s_two, s_many, s_refund, s_last);
+  update public.profiles set payouts_enabled = true where id = s_set;
+  insert into public.orders (id, buyer_id, seller_id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, currency, completed_at) values
+    (o_two, buyer, s_two, 'completed', 5000, 0, 500, 5000, 'USD', now()),
+    (o_three, buyer, s_many, 'completed', 5000, 0, 500, 5000, 'USD', now()),
+    (o_seven, buyer, s_many, 'completed', 5000, 0, 500, 5000, 'USD', now()),
+    (o_set, buyer, s_set, 'completed', 5000, 0, 500, 5000, 'USD', now()),
+    (o_refund, buyer, s_refund, 'refunded', 5000, 0, 500, 5000, 'USD', now()),
+    (o_last, buyer, s_last, 'completed', 5000, 0, 500, 5000, 'USD', now());
+  insert into public.transfer_intents (order_id, seller_id, amount_cents, currency, status, created_at) values
+    (o_two, s_two, 4500, 'USD', 'holding', now() - interval '2 days'),
+    (o_three, s_many, 4500, 'USD', 'holding', now() - interval '3 days'),
+    (o_seven, s_many, 4500, 'USD', 'holding', now() - interval '7 days'),
+    (o_set, s_set, 4500, 'USD', 'holding', now() - interval '3 days'),
+    (o_refund, s_refund, 4500, 'USD', 'holding', now() - interval '7 days'),
+    (o_last, s_last, 4500, 'USD', 'holding', now() - interval '12 days');
+  v_count := public.raise_payout_setup_reminders();
+  if exists (select 1 from public.notifications where kind = 'payout_setup_reminder' and user_id in (s_two, s_set, s_refund)) then
+    fails := fails || 'FAIL R1: a reminder went on day 2, after payouts were set up, or after a refund (OS-W41)'::text;
+  end if;
+  if (select count(*) from public.notifications where kind = 'payout_setup_reminder' and user_id = s_many) <> 1
+     or (select href from public.notifications where kind = 'payout_setup_reminder' and user_id = s_many) <> '/orders/' || o_seven
+     or (select sale_count from public.payout_setup_reminders where seller_id = s_many and reminded_on = current_date) is distinct from 2 then
+    fails := fails || 'FAIL R2: a seller with sales on days 3 and 7 did not get one reminder covering both, linked to the oldest (OS-W41)'::text;
+  end if;
+  if (select count(*) from public.notifications where kind = 'payout_setup_reminder' and user_id = s_last and body like 'Two days left%') <> 1
+     or not exists (select 1 from public.order_email_outbox where recipient_id = s_last and kind = 'payout_setup_reminder' and order_id = o_last) then
+    fails := fails || 'FAIL R3: a day-12 sale did not get its two-days-left reminder and email (OS-W41)'::text;
+  end if;
+  if v_count <> 2 then
+    fails := fails || format('FAIL R4: expected two reminders, raised %s (OS-W41)', v_count);
+  end if;
+  v_count := public.raise_payout_setup_reminders();
+  if v_count <> 0 or (select count(*) from public.notifications where kind = 'payout_setup_reminder' and user_id in (s_many, s_last)) <> 2 then
+    fails := fails || 'FAIL R5: a second run the same day raised another reminder (OS-W41)'::text;
+  end if;
+  -- The dedupe is its own row: deleting the in-app notice doesn't re-send.
+  delete from public.notifications where kind = 'payout_setup_reminder' and user_id = s_many;
+  v_count := public.raise_payout_setup_reminders();
+  if v_count <> 0 then
+    fails := fails || 'FAIL R6: a deleted notice let the same day''s reminder go again (OS-W41)'::text;
   end if;
 
   -- ---------- P ----------
@@ -134,7 +236,8 @@ begin
      or has_table_privilege('anon', 'public.order_email_outbox', 'select')
      or has_function_privilege('authenticated', 'public.claim_order_emails(integer)', 'execute')
      or has_function_privilege('authenticated', 'public.complete_order_email(uuid, integer, text, text, text, text)', 'execute')
-     or has_function_privilege('authenticated', 'public.raise_payout_setup_reminders()', 'execute') then
+     or has_function_privilege('authenticated', 'public.raise_payout_setup_reminders()', 'execute')
+     or has_table_privilege('authenticated', 'public.payout_setup_reminders', 'select') then
     fails := fails || 'FAIL P1: a member can reach the order email outbox (OS-W41)'::text;
   end if;
   if not exists (select 1 from private.scheduled_job_inventory() where job = 'drvn-transfer-worker' and 'orderEmails' = any(families)) then

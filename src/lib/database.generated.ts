@@ -4313,6 +4313,33 @@ export type Database = {
           },
         ]
       }
+      payout_setup_reminders: {
+        Row: {
+          created_at: string
+          oldest_day: number
+          order_id: string
+          reminded_on: string
+          sale_count: number
+          seller_id: string
+        }
+        Insert: {
+          created_at?: string
+          oldest_day: number
+          order_id: string
+          reminded_on: string
+          sale_count: number
+          seller_id: string
+        }
+        Update: {
+          created_at?: string
+          oldest_day?: number
+          order_id?: string
+          reminded_on?: string
+          sale_count?: number
+          seller_id?: string
+        }
+        Relationships: []
+      }
       pickup_confirmations: {
         Row: {
           attempts: number

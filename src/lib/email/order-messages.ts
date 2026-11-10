@@ -28,6 +28,10 @@ export type OrderEmailFacts = {
   title: string | null;
   itemCount: number;
   totalCents: number;
+  /** The order's currency (ISO 4217). */
+  currency: string;
+  /** For a payout-setup reminder: how many unpaid sales it covers. */
+  saleCount?: number;
   dispatchBy: string | null;
   carrier: string | null;
   trackingNumber: string | null;
@@ -51,8 +55,10 @@ export function orderRef(orderId: string): string {
   return orderId.slice(0, 8).toUpperCase();
 }
 
-const money = (cents: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: cents % 100 === 0 ? 0 : 2 }).format(cents / 100);
+export function money(cents: number, currency: string): string {
+  const code = /^[A-Za-z]{3}$/.test(currency) ? currency.toUpperCase() : "USD";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: code, maximumFractionDigits: cents % 100 === 0 ? 0 : 2 }).format(cents / 100);
+}
 
 const day = (iso: string | null) =>
   iso ? new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(iso)) : null;
@@ -74,7 +80,7 @@ function body(kind: OrderEmailKind, facts: OrderEmailFacts): Body {
       return {
         subject: `Sold: ${item}`,
         lines: [
-          `${item} sold for ${money(facts.totalCents)} (order ${ref}).`,
+          `${item} sold for ${money(facts.totalCents, facts.currency)} (order ${ref}).`,
           by ? `Dispatch it by ${by}, and add the tracking on the order.` : "Dispatch it within three business days, and add the tracking on the order.",
         ],
       };
@@ -82,7 +88,7 @@ function body(kind: OrderEmailKind, facts: OrderEmailFacts): Body {
     case "order_paid":
       return {
         subject: `Your receipt for order ${ref}`,
-        lines: [`You paid ${money(facts.totalCents)} for ${item} (order ${ref}).`, "The seller dispatches it next; we'll email you when they do."],
+        lines: [`You paid ${money(facts.totalCents, facts.currency)} for ${item} (order ${ref}).`, "The seller dispatches it next; we'll email you when they do."],
       };
     case "order_shipped": {
       const tracking = [oneLine(facts.carrier, 40), oneLine(facts.trackingNumber, 60)].filter(Boolean).join(" ");
@@ -129,14 +135,18 @@ function body(kind: OrderEmailKind, facts: OrderEmailFacts): Body {
             subject: `Order ${ref} was refunded`,
             lines: [`A refund was issued on order ${ref} (${item}).`, "The money goes back to the card it came from; banks usually show it within 5–10 business days."],
           };
-    case "payout_setup_reminder":
+    case "payout_setup_reminder": {
+      const others = Math.max((facts.saleCount ?? 1) - 1, 0);
       return {
-        subject: `Set up payouts to be paid for order ${ref}`,
+        subject: others > 0 ? `Set up payouts to be paid for your ${others + 1} sales` : `Set up payouts to be paid for order ${ref}`,
         lines: [
-          `You sold ${item} (order ${ref}), and your payouts aren't set up yet.`,
-          "Finish your payout setup within 14 days of the sale, or the sale is refunded to the buyer.",
+          others > 0
+            ? `You sold ${item} (order ${ref}) and ${others} other ${others === 1 ? "sale" : "sales"}, and your payouts aren't set up yet.`
+            : `You sold ${item} (order ${ref}), and your payouts aren't set up yet.`,
+          "Finish your payout setup within 14 days of each sale, or that sale is refunded to the buyer.",
         ],
       };
+    }
   }
 }
 

@@ -21,13 +21,16 @@
 --     by attempt, backoff 10, 20, 40, 80 minutes, failed after five attempts.
 --     A row older than 24 hours is skipped as stale. A recipient whose
 --     account is suspended, has a deletion request, or has no address is
---     skipped; so is anything past 20 emails to one recipient in an hour.
+--     skipped; so is anything past 20 emails to one recipient in an hour
+--     (sent in the hour, or being sent). A deletion held for money owed
+--     (temporary_financial_hold, not scrubbed) still gets order emails.
 --     A member needs a confirmed address; an unconfirmed one (a guest) is
 --     sent only the buyer's emails of their own order.
 --   * A deletion request skips the member's pending rows at once.
---   * raise_payout_setup_reminders(): an in-app notice (and so an email) to a
---     seller whose sale is 3, 7 or 12 days old with payouts still off, once
---     per sale per day; run by the payoutDeadlines family.
+--   * raise_payout_setup_reminders(): one in-app notice (and so one email) a
+--     day to a seller with payouts still off when any unpaid sale is 3, 7 or
+--     12 days old, covering all of them; recorded in payout_setup_reminders.
+--     Run by the payoutDeadlines family.
 --   * The money pass gains the family orderEmails (drvn-transfer-worker).
 --
 -- Restated: private.scheduled_job_inventory() from
@@ -117,7 +120,9 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
-  if new.user_id is not null then
+  -- A held deletion (temporary_financial_hold) leaves the member settling
+  -- orders with their account: they still need these emails.
+  if new.user_id is not null and (new.outcome <> 'temporary_financial_hold' or new.scrubbed_at is not null) then
     update public.order_email_outbox
        set status = 'skipped', skip_reason = 'account_closed', lease_id = null, lease_expires_at = null, updated_at = now()
      where recipient_id = new.user_id and status in ('pending', 'sending');
@@ -129,7 +134,7 @@ revoke all on function private.order_emails_account_closed() from public, anon, 
 
 drop trigger if exists order_emails_account_closed on public.account_deletion_requests;
 create trigger order_emails_account_closed
-  after insert or update of scrubbed_at on public.account_deletion_requests
+  after insert or update of outcome, scrubbed_at on public.account_deletion_requests
   for each row execute function private.order_emails_account_closed();
 
 -- ---------------------------------------------------------------------------
@@ -166,13 +171,15 @@ begin
     v_reason := case
       when v_row.created_at < now() - interval '24 hours' then 'stale'
       when exists (select 1 from public.profiles p where p.id = v_row.recipient_id and p.suspended_at is not null)
-        or exists (select 1 from public.account_deletion_requests r where r.user_id = v_row.recipient_id) then 'account_closed'
+        or exists (select 1 from public.account_deletion_requests r where r.user_id = v_row.recipient_id
+                    and (r.outcome <> 'temporary_financial_hold' or r.scrubbed_at is not null)) then 'account_closed'
       when v_buyer is null then 'not_a_party'
       when v_email is null then 'no_address'
       -- An unconfirmed address is a guest's: only the buyer's own emails.
       when not v_confirmed and not (v_buyer and v_row.kind in ('order_paid', 'order_shipped', 'receipt_auto_confirmed', 'order_refunded', 'dispute_resolved', 'admin_action')) then 'no_address'
       when (select count(*) from public.order_email_outbox s
-             where s.recipient_id = v_row.recipient_id and s.status = 'sent' and s.sent_at > now() - interval '1 hour') >= 20 then 'rate_capped'
+             where s.recipient_id = v_row.recipient_id
+               and ((s.status = 'sent' and s.sent_at > now() - interval '1 hour') or s.status = 'sending')) >= 20 then 'rate_capped'
     end;
 
     if v_reason is not null then
@@ -278,8 +285,26 @@ revoke all on function public.skip_order_emails_email_off() from public, anon, a
 grant execute on function public.skip_order_emails_email_off() to service_role;
 
 -- ---------------------------------------------------------------------------
--- Payout-setup reminders: days 3, 7 and 12 of a sale with payouts still off
+-- Payout-setup reminders: one a day per seller, on days 3, 7 and 12 of a sale
+-- with payouts still off. Recorded in its own row (seller, day), so the
+-- dedupe never depends on the in-app notice surviving; one reminder covers
+-- every unpaid sale and links to the most urgent (the oldest).
 -- ---------------------------------------------------------------------------
+create table if not exists public.payout_setup_reminders (
+  seller_id uuid not null references auth.users (id) on delete cascade,
+  reminded_on date not null,
+  order_id uuid not null,
+  sale_count integer not null check (sale_count >= 1),
+  oldest_day integer not null,
+  created_at timestamptz not null default now(),
+  primary key (seller_id, reminded_on)
+);
+alter table public.payout_setup_reminders enable row level security;
+revoke all on table public.payout_setup_reminders from public, anon, authenticated;
+grant all on table public.payout_setup_reminders to service_role;
+comment on table public.payout_setup_reminders is
+  'One payout-setup reminder per seller per day (20261110140000, #116). Service role only.';
+
 create or replace function public.raise_payout_setup_reminders()
 returns integer
 language plpgsql
@@ -291,29 +316,41 @@ declare
   v_n integer := 0;
 begin
   for v_row in
-    select distinct on (o.id) o.id as order_id, o.seller_id,
-           (current_date - ti.created_at::date) as day
-      from public.transfer_intents ti
-      join public.orders o on o.id = ti.order_id
-      join public.profiles p on p.id = o.seller_id
-     where ti.status in ('holding', 'ready', 'blocked_unpayable', 'failed')
-       and o.status not in ('refunded', 'cancelled')
-       and not p.payouts_enabled
-       and (current_date - ti.created_at::date) in (3, 7, 12)
-       and not exists (
-         select 1 from public.notifications n
-          where n.user_id = o.seller_id and n.kind = 'payout_setup_reminder'
-            and n.href = '/orders/' || o.id and n.created_at::date = current_date)
-     order by o.id
+    with unpaid as (
+      select o.id as order_id, o.seller_id, (current_date - min(ti.created_at)::date) as day
+        from public.transfer_intents ti
+        join public.orders o on o.id = ti.order_id
+        join public.profiles p on p.id = o.seller_id
+       where ti.status in ('holding', 'ready', 'blocked_unpayable', 'failed')
+         and o.status not in ('refunded', 'cancelled')
+         and not p.payouts_enabled
+       group by o.id, o.seller_id
+    )
+    select u.seller_id,
+           count(*)::integer as sale_count,
+           max(u.day) as oldest_day,
+           (array_agg(u.order_id order by u.day desc, u.order_id))[1] as order_id
+      from unpaid u
+     where u.day between 0 and 13
+     group by u.seller_id
+    having bool_or(u.day in (3, 7, 12))
+     order by u.seller_id
      limit 200
   loop
+    insert into public.payout_setup_reminders (seller_id, reminded_on, order_id, sale_count, oldest_day)
+    values (v_row.seller_id, current_date, v_row.order_id, v_row.sale_count, v_row.oldest_day)
+    on conflict (seller_id, reminded_on) do nothing;
+    if not found then
+      continue;
+    end if;
     insert into public.notifications (user_id, kind, section, title, body, href)
     values (v_row.seller_id, 'payout_setup_reminder', 'marketplace',
-            'Set up payouts to be paid for your sale',
-            case v_row.day
-              when 12 then 'Two days left: finish your payout setup, or the sale is refunded on day 14.'
-              else 'Finish your payout setup within 14 days of the sale, or it is refunded.'
-            end,
+            case when v_row.sale_count > 1 then format('Set up payouts to be paid for your %s sales', v_row.sale_count)
+                 else 'Set up payouts to be paid for your sale' end,
+            case when v_row.oldest_day >= 12
+                 then format('%s left: finish your payout setup, or the oldest sale is refunded on day 14.',
+                             case when 14 - v_row.oldest_day = 1 then 'One day' else (14 - v_row.oldest_day)::text || ' days' end)
+                 else 'Finish your payout setup within 14 days of each sale, or it is refunded.' end,
             '/orders/' || v_row.order_id);
     v_n := v_n + 1;
   end loop;
@@ -363,7 +400,8 @@ do $$
 begin
   if has_table_privilege('authenticated', 'public.order_email_outbox', 'select')
      or has_function_privilege('authenticated', 'public.claim_order_emails(integer)', 'execute')
-     or has_function_privilege('anon', 'public.claim_order_emails(integer)', 'execute') then
+     or has_function_privilege('anon', 'public.claim_order_emails(integer)', 'execute')
+     or has_table_privilege('authenticated', 'public.payout_setup_reminders', 'select') then
     raise exception '20261110140000: the order email outbox is reachable by a member';
   end if;
   raise notice 'PASS: 20261110140000 self-checks';

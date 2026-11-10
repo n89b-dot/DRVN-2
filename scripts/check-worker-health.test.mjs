@@ -5,7 +5,7 @@ const healthy = { families: REQUIRED_FAMILIES.map(family => ({ family, stale: fa
 const stoppedJob = () => ({ ...healthy, jobs: healthy.jobs.map(j => j.job === 'drvn-media-gc' ? { ...j, stale: true, reason: 'overdue', last_success: '2026-11-05T03:17:00.000Z' } : j) });
 test('accepts complete healthy state and keeps the bearer out of results', async () => {
  const result = await checkWorkerHealth('https://drvn.example', 'secret', async (_url, init) => { assert.equal(init.redirect, 'error'); return Response.json(healthy); });
- assert.deepEqual(result, { healthy: true, families: 21, jobs: 21 });
+ assert.deepEqual(result, { healthy: true, families: 22, jobs: 21 });
 });
 test('fails on unavailable, malformed, stale and exhausted health', async () => {
  for (const response of [new Response(null, { status: 503 }), new Response(null, { status: 500 }), Response.json({}), Response.json({ ...healthy, families: [{ stale: true }] }), Response.json({ ...healthy, queues: [{ status: 'failed' }] }), Response.json({ ...healthy, jobs: undefined }), Response.json({ error: 'Health data incomplete' }, { status: 503 })]) {
