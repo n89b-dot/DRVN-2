@@ -10,7 +10,7 @@ import path from "node:path";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
-import { alertPayload, gateVerdict, missingMigrations, validReleaseTag, versionMatches } from "../../scripts/deploy.mjs";
+import { alertPayload, gateVerdict, indexingProblems, missingMigrations, validReleaseTag, versionMatches } from "../../scripts/deploy.mjs";
 
 type Step = { name?: string; uses?: string; run?: string; if?: string; env?: Record<string, string>; with?: Record<string, unknown> };
 type Job = { if?: string; environment?: string; permissions?: Record<string, string>; steps: Step[] };
@@ -139,5 +139,70 @@ describe("the deploy decisions (N528)", () => {
   it("N634: the alert is plain text, bounded", () => {
     expect(alertPayload("deployed")).toEqual({ text: "deployed" });
     expect(alertPayload("x".repeat(5000)).text).toHaveLength(3000);
+  });
+});
+
+describe("N958: a deploy checks what the served site tells search engines (work review #156, N1072)", () => {
+  it("each job names its deployment to the version check, so the served site is held to it", () => {
+    for (const name of ["staging", "production"] as const) {
+      const step = deploy.jobs[name].steps[indexOf(deploy.jobs[name], runs("scripts/deploy.mjs version"))];
+      expect(step.run, name).toMatch(new RegExp(`scripts/deploy\\.mjs version "\\$ORIGIN" "\\$(GITHUB_)?SHA" ${name}$`));
+      // After the deploy, before the alert: a deployment that fails it is reported as failed.
+      const ship = indexOf(deploy.jobs[name], runs("vercel@65.2.0 deploy --prebuilt --prod"));
+      expect(indexOf(deploy.jobs[name], runs("scripts/deploy.mjs version"))).toBeGreaterThan(ship);
+    }
+  });
+
+  const STAGING_ROBOTS = "User-Agent: *\nDisallow: /\n";
+  const PRODUCTION_ROBOTS = "User-Agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin\n\nHost: https://drvn.app\nSitemap: https://drvn.app/sitemap.xml\nSitemap: https://drvn.app/catalog/sitemap/index.xml\n";
+  const hidden = {
+    robots: { status: 200, text: STAGING_ROBOTS },
+    pages: [{ path: "/", status: 200, tag: "noindex, nofollow" }, { path: "/api/version", status: 200, tag: "noindex, nofollow" }],
+    sitemaps: [{ path: "/sitemap.xml", status: 404 }, { path: "/catalog/sitemap/index.xml", status: 404 }],
+  };
+  const open = {
+    robots: { status: 200, text: PRODUCTION_ROBOTS },
+    pages: [{ path: "/", status: 200, tag: null }, { path: "/api/version", status: 200, tag: null }],
+    sitemaps: [{ path: "/sitemap.xml", status: 200 }],
+  };
+
+  it("passes a staging site that is hidden and a production site that is open", () => {
+    expect(indexingProblems("staging", hidden)).toEqual([]);
+    expect(indexingProblems("production", open)).toEqual([]);
+  });
+
+  it("fails a staging deploy that would be crawled, naming each way", () => {
+    // Built as production by mistake: everything about it is open.
+    expect(indexingProblems("staging", open)).toEqual([
+      "/robots.txt does not disallow the whole site: staging would be crawled",
+      "/robots.txt names a sitemap: staging would hand its pages to search engines",
+      '/ was served without "X-Robots-Tag: noindex" (got no header)',
+      '/api/version was served without "X-Robots-Tag: noindex" (got no header)',
+      "/sitemap.xml answered 200, not 404: staging serves a sitemap",
+    ]);
+    // Each fault alone.
+    expect(indexingProblems("staging", { ...hidden, pages: [{ path: "/", status: 200, tag: "nofollow" }] })).toEqual(['/ was served without "X-Robots-Tag: noindex" (got "nofollow")']);
+    expect(indexingProblems("staging", { ...hidden, sitemaps: [{ path: "/sitemap.xml", status: 200 }] })).toHaveLength(1);
+    expect(indexingProblems("staging", { ...hidden, robots: { status: 200, text: "User-Agent: *\nDisallow: /admin\n" } })).toEqual(["/robots.txt does not disallow the whole site: staging would be crawled"]);
+    expect(indexingProblems("staging", { ...hidden, robots: { status: 200, text: `${STAGING_ROBOTS}Allow: /\n` } })).toHaveLength(1);
+  });
+
+  it("fails a production deploy that is hidden from search", () => {
+    expect(indexingProblems("production", hidden)).toEqual([
+      "/robots.txt disallows the whole site: production is hidden from search",
+      "/robots.txt names no sitemap",
+      '/ was served with "X-Robots-Tag: noindex, nofollow": production is hidden from search',
+      '/api/version was served with "X-Robots-Tag: noindex, nofollow": production is hidden from search',
+      "/sitemap.xml answered 404, not 200",
+      "/catalog/sitemap/index.xml answered 404, not 200",
+    ]);
+    // A path rule such as "Disallow: /api/" is not the whole-site refusal.
+    expect(indexingProblems("production", open)).toEqual([]);
+  });
+
+  it("fails when robots.txt is not served at all, and on a name that is not a deployment", () => {
+    expect(indexingProblems("staging", { ...hidden, robots: { status: 500, text: "" } })).toEqual(["/robots.txt answered 500, not 200"]);
+    expect(indexingProblems("production", { ...open, robots: { status: 404, text: "" } })).toEqual(["/robots.txt answered 404, not 200"]);
+    expect(indexingProblems("preview", hidden)).toEqual(['"preview" is not a deployment name (staging or production)']);
   });
 });

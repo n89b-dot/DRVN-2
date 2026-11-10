@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 vi.mock("@/lib/catalog-sitemap", () => ({ catalogSitemap: vi.fn() }));
 vi.mock("@/lib/sitemap-pages", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/sitemap-pages")>()), sitemapPages: vi.fn() }));
 vi.mock("@/lib/site", () => ({ siteUrl: () => "https://example.test" }));
@@ -6,7 +6,21 @@ import { catalogSitemap } from "@/lib/catalog-sitemap";
 import { sitemapPages } from "@/lib/sitemap-pages";
 import { GET } from "./route";
 const request = (id: string) => GET(new Request(`https://example.test/catalog/sitemap/${id}`), { params: Promise.resolve({ id }) });
-beforeEach(() => vi.resetAllMocks());
+// Only the deployment named production serves a sitemap; these tests are about that one.
+beforeEach(() => { vi.resetAllMocks(); vi.stubEnv("DRVN_DEPLOY_ENV", "production"); });
+afterEach(() => vi.unstubAllEnvs());
+it("N958: on staging, and on a deployment with no name, every catalogue sitemap answers 404 without reading the database (work review #156)", async () => {
+  for (const name of ["staging", ""]) {
+    vi.stubEnv("DRVN_DEPLOY_ENV", name);
+    for (const id of ["index.xml", "cars-0.xml", "listings-3.xml", "posts-0.xml"]) {
+      const response = await request(id);
+      expect(response.status, `${name || "unnamed"} ${id}`).toBe(404);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+    }
+  }
+  expect(catalogSitemap).not.toHaveBeenCalled();
+  expect(sitemapPages).not.toHaveBeenCalled();
+});
 it("serves existing sitemap URLs and escapes XML", async () => {
   vi.mocked(catalogSitemap).mockResolvedValue([{ url: "https://example.test/cars/a&b", lastModified: "2026-09-05" }]);
   const response = await request("cars-1.xml");

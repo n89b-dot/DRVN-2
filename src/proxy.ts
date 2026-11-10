@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { blockedMediaKeys, imageRequestObjectKey } from "@/lib/copyright/blocked-media";
 import { buildContentSecurityPolicy, reportingEndpointsHeader } from "@/lib/csp";
+import { isIndexable } from "@/lib/deployment";
 import { isUnsignedMemberPhoto, signedPhotoLinkExpired } from "@/lib/photo-urls";
 import { updateSession } from "@/lib/supabase/proxy";
 
@@ -10,6 +11,12 @@ export async function proxy(request: NextRequest) {
   // Next serves the optimiser for any path starting /_next/image (a
   // trailing slash included), so the gate must catch every one (#196 review).
   if (request.nextUrl.pathname.startsWith("/_next/image")) return imageGate(request);
+  // N958 (work review #156): only the deployment named production serves a
+  // sitemap. Anywhere else (staging, previews, local, CI) the sitemaps answer
+  // 404 before any page code or prerendered file is reached.
+  if (isSitemapPath(request.nextUrl.pathname) && !isIndexable()) {
+    return new NextResponse("Not found", { status: 404, headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8", "X-Robots-Tag": "noindex, nofollow" } });
+  }
   const nonce = randomBytes(24).toString("base64");
   const configured = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "https://unconfigured.invalid");
   const local = process.env.E2E_TEST_PROJECT_REF === "local-drvn-remediation" && ["localhost", "127.0.0.1"].includes(configured.hostname) && configured.port === "54321";
@@ -24,6 +31,11 @@ export async function proxy(request: NextRequest) {
   response.headers.set("Reporting-Endpoints", reportingEndpointsHeader());
   response.headers.set("Cache-Control", "private, no-store");
   return response;
+}
+
+/** The static sitemap and every catalogue sitemap (src/app/sitemap.ts, src/app/catalog/sitemap/[id]). */
+export function isSitemapPath(pathname: string): boolean {
+  return pathname === "/sitemap.xml" || pathname.startsWith("/catalog/sitemap/");
 }
 
 /**
