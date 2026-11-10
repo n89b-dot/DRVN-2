@@ -819,6 +819,12 @@ are kept 90 days. Sending goes
 through `src/lib/email/send.ts`, selected by `EMAIL_PROVIDER` and sent from
 `EMAIL_FROM`. No provider is chosen yet (R-email): until one is, digests are
 recorded and nothing is sent, and the route logs and returns `provider: null`.
+While `EMAIL_PROVIDER` is unset, `/api/health/workers` lists the job
+`drvn-saved-search-digests` and its family `savedSearchDigests` with
+`disabled: true` and does not judge them, as it does the `search` and
+`analytics` families without their providers: a job with nothing to send
+cannot page anyone. Setting `EMAIL_PROVIDER` puts both back in the check, and
+a provider that is set but misconfigured stays in it.
 
 `/api/jobs/media-gc` and `/api/jobs/listing-imports` are scheduled the same
 way. To run any of them by hand:
