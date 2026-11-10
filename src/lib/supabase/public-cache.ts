@@ -144,9 +144,14 @@ export function isWithinMaxAge(response: Response, maxAgeSeconds: number, now = 
 }
 
 /** The isolated e2e stack inserts rows and expects the next page to show
- *  them; `DRVN_PUBLIC_CACHE=off` is the same switch for any other host. */
+ *  them; `DRVN_PUBLIC_CACHE=off` is the same switch for any other host.
+ *  `DRVN_PUBLIC_CACHE=on` puts the cache back on for the isolated stack: the
+ *  launch-configuration lane (playwright.launch.config.ts) sets it, because
+ *  the cache is on at launch and nothing else runs it in a browser. */
 export function publicCacheEnabled(env: Record<string, string | undefined> = process.env): boolean {
-  return env.DRVN_PUBLIC_CACHE !== "off" && env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation";
+  if (env.DRVN_PUBLIC_CACHE === "off") return false;
+  if (env.DRVN_PUBLIC_CACHE === "on") return true;
+  return env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation";
 }
 
 /** A fetch that answers cacheable reads from the shared copy, within the age

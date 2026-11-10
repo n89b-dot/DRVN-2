@@ -163,8 +163,13 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #223 | 2026-11-10 | test(ci): a report's table for the Intelligence OS is checked here… (batch 1, #228) | waived | — | waived (ruling, 10 Nov) |
 | #224 | 2026-11-10 | Plan 2 A5: the launch switch settings are recorded… (batch 1, #228) | waived | — | waived (ruling, 10 Nov) |
 | #225 | 2026-11-10 | docs: plan 1 record brought current, the by-hand counter-notice procedure… (batch 1, #228) | skipped | — | docs only (ruling, 7 Nov) |
+| #227 | 2026-11-10 | Plan 2 A0 follow-up: only a pull request into main can skip the browser suite… (plan 2 batch 1, #236) | waived | — | waived (ruling, 10 Nov) |
 | #228 | 2026-11-10 | Batch 1: #225 #218 #220 #223 #219 #216 #224 | waived | — | waived (ruling, 10 Nov) |
+| #229 | 2026-11-10 | Plan 2 A0b: the browser suite runs as four parts side by side… (plan 2 batch 1, #236) | waived | — | waived (ruling, 10 Nov) |
 | #230 | 2026-11-10 | Batch 2: #203 #198 #222 | waived | — | waived (ruling, 10 Nov) |
+| #231 | 2026-11-10 | N1075: a manually started workflow for the baseline's stack-build comparison… (plan 2 batch 1, #236) | waived | — | waived (ruling, 10 Nov) |
+| #232 | 2026-11-10 | docs(plans): plan 2 record: A5 merged, A0b opened, three lines under Needs Neil… (plan 2 batch 1, #236) | skipped | — | docs only (ruling, 7 Nov) |
 | #233 | 2026-11-10 | N667: staging's vehicle catalogue is filled, with the counts recorded… (batch 3, #235) | skipped | — | docs only (ruling, 7 Nov) |
 | #234 | 2026-11-10 | N1074: a camera photo chosen as a profile photo is shrunk to an avatar's size… (batch 3, #235) | waived | — | waived (ruling, 10 Nov) |
 | #235 | 2026-11-10 | Batch 3: #233 #234 #188 #195 #190 | waived | — | waived (ruling, 10 Nov) |
+| #236 | 2026-11-10 | Plan 2 batch 1: #227 #229 #231 #232 | waived | — | waived (ruling, 10 Nov) |

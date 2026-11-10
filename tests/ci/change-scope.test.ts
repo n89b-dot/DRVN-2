@@ -203,12 +203,15 @@ describe("the workflow wires the scope to the browser suite only (plan 2 A0)", (
     expect(changes.steps[0].uses).toMatch(/^actions\/checkout@[0-9a-f]{40}$/);
   });
 
-  it("only the browser suite is conditional on it, and the Stripe lane no longer waits on e2e", () => {
+  it("only the browser lanes are conditional on it, the launch lane among them (N1078), and the Stripe lane no longer waits on e2e", () => {
     // The suite's four parts (plan 2 item A0b) and the job that judges them.
     expect(ci.jobs["e2e-parts"].needs).toEqual(["changes"]);
     expect(ci.jobs["e2e-parts"].if).toBe("needs.changes.outputs.docs_only != 'true'");
     expect(ci.jobs.e2e.needs).toEqual(["changes", "e2e-parts"]);
     expect(ci.jobs.e2e.if).toContain("needs.changes.outputs.docs_only != 'true'");
+    // The launch-configuration lane (plan 2 item A4).
+    expect(ci.jobs["e2e-launch"].needs).toEqual(["changes"]);
+    expect(ci.jobs["e2e-launch"].if).toBe("needs.changes.outputs.docs_only != 'true'");
     expect(ci.jobs["stripe-integration"].needs).toBeUndefined();
     for (const name of ["verify", "secrets", "secrets-full", "sql-guard", "stripe-integration"]) {
       expect(ci.jobs[name].if, `${name} runs on every change`).toBeUndefined();
@@ -229,10 +232,12 @@ describe.skipIf(!hasJq)("release-gate with a change scope (plan 2 A0)", () => {
     EVENT: "pull_request", CHANGES: "success", DOCS_ONLY: "false",
     VERIFY: "success", SECRETS: "success", SECRETS_FULL: "success", SQL: "success",
     E2E_PARTS: "success", E2E: "success", E2E_RAN: "true", E2E_FIRST_ATTEMPT: "true",
+    LAUNCH: "success", LAUNCH_RAN: "true", LAUNCH_PASSED: "true",
     STRIPE: "success", STRIPE_RAN: "true",
   };
-  // What GitHub hands the gate when e2e was skipped: no result but 'skipped', no outputs.
-  const skipped = { E2E_PARTS: "skipped", E2E: "skipped", E2E_RAN: "", E2E_FIRST_ATTEMPT: "" };
+  // What GitHub hands the gate when the browser lanes were skipped: no result but 'skipped', no outputs.
+  const skipped = { E2E_PARTS: "skipped", E2E: "skipped", E2E_RAN: "", E2E_FIRST_ATTEMPT: "", LAUNCH: "skipped", LAUNCH_RAN: "", LAUNCH_PASSED: "" };
+  const launchSkipped = { LAUNCH: "skipped", LAUNCH_RAN: "", LAUNCH_PASSED: "" };
   const docsOnly = { ...green, DOCS_ONLY: "true", ...skipped };
 
   let n = 0;
@@ -254,10 +259,17 @@ describe.skipIf(!hasJq)("release-gate with a change scope (plan 2 A0)", () => {
     const result = gate(docsOnly);
     expect(result).toMatchObject({ status: 0, scope: "documents-only" });
     expect(result.out).toContain("ok: e2e (documents-only pull request: skipped by design)");
+    expect(result.out).toContain("ok: e2e-launch (documents-only pull request: skipped by design)");
   });
 
   it.each([
-    ["a code change whose e2e was skipped", { ...green, ...skipped }],
+    ["a code change whose browser lanes were all skipped", { ...green, ...skipped }],
+    ["a code change whose launch lane alone was skipped", { ...green, ...launchSkipped }],
+    ["a code change whose launch lane failed", { ...green, LAUNCH: "failure", LAUNCH_PASSED: "" }],
+    ["a code change whose launch lane was cancelled", { ...green, LAUNCH: "cancelled", LAUNCH_RAN: "", LAUNCH_PASSED: "" }],
+    ["a launch lane that reports success without having run its specs", { ...green, LAUNCH_RAN: "", LAUNCH_PASSED: "" }],
+    ["a documents-only pull request whose launch lane failed", { ...docsOnly, LAUNCH: "failure" }],
+    ["a documents-only pull request whose launch lane ran instead of being skipped", { ...docsOnly, LAUNCH: "success", LAUNCH_RAN: "true", LAUNCH_PASSED: "true" }],
     // Plan 2 item A0b: the four parts' own result is required beside the judgement.
     ["a part that failed, even if the judging job said success", { ...green, E2E_PARTS: "failure" }],
     ["a part that was cancelled", { ...green, E2E_PARTS: "cancelled" }],

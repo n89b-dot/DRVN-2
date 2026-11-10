@@ -97,4 +97,19 @@ describe("the cached fetch", () => {
     expect((base.mock.calls as unknown[][]).map((c) => c[1])).toEqual([{ cache: "no-store" }, { cache: "no-store" }, { cache: "no-store" }]);
     expect(publicCacheEnabled({})).toBe(true);
   });
+
+  // Plan 2 item A4 (R-unproven): the launch-configuration browser lane runs on
+  // the isolated stack with the cache on, because the cache is on at launch.
+  it("can be switched on for the isolated stack, and only by the exact word (R-unproven)", () => {
+    const isolated = { E2E_TEST_PROJECT_REF: "local-drvn-remediation" };
+    expect(publicCacheEnabled(isolated)).toBe(false);
+    expect(publicCacheEnabled({ ...isolated, DRVN_PUBLIC_CACHE: "on" })).toBe(true);
+    for (const value of ["", "true", "1", "ON", "yes"]) {
+      expect(publicCacheEnabled({ ...isolated, DRVN_PUBLIC_CACHE: value }), `'${value}' on the isolated stack`).toBe(false);
+    }
+    // Everywhere else it is on unless switched off, as before.
+    expect(publicCacheEnabled({ DRVN_PUBLIC_CACHE: "on" })).toBe(true);
+    expect(publicCacheEnabled({ DRVN_PUBLIC_CACHE: "off" })).toBe(false);
+    expect(publicCacheEnabled({ ...isolated, DRVN_PUBLIC_CACHE: "off" })).toBe(false);
+  });
 });
