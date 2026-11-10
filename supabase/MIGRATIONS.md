@@ -32,6 +32,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 10 — a deleted member's words leave every feed: Codex on #181 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110150000_deletion_scrub_previews_repair.sql` | not applied |
+
+Restates `public.scrub_deleted_account` (from `20261108180000`) so an offer notice's body, the listing title the seller wrote, goes too. Adds `private.repair_scrubbed_previews()` and runs it once: it rewrites notifications that members scrubbed before `20261108180000` are still the actor of, clears links to retired handles, and clears offer bodies already left without an actor. The counts are printed as a NOTICE when applied; record them here. Idempotent.
+
 ## November 8 — deletion: late holds after the scrub, other members' notifications, the tombstone race, old retained cases: N418 (not applied anywhere)
 
 | File | Applied to |
