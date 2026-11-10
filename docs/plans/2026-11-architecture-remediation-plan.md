@@ -1,0 +1,166 @@
+# Remediation plan 2 of 2: simplify the architecture
+
+Written 10 November 2026 from `main` at `3a2ddc5`. It takes the architecture findings of the 10 November review (`docs/work-review-2026-11-10.md` findings `#159` to `#163`, and the architecture section of the review's reading copy) and turns them into ordered work. Its companion is `docs/plans/2026-11-work-review-remediation-plan.md` (plan 1). **Plan 1 runs first; this plan starts at plan 1's quiet point**, except for three items marked "any time" that do not touch the database.
+
+This file lives under `docs/plans/`, so the OS does not read it as a report. Each pull request names the OS id for its item (`docs/ids.md`); the OS session assigns ids for items that have none before the work starts.
+
+**Status: approved.** On 10 November 2026 Neil approved this plan and every recommended default in its decisions table, including A6 (one proven baseline before production). It is run as plan 1's section "How the work is run" describes: one building thread, orchestrated and reviewed by the session "Yesterday's work review and improvements", with a plain-language work log and no per-change Codex reviews.
+
+---
+
+## In plain words
+
+DRVN does not need to be rebuilt. The way it is put together is the standard way to build a marketplace on these tools: the app asks the database to make every change to an order, the database enforces the rules, and Stripe reports payments to one place. That is sound and stays.
+
+It is harder to work in than it should be for four reasons, and each has a fix that can be done a piece at a time:
+
+1. **The database code is stored as a history of changes, not as it stands today.** To change one line of a function, the whole function is copied into a new file. About a third of the database code is old copies. This plan adds a readable copy of the database as it is now, checked automatically.
+2. **A rule that is supposed to hold everywhere has three exceptions.** The database is meant to own every change to an order. Three places in the app change an order directly. This plan moves them in and adds a guard.
+3. **The app repeats itself.** The same sign-in check is written fourteen times. This plan replaces the copies with one.
+4. **More was built and hardened than the first release needs.** This plan switches the extra parts off for launch without deleting them.
+
+The work is in two halves. **Part A, about three weeks, is done before a production database exists**, because it is cheap now and expensive once real data is in. **Part B, four to six weeks spread out, follows launch** and is guided by what members actually use.
+
+**What this plan deliberately does not do:** rewrite the app, move the database's logic into the app's code, change how Stripe is used, or delete the features that are switched off.
+
+**The end result** is a codebase where anyone can read what a database function does today, where a change shows the line that changed, where the rule about orders is enforced, and where the configuration that launches is the one that is tested.
+
+---
+
+## When this plan starts
+
+| Item | Starts |
+|---|---|
+| A0, A4, A5 | Any time. They do not touch the database and they help plan 1. |
+| A1, A2, A3 | At plan 1's quiet point: no pull request that changes the database is in review. A1 is first. |
+| A6 | After A1 to A3, with the database frozen, before the production database is created. |
+| Part B | After launch. |
+
+Plan 1's working rules R1 to R7 apply throughout: at most three database pull requests in review, a migration applied only after approval, and no test trusted before it has been seen to fail.
+
+Sizes: **S** is a few days of session work with review, **M** is one to two weeks, **L** is more.
+
+---
+
+## Part A: before a production database exists
+
+### A0. Do not run browser tests on documents-only pull requests (S, any time)
+
+- **Problem.** A CI run takes 17 to 46 minutes and the browser tests are most of it. A pull request that changes only documents still runs them.
+- **Fix.** A path filter on the `e2e` job in `.github/workflows/ci.yml`, with the job still reporting a result so branch protection is satisfied; the Stripe lane stops waiting on `e2e`.
+- **Done when:** a documents-only pull request reaches a mergeable state in under ten minutes.
+- **Note.** It edits a workflow file, so the orchestrator merges it in the browser.
+
+### A1. A checked-in copy of the database as it stands (S, first at the quiet point)
+
+- **Problem (`#159`).** 286 migration files and about 60,000 lines of SQL define 516 functions; 31% of that SQL is superseded copies. The checkout function is 199 lines and has been written out as 1,341. A reviewer cannot see the line that changed, and two sessions that restate the same function do not collide in git: the later merge silently wins. This has already cost a lost permission statement (`20260919201000`) and five functions overwritten on shared dev.
+- **Fix.** CI already builds a fresh database from every migration and checks the generated types. Add a schema-only dump, written as one file per function, table and policy under `supabase/schema/`, generated by a script and compared in CI exactly as `src/lib/database.generated.ts` is. A pull request that changes a function must include the regenerated file.
+- **Done when:** `supabase/schema/` is on `main`; CI fails when it is out of date; a pull request that changes one line of a function shows a one-line diff in that function's file.
+- **Plain words.** One place to read what the database does today.
+
+### A2. The database owns every change to an order (S to M)
+
+- **Problem.** The rule is that only database functions change an order's status. Three places in the app write it directly with the all-access key: `src/lib/shipping/apply-tracking.ts:481` (shipped to delivered), `src/lib/payments/settlement.ts:467` (dispute open and close), and `src/lib/admin/actions.ts:307` (admin resolves a dispute). Orders have no transition guard, unlike listings, returns and shipments.
+- **Fix.** One database function for each of the three, called from the same places. Then a `guard_order_status` trigger that allows only the transitions listed in `docs/site/domain-states.md`. The trigger is added after the three moves, in its own pull request, so a missed path fails in tests and not in production.
+- **Done when:** no `.from("orders").update(` in `src/` sets `status`; a SQL guard proves an illegal transition is refused; every money scenario in the Stripe lane still passes.
+- **Plain words.** The rule becomes true, and the database refuses anything that breaks it.
+
+### A3. New database functions are closed by default (S)
+
+- **Problem.** Nothing sets default privileges, so every new function needs a hand-written line removing public access. A forgotten line exposes the function; that is the regression named in A1.
+- **Fix.** `alter default privileges ... revoke execute on functions from public` for the roles that create functions, with the existing allow-list test kept. First confirm on staging that hosted Supabase permits it for the migration role; if it does not, add a CI check that every new function carries its revoke.
+- **Done when:** a function created with no grant statements is not callable by a signed-in member, proven by a SQL guard.
+
+### A4. Test the configuration that will launch (S, any time)
+
+- **Problem (`#162`).** There are over 1,700 combinations of settings. The browser tests run with the agent on, shipping and the importer stubbed and the public data cache off. The launch configuration (Stripe, cache on, agent off, DRVN Shipping off) never runs in a browser.
+- **Fix.** A small second browser lane, a handful of specs: browse as a signed-out visitor twice (so the second read comes from the cache), buy as a guest in Stripe test mode, and check a seller's edit shows at once.
+- **Done when:** the lane runs on every pull request that is not documents-only and has been seen to fail once when the cache is deliberately broken.
+
+### A5. Limit the launch by switches, not by deleting code (S, any time)
+
+- **Problem.** About 8,000 lines of money code serve features the first release does not require: DRVN Shipping labels, label refunds, the system that carries label costs forward, returns and pickup codes.
+- **Fix.** Confirm DRVN Shipping is off in the launch configuration and that label refunds and cost carrying stay asleep with it; take the saved-search digest job and the `analytics` and `search` worker families out of the health check until a provider exists; record the launch switch settings in `docs/release-evidence/`. Nothing is deleted.
+- **Decision for Neil (DA1).** Whether a cart is limited to one seller at first. Recommended: no, leave it as built; the product requirements say the cart is unchanged.
+- **Done when:** the launch configuration is written down, and A4's lane runs with it.
+
+### A6. One starting file in place of 286 (M, after A1 to A3, before the production database is created)
+
+- **Problem (`#159`).** The migration history is 286 files and 59,722 lines. A third of the function code is superseded copies, a new database has to replay all of it, and the record that tracks it (`supabase/MIGRATIONS.md`, 2,128 lines) is itself a source of faults: shared dev has twelve gaps in its history rows (OS id N786), extra rows from before a rename, and now a named exception for PR #198.
+- **Why now.** Only shared dev and staging exist, and both hold test data only. Once a production database exists, a squash means rewriting the history of a database with real money in it. This is the cheapest it will ever be.
+- **Why after A1 to A3.** A1's snapshot is the tool that proves the squash changed nothing, and it is what stops the history growing back; A2 and A3 change the database, so they belong inside the baseline, not on top of it.
+- **Fix, in order.**
+  1. Freeze: no other pull request that changes the database is in review. One session does this item and nothing else touches the database until it is done.
+  2. Build a new database from the 286 files (CI already does this) and dump it as one baseline file. A plain schema dump is not enough: the baseline must also carry the 21 scheduled jobs, the 20 storage policies and five storage buckets, the worker role, the three extensions, every grant and revoke, and the reference rows that migrations insert (payout settings, the curated vehicle generations). 63 of the 286 files contain data statements; each is classed as "reference data, keep" or "one-time backfill, drop" and the list is reviewed.
+  3. Prove it is identical. Build one database from the 286 files and one from the baseline, and compare them with A1's snapshot script plus a dump of scheduled jobs, storage policies, grants and reference rows. The difference must be empty. Run the 157 SQL guards, the generated-types check and the browser suite against the baseline build.
+  4. Compare shared dev and staging to the baseline before touching their history. Staging should match. Shared dev has known drift; each difference is fixed forward or written down. If shared dev cannot be made to match, it is rebuilt from the baseline and re-seeded, which is acceptable because it holds test data only.
+  5. Move the 286 files to `supabase/migrations-archive/` (out of the runner's path, still in the repository), add the baseline, and mark it as already applied on shared dev and staging through the runner, with the row counts recorded. This is a deliberate, proven rewrite of the history on two test databases; it is the only time that is acceptable.
+  6. Update what depended on the old files: the runner's allow-list and its refusal of a baseline on a populated database, `tests/ci/migration-order.test.ts` (PR #198's named exception goes), the tests that read a migration by name (they read A1's per-function files instead), and `supabase/MIGRATIONS.md`, which collapses to the baseline row.
+  7. Afterwards, delete the `--record-only` tooling that existed to manage the old history.
+- **Not in this item.** Removing functions or tables that look unused, and pruning indexes. The first is a separate pull request per object with evidence that nothing calls it; the second waits for real traffic. Both come after launch.
+- **Done when:** the comparison in step 3 is empty and recorded; shared dev and staging each report one applied file and nothing missing or extra; the production runbook's "create the database" step applies one file; OS id N786 and plan 1 decision D6 are closed by it.
+- **Plain words.** One clean starting point for the production database, proven to be the same database, with the old history kept on a shelf.
+- **Decision for Neil (DA2).** Recommended: yes. The 10 November review first recommended no. That was changed after three of the review's four architecture reads and a separate session's advice all said "before production or never", and because the build-twice comparison makes the change provable, which the review had under-weighted.
+
+---
+
+## Part B: after launch
+
+| # | Change | What it buys | Size | Finding |
+|---|---|---|---|---|
+| B1 | One shared kit for actions: one sign-in check, shared readers for form fields, one result type. | Replaces 14 copies of `requireUser`, 39 id-format checks and about 31 result types across 41 files. | S | |
+| B2 | The all-access database key sits behind a small set of named server functions, with a ratchet so its use can only fall. Start with the 19 uses inside pages and actions. | Fewer places where one missed permission check exposes data. It is used from 134 places in 83 files today. | M | |
+| B3 | Split `src/app/(product)/garage/actions.ts` into cars, mods, gallery, posts and account; write the rule for `lib` and `features` into `src/components/architecture.test.ts`. | Removes four allowed exceptions and seventeen backwards imports. | S | |
+| B4 | One list of scheduled jobs, with the monitor's list and the runbook's block generated from it. | The list is copied by hand in five places today. | S | |
+| B5 | Money code readability: named predicates for the order-state lists; one answer shape for money functions; the dispute and reversal steps that are split between the app and the database finished on the database side; `apply_stripe_dispute_event` reformatted, with one test that lists every state and event pair. | The direct answer to "the money logic is the hardest code to read". | M | `#160`, `#161` |
+| B6 | Retire records that only serve tracking: the hand-written cells of `supabase/MIGRATIONS.md` (generate them from `--status`), the Codex queue file, `src/lib/docs/implementation-registry.ts`. | About 6,000 lines and two or three tests. The OS must be changed to read GitHub directly first, so this is Neil's call. | S | |
+| B7 | Published photos at permanent public addresses; signing kept for drafts and private builds. Only if Neil rules yes (plan 1 decision D5). | Removes hourly re-processing, expiring share images and most of the signing path from public pages. | M | `#133`, `#134` |
+| B8 | Tests that cannot fail are replaced as they are touched: tests that assert on source text, and guards that catch every error. | A passing test means what it says. | S, ongoing | `#163` |
+
+Order within Part B is by what real use shows. B5 goes first if a money fault is found in production; B2 goes first if member data grows faster than expected.
+
+---
+
+## What this plan does not do, and why
+
+- **No rewrite, new framework, or new way of talking to the database.** It would take months and discard behaviour that about 2,480 unit tests and 157 database guards prove today.
+- **No move of database logic into the app's code.** The locks and all-or-nothing steps are the reason it is in the database.
+- **No change to how Stripe is used.** DRVN holding the payment and paying sellers later is what allows one payment for a cart from several sellers and payout after delivery. Changing it would be a large, high-risk change to the most-tested code.
+- **No deletion of dormant features now.** Switching them off gives the benefit; deletion is large and risky and gives members nothing.
+- **No adoption of Supabase's declarative-schema tool.** This database depends on hundreds of permission statements that the tool's comparison is understood not to track; A1 gets most of the benefit without it.
+
+---
+
+## The decisions, in one table
+
+**Ruled 10 November 2026: Neil approved every recommended default below.**
+
+| # | Decision | Recommended default | When |
+|---|---|---|---|
+| DA1 | Limit a cart to one seller at launch? | No. | With A5. |
+| DA2 | Collapse the migration history into one file (A6)? | Yes, after A1 to A3 and before the production database exists. | Before the production project is created. |
+| DA3 | Retire the tracking records (B6)? | Yes, after the OS reads GitHub directly. | After launch. |
+| D5 (plan 1) | Published photos at public addresses (B7)? | Yes, after launch. | Any time before B7. |
+
+---
+
+## Sequence
+
+| When | Work |
+|---|---|
+| During plan 1 | A0 (Neil merges), A4, A5. |
+| Quiet point, week 1 | A1, then A3. |
+| Week 2 | A2 in two pull requests: the three moves, then the guard. |
+| Week 3 | A6, with the database frozen: one session, nothing else touching the database. |
+| After A6 | The production database is created from the baseline (step D4 of the earlier plan). |
+| After launch | Part B, in the order real use suggests. |
+
+## What "done" looks like
+
+**Part A is done when:** `supabase/schema/` is on `main` and CI keeps it current; the migration history is one proven baseline; no code outside the database sets an order's status and a guard enforces it; a new function is closed by default or CI proves each carries its revoke; the launch-configuration lane runs on every code pull request; and the launch switch settings are recorded.
+
+**Part B has no fixed end.** Each item is done when its ratchet or test is in place, so the improvement cannot be undone silently.
+
+## Tracking
+
+As plan 1: one row per item in `docs/plans/2026-11-remediation-record.md`, with the pull request and merge commit, under a heading for this plan.
