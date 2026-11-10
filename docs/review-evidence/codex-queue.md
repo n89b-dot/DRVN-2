@@ -145,6 +145,8 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #201 | 2026-11-10 | OS-W42: earlier members confirm 18+ on their next visit, however long their ses… | waived | — | waived (ruling, 10 Nov) |
 | #202 | 2026-11-10 | OS-W40 N951: the pooler route is refused for record-only and dry runs too (foll… | waived | — | waived (ruling, 10 Nov) |
 | #205 | 2026-11-10 | N717: decision defaults for N786 and R-retention, deleted-photo caching closed… | skipped | — | docs only (ruling, 7 Nov) |
+| #212 | 2026-11-10 | docs(review): 10 Nov review of the work of 9 November | skipped | — | docs only (ruling, 7 Nov) |
 | #213 | 2026-11-10 | docs(plans): two remediation plans from the 10 November review | skipped | — | docs only (ruling, 7 Nov) |
 | #214 | 2026-11-10 | N725: owed Codex reviews are waived by ruling, and the queue test accepts a waived row (work… | waived | — | waived (ruling, 10 Nov) |
 | #215 | 2026-11-10 | Plan 2 A0: a documents-only pull request skips the browser suite | waived | — | waived (ruling, 10 Nov) |
+| #221 | 2026-11-10 | docs: the 10 November working rules are written into MIGRATIONS.md and the pull-request… | skipped | — | docs only (ruling, 7 Nov) |
