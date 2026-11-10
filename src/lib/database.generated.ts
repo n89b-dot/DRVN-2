@@ -8283,6 +8283,7 @@ export type Database = {
         Returns: string
       }
       my_account_deletion_status: { Args: never; Returns: Json }
+      my_age_confirmation_due: { Args: never; Returns: boolean }
       my_car_vin: { Args: { p_car: string }; Returns: string }
       my_deal_listing_ids: { Args: never; Returns: string[] }
       my_default_offer_floor: { Args: never; Returns: number }
@@ -8429,6 +8430,22 @@ export type Database = {
         Returns: {
           path: string
           reason: string
+        }[]
+      }
+      photo_signatures_offer: {
+        Args: { p_signed: Json; p_window: number }
+        Returns: {
+          bucket: string
+          path: string
+          signed_url: string
+        }[]
+      }
+      photo_signatures_read: {
+        Args: { p_objects: Json; p_window: number }
+        Returns: {
+          bucket: string
+          path: string
+          signed_url: string
         }[]
       }
       pickup_mint_pass: {

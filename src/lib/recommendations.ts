@@ -26,7 +26,8 @@ export async function recommendListings(
   userId: string,
   limit = 8
 ): Promise<ListingCardData[]> {
-  const admin = createAdminClient();
+  // #105: the cards it hydrates carry listing photos, shown on Home.
+  const admin = createAdminClient({ signPhotos: true });
   // One statement: `recommend_listings` (migration 20260928121000) runs the
   // three rules below in the database — the chain here was up to eight
   // dependent reads. Service-role only, like the reads it replaces.
