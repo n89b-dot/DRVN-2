@@ -18,6 +18,7 @@ import {
 import { jobHeartbeat } from "./job-lease";
 import { reportError } from "./monitoring";
 import { createAdminClient } from "./supabase/admin";
+import { tableContext } from "./photo-urls";
 import { signPhotosForExport } from "./supabase/photo-signing";
 
 type ExportJob = { id: string; lease_id: string; payload: { request_id: string; user_id: string } };
@@ -135,7 +136,7 @@ async function readPage(admin: UntypedAdmin, request: ExportRequest, section: Ex
   // N455: car, listing and post photos are private objects; the member's
   // export carries links that open for seven days instead of stored URLs
   // that no longer do. Only the member's own objects (#178 review).
-  return signPhotosForExport(rows, request.user_id);
+  return signPhotosForExport(rows, request.user_id, tableContext(section.table, section.sourceProjection ?? section.projection));
 }
 
 async function persistPart(admin: UntypedAdmin, request: ExportRequest, sectionKey: string, page: number, body: Uint8Array, rowCount: number, contentType = "application/json") {
