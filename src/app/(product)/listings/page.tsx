@@ -7,6 +7,7 @@ import type {
   SellerListingStat,
   SellerRegisterTally,
 } from "@/lib/database.types";
+import { offersForListings } from "@/lib/seller-page-reads";
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
@@ -180,15 +181,8 @@ export default async function SellerListingsPage({
   // Offer history only for the rows on screen — the expandable detail is the
   // one thing the RPC doesn't aggregate.
   const [offersRes, carsRes] = await Promise.all([
-    listingIds.length
-      ? supabase
-          .from("offers")
-          .select(
-            "id, listing_id, buyer_id, amount_cents, counter_amount_cents, status, expires_at, created_at",
-          )
-          .in("listing_id", listingIds)
-          .order("created_at", { ascending: false })
-      : Promise.resolve({ data: [], error: null }),
+    // Every offer on these listings, not the first 1,000 (N718).
+    offersForListings(supabase, listingIds),
     carIds.length
       ? supabase.from("cars").select("id, name, slug").in("id", carIds)
       : Promise.resolve({ data: [], error: null }),
@@ -197,7 +191,7 @@ export default async function SellerListingsPage({
     reportError("[listings] offers failed to load", offersRes.error);
   if (carsRes.error)
     reportError("[listings] cars failed to load", carsRes.error);
-  const offers = offersRes.data ?? [];
+  const offers = offersRes.rows ?? [];
 
   const buyerIds = [...new Set(offers.map((o) => o.buyer_id))];
   const { data: buyers } = buyerIds.length
