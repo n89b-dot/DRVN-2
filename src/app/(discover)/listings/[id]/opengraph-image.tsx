@@ -3,6 +3,7 @@ import { connection } from "next/server";
 
 import { listingShareCard } from "@/lib/share-copy";
 import { createPublicClient } from "@/lib/supabase/public";
+import { PUBLIC_MAX_AGE } from "@/lib/supabase/public-cache";
 
 export const alt = "A part for sale on DRVN";
 export const size = { width: 1200, height: 630 };
@@ -22,7 +23,8 @@ export default async function ListingCard({ params }: { params: Promise<{ id: st
   // card everyone gets afterwards (src/lib/photo-copies.ts).
   await connection();
   const { id } = await params;
-  const supabase = createPublicClient({ maxAge: 300, kinds: ["listings"] });
+  // As old as the listing page's own copy may be, no older: a price or a sale shows here when it shows there.
+  const supabase = createPublicClient({ maxAge: PUBLIC_MAX_AGE.commerce, kinds: ["listings"] });
   const [{ data: listing }, { data: photos }] = await Promise.all([
     supabase.from("listings").select("id, title, price_cents, status").eq("id", id).maybeSingle(),
     supabase.from("listing_images").select("url, position").eq("listing_id", id).order("position").limit(1),
@@ -66,7 +68,7 @@ export default async function ListingCard({ params }: { params: Promise<{ id: st
                 color: "#a3a6ae",
               }}
             >
-              {card.sold ? "Sold" : "For sale"}
+              {card.label}
             </div>
             <div
               style={{

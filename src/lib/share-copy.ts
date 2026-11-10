@@ -102,23 +102,29 @@ export function listingShareDescription(listing: ShareListing, sourceCar: ShareS
  * be the share image itself, and a pasted listing lost its picture when the
  * preview was fetched again.
  *
- * The photo is drawn only for a listing a visitor can open (on sale or sold),
- * and only from a signed link to our own storage (ogImageSource): the card
- * renderer fetches it from our server.
+ * The photo is drawn only for a listing a visitor can open: on sale, reserved
+ * (in someone's checkout, or held by an accepted offer; the page shows it with
+ * a Reserved badge), or sold. And only from a signed link to our own storage
+ * (ogImageSource): the card renderer fetches it from our server. A link is
+ * most often pasted while a part is reserved, and a chat keeps the preview it
+ * first fetched, so that card must be the whole card (review of #244).
  */
-export type ListingShareCard = { title: string; price: string; sold: boolean; photo: string | null };
+export type ListingShareCard = { title: string; price: string; label: "For sale" | "Reserved" | "Sold" | "On DRVN"; photo: string | null };
+
+const OPEN_LABEL: Record<string, ListingShareCard["label"]> = { active: "For sale", reserved: "Reserved", sold: "Sold" };
 
 export function listingShareCard(
   listing: { title: string | null; price_cents: number; status: string } | null,
   firstPhotoUrl: string | null | undefined,
 ): ListingShareCard {
-  if (!listing) return { title: "A part on DRVN", price: "", sold: false, photo: null };
-  const open = listing.status === "active" || listing.status === "sold";
+  if (!listing) return { title: "A part on DRVN", price: "", label: "On DRVN", photo: null };
+  const label = Object.hasOwn(OPEN_LABEL, listing.status) ? OPEN_LABEL[listing.status] : null;
+  const open = label !== null;
   const title = (listing.title ?? "").replace(/\s+/g, " ").trim();
   return {
     title: title ? (title.length > 90 ? `${title.slice(0, 89)}…` : title) : "A part on DRVN",
     price: open ? formatPrice(listing.price_cents) : "",
-    sold: listing.status === "sold",
+    label: label ?? "On DRVN",
     photo: open ? ogImageSource(firstPhotoUrl) : null,
   };
 }

@@ -120,16 +120,18 @@ describe("N1048: a listing's share card (work review #132)", () => {
   beforeEach(() => { saved = process.env.NEXT_PUBLIC_SUPABASE_URL; process.env.NEXT_PUBLIC_SUPABASE_URL = ORIGIN; });
   afterEach(() => { process.env.NEXT_PUBLIC_SUPABASE_URL = saved; });
 
-  it("N1048: a listing on sale shows its title on one line, its price and its photo; a sold one says so", () => {
-    expect(listingShareCard(listing, signed)).toEqual({ title: "Garrett GTX3076R turbo", price: "$1,450", sold: false, photo: signed });
-    expect(listingShareCard({ ...listing, status: "sold" }, signed)).toMatchObject({ sold: true, price: "$1,450", photo: signed });
+  it("N1048: a listing on sale shows its title on one line, its price and its photo; a reserved or sold one says so and keeps them", () => {
+    expect(listingShareCard(listing, signed)).toEqual({ title: "Garrett GTX3076R turbo", price: "$1,450", label: "For sale", photo: signed });
+    expect(listingShareCard({ ...listing, status: "sold" }, signed)).toEqual({ title: "Garrett GTX3076R turbo", price: "$1,450", label: "Sold", photo: signed });
+    // In someone's checkout or held by an accepted offer: a visitor can open it, and the page shows it with a Reserved badge.
+    expect(listingShareCard({ ...listing, status: "reserved" }, signed)).toEqual({ title: "Garrett GTX3076R turbo", price: "$1,450", label: "Reserved", photo: signed });
   });
 
-  it("N1048: a listing a visitor cannot open shows no photo and no price", () => {
-    for (const status of ["draft", "paused", "archived", "removed", "reserved"]) {
-      expect(listingShareCard({ ...listing, status }, signed), status).toMatchObject({ photo: null, price: "", sold: false });
+  it("N1048: a listing a visitor cannot open shows no photo and no price, and does not say it is for sale", () => {
+    for (const status of ["draft", "paused", "archived", "removed", "constructor", "toString"]) {
+      expect(listingShareCard({ ...listing, status }, signed), status).toMatchObject({ photo: null, price: "", label: "On DRVN" });
     }
-    expect(listingShareCard(null, signed)).toEqual({ title: "A part on DRVN", price: "", sold: false, photo: null });
+    expect(listingShareCard(null, signed)).toEqual({ title: "A part on DRVN", price: "", label: "On DRVN", photo: null });
   });
 
   it("N1048: the photo is drawn only from a link signed for this render, on our own storage", () => {
