@@ -7813,10 +7813,7 @@ export type Database = {
         Returns: string
       }
       hold_stripe_dispute:
-        | {
-            Args: { p_detail: string; p_dispute: string }
-            Returns: string
-          }
+        | { Args: { p_detail: string; p_dispute: string }; Returns: string }
         | {
             Args: {
               p_created: number
