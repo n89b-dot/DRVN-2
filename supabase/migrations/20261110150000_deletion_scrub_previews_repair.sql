@@ -39,6 +39,65 @@
 begin;
 
 -- ---------------------------------------------------------------------------
+-- Whose words a notification kind carries (N1069, work review #153). The scrub below
+-- reads this instead of listing kinds by hand, and a kind it does not know is
+-- treated as carrying the actor's words, so a new kind is scrubbed by default.
+--
+--   actor          the actor's name in the title and their words in the body
+--   listing_title  the body is, or quotes, a listing's title (its seller's words)
+--   order_reason   the body can quote a reason a party to the order wrote
+--   matched_titles titles of other members' listings that matched a saved search
+--   none           DRVN's own words, or the recipient's own
+--
+-- src/lib/notifications/kinds.test.ts holds the app's registry and every kind
+-- the app writes to this list. In the test database every insert of a kind
+-- this function does not know is refused (private.guard_notification_kind,
+-- switched on by drvn.strict_notification_kinds), so a guard or a browser test
+-- that raises an unclassified kind fails.
+-- ---------------------------------------------------------------------------
+create or replace function private.notification_member_text(p_kind text)
+returns text
+language sql
+immutable
+set search_path = pg_catalog, pg_temp
+as $$
+  select case
+    when p_kind in ('follow', 'car_follow', 'save', 'listing_save', 'comment', 'reaction', 'review', 'question', 'message') then 'actor'
+    when p_kind in ('offer_new', 'offer_countered', 'offer_declined', 'offer_accepted', 'offer_counter_accepted', 'offer_withdrawn',
+                    'offer_countered_back', 'offer_expired', 'offer_agent_recommends_accept', 'offer_agent_deal_reached',
+                    'offer_agent_out_of_rounds', 'offer_listing_withdrawn') then 'listing_title'
+    when p_kind in ('order_disputed', 'order_cancelled', 'order_refunded') then 'order_reason'
+    when p_kind = 'saved_search' then 'matched_titles'
+    when p_kind in ('order_sold', 'order_paid', 'order_shipped', 'order_delivered', 'order_completed', 'order_pending',
+                    'order_requires_action', 'order_payment_failed',
+                    'receipt_due', 'receipt_auto_confirmed', 'dispute_resolved', 'dispute_escalated',
+                    'refund_offered', 'refund_offer_expired', 'payout_sent', 'payout_blocked',
+                    'report_reviewed', 'post_removed', 'comment_removed', 'listing_removed', 'car_hidden', 'car_restored',
+                    'account_suspended', 'account_restored', 'password_changed', 'copyright_takedown', 'policy_updated',
+                    'admin_action') then 'none'
+  end;
+$$;
+revoke all on function private.notification_member_text(text) from public, anon, authenticated;
+
+create or replace function private.guard_notification_kind()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, pg_temp
+as $$
+begin
+  if current_setting('drvn.strict_notification_kinds', true) = 'on' and private.notification_member_text(new.kind) is null then
+    raise exception 'Notification kind "%" is not classified: say whose words it carries in private.notification_member_text (N1069, work review #153)', new.kind
+      using errcode = '23514';
+  end if;
+  return new;
+end $$;
+revoke all on function private.guard_notification_kind() from public, anon, authenticated;
+drop trigger if exists notification_kind_classified on public.notifications;
+create trigger notification_kind_classified
+  before insert on public.notifications
+  for each row execute function private.guard_notification_kind();
+
+-- ---------------------------------------------------------------------------
 -- The leaver's words in other members' notifications. One place, used by the
 -- scrub and by the repair.
 --
@@ -75,10 +134,12 @@ declare
   v_actor integer;
   v_offer integer;
   v_order integer;
+  v_matched integer;
 begin
   update public.notifications nt
      set title = case
-           when nt.kind ~ '^(order|offer|dispute|receipt|refund)_' then nt.title
+           -- Not the actor's words: DRVN's title stays. An unclassified kind is treated as theirs.
+           when coalesce(private.notification_member_text(nt.kind), 'actor') <> 'actor' then nt.title
            when nt.kind = 'follow' then left_drvn || ' followed you'
            when nt.kind = 'car_follow' then left_drvn || ' is following your build'
            when nt.kind in ('save', 'listing_save') then left_drvn || ' saved this'
@@ -90,8 +151,8 @@ begin
            else left_drvn
          end,
          body = case
-           -- Offer and order bodies are decided by linkage below.
-           when nt.kind ~ '^(order|offer|dispute|receipt|refund)_' then nt.body
+           -- Offer, order and saved-search bodies are decided by linkage below.
+           when coalesce(private.notification_member_text(nt.kind), 'actor') <> 'actor' then nt.body
            when nt.body is null then null
            else '(removed)'
          end,
@@ -123,7 +184,7 @@ begin
          end
     from linked
    where nt.user_id = linked.buyer_id and nt.href = linked.href
-     and nt.kind ~ '^offer_' and nt.body is not null
+     and coalesce(private.notification_member_text(nt.kind), 'listing_title') = 'listing_title' and nt.body is not null
      and nt.body not like a_listing || '%' and nt.body not like 'Your offer on a listing by a member who has since left DRVN%';
   get diagnostics v_offer = row_count;
 
@@ -147,9 +208,96 @@ begin
      and nt.body not like 'The % was removed because %';
   get diagnostics v_order = row_count;
 
-  return jsonb_build_object('notifications_sent', v_actor, 'offer_notice_bodies', v_offer, 'order_notice_bodies', v_order);
+  -- 4. Saved-search notices that named the member's listings to other members
+  --    (src/app/api/jobs/saved-searches/route.ts: the title ends ": <listing
+  --    title>" for one match, the body is up to three titles joined by " · ").
+  --    Nothing links such a notice to the listing, so it is found by the
+  --    exact title, whole, in its place.
+  with mine as (
+    select distinct l.title from public.listings l
+     where l.seller_id = p_user and l.title is not null and btrim(l.title) <> ''
+  )
+  update public.notifications nt
+     set title = coalesce((
+           select left(nt.title, length(nt.title) - length(m.title)) || a_listing from mine m
+            where nt.title like 'New match for %' and right(nt.title, length(m.title) + 2) = ': ' || m.title
+            order by length(m.title) desc limit 1), nt.title),
+         body = (
+           select string_agg(case when exists (select 1 from mine m where m.title = e.t) then a_listing else e.t end, ' · ' order by e.ord)
+             from unnest(string_to_array(nt.body, ' · ')) with ordinality as e(t, ord))
+   where private.notification_member_text(nt.kind) = 'matched_titles'
+     and nt.user_id <> p_user
+     and exists (
+       select 1 from mine m
+        where (nt.body is not null and strpos(' · ' || nt.body || ' · ', ' · ' || m.title || ' · ') > 0)
+           or (nt.title like 'New match for %' and right(nt.title, length(m.title) + 2) = ': ' || m.title));
+  get diagnostics v_matched = row_count;
+
+  return jsonb_build_object('notifications_sent', v_actor, 'offer_notice_bodies', v_offer, 'order_notice_bodies', v_order, 'saved_search_notices', v_matched);
 end $$;
 revoke all on function private.scrub_member_notices(uuid, text) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- The leaver's listing titles in saved-search emails (N1069, work review #153).
+-- saved_search_email_digests.items holds {id, title, price_cents} for up to
+-- ten listings; rows are kept 90 days. An item is the member's when its
+-- listing is theirs, or is gone altogether.
+--   - A digest not yet sent loses those items; with none left it is not sent
+--     (skip_reason 'listings_removed').
+--   - A digest already sent, skipped or failed keeps its shape, and the item's
+--     title becomes a neutral line.
+-- ---------------------------------------------------------------------------
+alter table public.saved_search_email_digests drop constraint if exists saved_search_email_digests_skip_reason;
+alter table public.saved_search_email_digests add constraint saved_search_email_digests_skip_reason check (
+  (status = 'skipped') = (skip_reason is not null)
+  and (skip_reason is null or skip_reason in ('opted_out', 'alert_off', 'no_address', 'account_closed', 'expired', 'carried', 'listings_removed')));
+
+create or replace function private.scrub_member_digest_items(p_user uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  a_listing constant text := 'A listing by a member who has since left DRVN';
+  v_trimmed integer;
+  v_skipped integer;
+  v_neutral integer;
+begin
+  with item as (
+    select d.id as digest_id, e.i, e.ord,
+           -- The member's, or no longer there at all.
+           (e.i->>'id') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+             or not exists (select 1 from public.listings l where l.id = (e.i->>'id')::uuid and l.seller_id is distinct from p_user) as theirs
+      from public.saved_search_email_digests d
+      cross join lateral jsonb_array_elements(d.items) with ordinality as e(i, ord)
+  ), hit as (
+    select digest_id,
+           jsonb_agg(i order by ord) filter (where not theirs) as kept,
+           jsonb_agg(case when theirs then jsonb_set(i, '{title}', to_jsonb(a_listing)) else i end order by ord) as neutral,
+           count(*) filter (where theirs) as gone,
+           bool_or(theirs and i->>'title' is distinct from a_listing) as changes
+      from item group by digest_id
+    having bool_or(theirs)
+  ), done as (
+    update public.saved_search_email_digests d
+       set items = case when d.status in ('pending', 'sending') and hit.kept is not null then hit.kept else hit.neutral end,
+           match_count = case when d.status in ('pending', 'sending') and hit.kept is not null
+                              then greatest(d.match_count - hit.gone::integer, jsonb_array_length(hit.kept)) else d.match_count end,
+           status = case when d.status in ('pending', 'sending') and hit.kept is null then 'skipped' else d.status end,
+           skip_reason = case when d.status in ('pending', 'sending') and hit.kept is null then 'listings_removed' else d.skip_reason end,
+           updated_at = now()
+      from hit
+     where d.id = hit.digest_id
+       and (d.status in ('pending', 'sending') or hit.changes)
+    returning (d.status = 'skipped' and d.skip_reason = 'listings_removed' and hit.kept is null) as skipped,
+              (hit.kept is not null and d.items = hit.kept) as trimmed
+  )
+  select count(*) filter (where trimmed and not skipped), count(*) filter (where skipped), count(*) filter (where not trimmed and not skipped)
+    into v_trimmed, v_skipped, v_neutral from done;
+  return jsonb_build_object('digests_trimmed', v_trimmed, 'digests_not_sent', v_skipped, 'digest_titles_removed', v_neutral);
+end $$;
+revoke all on function private.scrub_member_digest_items(uuid) from public, anon, authenticated;
 
 create or replace function public.scrub_deleted_account(p_user uuid, p_email_digest text, p_digest_key text)
 returns jsonb
@@ -279,6 +427,8 @@ begin
   -- notifications copied it, found by actor and by the offer or order the
   -- notice is about (private.scrub_member_notices, below).
   v_counts := v_counts || private.scrub_member_notices(p_user, v_username);
+  -- Their listing titles in other members' saved-search emails (N1069, work review #153).
+  v_counts := v_counts || private.scrub_member_digest_items(p_user);
 
   -- Their own social record, none of it a transaction key.
   delete from public.notifications where user_id = p_user;
@@ -332,6 +482,8 @@ declare
   v_offers integer := 0;
   v_orders integer := 0;
   v_links integer := 0;
+  v_matched integer := 0;
+  v_digests integer := 0;
   n integer;
   r record;
 begin
@@ -342,11 +494,16 @@ begin
     select d.user_id from public.account_deletion_requests d
      where d.scrubbed_at is not null and d.user_id is not null
   loop
-    v_counts := private.scrub_member_notices(r.user_id, null);
+    v_counts := private.scrub_member_notices(r.user_id, null) || private.scrub_member_digest_items(r.user_id);
     v_actor := v_actor + (v_counts->>'notifications_sent')::integer;
     v_offers := v_offers + (v_counts->>'offer_notice_bodies')::integer;
     v_orders := v_orders + (v_counts->>'order_notice_bodies')::integer;
+    v_matched := v_matched + (v_counts->>'saved_search_notices')::integer;
+    v_digests := v_digests + (v_counts->>'digests_trimmed')::integer + (v_counts->>'digests_not_sent')::integer + (v_counts->>'digest_titles_removed')::integer;
   end loop;
+  -- With no scrubbed member at all, a digest can still name a listing that is gone.
+  v_counts := private.scrub_member_digest_items(null);
+  v_digests := v_digests + (v_counts->>'digests_trimmed')::integer + (v_counts->>'digests_not_sent')::integer + (v_counts->>'digest_titles_removed')::integer;
 
   -- 2. Links to a retired handle lead nowhere and name the member who left.
   --    A scan of notifications, so in batches; one batch is enough today.
@@ -363,7 +520,8 @@ begin
     exit when n = 0;
   end loop;
 
-  return jsonb_build_object('actor_rows', v_actor, 'offer_bodies', v_offers, 'order_bodies', v_orders, 'retired_links', v_links);
+  return jsonb_build_object('actor_rows', v_actor, 'offer_bodies', v_offers, 'order_bodies', v_orders, 'retired_links', v_links,
+    'saved_search_notices', v_matched, 'saved_search_digests', v_digests);
 end $$;
 drop function if exists private.repair_scrubbed_previews();
 revoke all on function private.repair_scrubbed_previews(integer) from public, anon, authenticated;
@@ -372,8 +530,8 @@ do $$
 declare
   r jsonb := private.repair_scrubbed_previews();
 begin
-  raise notice '20261110150000 repair: % notifications of already-scrubbed members rewritten, % offer and % order notice bodies made neutral, % links to retired handles cleared',
-    r->>'actor_rows', r->>'offer_bodies', r->>'order_bodies', r->>'retired_links';
+  raise notice '20261110150000 repair: % notifications of already-scrubbed members rewritten, % offer and % order notice bodies made neutral, % links to retired handles cleared, % saved-search notices and % saved-search emails cleared of a departed member''s listing titles',
+    r->>'actor_rows', r->>'offer_bodies', r->>'order_bodies', r->>'retired_links', r->>'saved_search_notices', r->>'saved_search_digests';
 end $$;
 
 commit;

@@ -12,6 +12,16 @@
 --   R  the one-time repair applies the same rules to a member scrubbed before
 --      20261108180000, clears links to retired handles; a second run changes
 --      nothing
+--   S  (N1069, work review #153) a saved-search notice that named the leaver's listing
+--      to another member loses that title, whole and in its place, and keeps
+--      the other titles; one that names none of theirs is untouched
+--   E  (N1069, work review #153) saved-search emails: one not yet sent loses the
+--      leaver's items, and is not sent when none is left; one already sent
+--      keeps its shape with a neutral title
+--   U  (N1069, work review #153) every kind says whose words it carries: a kind the
+--      classification does not know is scrubbed as the actor's words, DRVN's
+--      own text stays, every kind a function writes by name is classified,
+--      and with drvn.strict_notification_kinds on an unclassified kind is refused
 -- Every failed check is collected and reported together at the end.
 begin;
 
@@ -29,6 +39,9 @@ declare
   bought uuid := gen_random_uuid();
   job uuid; lease uuid := gen_random_uuid();
   r jsonb;
+  search uuid; d_trim uuid; d_skip uuid; d_sent uuid; d_old uuid; d_gone uuid;
+  refused boolean;
+  unknown text;
   fails text[] := '{}';
 begin
   insert into public.job_config (key, value) values ('payments_mode', 'stub')
@@ -69,6 +82,33 @@ begin
     -- D: the leaver's own words, as the seller got them.
     (fan, 'order_disputed', 'marketplace', 'A buyer opened a dispute', 'It leaks. Call me on 07123 456789', '/orders/' || bought, leaver),
     (fan, 'order_refunded', 'marketplace', 'Order refunded', 'Wrong part, ring 07123 456789', '/orders/' || bought, null);
+  -- ---------- S, E, U fixtures ----------
+  insert into public.notifications (user_id, kind, section, title, body, href, actor_id) values
+    (fan, 'saved_search', 'marketplace', 'New match for JDM turbos: Alice''s turbo, call 07123 456789', 'Alice''s turbo, call 07123 456789', '/marketplace?q=turbo', null),
+    (fan, 'saved_search', 'marketplace', '3 new parts match JDM turbos', 'Fan''s exhaust · Alice''s turbo, call 07123 456789 · Someone''s intake', '/marketplace?q=turbo', null),
+    (fan, 'saved_search', 'marketplace', 'New match for exhausts: Fan''s exhaust', 'Fan''s exhaust', '/marketplace?q=exhaust', null),
+    -- DRVN's own words, with the leaver as the actor: they stay.
+    (fan, 'refund_offered', 'marketplace', 'The seller offered a refund', '$20.00: review it on the order.', '/orders/' || bought, leaver);
+  -- A kind nobody classified, as production (strict mode off) would take it.
+  perform set_config('drvn.strict_notification_kinds', 'off', true);
+  insert into public.notifications (user_id, kind, section, title, body, href, actor_id) values
+    (fan, 'n153_new_kind', 'engagement', 'Alice did a new thing', 'Alice wrote this, 07123 456789', null, leaver);
+  insert into public.saved_searches (user_id, name, alert) values (fan, 'JDM turbos', true) returning id into search;
+  insert into public.saved_search_email_digests (saved_search_id, digest_day, window_start, window_end, search_name, href, match_count, items, status)
+    values (search, current_date, now() - interval '1 day', now(), 'JDM turbos', '/marketplace?q=turbo', 5,
+            jsonb_build_array(jsonb_build_object('id', part, 'title', 'Alice''s turbo, call 07123 456789', 'price_cents', 50000),
+                              jsonb_build_object('id', fan_part, 'title', 'Fan''s exhaust', 'price_cents', 30000)), 'pending')
+    returning id into d_trim;
+  insert into public.saved_search_email_digests (saved_search_id, digest_day, window_start, window_end, search_name, href, match_count, items, status)
+    values (search, current_date - 1, now() - interval '2 days', now() - interval '1 day', 'JDM turbos', '/marketplace?q=turbo', 1,
+            jsonb_build_array(jsonb_build_object('id', part, 'title', 'Alice''s turbo, call 07123 456789', 'price_cents', 50000)), 'pending')
+    returning id into d_skip;
+  insert into public.saved_search_email_digests (saved_search_id, digest_day, window_start, window_end, search_name, href, match_count, items, status, sent_at)
+    values (search, current_date - 2, now() - interval '3 days', now() - interval '2 days', 'JDM turbos', '/marketplace?q=turbo', 2,
+            jsonb_build_array(jsonb_build_object('id', fan_part, 'title', 'Fan''s exhaust', 'price_cents', 30000),
+                              jsonb_build_object('id', part, 'title', 'Alice''s turbo, call 07123 456789', 'price_cents', 50000)), 'sent', now() - interval '2 days')
+    returning id into d_sent;
+
   insert into public.remediation_jobs (kind, dedup_key, payload, status, lease_id, locked_until)
     values ('delete_account', 'delete:' || leaver, jsonb_build_object('user_id', leaver), 'processing', lease, now() + interval '5 minutes')
     returning id into job;
@@ -96,6 +136,74 @@ begin
      or not exists (select 1 from public.notifications where user_id = fan and kind = 'order_refunded' and body like 'The reason was removed%') then
     fails := fails || 'FAIL D1: a leaving buyer''s dispute text or reason was not replaced by a line pointing to the order (Codex #181)'::text;
   end if;
+  -- ---------- S ----------
+  if exists (select 1 from public.notifications where user_id = fan and kind = 'saved_search' and (title ~ '07123|Alice' or coalesce(body, '') ~ '07123|Alice')) then
+    fails := fails || 'FAIL S1: a saved-search notice still names the deleted member''s listing (N1069, work review #153)'::text;
+  end if;
+  if not exists (select 1 from public.notifications where user_id = fan and title = 'New match for JDM turbos: A listing by a member who has since left DRVN' and body = 'A listing by a member who has since left DRVN')
+     or not exists (select 1 from public.notifications where user_id = fan and title = '3 new parts match JDM turbos' and body = 'Fan''s exhaust · A listing by a member who has since left DRVN · Someone''s intake')
+     or not exists (select 1 from public.notifications where user_id = fan and title = 'New match for exhausts: Fan''s exhaust' and body = 'Fan''s exhaust') then
+    fails := fails || format('FAIL S2: a saved-search notice lost more than the leaver''s title, or its place: %s (N1069, work review #153)',
+      (select string_agg(title || ' / ' || coalesce(body, ''), ' | ') from public.notifications where user_id = fan and kind = 'saved_search'));
+  end if;
+
+  -- ---------- E ----------
+  if exists (select 1 from public.saved_search_email_digests where saved_search_id = search and items::text ~ '07123|Alice') then
+    fails := fails || 'FAIL E1: a saved-search email still holds the deleted member''s listing title (N1069, work review #153)'::text;
+  end if;
+  if not exists (select 1 from public.saved_search_email_digests where id = d_trim and status = 'pending' and skip_reason is null and match_count = 4
+                    and jsonb_array_length(items) = 1 and items->0->>'title' = 'Fan''s exhaust') then
+    fails := fails || format('FAIL E2: an unsent email did not lose only the leaver''s item: %s (N1069, work review #153)', (select to_jsonb(d) - 'id' from public.saved_search_email_digests d where id = d_trim));
+  end if;
+  if not exists (select 1 from public.saved_search_email_digests where id = d_skip and status = 'skipped' and skip_reason = 'listings_removed'
+                    and items->0->>'title' = 'A listing by a member who has since left DRVN') then
+    fails := fails || 'FAIL E3: an unsent email with nothing left to show would still be sent (N1069, work review #153)'::text;
+  end if;
+  if not exists (select 1 from public.saved_search_email_digests where id = d_sent and status = 'sent' and match_count = 2 and jsonb_array_length(items) = 2
+                    and items->0->>'title' = 'Fan''s exhaust' and items->1->>'title' = 'A listing by a member who has since left DRVN' and (items->1->>'price_cents')::int = 50000) then
+    fails := fails || 'FAIL E4: a sent email''s record changed shape, or kept the title (N1069, work review #153)'::text;
+  end if;
+
+  -- ---------- U ----------
+  if not exists (select 1 from public.notifications where user_id = fan and kind = 'n153_new_kind' and title = 'A member who has since left DRVN' and body = '(removed)' and actor_id is null) then
+    fails := fails || 'FAIL U1: a kind nobody classified kept the leaver''s name or words (N1069, work review #153)'::text;
+  end if;
+  if not exists (select 1 from public.notifications where user_id = fan and kind = 'refund_offered' and title = 'The seller offered a refund' and body = '$20.00: review it on the order.' and actor_id is null) then
+    fails := fails || 'FAIL U2: DRVN''s own words were removed from a kind that carries no member text (N1069, work review #153)'::text;
+  end if;
+  -- Every kind a function writes by name, next to its section, is classified.
+  select string_agg(distinct k.kind, ', ') into unknown
+    from (
+      select (regexp_matches(p.prosrc, '''([a-z][a-z_]+)''\s*,\s*''(?:engagement|marketplace)''', 'g'))[1] as kind
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname in ('public', 'private') and p.prokind = 'f'
+         and (p.prosrc ~* 'notify\s*\(' or p.prosrc ~* 'into\s+(public\.)?notifications')
+    ) k
+   where private.notification_member_text(k.kind) is null;
+  if unknown is not null then
+    fails := fails || format('FAIL U3: a function writes a notification kind nobody classified: %s (N1069, work review #153)', unknown);
+  end if;
+  -- The computed families: every order status and every offer status.
+  select string_agg(k, ', ') into unknown
+    from unnest(array['order_pending', 'order_requires_action', 'order_payment_failed', 'order_paid', 'order_shipped', 'order_delivered',
+                      'order_completed', 'order_cancelled', 'order_refunded', 'order_disputed',
+                      'offer_countered', 'offer_accepted', 'offer_declined', 'offer_withdrawn', 'offer_expired']) k
+   where private.notification_member_text(k) is null;
+  if unknown is not null then
+    fails := fails || format('FAIL U3: a status has no classified notification kind: %s (N1069, work review #153)', unknown);
+  end if;
+  -- Strict mode, as the test databases run: an unclassified kind is refused, a classified one is not.
+  perform set_config('drvn.strict_notification_kinds', 'on', true);
+  refused := false;
+  begin
+    insert into public.notifications (user_id, kind, section, title) values (fan, 'n153_another_new_kind', 'engagement', 'x');
+  exception when check_violation then refused := true;
+  end;
+  if not refused then
+    fails := fails || 'FAIL U4: with strict kinds on, an unclassified notification kind was accepted (N1069, work review #153)'::text;
+  end if;
+  insert into public.notifications (user_id, kind, section, title) values (fan, 'policy_updated', 'marketplace', 'Our terms changed');
+
   if not exists (select 1 from public.notifications where user_id = buyer and kind = 'offer_declined' and title = 'Your offer was declined' and href = '/offers/' || offer and actor_id is null) then
     fails := fails || 'FAIL O2: the offer notice lost DRVN''s own title or its link (Codex #181)'::text;
   end if;
@@ -106,6 +214,17 @@ begin
     (fan, 'follow', 'engagement', 'Bob Old followed you', null, '/u/n181oldhandle', old_leaver),
     (buyer, 'offer_countered', 'marketplace', 'The seller countered', 'Bob''s wheels, text 07999 111222', '/offers/' || old_offer, null);
   insert into private.username_tombstones (username) values ('n181oldhandle') on conflict do nothing;
+  insert into public.notifications (user_id, kind, section, title, body, href, actor_id) values
+    (fan, 'saved_search', 'marketplace', '2 new parts match wheels', 'Bob''s wheels, text 07999 111222 · Fan''s exhaust', '/marketplace?q=wheels', null);
+  insert into public.saved_search_email_digests (saved_search_id, digest_day, window_start, window_end, search_name, href, match_count, items, status, sent_at)
+    values (search, current_date - 3, now() - interval '4 days', now() - interval '3 days', 'JDM turbos', '/marketplace?q=turbo', 1,
+            jsonb_build_array(jsonb_build_object('id', old_part, 'title', 'Bob''s wheels, text 07999 111222', 'price_cents', 50000)), 'sent', now() - interval '3 days')
+    returning id into d_old;
+  -- A listing that is gone altogether (its seller's profile was hard-deleted).
+  insert into public.saved_search_email_digests (saved_search_id, digest_day, window_start, window_end, search_name, href, match_count, items, status, sent_at)
+    values (search, current_date - 4, now() - interval '5 days', now() - interval '4 days', 'JDM turbos', '/marketplace?q=turbo', 1,
+            jsonb_build_array(jsonb_build_object('id', gen_random_uuid(), 'title', 'Carol''s seats 07555 000111', 'price_cents', 9000)), 'sent', now() - interval '4 days')
+    returning id into d_gone;
   insert into public.account_deletion_requests (user_id, outcome, next_action, responsible_owner, scrubbed_at)
     values (old_leaver, 'operator_attention', 'Personal data is removed.', 'operations and policy owner', now() - interval '2 days');
 
@@ -120,11 +239,17 @@ begin
   if (select body from public.notifications where user_id = buyer and href = '/offers/' || old_offer) is distinct from 'A listing by a member who has since left DRVN' then
     fails := fails || 'FAIL R3: an actor-less offer notice kept a scrubbed seller''s listing title, or lost its subject (Codex #181)'::text;
   end if;
+  if exists (select 1 from public.notifications where user_id = fan and kind = 'saved_search' and coalesce(body, '') ~ '07999|Bob')
+     or exists (select 1 from public.saved_search_email_digests where id in (d_old, d_gone) and items::text ~ '07999|Bob|07555|Carol')
+     or (r->>'saved_search_notices')::int < 1 or (r->>'saved_search_digests')::int < 2 then
+    fails := fails || format('FAIL R6: the repair left a scrubbed member''s listing title in a saved-search notice or email, or did not count it (%s) (N1069, work review #153)', r);
+  end if;
   if (r->>'actor_rows')::int < 2 or (r->>'retired_links')::int < 1 or (r->>'offer_bodies')::int < 1 then
     fails := fails || format('FAIL R4: the repair didn''t count what it changed (%s) (Codex #181)', r);
   end if;
   r := private.repair_scrubbed_previews();
-  if (r->>'actor_rows')::int <> 0 or (r->>'retired_links')::int <> 0 or (r->>'offer_bodies')::int <> 0 or (r->>'order_bodies')::int <> 0 then
+  if (r->>'actor_rows')::int <> 0 or (r->>'retired_links')::int <> 0 or (r->>'offer_bodies')::int <> 0 or (r->>'order_bodies')::int <> 0
+     or (r->>'saved_search_notices')::int <> 0 or (r->>'saved_search_digests')::int <> 0 then
     fails := fails || format('FAIL R5: a second repair changed more rows (%s) (Codex #181)', r);
   end if;
 
