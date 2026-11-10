@@ -1195,6 +1195,10 @@ export async function adminRetryDisputeRecovery(_prev: AdminActionState, formDat
   if (outcome !== "committed") {
     return { error: `The replay didn't finish (${outcome ?? "no answer"}): the chargeback is ${after?.state ?? "unresolved"} and its payout stays frozen until Stripe's next event or a later retry settles it.` };
   }
+  // Applied, and not yet decided: Stripe's outcome closes the case by itself.
+  if (after?.state === "open") {
+    return { ok: "Replayed Stripe's event: it now matches the payment, and the chargeback is open again, waiting for the bank. Its case stays listed until Stripe's outcome arrives, then closes by itself. There is nothing more to retry." };
+  }
   return { ok: `Replayed Stripe's event: the chargeback is now ${after?.state ?? "updated"}.` };
 }
 

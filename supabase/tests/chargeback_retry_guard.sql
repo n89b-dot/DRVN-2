@@ -18,6 +18,9 @@
 --      chargeback Retry still works on
 --   H  (N1064) a case that was closed opens again when a later event holds
 --      the chargeback again
+--   U  (N1064) a chargeback held before the state it was held from was
+--      recorded is not retryable: Retry refuses it, and its event does not
+--      reopen it even with an allowance on the row
 -- Every failed check is collected and reported together at the end.
 begin;
 
@@ -225,6 +228,27 @@ begin
     get stacked diagnostics msg = message_text;
     if msg not like '%isn''t stored%' then fails := fails || format('FAIL N4: the refusal said "%s" (N944)', msg); end if;
   end;
+
+  -- ---------- U: held before held_from_state existed ----------
+  -- dp_n944r_n was held through the old two-argument function from 'open';
+  -- wipe what the trigger recorded, as a row held before this migration reads.
+  update public.stripe_dispute_journal set held_from_state = null, held_event_id = 'evt_n944r_a', held_event_created = 150 where dispute_id = 'dp_n944r_n';
+  begin
+    perform public.admin_retry_dispute_recovery('dp_n944r_n', admin_actor, false);
+    fails := fails || 'FAIL U1: a chargeback held from an unknown state was allowed a retry (N1064)'::text;
+  exception when others then
+    get stacked diagnostics msg = message_text;
+    if msg not like '%held before the state it was held from was recorded%' then fails := fails || format('FAIL U2: the refusal said "%s" (N1064)', msg); end if;
+  end;
+  -- Even with an allowance written on the row by hand, its event does not reopen it.
+  insert into public.payments (order_id, provider, provider_reference, status, amount_cents, currency)
+  values (bare, 'stripe', 'pi_n944r_n', 'succeeded', 3000, 'USD');
+  update public.stripe_dispute_journal set retry_until = now() + interval '5 minutes' where dispute_id = 'dp_n944r_n';
+  t := public.apply_stripe_dispute_event('dp_n944r_n', 'pi_n944r_n', 3000, 'usd', 'needs_response', false, 'evt_n944r_a', 150, gen_random_uuid());
+  if t <> 'recovery_recorded' or (select state from public.stripe_dispute_journal where dispute_id = 'dp_n944r_n') <> 'recovery' then
+    fails := fails || format('FAIL U3: a chargeback held from an unknown state was reopened by a replay (%s) (N1064)', t);
+  end if;
+  update public.stripe_dispute_journal set retry_until = null where dispute_id = 'dp_n944r_n';
 
   -- ---------- A: a refused retry is released while still held ----------
   select id into case_id from public.payment_recoveries where recovery_key = 'stripe:dispute:dp_n944r_n';

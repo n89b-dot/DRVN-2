@@ -588,9 +588,13 @@ match (usually the payment record), then Retry with a reason. It replays the
 Stripe event that held the chargeback, or the newest since, through the
 normal handling, which checks it against the payment again in one step: it
 ends applied, or held again saying so, and the case closes by itself when
-Stripe's outcome is applied. Retry refuses a chargeback that was already
-settled, or was mid-booking, when a conflicting event held it, and one with
-no stored event: those stay for the owner, and still **block Resume deletion
+Stripe's outcome is applied. When the event replayed is not the bank's
+decision, the chargeback is open again and **its case stays listed until
+Stripe's outcome arrives**: that is the expected state after "Replayed", and
+there is nothing more to retry. Retry refuses a chargeback that was already
+settled, or was mid-booking, when a conflicting event held it, one held
+before 10 November 2026 (what it was held from was not recorded then, so it
+is treated as unknown), and one with no stored event: those stay for the owner, and still **block Resume deletion
 for both parties**. For those the safe action is: read the dispute's final
 status in Stripe, record it on the recovery case's note, and leave the case
 open. A case that was closed opens again by itself if a later Stripe event

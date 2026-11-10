@@ -15,8 +15,9 @@
 --   * The state before the hold is recorded (held_from_state). An entry that
 --     was already settled (won, warning closed, lost) when a conflicting
 --     event held it can't be retried: Retry must never turn a booked loss
---     into a win. Nor can one held mid-booking (loss_pending). Those stay
---     for the owner (Needs Neil).
+--     into a win. Nor can one held mid-booking (loss_pending), nor one held
+--     before this migration, whose state before the hold was never recorded
+--     and so is unknown. Those stay for the owner (Needs Neil).
 --   * The recovery case closes by itself when the journal reaches a settled
 --     outcome from an unsettled one (a replay that now matches, or the next
 --     Stripe event): before, a retried chargeback that resolved left its case
@@ -156,8 +157,11 @@ begin
   -- 20261110230000: a later event while held is remembered, so Retry
   -- replays the newest Stripe knows.
   if entry.state='recovery' then
+   -- Only an entry known to have been held from 'open'. One held before
+   -- this migration has no held_from_state: what it was held from is
+   -- unknown, and unknown is not retryable (review of #208).
    if entry.retry_until is not null and entry.retry_until>now() and p_event=entry.held_event_id
-      and coalesce(entry.held_from_state,'open')='open' then
+      and entry.held_from_state='open' then
     -- An admin's Retry allowed this one replay (work review #148). The
     -- reopen and everything below are this one transaction: it ends
     -- settled, open, or held again, never reopened with nothing replayed.
@@ -284,6 +288,12 @@ begin
   end if;
   if v_entry.held_from_state = 'loss_pending' then
     raise exception 'A loss was being booked when this chargeback was held. Retry can''t finish a booking: leave the case for the owner'
+      using errcode = '22023';
+  end if;
+  if v_entry.held_from_state is distinct from 'open' then
+    -- Null: held before 20261110230000 recorded where from. It may have been
+    -- settled or mid-booking, so it is treated as if it was.
+    raise exception 'This chargeback was held before the state it was held from was recorded, so Retry can''t tell whether it is safe: check the dispute in Stripe and leave the case for the owner'
       using errcode = '22023';
   end if;
   if v_entry.held_event_id is null then

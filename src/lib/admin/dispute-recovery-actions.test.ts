@@ -107,6 +107,14 @@ describe("retry a chargeback held for review (N944, report five #108)", () => {
     expect((result as { error: string }).error).not.toMatch(/reopened/i);
   });
 
+  it("N1064: after a replay that is not the bank's decision, says the case stays listed and there is nothing more to retry", async () => {
+    mocks.rows.stripe_dispute_journal = { state: "open" };
+    const result = await adminRetryDisputeRecovery(null, form({ recovery_id: CASE, reason: "Payment record corrected" }));
+    expect(result).toEqual({ ok: expect.stringContaining("open again, waiting for the bank") });
+    expect((result as { ok: string }).ok).toContain("Its case stays listed until Stripe's outcome arrives");
+    expect((result as { ok: string }).ok).toContain("nothing more to retry");
+  });
+
   it("says when the replay is held again", async () => {
     mocks.dispatch.mockResolvedValue("recovery_recorded");
     mocks.rows.stripe_dispute_journal = { state: "recovery" };
