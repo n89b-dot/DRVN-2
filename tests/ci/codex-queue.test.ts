@@ -4,6 +4,10 @@
 // Where the full history is present, it also checks that every PR merged to
 // main since #61 has a row, allowing two days for the row to be added after
 // the merge, so another session's merge never turns main red.
+//
+// Review finding #129 (OS id N725), Neil's ruling of 10 November 2026: no
+// per-change Codex reviews. A review that was owed is waived, a code PR merged
+// from then on is recorded as waived, and an owed row is refused.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -17,7 +21,9 @@ const GRACE_DAYS = 2;
 
 export type QueueRow = { pr: number; merged: string; review: string; reviewedOn: string; verdict: string };
 
-const REVIEWS = new Set(["full", "fix-check", "full + fix-check", "skipped", "owed"]);
+const REVIEWS = new Set(["full", "fix-check", "full + fix-check", "skipped", "waived"]);
+/** Rows that record a ruling, not a review: no review date, and the verdict names the ruling. */
+const BY_RULING = new Set(["skipped", "waived"]);
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function queueRows(markdown: string): QueueRow[] {
@@ -34,11 +40,12 @@ export function queueRows(markdown: string): QueueRow[] {
 /** What is wrong with one row. */
 export function rowProblem(row: QueueRow): string | null {
   if (!DATE.test(row.merged)) return `#${row.pr}: Merged is not a date`;
+  if (row.review === "owed") return `#${row.pr}: no review is owed since Neil's ruling of 10 November 2026; write "waived", with "—" as its date`;
   if (!REVIEWS.has(row.review)) return `#${row.pr}: Review must be one of ${[...REVIEWS].join(", ")}`;
-  if (row.review === "owed" && row.reviewedOn !== "owed") return `#${row.pr}: an owed review has "owed" as its date`;
-  if (row.review === "skipped" && row.reviewedOn !== "—") return `#${row.pr}: a skipped review has "—" as its date`;
-  if (!["owed", "skipped"].includes(row.review) && !DATE.test(row.reviewedOn)) return `#${row.pr}: a done review needs its date`;
+  if (BY_RULING.has(row.review) && row.reviewedOn !== "—") return `#${row.pr}: a ${row.review} review has "—" as its date`;
+  if (!BY_RULING.has(row.review) && !DATE.test(row.reviewedOn)) return `#${row.pr}: a done review needs its date`;
   if (!row.verdict) return `#${row.pr}: Verdict is empty`;
+  if (BY_RULING.has(row.review) && !/ruling/.test(row.verdict)) return `#${row.pr}: a ${row.review} row names the ruling it rests on in Verdict`;
   return null;
 }
 
@@ -69,11 +76,20 @@ describe("the Codex review queue is in the repository (#95)", () => {
   });
 
   it("reads rows and refuses malformed ones", () => {
-    const md = "| PR | Merged | Title | Review | Reviewed on | Verdict |\n|---|---|---|---|---|---|\n| #200 | 2026-11-09 | x | owed | owed | — |\n| #201 | 2026-11-09 | y | full | soon | clean |";
+    const md = "| PR | Merged | Title | Review | Reviewed on | Verdict |\n|---|---|---|---|---|---|\n| #200 | 2026-11-09 | x | skipped | — | docs only (ruling, 7 Nov) |\n| #201 | 2026-11-09 | y | full | soon | clean |";
     const [a, b] = queueRows(md);
     expect(rowProblem(a)).toBeNull();
     expect(rowProblem(b)).toBe("#201: a done review needs its date");
     expect(rowProblem({ ...a, review: "maybe" })).toMatch(/Review must be one of/);
+  });
+
+  it("accepts a waived row and refuses an owed one (#129, N725)", () => {
+    const waived: QueueRow = { pr: 300, merged: "2026-11-09", review: "waived", reviewedOn: "—", verdict: "waived (ruling, 10 Nov)" };
+    expect(rowProblem(waived)).toBeNull();
+    expect(rowProblem({ ...waived, reviewedOn: "2026-11-09" })).toBe('#300: a waived review has "—" as its date');
+    expect(rowProblem({ ...waived, verdict: "—" })).toBe("#300: a waived row names the ruling it rests on in Verdict");
+    expect(rowProblem({ ...waived, review: "owed", reviewedOn: "owed", verdict: "—" })).toMatch(/no review is owed since Neil's ruling of 10 November 2026/);
+    expect(rows.filter((r) => r.review === "owed").map((r) => `#${r.pr}`)).toEqual([]);
   });
 
   const merged = mergedPrs();
