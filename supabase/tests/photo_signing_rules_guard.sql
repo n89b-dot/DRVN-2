@@ -269,6 +269,10 @@ begin
     values (item, replace(foreign_photo, 'car-images', 'listing-images'), 'x', 9);
   perform set_config('session_replication_role', 'origin', true);
 
+  v_result := private.foreign_photo_ref_counts();
+  if (select sum(value::integer) from jsonb_each_text(v_result)) <> 4 or (v_result ->> 'car_images')::int <> 1 then
+    raise exception 'FAIL 6f: the counts before the move were wrong: % (N940)', v_result;
+  end if;
   n := private.quarantine_foreign_photo_refs();
   if n <> 4 then raise exception 'FAIL 6: expected 4 references moved aside, got % (N940)', n; end if;
   if exists (select 1 from public.car_images where url = foreign_photo)
@@ -288,6 +292,25 @@ begin
   if (select count(*) from private.photo_refs_quarantined where value like '%' || other || '%' and row_data ? 'id') <> 4 then
     raise exception 'FAIL 6e: the moved rows were not kept whole (N940)';
   end if;
+
+  if private.foreign_photo_ref_counts() <> '{}'::jsonb then
+    raise exception 'FAIL 6g: a second count found more to move (N940)';
+  end if;
+  -- 7. A row moved aside wrongly comes back exactly; one that still breaks
+  --    the rule is refused by the triggers.
+  delete from public.car_images where car_id = car and url = photo returning to_jsonb(car_images.*) into v_result;
+  insert into private.photo_refs_quarantined (relation, field, value, row_data, action)
+    values ('car_images', 'url', photo, v_result, 'deleted');
+  t := private.restore_quarantined_photo_ref((select max(id) from private.photo_refs_quarantined));
+  if (select to_jsonb(ci.*) from public.car_images ci where ci.id = (v_result ->> 'id')::uuid) is distinct from v_result then
+    raise exception 'FAIL 7: a restored row did not come back exactly (N940)';
+  end if;
+  refused := false;
+  begin
+    perform private.restore_quarantined_photo_ref((select min(id) from private.photo_refs_quarantined where relation = 'car_images'));
+  exception when insufficient_privilege then refused := true;
+  end;
+  if not refused then raise exception 'FAIL 7b: restoring a foreign photo was not refused (N940)'; end if;
 
   raise notice 'PASS: photo_signing_rules_guard — all checks green (rolling back)';
 end $$;

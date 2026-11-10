@@ -35,7 +35,13 @@
 --  4. Rows written before this that break the rule are moved aside once,
 --     into private.photo_refs_quarantined (the whole row, so nothing is
 --     lost): gallery, pin and snapshot rows are deleted, a cover or part
---     thumbnail is cleared, a body loses just the offending photos.
+--     thumbnail is cleared, a body loses just the offending photos. Each is
+--     restorable exactly (private.restore_quarantined_photo_ref). With more
+--     than ten in all the migration refuses, with the counts, unless the
+--     apply sets drvn.photo_quarantine_confirm to that total. Rows are
+--     deleted rather than hidden: the gallery, pin and snapshot tables have
+--     no hidden state, and adding one to each (and to every read of them)
+--     is a wider change than the handful of rows this moves.
 --
 -- dispute_evidence.url and the JSON columns (agent_events.inputs/result, a
 -- listing's condition checklist, its order copy, every Json-returning RPC)
@@ -359,11 +365,79 @@ end;
 $$;
 revoke all on function private.quarantine_foreign_photo_refs() from public, anon, authenticated;
 
+-- How many references the step would move, per place, before anything moves.
+create or replace function private.foreign_photo_ref_counts()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select jsonb_strip_nulls(jsonb_build_object(
+    'car_images', nullif((select count(*) from public.car_images ci left join public.cars c on c.id = ci.car_id
+                           where not private.photo_in_owner_folder(ci.url, c.owner_id)), 0),
+    'car_hotspots', nullif((select count(*) from public.car_hotspots h left join public.cars c on c.id = h.car_id
+                             where not private.photo_in_owner_folder(h.image_url, c.owner_id)), 0),
+    'listing_images', nullif((select count(*) from public.listing_images li left join public.listings l on l.id = li.listing_id
+                               where not private.photo_in_owner_folder(li.url, l.seller_id)), 0),
+    'activity_images', nullif((select count(*) from public.activity_images ai left join public.activity_posts p on p.id = ai.post_id
+                                where not private.photo_in_owner_folder(ai.url, p.author_id)), 0),
+    'activity_posts.body', nullif((select count(*) from public.activity_posts p cross join lateral unnest(private.activity_body_media(p.body)) u(url)
+                                    where strpos(p.body::text, '/storage/v1/') > 0 and not private.photo_in_owner_folder(u.url, p.author_id)), 0),
+    'order_item_snapshot_images', nullif((select count(*) from public.order_item_snapshot_images s
+                                           left join public.order_items oi on oi.id = s.order_item_id left join public.orders o on o.id = oi.order_id
+                                           where not private.photo_in_owner_folder(s.url, o.seller_id)), 0),
+    'cars.cover_image_url', nullif((select count(*) from public.cars c2 where not private.photo_in_owner_folder(c2.cover_image_url, c2.owner_id)), 0),
+    'mod_items.image_url', nullif((select count(*) from public.mod_items m left join public.cars c on c.id = m.car_id
+                                    where not private.photo_in_owner_folder(m.image_url, c.owner_id)), 0)
+  ));
+$$;
+revoke all on function private.foreign_photo_ref_counts() from public, anon, authenticated;
+
+-- Puts one quarantined reference back exactly as it was (the whole row, the
+-- cleared column, or the post's body as it was), for an operator who finds a
+-- row moved aside wrongly. The triggers below still apply, so a row that
+-- still breaks the rule is refused.
+create or replace function private.restore_quarantined_photo_ref(p_id bigint)
+returns text
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  q private.photo_refs_quarantined%rowtype;
+begin
+  select * into strict q from private.photo_refs_quarantined where id = p_id for update;
+  if q.action = 'deleted' then
+    execute format('insert into public.%I select * from jsonb_populate_record(null::public.%I, $1)', q.relation, q.relation) using q.row_data;
+  elsif q.action = 'cleared' then
+    execute format('update public.%I set %I = $1 where id = ($2 ->> ''id'')::uuid', q.relation, q.field) using q.value, q.row_data;
+  else
+    perform set_config('drvn.activity_write', 'v1', true);
+    update public.activity_posts set body = q.row_data -> 'body' where id = (q.row_data ->> 'id')::uuid;
+  end if;
+  delete from private.photo_refs_quarantined where id = p_id;
+  return q.relation || '.' || q.field || ' ' || q.action || ' row restored';
+end;
+$$;
+revoke all on function private.restore_quarantined_photo_ref(bigint) from public, anon, authenticated;
+
+-- Refuses to move more than a few references silently: with more than ten,
+-- an operator checks the counts and sets drvn.photo_quarantine_confirm to the
+-- total for that apply, so a first apply on production can never drop rows
+-- unseen. Rerunning is safe: once moved, nothing is left to count.
 do $$
 declare
-  n integer := private.quarantine_foreign_photo_refs();
+  counts jsonb := private.foreign_photo_ref_counts();
+  total integer := (select coalesce(sum(value::integer), 0) from jsonb_each_text(counts));
+  confirm text := nullif(current_setting('drvn.photo_quarantine_confirm', true), '');
+  n integer;
 begin
-  raise notice '20261110190000: % photo reference(s) outside their owner''s folder moved to private.photo_refs_quarantined', n;
+  if total > 10 and confirm is distinct from total::text then
+    raise exception '20261110190000: % photo reference(s) outside their owner''s folder would be moved aside: %. Check them, then apply with drvn.photo_quarantine_confirm = ''%'' (N940)', total, counts, total;
+  end if;
+  n := private.quarantine_foreign_photo_refs();
+  raise notice '20261110190000: % photo reference(s) outside their owner''s folder moved to private.photo_refs_quarantined (%); restore one with private.restore_quarantined_photo_ref(id)', n, counts;
 end $$;
 
 -- The triggers, one per listed place (the guard reads them back from
