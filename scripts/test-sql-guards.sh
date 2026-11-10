@@ -20,6 +20,16 @@ if ! psql -h "${PGHOST:-localhost}" -p "${PGPORT:-5432}" -U "${PGUSER:-supabase_
   exit 1
 fi
 
+# Guards run with strict notification kinds (work review #153): an insert of a
+# kind private.notification_member_text does not classify is refused, so a
+# guard that raises a new kind fails until someone says whose words it carries.
+# A database setting, read by each guard's own session; production never sets it.
+if ! psql -h "${PGHOST:-localhost}" -p "${PGPORT:-5432}" -U "${PGUSER:-supabase_admin}" -d "${PGDATABASE:-postgres}" -v ON_ERROR_STOP=1 -q \
+  -c "do \$\$ begin execute format('alter database %I set drvn.strict_notification_kinds = %L', current_database(), 'on'); end \$\$"; then
+  echo "Could not switch on strict notification kinds for the guards" >&2
+  exit 1
+fi
+
 # JUnit for the Intelligence OS (docs/ids.md): one <testcase> per guard file,
 # named by its basename without .sql; a failure's body is the guard's FAIL
 # lines verbatim (or the end of its output when it printed none). Writing it
