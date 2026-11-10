@@ -1362,6 +1362,8 @@ export type StuckCarryPayout = Pick<
 
 export type PaymentsOps = {
   recoveries: (PaymentRecovery & { orderTitle: string })[];
+  /** Every open recovery case, counted in the database (N718); the list shows the newest 200. */
+  openRecoveryTotal: number;
   stuckIntents: (TransferIntent & { seller: PartyRef | null; orderTitle: string })[];
   /** Seller credit payouts needing an operator's retry or cancel (readiness 21). */
   stuckCarryPayouts: StuckCarryPayout[];
@@ -1386,12 +1388,22 @@ export type PaymentsOps = {
 
 export async function getPaymentsOps(opts: { query?: string } = {}): Promise<PaymentsOps> {
   const a = await admin();
-  const [recoveries, intents, events, refundOps, alerts, carryPayouts] = await Promise.all([
+  // N718: open cases are read on their own (with their exact count), and the
+  // recently closed ones apart. Reading the 100 newest of any status and
+  // filtering here hid every open case older than the 100th recovery.
+  const [recoveries, closedRecoveries, intents, events, refundOps, alerts, carryPayouts] = await Promise.all([
+    a
+      .from("payment_recoveries")
+      .select("*", { count: "exact" })
+      .eq("status", "open")
+      .order("created_at", { ascending: false })
+      .limit(200),
     a
       .from("payment_recoveries")
       .select("*")
+      .neq("status", "open")
       .order("created_at", { ascending: false })
-      .limit(100),
+      .limit(25),
     a
       .from("transfer_intents")
       .select("*")
@@ -1434,13 +1446,14 @@ export async function getPaymentsOps(opts: { query?: string } = {}): Promise<Pay
   // Each panel is a queue an operator acts on; an unread one must not look
   // empty.
   unlessFailed("payment recoveries", recoveries.error);
+  unlessFailed("closed payment recoveries", closedRecoveries.error);
   unlessFailed("transfer intents", intents.error);
   unlessFailed("webhook events", events.error);
   unlessFailed("refund operations", refundOps.error);
   unlessFailed("the admin alert backlog", alerts.error);
   unlessFailed("stuck seller credit payouts", carryPayouts.error);
 
-  const recoveryRows = recoveries.data ?? [];
+  const recoveryRows = [...(recoveries.data ?? []), ...(closedRecoveries.data ?? [])];
   const intentRows = intents.data ?? [];
   const refundOpRows = refundOps.data ?? [];
   const carryRows = carryPayouts.data ?? [];
@@ -1491,6 +1504,7 @@ export async function getPaymentsOps(opts: { query?: string } = {}): Promise<Pay
 
   return {
     recoveries: filteredRecoveries,
+    openRecoveryTotal: recoveries.count ?? (recoveries.data ?? []).length,
     stuckIntents: filteredIntents,
     stuckCarryPayouts,
     refundOps: refundOpRows

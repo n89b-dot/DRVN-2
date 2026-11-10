@@ -1,5 +1,6 @@
 import { Alert, Badge, Button, ButtonLink, KeyValueTable, ObjectRow, PageHead, TextField, TileHead } from "@/components/ui";
 import { adminReadClient, requireAdminRead } from "@/lib/admin/guard";
+import { pagedRows } from "@/lib/supabase/paged-rows";
 import {
   AGENT_MEASURES,
   approximationNote,
@@ -60,7 +61,11 @@ export default async function AdminAgentPage() {
   const days = measureWindowDays();
   const since = days[0];
   const [controls, health, steps, limits, spend, metrics] = await Promise.all([
-    admin.from("agent_controls").select("id, scope, subject_id, reason, set_at").is("cleared_at", null).order("set_at", { ascending: false }),
+    // N718: every live control, paged. Past PostgREST's 1,000 rows a single
+    // read could drop the global switch and show "Running" while paused.
+    pagedRows((from, to) =>
+      admin.from("agent_controls").select("id, scope, subject_id, reason, set_at").is("cleared_at", null).order("set_at", { ascending: false }).order("id").range(from, to),
+    ).then(({ rows, error }) => ({ data: rows, error })),
     admin.rpc("agent_health"),
     admin.from("agent_beta_steps").select("step, open, changed_at, reason"),
     admin.from("agent_spend_limits").select("per_member_daily_usd, global_daily_usd").maybeSingle(),

@@ -13,7 +13,8 @@ const mocks = vi.hoisted(() => ({ tables: new Map<string, { data: unknown; error
 function query(table: string) {
   const result = () => mocks.tables.get(table) ?? { data: [], error: null };
   const builder: Record<string, unknown> = {};
-  for (const method of ["select", "is", "order", "gte"]) builder[method] = () => builder;
+  // `range`: the live switches are read a page at a time (N718).
+  for (const method of ["select", "is", "order", "gte", "range"]) builder[method] = () => builder;
   builder.maybeSingle = async () => result();
   builder.then = (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => Promise.resolve(result()).then(resolve, reject);
   return builder;

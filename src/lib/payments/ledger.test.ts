@@ -17,7 +17,8 @@ function fakeClient(tables: Record<string, Result>) {
     from(table: string) {
       const result = tables[table] ?? { data: [], error: null };
       const builder: Record<string, unknown> = {};
-      for (const method of ["select", "eq", "in", "order", "limit"]) builder[method] = () => builder;
+      // `range`: the line and adjustment reads page (N718).
+      for (const method of ["select", "eq", "in", "order", "limit", "range"]) builder[method] = () => builder;
       builder.then = (resolve: (value: Result) => unknown) => resolve(result);
       return builder;
     },
@@ -238,5 +239,32 @@ describe("getSellerLedger", () => {
   it("is a genuine empty ledger when the seller has no sales", async () => {
     const result = await getSellerLedger(fakeClient({ orders: { data: [], error: null } }), "seller");
     expect(result).toMatchObject({ status: "ok", ledger: { lines: [], availableCents: 0, truncated: false } });
+  });
+});
+
+describe("a seller's lines past PostgREST's 1,000 rows (N718)", () => {
+  it("keeps the return window of a line on the second page, so the clearing date is still the shop's", async () => {
+    const lines = [
+      ...Array.from({ length: 1000 }, (_, i) => ({ order_id: "order-1", title: `Bolt ${i}`, quantity: 1, return_policy: { returns_accepted: false } })),
+      { order_id: "order-1", title: "Intake", quantity: 1, return_policy: { returns_accepted: true, window_days: 60 } },
+    ];
+    const base = fakeClient({
+      orders: { data: [{ ...order, refunded_cents: 0 }], error: null },
+      settlement_hold_policy: { data: [{ payout_hold_days: 7, payout_hold_mode: "claim_window" }], error: null },
+    }) as unknown as { from: (t: string) => unknown; rpc: (n: string) => unknown };
+    const client = {
+      rpc: base.rpc,
+      from(table: string) {
+        if (table !== "order_items") return base.from(table);
+        let range: [number, number] = [0, 999];
+        const builder: Record<string, unknown> = {};
+        for (const method of ["select", "in", "order"]) builder[method] = () => builder;
+        builder.range = (from: number, to: number) => { range = [from, to]; return builder; };
+        builder.then = (resolve: (value: Result) => unknown) => resolve({ data: lines.slice(range[0], range[1] + 1), error: null });
+        return builder;
+      },
+    } as never;
+    const result = await getSellerLedger(client, "seller");
+    expect(result).toMatchObject({ status: "ok", ledger: { lines: [{ availableAt: "2026-11-01T00:00:00.000Z" }] } });
   });
 });

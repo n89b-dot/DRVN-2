@@ -4,6 +4,7 @@ import type { Database } from "@/lib/database.types";
 import { requireServerEnv } from "@/lib/env";
 import { canonicalStorageObject, storageObjectKey } from "@/lib/media-url";
 import { reportError } from "@/lib/monitoring";
+import { pagedRows } from "@/lib/supabase/paged-rows";
 
 /**
  * Photos a copyright takedown removed (R69-dmca), as the proxy sees them.
@@ -37,9 +38,14 @@ async function load(): Promise<Set<string>> {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { fetch: (input, init) => fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(3000) }) },
   });
-  const { data, error } = await admin.from("copyright_blocked_media").select("object_key").limit(10_000);
-  if (error) throw error;
-  return new Set((data ?? []).map((row) => row.object_key));
+  // N718: every row, a page at a time in key order. A single read stopped at
+  // PostgREST's 1,000 rows (whatever .limit asked), so the 1,001st taken-down
+  // photo was served again.
+  const { rows, error } = await pagedRows((from, to) =>
+    admin.from("copyright_blocked_media").select("object_key").order("object_key").range(from, to),
+  );
+  if (error || !rows) throw error ?? new Error("blocked media unreadable");
+  return new Set(rows.map((row) => row.object_key));
 }
 
 export async function blockedMediaKeys(now: number = Date.now()): Promise<Set<string>> {

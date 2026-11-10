@@ -29,6 +29,7 @@ import {
 import { sellerProceeds } from "./proceeds";
 import { platformFeeCents } from "./provider";
 import { reportError } from "@/lib/monitoring";
+import { chunks, pagedRows } from "@/lib/supabase/paged-rows";
 
 /**
  * The one currency the marketplace charges in (listings and orders are
@@ -174,13 +175,11 @@ export async function getSellerLedger(
   const captured = orders;
   const orderIds = captured.map((o) => o.id);
 
-  const [{ data: items, error: itemsError }, adjustments, carry, hold, { data: payoutDates, error: payoutDatesError }] = await Promise.all([
-    orderIds.length
-      ? supabase
-          .from("order_items")
-          .select("order_id, title, quantity, return_policy:commercial_snapshot->commercial->return_policy")
-          .in("order_id", orderIds)
-      : Promise.resolve({ data: [] as { order_id: string; title: string | null; quantity: number; return_policy: Json }[], error: null }),
+  const [{ rows: items, error: itemsError }, adjustments, carry, hold, { data: payoutDates, error: payoutDatesError }] = await Promise.all([
+    // N718: a seller's 500 orders can hold more than PostgREST's 1,000-row
+    // answer of lines, and a missing line drops its return window from the
+    // clearing dates. Every line, a page at a time per group of orders.
+    orderLines(supabase, orderIds),
     adjustmentsByOrder(supabase, orderIds),
     readSellerCarry(supabase, sellerId),
     readPayoutHoldPolicy(supabase),
@@ -320,3 +319,27 @@ export async function getSellerLedger(
     },
   };
 }
+
+type OrderLine = { order_id: string; title: string | null; quantity: number; return_policy: Json };
+
+/** Every line of these orders (N718): paged, so none is lost past 1,000. Null rows and the error on a failed read. */
+async function orderLines(
+  supabase: SupabaseClient<Database>,
+  orderIds: string[],
+): Promise<{ rows: OrderLine[] | null; error: unknown }> {
+  const rows: OrderLine[] = [];
+  for (const group of chunks(orderIds)) {
+    const page = await pagedRows<OrderLine>((from, to) =>
+      supabase
+        .from("order_items")
+        .select("order_id, title, quantity, return_policy:commercial_snapshot->commercial->return_policy")
+        .in("order_id", group)
+        .order("id")
+        .range(from, to) as unknown as PromiseLike<{ data: OrderLine[] | null; error: unknown }>,
+    );
+    if (page.error || !page.rows) return { rows: null, error: page.error };
+    rows.push(...page.rows);
+  }
+  return { rows, error: null };
+}
+

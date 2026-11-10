@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ select: vi.fn(), reportError: vi.fn() }));
 
 vi.mock("@supabase/supabase-js", () => ({
-  createClient: () => ({ from: () => ({ select: () => ({ limit: mocks.select }) }) }),
+  // The list is read a page at a time in key order (N718): select → order → range.
+  createClient: () => ({ from: () => ({ select: () => ({ order: () => ({ range: mocks.select }) }) }) }),
 }));
 vi.mock("@/lib/env", () => ({ requireServerEnv: () => ({ url: "https://proj.supabase.co", serviceRoleKey: "service" }) }));
 vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
@@ -62,3 +63,16 @@ describe("blocked media", () => {
     expect((await blockedMediaKeys()).size).toBe(0);
   });
 });
+
+describe("the whole blocklist, past PostgREST's 1,000 rows (N718)", () => {
+  it("reads every page in key order until a short page, so the 1,001st takedown is still blocked", async () => {
+    const page = (start: number, n: number) => ({ data: Array.from({ length: n }, (_, i) => ({ object_key: `listing-images/o/${start + i}.webp` })), error: null });
+    mocks.select.mockImplementation(async (from: number) => (from === 0 ? page(0, 1000) : page(1000, 5)));
+    const keys = await blockedMediaKeys(9_000_000);
+    expect(keys.size).toBe(1005);
+    expect(keys.has("listing-images/o/1004.webp")).toBe(true);
+    expect(mocks.select).toHaveBeenCalledWith(0, 999);
+    expect(mocks.select).toHaveBeenCalledWith(1000, 1999);
+  });
+});
+
