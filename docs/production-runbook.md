@@ -810,6 +810,30 @@ forward with a new migration through the runner. Restoring a backup (§6) is
 the last resort, because it loses every order, payment and message since the
 backup.
 
+**What a rollback does not bring back (work review #142).** Two things about
+a rollback are today's, not the old release's, and one is the reverse:
+
+- **The host's settings are today's.** The job builds the old code with the
+  environment variables the host holds now (`vercel pull` reads them at
+  build time). A release that went bad because of a settings change (a
+  rotated key, a wrong origin, a switched flag) is still bad after a
+  rollback. Put the setting right in the host's project settings, then
+  dispatch the tag again so the build picks it up. The same holds the other
+  way: an old release reads a variable that has since been removed as
+  unset, and ignores one added since.
+- **The workflow is today's.** A dispatch runs `.github/workflows/deploy.yml`
+  from `main`, so the steps, their order and the secrets they read are the
+  current ones.
+- **The scripts the steps run are the old tag's.** The job checks out the
+  tag, so `scripts/deploy.mjs` (the gate, migration and version checks),
+  `scripts/apply-migration.mjs --status`, `scripts/release-candidate.mjs`
+  and the allow-list of databases in `supabase/migration-targets.json` are
+  the versions that release shipped with. A check fixed or tightened since
+  that tag is not in force during the rollback, and a tag from before a
+  database or its pooler host was added to the allow-list cannot check it:
+  the migration step fails and nothing is deployed. If that happens, roll
+  back to a newer tag that has the entry, or fix forward.
+
 **After any rollback:** confirm `/api/version` reports the commit you meant,
 check Admin → Settings → Background jobs and `/api/health/workers`, and
 write down in the release packet which tag was rolled back and why.
