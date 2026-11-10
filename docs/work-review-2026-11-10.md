@@ -17,7 +17,7 @@ A review of everything done on Monday 9 November 2026 (US Eastern): the twelve p
 The small fixes of 9 November are sound and the first-deploy blocker is fixed, but more code was written than could be reviewed. Twelve pull requests merged (65 files, 2,298 lines added, one migration). Fourteen more, about 8,300 lines with nine migrations, were written the same evening; review sent seven of them back.
 
 - The deploy's migration check can now reach staging from GitHub, proven with a real sign-in (PR #189, PR #202).
-- `main` fails one unit test from 10:00 UTC on 10 November while GitHub's last run shows a pass (#124).
+- `main` failed one unit test from 10:00 UTC on 10 November while GitHub's last run showed a pass; the test fix merged at 13:39 UTC (#124).
 - Shared dev and staging each hold three migrations that are ahead of `main` (#125).
 - Member photos are the weakest code: three changes in three days, and the privacy rule rests on PR #210 (#128).
 - The chargeback write-off, the chargeback retry, the order emails and the copyright counter-notice each carry a fault that should be fixed before they merge (section 6).
@@ -68,11 +68,11 @@ Four plan items merged on 8 November and were found unfinished by report five: p
 
 ## 4. Findings on `main` and on how the day was run
 
-**#124 `main` fails a unit test that GitHub shows as passing (High, Checked).** `src/lib/supabase/photo-signing.test.ts` fixes the clock at `Date.UTC(2026, 10, 10, 10, 0)` (line 205), while `src/lib/supabase/photo-signing.ts` keeps `sharedRetryAt` in a module-level variable that an earlier test sets from the real clock. Once the real time passed 10:00 UTC on 10 November the test fails: run at 13:22 UTC, 1 of 29 failed at line 215. GitHub's last run on `main` was at 03:53 UTC. Every pull request's `verify` job fails on it. PR #211 carries the test fix on its own. The production code has no date assumption.
+**#124 `main` fails a unit test that GitHub shows as passing (High, Checked).** `src/lib/supabase/photo-signing.test.ts` fixes the clock at `Date.UTC(2026, 10, 10, 10, 0)` (line 205), while `src/lib/supabase/photo-signing.ts` keeps `sharedRetryAt` in a module-level variable that an earlier test sets from the real clock. Once the real time passed 10:00 UTC on 10 November the test fails: run at 13:22 UTC, 1 of 29 failed at line 215. GitHub's last run on `main` was at 03:53 UTC. Every pull request's `verify` job failed on it for those hours. The test fix merged with PR #200 at 13:39 UTC on 10 November; the cause, timing state no test can reset, stands as #135. The production code has no date assumption.
 
 **#125 Shared dev and staging hold three migrations that are not on `main` (Medium, Checked).** `20261110110000` (PR #198), `20261110120000` (PR #200) and `20261110130000` (PR #201) are recorded on both databases (shared dev through `apply-migration.mjs --status`, staging through the read-only role, 13:25 UTC on 10 November). `supabase/MIGRATIONS.md` says a migration is applied by the session that merges it. Apply a migration only after its pull request is approved.
 
-**#126 The queued merge order forces a rename of an applied migration (Medium, Checked).** `tests/ci/migration-order.test.ts` refuses a file dated at or before the newest on the base. If PR #200 (`120000`) merges before PR #198 (`110000`), PR #198's file must be re-dated, which leaves a history row under the old name on both databases, the fault report four recorded as #101. Merging in date order (PR #198, PR #200, PR #201) needs no rename.
+**#126 The merge order forces a rename of an applied migration (Medium, Checked).** `tests/ci/migration-order.test.ts` refuses a file dated at or before the newest on the base. PR #200 (`20261110120000`) merged at 13:39 UTC on 10 November, so PR #198's `20261110110000` file must now be re-dated. Shared dev and staging already record it under the old name, which leaves a history row for a file that will not exist on `main`, the fault report four recorded as #101. Re-date the file, then repair or document that row on both databases before PR #198 merges.
 
 **#127 Two pull requests that show as mergeable are not based on `main` (Low, Checked).** PR #207's base is `feat/r5-dispute-retry` and PR #209's base is `fix/r5-takedown-findings`. Their passing checks are against those branches.
 
@@ -168,8 +168,8 @@ Each line describes the pull request as written on 10 November.
 
 **Engineer.**
 
-1. Merge PR #211 so `main` passes, then make the signer's timing state resettable (#124, #135).
-2. Merge the three applied migrations in date order: PR #198, PR #200, PR #201 (#126). Apply no further migration before approval (#125).
+1. Make the signer's timing state resettable so the clock fault cannot return (#135); PR #211 duplicates the test fix that merged with PR #200 and can be closed.
+2. Re-date PR #198's migration and settle its history row on shared dev and staging (#126), then PR #201. Apply no further migration before approval (#125).
 3. PR #203, PR #188 and PR #190 with section 6's gaps closed; run the catalogue import on staging (#141).
 4. PR #210 before anything is hosted, and a generated share image for listings (#131, #132).
 5. PR #208, then PR #207 based on `main`, then PR #204 (#147, #148, #149).
