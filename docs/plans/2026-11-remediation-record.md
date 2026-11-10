@@ -113,10 +113,10 @@ Status words: **merged** (on `main`, CI green) · **in review** (PR up, waiting 
 | Step | Findings | Ids | PR | Merge commit | Status |
 |---|---|---|---|---|---|
 | 0 / 3.4 Codex reviews waived | `#129` | N725 | #214 | `029c29e` | merged 10 Nov: every owed row waived by Neil's ruling; `tests/ci/codex-queue.test.ts` accepts `waived` and refuses `owed` |
-| 1 Working rules written down | `#125` to `#128`, `#163` | | #221 | | in review, approved: R1 to R3 in `supabase/MIGRATIONS.md`, R5 and R6 in the pull-request template |
-| 2.1 Deletion runbook and Resume | `#126`, `#154`, `#157` | N944, N734 | #198 | | inherited 10 Nov; fix written, not pushed until its turn: the D6 named exception in `tests/ci/migration-order.test.ts`, the guard that passed on any error (and the same block in #200's takedown guard), the three situations the console cannot finish |
-| 2.2 18+ for earlier members | `#152` | N662, N686 | #201 merged as written (`58b4ad7`); #217 closed unmerged; #222 | | **removed by ruling (Neil, 10 November 2026)**; #222 in review, approved; migration `20261110131000` not applied |
-| 2.3 Upload size | `#158` | N955 | #203 | | inherited; fix written, not pushed until its turn: a second shrink method and tests of the server's 413 |
+| 1 Working rules written down | `#125` to `#128`, `#163` | N1038, N1039, N1040, N1042, N1079 | #221 | `5ada2e0` | merged 10 Nov: R1 to R3 in `supabase/MIGRATIONS.md`, R5 and R6 in the pull-request template |
+| 2.1 Deletion runbook and Resume | `#125`, `#126`, `#154`, `#157` | N944, N734, N1038, N1039, N1070, N1073 | #198 | | approved 10 Nov, in batch 2 (#230): the D6 named exception in `tests/ci/migration-order.test.ts`, two guards that no longer pass on any error, runbook §5d "What the console cannot finish". Its migration `20261110110000` was already on both databases. **Follow-up owed:** `public.admin_resume_account_deletion` takes no actor and does not call `assert_admin_actor` in SQL (service role only today, and the app checks the admin); add the check in a new migration with the next deletion change |
+| 2.2 18+ for earlier members | `#152` | N662, N686, N1068 | #201 merged as written (`58b4ad7`); #217 closed unmerged; #222 | | **removed by ruling (Neil, 10 November 2026)**; #222 approved, last member of batch 2 (#230); migration `20261110131000` applied to shared dev then staging immediately before that batch merges |
+| 2.3 Upload size | `#158` | N955, N1074 | #203; avatar follow-up to come | | #203 approved 10 Nov, in batch 2 (#230): a second shrink method and tests of the server's 413; resolves N955. **N1074 stays open** until the profile photo upload shrinks too (written, goes up when #203 lands) |
 | 2.4 Staging out of search | `#156` | N958, N961 | #188 | | inherited, not started |
 | 2.5 Set-up order | `#156` | N952 | #190 | | inherited, not started |
 | 2.6 Protection watch, and its follow-up | `#156`, `#139` | N949, N950 | #195 | | inherited, not started (the orchestrator merges #195) |
@@ -125,14 +125,14 @@ Status words: **merged** (on `main`, CI green) · **in review** (PR up, waiting 
 | 2.9 A deleted member's words | `#153` | | #206 | | inherited, not started |
 | 2.10 Chargeback retry | `#148` | N944 | #208 | | inherited, not started |
 | 2.11 Order emails | `#147` | | #204 | | inherited, not started |
-| 2.12 Chargeback write-off | `#149` | N944 | #207 | | set aside until after launch (decision D1): a draft since 10 Nov, with what it needs when it returns |
-| 2.13 Copyright counter-notice | `#150` | | #209 | | set aside until after launch (decision D2): a draft since 10 Nov; the by-hand procedure is runbook §5e |
+| 2.12 Chargeback write-off | `#149` | N944, N1065 | #207 | | set aside until after launch (decision D1): a draft since 10 Nov, with what it needs when it returns |
+| 2.13 Copyright counter-notice | `#150` | N1066 | #209; #225 | `76a209a` (#225, in batch 1) | set aside until after launch (decision D2): a draft since 10 Nov; the by-hand procedure is runbook §5e, merged 10 Nov |
 | Duplicate test fix | `#124` | | #211 | | closed: the fix merged with #200 |
 | 3.1 Photos on `main` | `#132`, `#135`, `#136`, `#137` | | | | not started (after step 2.7 merges) |
-| 3.2 The deploy path | `#138`, `#140`, `#142`, `#143`, `#144` | N715, N962, N957, N714, N634 | #218, #219 | | in review, both approved. #218: admin gate on every console path, key kinds at boot, one commit-sha rule, patched ranges, rollback caveats. #219: `--status` signs in with a read-only login (the orchestrator merges it). The single definition of "hosted" (`#144`) is done in #188 |
-| 3.3 Data set-up | `#141`, `#145` | N667, N943 | #220 | | in review, approved. Staging import approved to run from merged code |
+| 3.2 The deploy path | `#138`, `#140`, `#142`, `#143`, `#144` | N1054, N1056, N1058, N1059, N1060; N715, N962, N957, N714, N634 | #218, #219 | `76a209a` (batch 1, #228) | merged 10 Nov: admin gate on every console path, key kinds at boot, one commit-sha rule that prefers the workflow's sha, patched ranges, rollback caveats, and `--status` through a read-only login. **N1060 (`#144`) stays open** until #188 gives the single definition of "hosted" |
+| 3.3 Data set-up | `#141`, `#145` | N667, N1061, N943 | #220; this evidence PR | `76a209a` (batch 1, #228) | merged 10 Nov. Staging import run 10 Nov 16:16 UTC from merged code: 315 makes, 5,541 models, 175 of 194 curated generations; recorded in `docs/release-evidence/infrastructure.md` |
 | Fixed-date sweep | `#124`, `#163` | | none needed | | done 10 Nov: every unit test under `src` passes with the clock 400 days and five years ahead |
-| The table the OS reads | plan step 4.8 | | #223 | | in review, approved: format in `docs/ids.md`, check in `tests/ci/os-report-table.test.ts` |
+| The table the OS reads | plan step 4.8 | | #223 | `76a209a` (batch 1, #228) | merged 10 Nov: format in `docs/ids.md`, check in `tests/ci/os-report-table.test.ts`, on the OS's own file pattern |
 
 ## Plan 1: needs Neil
 
@@ -143,6 +143,8 @@ Status words: **merged** (on `main`, CI green) · **in review** (PR up, waiting 
 - **Step 3.3, the three Volkswagen trims:** on a database filled only from the pinned VehiclesDB release, the curated generations for `Golf GTI`, `GTI` and `Golf R` (19 of 194) have no catalogue model to attach to, because VehiclesDB files them under `Golf`. Nothing was added to the catalogue. A GTI is entered as a Golf and resolves its generation. Revisit with real use.
 - **Step 3.2, the deploy's read-only login:** `deploy_reader` was not created on staging. It is five statements in the owner's set-up guide and has no secret to live in until the GitHub environments exist; it swaps two secrets on his list for two, adding none.
 - **Finding `#157`, one more guard than the plan names:** the takedown guard that merged with #200 had the same `when others then null` as #198's; both are fixed in #198's pull request, because it is one finding.
+- **How changes land, from 10 November 16:00 UTC (the orchestrating session's decision):** approved pull requests merge in batches. A batch branch is cut from `main`, each member's approved head is merged with `--no-ff` (never rebased or squashed, so GitHub marks the member merged), the checks run once on the combination, and the orchestrating session verifies the batch holds exactly what it approved. At most one member with a migration to apply, merged last, applied to shared dev then staging once the batch is green and immediately before the merge. Batch 1 was #228 (`76a209a`): #225, #218, #220, #223, #219, and plan 2's #216 and #224. Batch 2 is #230.
+- **Rule R4, as clarified on 10 November:** merge when the pull request is level with `main` and every check is green on its head; do not wait for `main`'s own run of the previous merge, which tests the same tree. If any run on `main` completes red, stop merging and tell the orchestrating session.
 - **Needs Neil, format:** every line under "Plan 1: needs Neil" is a bullet of the form `- **short name:** one sentence`, which is the shape the Intelligence OS reads. The section is empty when nothing needs him.
 
 ---
@@ -157,17 +159,22 @@ Status words: **merged** (on `main`, CI green) · **in review** (PR up, waiting 
 
 | Item | Findings | Ids | PR | Merge commit | Status |
 |---|---|---|---|---|---|
-| A0 Documents-only pull requests skip the browser suite | | | #215 | `9103915` | merged 10 November: the `changes` job and `scripts/ci-change-scope.mjs`; `release-gate` accepts a skipped `e2e` only on a documents-only pull request; the Stripe lane no longer waits on `e2e`. Measured on #216: mergeable in 4m48s. The `main` run on the merge commit was green |
-| A1 A checked-in copy of the database | `#159` | | branch `db/a1-schema-snapshot` | | prepared: `scripts/schema-snapshot.mjs` writes `supabase/schema/` (1,098 files) and `sql-guard` checks it. Two builds gave identical folders, and CI's own database matched the folder made on a Mac (run 42839710828). Opens at the quiet point, regenerated |
-| A2 The database owns every change to an order | | | | | not started (quiet point) |
+| A0 Documents-only pull requests skip the browser suite | | | #215, #227 | `9103915` | merged 10 November: the `changes` job and `scripts/ci-change-scope.mjs`; `release-gate` accepts a skipped `e2e` only on a documents-only pull request; the Stripe lane no longer waits on `e2e`. Measured on #216: mergeable in 4m48s. #227 (approved, in the plan 2 batch) closes a gap found afterwards: only a pull request into `main` can be documents-only, because a verdict worked out against another branch would survive a retarget |
+| A0b The browser suite as four parts side by side (added 10 November, approved by Neil) | | | #229 | | in review: `e2e/parts.json` splits the spec files by measured time; four jobs, each with its own database and build; the `e2e` job judges and merges them; the same 331 tests, each once, proven by listing |
+| A1 A checked-in copy of the database | `#159` | N1075 | branch `db/a1-schema-snapshot` | | prepared: `scripts/schema-snapshot.mjs` writes `supabase/schema/` (1,098 files) and `sql-guard` checks it. Two builds gave identical folders, and CI's own database matched the folder made on a Mac (run 42839710828). Opens at the quiet point, regenerated |
+| A2 The database owns every change to an order | | | | | not started (quiet point). Pre-study done and ruled on: six direct writes, not three; the guard applies to every role; see judgement calls |
 | A3 New functions closed by default | | | | | not started (quiet point). Tried on a throwaway database: see judgement calls |
-| A4 Launch-configuration browser lane | `#162` | R-unproven | #226 | | draft until #224 merges. Five specs in the recorded launch configuration; passed six times locally with real Stripe test keys; each spec seen to fail for a deliberate fault. Needs the Actions variable `STRIPE_TEST_PUBLISHABLE_KEY` |
-| A5 Launch switches recorded | | R-email, R-unproven | #224 | | in review: `docs/release-evidence/launch-configuration.md` and `.json`, proven against the app's own resolvers; the saved-search digest job leaves the health check while there is no email provider. No migration |
-| A6 One baseline in place of the migration history | `#159` | N786 | branch `docs/a6-baseline-analysis` | | analysis sent for review (`docs/plans/2026-11-a6-baseline-analysis.md` on that branch). The work waits for A1 to A3 and for the orchestrator to freeze the database |
+| A4 Launch-configuration browser lane | `#162` | N1078 | #226 | | draft until A0b (#229) lands, since both edit `ci.yml`. Passed on GitHub on its first run there (run 42850751984, 211 seconds), including a real Stripe test payment settled by the webhook. Each spec seen to fail for a deliberate fault |
+| A5 Launch switches recorded | | R-email | #224 (batch 1, #228) | `76a209a` | merged 10 November: `docs/release-evidence/launch-configuration.md` and `.json`, proven against the app's own resolvers; the saved-search digest job leaves the health check while there is no email provider. No migration |
+| A6 One baseline in place of the migration history | `#159` | N1075, N786 | branch `docs/a6-baseline-analysis`; #231 | | analysis accepted by the orchestrator with rulings and four additions (section 11 of `docs/plans/2026-11-a6-baseline-analysis.md` on that branch). #231 is the manually started workflow for the stack-build comparison. The work waits for A1 to A3 and for the orchestrator to freeze the database |
 
 ## Plan 2: needs Neil
 
-Nothing.
+Nothing is blocked on these. Each is information with the default already applied.
+
+- **Carrier tracking at launch:** off by default because no EasyPost account exists; without it an order counts as delivered when the buyer confirms or after 21 days, so a seller's payout waits on that. Turning it on is one EasyPost key.
+- **Listing importer at launch:** off by default because it uses the same Anthropic key as the agent; turning it on is that key with the agent left off.
+- **Stripe Link on the card form:** checkout shows Bank and Klarna beside Card because Link is switched on in the Stripe account. DRVN's code assumes a card-style payment; before launch, either switch Link off in the Stripe dashboard or make one test payment with a Link bank account so its timing and refund behaviour are known.
 
 ## Plan 2: judgement calls
 
@@ -175,6 +182,9 @@ Nothing.
 - **A0, `main` is never documents-only:** the skip applies to pull requests alone. A push to `main` runs the whole suite, so the deploy workflow and the Intelligence OS read the same proof on `main` as before.
 - **No OS ids for plan 2's items:** the pull requests have plain titles and `Resolves: none`. Tests name the OS item they bear on where one exists (R-unproven, R-email).
 - **A3, the plan's statement does not work as written.** On a throwaway database, as the non-superuser `postgres` role: `alter default privileges in schema public revoke execute on functions from public` leaves a new function callable by `anon` and `authenticated`, because Supabase's own per-schema defaults grant both and a per-schema default can only add to the global one. What closes a new function is the global form (`alter default privileges revoke execute on functions from public`) together with a per-schema revoke from `anon` and `authenticated`. `postgres` may not change `supabase_admin`'s defaults, so the migration uses the current-role form: CI builds as `supabase_admin`, a hosted project as `postgres`.
+- **A2, scope and shape (ruled by the orchestrator, 10 November):** the app writes `orders.status` directly in six places, not the plan's three, plus two writes of `pre_dispute_status`; all move. The guard judges UPDATEs for every role, `service_role` and `postgres` included. One override exists for repairs and backfills: a transaction-local setting honoured only for `postgres` or `supabase_admin`, with a reason, audited. The transition table lives in one place and `docs/site/domain-states.md` is checked against it; it gains `paid -> delivered` (pickup), which the document omits today.
+- **A0b, browser caching left out:** installing the browsers is about 38 seconds and the system packages would still be installed on a cache hit.
+- **A4, the Stripe test publishable key** was added to the repository's settings as the Actions variable `STRIPE_TEST_PUBLISHABLE_KEY` on the orchestrator's approval, from the test key already in the main checkout's `.env.local`, never printed. CI confirmed it pairs with the existing secret.
 - **A4, the card is presented through Stripe's API**, not typed into Stripe's form, after the form is seen to mount. Stripe's form changed shape between two runs and Stripe asks integrators not to automate it.
 - **A4, two small changes to the app** so the launch configuration can run on the loopback stack at all: `DRVN_PUBLIC_CACHE=on` switches the cache on there, and the production boot check accepts an http site URL there in Stripe test mode only.
 - **A5, what the plan did not rule on and was recorded as off:** carrier tracking (no EasyPost key) and the listing importer (it shares the agent's model key). Returns and pickup codes have no switch and stay on.
@@ -184,6 +194,8 @@ Nothing.
 
 Reported to the orchestrator; none is in plan 2's scope.
 
-- The database does not itself refuse `shipping_mode = 'drvn'` when DRVN Shipping is off; the app does. No money can move that way.
+- The database does not itself refuse `shipping_mode = 'drvn'` when DRVN Shipping is off; the app does. No money can move that way. **After launch:** it becomes a small database guard when DRVN Shipping is next worked on (orchestrator's ruling on #224).
+- How Stripe presents a Link bank or Klarna payment to an integration that creates card-only payments (card-like, or with bank-debit timing) could not be established from Stripe's documentation. No refund, dispute or payout path reads a card-only field. One test payment with a Link bank account, by whoever sets Stripe up, would settle it.
 - Stripe's card form offers Bank and Klarna (Stripe Link options) beside Card, from the Stripe account's settings.
+- **After launch:** today's schema grants `all` on 27 tables to `anon`, the signed-out role, `orders` among them; row-level security is the only thing that stands between a visitor and those rows. The A6 baseline carries today's grants exactly, as it must. Narrowing them is outside plan 2 Part A and is not acted on (orchestrator's ruling, 10 November); it is listed here so that it reaches the final review.
 - Under a local `next start` the app's own redirects are built on `localhost` whatever address the browser used, so a guest returning from Stripe to `127.0.0.1` loses their order cookie. It does not apply to a hosted deployment.

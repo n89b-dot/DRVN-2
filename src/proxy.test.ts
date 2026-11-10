@@ -15,7 +15,7 @@ session.update.mockImplementation(async () => NextResponse.next());
 
 import { buildContentSecurityPolicy } from "@/lib/csp";
 
-import { config, proxy } from "./proxy";
+import { config, isSitemapPath, proxy } from "./proxy";
 
 /** The generated policy as directive → sources. */
 function directives(policy: string): Map<string, string[]> {
@@ -197,5 +197,37 @@ describe("N715: the proxy's matcher runs on every console path (work review #143
     for (const url of ["/_next/static/chunks/main.js", "/favicon.ico", "/logo.png", "/brand/mark.svg", "/administrator.png"]) {
       expect(runs(url), url).toBe(false);
     }
+  });
+});
+
+describe("N958: only the deployment named production serves a sitemap (work review #156, N1072)", () => {
+  const get = (path: string) => proxy(new NextRequest(`https://drvn.example${path}`));
+
+  it("answers 404 for the static and catalogue sitemaps on staging and on an unnamed deployment, without reaching the app", async () => {
+    for (const name of ["staging", ""]) {
+      vi.stubEnv("DRVN_DEPLOY_ENV", name);
+      for (const path of ["/sitemap.xml", "/catalog/sitemap/index.xml", "/catalog/sitemap/listings-0.xml"]) {
+        session.update.mockClear();
+        const response = await get(path);
+        expect(response.status, `${name || "unnamed"} ${path}`).toBe(404);
+        expect(response.headers.get("cache-control")).toBe("no-store");
+        expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+        expect(session.update).not.toHaveBeenCalled();
+      }
+    }
+  });
+
+  it("lets the sitemaps through on production, and never touches another path", async () => {
+    vi.stubEnv("DRVN_DEPLOY_ENV", "production");
+    for (const path of ["/sitemap.xml", "/catalog/sitemap/index.xml"]) {
+      expect((await get(path)).status, path).toBe(200);
+    }
+    vi.stubEnv("DRVN_DEPLOY_ENV", "staging");
+    for (const path of ["/", "/marketplace", "/robots.txt", "/sitemap", "/catalog", "/listings/sitemap.xml"]) {
+      expect((await get(path)).status, path).toBe(200);
+      expect(isSitemapPath(path), path).toBe(false);
+    }
+    // The proxy runs on these paths at all.
+    for (const url of ["/sitemap.xml", "/catalog/sitemap/index.xml"]) expect(unstable_doesMiddlewareMatch({ config, url }), url).toBe(true);
   });
 });

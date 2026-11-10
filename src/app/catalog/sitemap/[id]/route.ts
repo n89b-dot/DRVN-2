@@ -1,5 +1,6 @@
 import { SITEMAP_ENTITIES, SITEMAP_PAGE_SIZE, sitemapPages } from "@/lib/sitemap-pages";
 import { catalogSitemap } from "@/lib/catalog-sitemap";
+import { isIndexable } from "@/lib/deployment";
 import { siteUrl } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,10 @@ function unavailable() {
  * a failing robots.txt (which crawlers read as "don't crawl").
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  // N958 (work review #156): only the deployment named production has a
+  // sitemap. Staging and every other deployment answer 404, the same as a
+  // page that does not exist, so nothing hands their pages to a crawler.
+  if (!isIndexable()) return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
   const { id } = await params;
   if (id === "index.xml") {
     try {
