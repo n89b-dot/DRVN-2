@@ -55,13 +55,37 @@ export function readDbEnv(text) {
   return { password, ref };
 }
 
-/** The committed allow-list: `{ targets: { <name>: { ref, note } } }`. */
+/**
+ * A Supabase session-pooler host: `aws-<n>-<region>.pooler.supabase.com`.
+ * Its certificate is `*.pooler.supabase.com`, issued under the same pinned
+ * Supabase Root 2021 CA as the direct host's (checked 9 Nov 2026 by a TLS
+ * handshake that sent no password), so the same verification applies.
+ */
+export const POOLER_HOST = /^aws-\d+-[a-z]{2}-[a-z]+-\d+\.pooler\.supabase\.com$/;
+
+/** The two ways to reach a project's database. */
+export const ROUTES = ["direct", "pooler"];
+
+/**
+ * The committed allow-list: `{ targets: { <name>: { ref, note, pooler?,
+ * statusRoute? } } }`. `pooler` pins the project's session-pooler host;
+ * `statusRoute: "pooler"` makes read-only `--status` use it by default.
+ */
 export function loadTargets(file = TARGETS_PATH) {
   const parsed = JSON.parse(readFileSync(file, "utf8"));
   const targets = parsed?.targets;
   if (!targets || typeof targets !== "object") throw new Error(`${file} has no "targets" object`);
   for (const [name, target] of Object.entries(targets)) {
     if (!/^[a-z0-9]{20}$/.test(target?.ref ?? "")) throw new Error(`${file}: target ${name} has no valid project ref`);
+    if (target.pooler !== undefined && !POOLER_HOST.test(target.pooler)) {
+      throw new Error(`${file}: target ${name} has a pooler that is not a Supabase session-pooler host`);
+    }
+    if (target.statusRoute !== undefined && !ROUTES.includes(target.statusRoute)) {
+      throw new Error(`${file}: target ${name} statusRoute must be one of ${ROUTES.join(", ")}`);
+    }
+    if (target.statusRoute === "pooler" && !target.pooler) {
+      throw new Error(`${file}: target ${name} has statusRoute "pooler" but no pooler host`);
+    }
   }
   return targets;
 }
@@ -86,7 +110,7 @@ export function loadDynamicSqlAllowed(file = TARGETS_PATH) {
  * env file points at. Naming the target is the operator's explicit choice;
  * the env file alone never decides where a script writes.
  */
-export function resolveTarget({ targets, name, envRef }) {
+export function resolveTarget({ targets, name, envRef, route = "direct" }) {
   const names = Object.keys(targets).join(", ");
   if (!name) throw new Error(`name the target with --target <name> (allowed: ${names})`);
   const target = Object.hasOwn(targets, name) ? targets[name] : undefined;
@@ -97,15 +121,28 @@ export function resolveTarget({ targets, name, envRef }) {
   if (target.ref !== envRef) {
     throw new Error(`target "${name}" is project ${target.ref}, but the env file points at ${envRef}: refusing`);
   }
-  return { name, ref: target.ref, note: target.note ?? "", host: `db.${target.ref}.supabase.co` };
+  if (!ROUTES.includes(route)) throw new Error(`--route must be one of ${ROUTES.join(", ")}, not "${route}"`);
+  if (route === "pooler") {
+    if (!target.pooler) {
+      throw new Error(`target "${name}" has no pooler host in supabase/migration-targets.json: use the direct route`);
+    }
+    // Session mode (port 5432) on the pinned pooler host. The user name
+    // carries the project ref, which is how the pooler finds the project.
+    return { name, ref: target.ref, note: target.note ?? "", route, host: target.pooler, user: `postgres.${target.ref}` };
+  }
+  return { name, ref: target.ref, note: target.note ?? "", route, host: `db.${target.ref}.supabase.co`, user: "postgres" };
 }
 
-/** node-postgres client settings for the target's direct connection. */
-export function directClientConfig({ host, password, ca, port = 5432, applicationName = "drvn-script" }) {
+/**
+ * node-postgres client settings for the target's connection: the direct host
+ * by default, or the session pooler (`user` from resolveTarget). Both verify
+ * the certificate against the pinned root and the host name.
+ */
+export function directClientConfig({ host, password, ca, port = 5432, user = "postgres", applicationName = "drvn-script" }) {
   return {
     host,
     port,
-    user: "postgres",
+    user,
     password,
     database: "postgres",
     ssl: verifiedTls(host, ca),
