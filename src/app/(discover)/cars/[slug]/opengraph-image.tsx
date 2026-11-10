@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { connection } from "next/server";
 
 import { ogImageSource } from "@/lib/media-url";
 import { createPublicClient } from "@/lib/supabase/public";
@@ -13,6 +14,10 @@ export const contentType = "image/png";
  * workflow; every share link gets this automatically.
  */
 export default async function BuildCard({ params }: { params: Promise<{ slug: string }> }) {
+  // Made for each request and never stored by the framework: a card drawn
+  // while the photo signer had no answer has no photo, and must not be the
+  // card everyone gets afterwards (src/lib/photo-copies.ts).
+  await connection();
   const { slug } = await params;
   const supabase = createPublicClient({ maxAge: 300, kinds: ["cars", "posts", "profiles"] });
   const { data: car } = await supabase

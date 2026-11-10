@@ -1,25 +1,30 @@
 import Link from "next/link";
-import { unstable_cache } from "next/cache";
 import { Suspense, type ReactNode } from "react";
 
 import { ListingCard, Mosaic, MosaicCell } from "@/components/ui";
 import { hydrateListingCards } from "@/lib/marketplace/query";
+import { timedCopy } from "@/lib/photo-copies";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { vehicleSubline } from "@/lib/vehicles/label";
 import { AuthClose } from "./auth-close";
+import { backdropKeepable } from "./backdrop-photos";
 
 /**
  * The backdrop's data is public and identical for every visitor, and layouts
  * re-render on every server-action submit — uncached, each failed login or
  * signup validation error would re-run the listings query plus the four
- * hydrate queries for pure decoration. One cached payload, refreshed every
- * 60s, using the admin client because cookie-bound clients can't run inside
- * a cached scope (and anon visibility is what we're rendering anyway —
- * active listings are public).
+ * hydrate queries for pure decoration. One copy, kept in this process for a
+ * minute and never handed out older than that, using the admin client
+ * because it is read once for every visitor (anon visibility is what we're
+ * rendering anyway: active listings are public).
+ *
+ * It holds signed photo links, which run out by themselves, so the copy is
+ * `timedCopy`, not Next's `unstable_cache` (src/lib/photo-copies.ts says
+ * why): a minute at most, and a result read while the signer had no answer
+ * is shown to that visitor and not kept.
  */
-const getBackdropCards = unstable_cache(
+const getBackdropCards = timedCopy(
   async () => {
-    // N455: cached for a minute, so the signed photo URLs (an hour or more) outlive the copy.
     const supabase = createAdminClient({ signPhotos: true });
     // Five parts and three builds — eight cards close a 4×2 desktop wall
     // (six left a ragged second row), and DRVN is builds and parts, not a
@@ -57,8 +62,10 @@ const getBackdropCards = unstable_cache(
     }
     return cards;
   },
-  ["auth-backdrop-cards-v2"],
-  { revalidate: 60 }
+  {
+    maxAgeMs: 60_000,
+    keep: backdropKeepable,
+  },
 );
 
 /**

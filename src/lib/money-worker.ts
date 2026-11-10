@@ -17,6 +17,7 @@ import { resumeIncompleteRefunds } from "@/lib/payments/refunds";
 import { processReservationExpiries } from "@/lib/payments/reservation-expiry";
 import { processDueTransfers, reconcileTransferRecords } from "@/lib/payments/transfer-worker";
 import { processPurchaseAnalytics } from "@/lib/purchase-analytics";
+import { processOrderEmails } from "@/lib/order-emails";
 import { processReceiptJobs } from "@/lib/receipt-worker";
 import { reconcileOutboundLabelVoids } from "@/lib/shipping/outbound-label-void";
 import { processTrackerRegistrations } from "@/lib/shipping/tracker-registration";
@@ -41,7 +42,11 @@ export type MoneyWorkerPass = {
  * Shared by /api/jobs/transfers (the scheduler's door) and the console's
  * "Run worker now", so the manual run is exactly the scheduled one.
  */
+/** What a pass may use of the route's 300 seconds (src/app/api/jobs/transfers/route.ts) before its last family must be done. */
+export const MONEY_PASS_BUDGET_MS = 270_000;
+
 export async function runMoneyWorkerPass(admin: Admin): Promise<MoneyWorkerPass> {
+  const passStartedAt = Date.now();
   const jobs: Record<string, () => Promise<unknown>> = {
     expiries: () => processReservationExpiries(),
     captures: () => reconcileCapturedPayments(),
@@ -96,7 +101,7 @@ export async function runMoneyWorkerPass(admin: Admin): Promise<MoneyWorkerPass>
   };
   const results: Record<string, unknown> = {};
   let failed = false;
-  await mapBounded(Object.entries(jobs), 4, async ([family, run]) => {
+  const runFamily = async ([family, run]: [string, () => Promise<unknown>]) => {
     const id = randomUUID();
     try {
       const started = await admin.rpc("record_worker_run", { p_id: id, p_family: family, p_status: "running" });
@@ -114,6 +119,15 @@ export async function runMoneyWorkerPass(admin: Admin): Promise<MoneyWorkerPass>
       await admin.rpc("record_worker_run", { p_id: id, p_family: family, p_status: "failed", p_summary: { error: "Worker family failed" } });
       reportError("[worker] family failed", { family, runId: id, error });
     }
-  });
+  };
+  await mapBounded(Object.entries(jobs), 4, runFamily);
+  // Order emails (#116) last, once every money family above has finished,
+  // inside their own time budget, their own failure and a provider timeout
+  // per send: an email provider that hangs or fails can't delay a transfer,
+  // a refund or a payout deadline.
+  // Their time is what the pass has left, up to their own budget (work
+  // review #147): the route may run 300 seconds, and a pass that used most of
+  // it must not have its last family cut off mid-send.
+  await runFamily(["orderEmails", () => processOrderEmails(admin, { notAfter: passStartedAt + MONEY_PASS_BUDGET_MS })]);
   return { results, failed };
 }
