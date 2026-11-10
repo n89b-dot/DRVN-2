@@ -192,7 +192,7 @@ Emails:
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | step 1.3 |
 | `SUPABASE_SECRET_KEY` | step 1.3 — server only |
 | `NEXT_PUBLIC_SITE_URL` | the staging origin, `https://…`, no path |
-| `DRVN_DEPLOY_ENV` | `staging` (the production project gets `production`). Required: a hosted deploy without it refuses to boot. Anything but `production` answers robots.txt with `Disallow: /` and sends `X-Robots-Tag: noindex`, so staging stays out of search engines, and error reports carry it as their environment (`src/lib/deployment.ts`) |
+| `DRVN_DEPLOY_ENV` | `staging` (the production project gets `production`). Required: a hosted deploy without it refuses to boot. Anything but `production` answers robots.txt with `Disallow: /` and sends `X-Robots-Tag: noindex`, so staging stays out of search engines, and error reports carry it as their environment (`src/lib/deployment.ts`). **Fixed at build, like `NEXT_PUBLIC_*`:** the deploy workflow's build reads it through `vercel pull`, so set it before the first deploy, don't mark it Sensitive (a Sensitive value isn't pulled), and re-run the Deploy workflow after changing it. A hosted production-mode build without it, or with a misspelt value, fails |
 | `PAYMENTS_MODE` | `stripe` |
 | `STRIPE_SECRET_KEY` | Stripe **test mode** → Developers → API keys (`sk_test_…`). A test key keeps the site's test-mode notices on |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | same page (`pk_test_…`) |

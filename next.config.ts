@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-import { isIndexable } from "./src/lib/deployment";
+import { deployEnvProblem, isIndexable } from "./src/lib/deployment";
 
 /** Supabase storage host, derived from the project URL. */
 function supabaseHost(): string | null {
@@ -12,6 +12,14 @@ function supabaseHost(): string | null {
     return null;
   }
 }
+
+// Indexing is decided when the app is BUILT (headers() below and the
+// prerendered robots.txt read DRVN_DEPLOY_ENV on the build machine), so the
+// build refuses the same shapes boot does: a hosted production-mode build
+// with no name, or a misspelt one, would otherwise bake "noindex" into
+// production while boot, seeing the runtime value, passes (#121 review).
+const deployProblem = deployEnvProblem();
+if (deployProblem) throw new Error(`Build refused: ${deployProblem}`);
 
 const host = supabaseHost();
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL) : null;

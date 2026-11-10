@@ -63,3 +63,42 @@ describe("staging stays out of search engines (N958, report five #121)", () => {
     expect(monitoringEnvironment({})).toBe("development");
   });
 });
+
+describe("the build refuses what boot refuses, since indexing is fixed at build (N958)", () => {
+  const load = async () => {
+    vi.resetModules();
+    return (await import("../../next.config")).default;
+  };
+
+  it("a hosted production-mode build with no name, or a misspelt one, fails", async () => {
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("DRVN_DEPLOY_ENV", "");
+    await expect(load()).rejects.toThrow(/Build refused: DRVN_DEPLOY_ENV is not set/);
+    vi.stubEnv("DRVN_DEPLOY_ENV", "prod");
+    await expect(load()).rejects.toThrow(/Build refused: DRVN_DEPLOY_ENV must be/);
+  });
+
+  it("staging and production build, and so do CI's and a local build with nothing set", async () => {
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "production");
+    for (const name of ["staging", "production"]) {
+      vi.stubEnv("DRVN_DEPLOY_ENV", name);
+      await expect(load()).resolves.toBeTruthy();
+    }
+    vi.unstubAllEnvs();
+    vi.stubEnv("VERCEL", "");
+    vi.stubEnv("DRVN_DEPLOY_ENV", "");
+    await expect(load()).resolves.toBeTruthy();
+  });
+
+  it("the noindex header changes no status or caching rule: it is the only header added, on every path alike", async () => {
+    vi.stubEnv("DRVN_DEPLOY_ENV", "staging");
+    const rules = await nextConfig.headers!();
+    expect(rules.map((rule) => rule.source)).toEqual(["/:path*"]);
+    const keys = rules[0].headers.map((header) => header.key);
+    expect(keys).not.toContain("Cache-Control");
+    expect(keys.filter((key) => key === "X-Robots-Tag")).toHaveLength(1);
+  });
+});
+
