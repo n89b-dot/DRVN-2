@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   shipmentWrite: vi.fn(),
   workerRuns: [] as { family: string; status: string; summary?: unknown }[],
   quiet: async () => ({ completed: 0, failed: 0 }),
+  orderEmails: vi.fn<(admin: unknown, options?: { notAfter?: number }) => Promise<{ sent: number; failed: number; retrying: number }>>(async () => ({ sent: 0, failed: 0, retrying: 0 })),
 }));
 
 vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
@@ -29,13 +30,15 @@ vi.mock("@/lib/payments/reservation-expiry", () => ({ processReservationExpiries
 vi.mock("@/lib/payments/transfer-worker", () => ({ processDueTransfers: mocks.quiet, reconcileTransferRecords: mocks.quiet }));
 vi.mock("@/lib/purchase-analytics", () => ({ processPurchaseAnalytics: mocks.quiet }));
 vi.mock("@/lib/receipt-worker", () => ({ processReceiptJobs: mocks.quiet }));
+// #116: the order-email family runs last in the pass; these tests are about the others.
+vi.mock("@/lib/order-emails", () => ({ processOrderEmails: mocks.orderEmails }));
 // The real label-void and tracker queues and the real provider resolution,
 // over a mocked EasyPost.
 vi.mock("@/lib/shipping/easypost", () => ({
   easypostProvider: { name: "easypost", createTracker: mocks.createTracker },
 }));
 
-import { runMoneyWorkerPass } from "./money-worker";
+import { MONEY_PASS_BUDGET_MS, runMoneyWorkerPass } from "./money-worker";
 
 function fakeAdmin() {
   const respond = (result: unknown) => Object.assign(Promise.resolve(result), { abortSignal: () => Promise.resolve(result) });
@@ -123,3 +126,17 @@ it("the family succeeds when both queues do", async () => {
   const { results } = await runMoneyWorkerPass(admin as never);
   expect(results.labelVoids).toMatchObject({ failed: 0, trackers: { registered: 1, failed: 0 } });
 });
+
+it("N1063: a shipping queue that fails does not cost the order emails their turn, and they are given the pass's own deadline", async () => {
+  mocks.orderEmails.mockClear();
+  const before = Date.now();
+  const { failed } = await runMoneyWorkerPass(fakeAdmin() as never);
+  // The label-void queue failed in this pass, as in the first test.
+  expect(failed).toBe(true);
+  expect(mocks.orderEmails).toHaveBeenCalledTimes(1);
+  const notAfter = mocks.orderEmails.mock.calls[0][1]?.notAfter;
+  expect(notAfter).toBeGreaterThanOrEqual(before + MONEY_PASS_BUDGET_MS);
+  expect(notAfter).toBeLessThanOrEqual(Date.now() + MONEY_PASS_BUDGET_MS);
+  expect(mocks.workerRuns.find((run) => run.family === "orderEmails")?.status).toBe("succeeded");
+});
+

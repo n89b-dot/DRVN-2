@@ -169,8 +169,9 @@ begin
      or position('from public.orders where id=any(ids) order by id for update' in apply_def)
         > position('insert into public.stripe_dispute_journal' in apply_def)
      or position('from public.orders where id=any(ids) order by id for update' in apply_def)
-        > position('public.hold_stripe_dispute(p_dispute,''The dispute does not exactly match' in apply_def) then
-    raise exception 'FAIL 1c: apply_stripe_dispute_event writes the journal before it locks the orders';
+        -- The hold's message, however the call is spelled (20261110230000 passes the event).
+        > position('''The dispute does not exactly match' in apply_def) then
+    raise exception 'FAIL 1c: apply_stripe_dispute_event writes the journal before it locks the orders (N944)';
   end if;
   raise notice 'PASS 1: dispatch and both admission paths lock the order before the journal';
 end $$;

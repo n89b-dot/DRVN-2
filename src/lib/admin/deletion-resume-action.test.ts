@@ -43,8 +43,9 @@ describe("resume a stuck account deletion (N944, report five #108)", () => {
   it("asks the database first, then resumes through the audited service-role call with the reason", async () => {
     const result = await adminResumeAccountDeletion(null, form({ user_id: USER, reason: "Stripe customer checked: it is theirs" }));
     expect(result).toEqual({ ok: expect.stringContaining("queued again") });
-    expect(mocks.rpc).toHaveBeenNthCalledWith(1, "admin_resume_account_deletion", { p_user: USER, p_dry_run: true });
-    expect(mocks.rpc).toHaveBeenNthCalledWith(2, "admin_resume_account_deletion", { p_user: USER, p_dry_run: false });
+    // N944: both calls name the admin who is acting, and the database checks them itself (20261111080000).
+    expect(mocks.rpc).toHaveBeenNthCalledWith(1, "admin_resume_account_deletion", { p_actor: "admin-1", p_user: USER, p_dry_run: true });
+    expect(mocks.rpc).toHaveBeenNthCalledWith(2, "admin_resume_account_deletion", { p_actor: "admin-1", p_user: USER, p_dry_run: false });
     expect(mocks.audited).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ actorId: "admin-1", action: "deletion.resume", subjectType: "user", subjectId: USER, reason: "Stripe customer checked: it is theirs" }),

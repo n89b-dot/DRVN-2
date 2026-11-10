@@ -37,13 +37,13 @@ Most of what's left falls into five themes:
 2. **Safety nets for things going wrong.** For example: a seller who never ships, a refund that fails halfway, a payout to a seller whose Stripe account got restricted.
 3. **Operations.** No production or staging project, no backups yet, CI that doesn't actually block a bad deploy, and alerts that would be noisy or empty.
 4. **Legal and privacy.** Sales tax, terms that haven't had a lawyer's review, account deletion that keeps personal data, and an AI privacy promise the code doesn't fully keep.
-5. **A small number of real security bugs.** An outdated Next.js with a critical advisory, an open redirect, a password-change bypass, an admin-console access gap, and a way to delete someone else's dispute evidence.
+5. **A small number of real security bugs.** An outdated Next.js with a critical advisory (fixed 7 Nov, see B1), an open redirect, a password-change bypass, an admin-console access gap, and a way to delete someone else's dispute evidence.
 
 ### Launch blockers (fix before any real member or payment)
 
 | # | What | Area | Confidence |
 |---|---|---|---|
-| B1 | The installed Next.js version has a **critical** published security advisory | Whole app | Checked (`npm audit`) |
+| B1 | ~~The installed Next.js version has a **critical** published security advisory~~ **Fixed 7 Nov 2026** (PR #65: Next 16.4.3) | Whole app | Checked (`npm audit`) |
 | B2 | A buyer who has paid has **no self-service way to get their money back if the seller never ships** (only an admin can refund) | Orders | Checked |
 | B3 | **No sales tax**, and the Terms are marked in the code as an unreviewed draft | Checkout / legal | Checked |
 | B4 | Admin console pages check access only in the layout, while reading data with the all-access key | Admin | Checked (code); needs a live test (exploit) |
@@ -60,7 +60,7 @@ Most of what's left falls into five themes:
 | Typecheck | Pass |
 | Unit tests | Pass: 166 files, 1,183 tests |
 | Lint | 1 error, in `intelligence-os-export/` (not app code), plus 655 warnings. The warnings are almost all "unused expression" in a few generated files |
-| Dependency audit (production) | **3 vulnerabilities: 1 critical (Next.js), 2 high (undici, zod).** All fixable with `npm audit fix`. CI's own audit step should currently be failing on these |
+| Dependency audit (production) | **3 vulnerabilities: 1 critical (Next.js), 2 high (undici, zod).** All fixable with `npm audit fix`. CI's own audit step should currently be failing on these. **7 Nov: 0 vulnerabilities after PR #65 (B1)** |
 
 ---
 
@@ -68,7 +68,8 @@ Most of what's left falls into five themes:
 
 ### 2.1 Whole app and platform
 
-**B1. Next.js has a critical security advisory (Blocker, Checked)**
+**B1. Next.js has a critical security advisory (Blocker, Checked) — FIXED 7 Nov 2026**
+- **Status:** fixed by PR #65 (merge `f2b8eee`): `next` 16.3.8 → 16.4.3, `undici` 8.11.2 → 8.12.3, `zod` 4.4.3 → 4.6.7, lockfile only. `npm audit --omit=dev --audit-level=high` reports 0 vulnerabilities; `next build` passes on that lockfile; all eight CI checks, e2e included, passed on the PR head. Next 16.4.5 is out since; no advisory requires it.
 - **What's wrong:** The installed version is 16.3.8. It falls inside published advisories for:
   - remote code execution through the image optimiser when SVGs are involved;
   - remote code execution in `use cache` functions;
@@ -622,7 +623,7 @@ The two passes overlap only partly, which is the case for doing both.
 
 Pulled from the runbook and the findings above:
 
-1. Upgrade Next.js, undici and zod (B1).
+1. ~~Upgrade Next.js, undici and zod (B1).~~ Done 7 Nov 2026 (PR #65).
 2. Paid Supabase plan with point-in-time recovery; staging and production projects created; hosted restore rehearsed and recorded (B6).
 3. Seed migration history on the new project, never `db push`, and guard 0001 first.
 4. Raise Supabase Auth rate limits. Turn on "Secure password change" and "Secure email change". Set the minimum password length to 8.
@@ -661,7 +662,7 @@ Pulled from the runbook and the findings above:
 
 0. **Start now, in parallel with code fixes:** paid Supabase plan, staging, backups and a tax/legal decision. These are prerequisites, not a final phase (Codex's point, and a fair one).
 1. **This week (small, high-value):**
-   - dependency upgrades (B1);
+   - ~~dependency upgrades (B1);~~ done 7 Nov (PR #65);
    - open-redirect fix;
    - password-reset check;
    - media-gc owner fix, `staged_uploads` lockdown and storage delete policies for evidence (B5);

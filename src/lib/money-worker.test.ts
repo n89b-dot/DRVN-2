@@ -16,6 +16,8 @@ vi.mock("@/lib/payments/reservation-expiry", () => ({ processReservationExpiries
 vi.mock("@/lib/payments/transfer-worker", () => ({ processDueTransfers: quiet, reconcileTransferRecords: quiet }));
 vi.mock("@/lib/purchase-analytics", () => ({ processPurchaseAnalytics: quiet }));
 vi.mock("@/lib/receipt-worker", () => ({ processReceiptJobs: quiet }));
+// #116: the order-email family runs last in the pass; these tests are about the others.
+vi.mock("@/lib/order-emails", () => ({ processOrderEmails: quiet }));
 vi.mock("@/lib/shipping/outbound-label-void", () => ({ reconcileOutboundLabelVoids: quiet }));
 
 import { runMoneyWorkerPass } from "./money-worker";

@@ -104,7 +104,8 @@ begin
     ('drvn-transfer-worker', 'payoutDeadlines'),
     ('drvn-transfer-worker', 'alerts'),
     ('drvn-transfer-worker', 'receipts'),
-    ('drvn-transfer-worker', 'analytics');
+    ('drvn-transfer-worker', 'analytics'),
+    ('drvn-transfer-worker', 'orderEmails');
   select string_agg(e.job || ':' || e.family, ', ' order by e.job, e.family) into missing
   from pg_temp.expected_families e
   where not exists (select 1 from private.scheduled_job_inventory() i where i.job = e.job and e.family = any(i.families));

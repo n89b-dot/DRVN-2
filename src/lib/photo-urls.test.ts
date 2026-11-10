@@ -373,33 +373,75 @@ describe("every select the app sends, constant and template ones too, parses and
     for (const s of selects) expect(parseSelect(s.select), `${s.file}: ${s.select}`).not.toBeNull();
   });
 
-  it("each select that reads a photo place signs a photo there", () => {
+  /**
+   * A second, plain reading of a select that shares no code with parseSelect:
+   * each top-level item as the key its answer carries and the column or
+   * relation it names. Enough for the selects this app writes; a select it
+   * can't read (a spread, a JSON path) is skipped, not guessed.
+   */
+  type PlainItem = { key: string; column: string } | { key: string; relation: string; inner: string };
+  const plainItems = (select: string): PlainItem[] | null => {
+    const text = select.replace(/\s+/g, "");
+    const parts: string[] = [];
+    let depth = 0;
+    let start = 0;
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === "(") depth++;
+      else if (text[i] === ")") depth--;
+      else if (text[i] === "," && depth === 0) { parts.push(text.slice(start, i)); start = i + 1; }
+    }
+    parts.push(text.slice(start));
+    const items: PlainItem[] = [];
+    for (const part of parts.filter(Boolean)) {
+      if (part.startsWith("...") || part.includes("->") || part.includes('"')) return null;
+      const open = part.indexOf("(");
+      const head = (open < 0 ? part : part.slice(0, open)).split("::")[0];
+      const [first, second] = head.split(":");
+      const name = (second ?? first).split("!")[0];
+      if (open < 0) items.push({ key: second === undefined ? first : first, column: name });
+      else if (/^(count|sum|avg|min|max)$/.test(name) && part.endsWith("()")) continue;
+      else items.push({ key: second === undefined ? name : first, relation: name, inner: part.slice(open + 1, part.lastIndexOf(")")) });
+    }
+    return items;
+  };
+
+  it("N940: each select that reads a photo place signs a photo there, by a reading of the select that is not the signer's", () => {
+    const photoFields = (table: string) => PHOTO_POSITIONS.filter((p) => p.kind !== "rpc" && p.relation === table);
     let checked = 0;
+    let skipped = 0;
     for (const s of selects) {
       if (!s.table) continue;
-      const selection = parseSelect(s.select)!;
-      let n = 0;
-      const sample = (table: string, sel: typeof selection): Record<string, unknown> => {
+      const urls: string[] = [];
+      let readable = true;
+      const sample = (table: string, select: string): Record<string, unknown> => {
         const row: Record<string, unknown> = {};
-        const columns = new Set<string>([...sel.keys].flatMap(([, at]) => ("column" in at && at.column ? [at.column] : [])));
-        if (sel.star) for (const p of PHOTO_POSITIONS) if (p.kind !== "rpc" && p.relation === table) columns.add(p.field);
-        for (const [key, at] of sel.keys) {
-          if ("relation" in at) row[key] = [sample(at.relation, at.selection)];
-        }
-        for (const p of PHOTO_POSITIONS) {
-          if (p.kind === "rpc" || p.relation !== table || !columns.has(p.field)) continue;
-          const key = [...sel.keys].find(([, at]) => "column" in at && at.column === p.field)?.[0] ?? p.field;
-          const url = `${O}/storage/v1/object/public/car-images/${ME}/sample-${n++}.webp`;
-          row[key] = p.kind === "body" ? [{ type: "images", urls: [url] }] : url;
+        const items = plainItems(select);
+        if (!items) { readable = false; return row; }
+        const place = (key: string, kind: string) => {
+          const url = `${O}/storage/v1/object/public/car-images/${ME}/sample-${urls.length}.webp`;
+          urls.push(url);
+          row[key] = kind === "body" ? [{ type: "images", urls: [url] }] : url;
+        };
+        for (const item of items) {
+          if ("relation" in item) row[item.key] = [sample(item.relation, item.inner)];
+          else if (item.column === "*") for (const p of photoFields(table)) place(p.field, p.kind);
+          else {
+            const p = photoFields(table).find((field) => field.field === item.column);
+            if (p) place(item.key, p.kind);
+          }
         }
         return row;
       };
-      const value = [sample(s.table, selection)];
-      if (!n) continue;
+      const value = [sample(s.table, s.select)];
+      if (!readable) { skipped++; continue; }
+      if (!urls.length) continue;
       checked++;
-      expect(photoFieldUrls(value, signingContext(`${O}/rest/v1/${s.table}?select=${encodeURIComponent(s.select)}`), O).length, `${s.file}: ${s.table} ${s.select}`).toBe(n);
+      const found = photoFieldUrls(value, signingContext(`${O}/rest/v1/${s.table}?select=${encodeURIComponent(s.select)}`), O);
+      expect([...found].sort(), `${s.file}: ${s.table} ${s.select}`).toEqual([...urls].sort());
     }
     expect(checked).toBeGreaterThan(30);
+    // The plain reading has to cover nearly all of them, or this proves little.
+    expect(skipped).toBeLessThan(5);
   });
 });
 

@@ -1126,6 +1126,82 @@ export async function adminResolveRecovery(
   }
 }
 
+// ---------- Chargebacks held for review (20261110230000, report five #108) ----------
+
+type DisputeRetryCheck = {
+  dispute_id: string;
+  event_id: string;
+  before: { amount_cents: number; currency: string; order_ids: string[]; held_from_state: string | null; last_event_id: string; case_status: string | null };
+};
+
+/**
+ * Retry a chargeback held for review ('recovery'). The database allows one
+ * replay of the event that caused the hold, or the newest one since, for five
+ * minutes (admin_retry_dispute_recovery, under the journal → orders → case
+ * locks) and leaves the chargeback held. That event is then replayed through
+ * the normal chargeback handling, which reopens the entry and checks it
+ * against the payment in one transaction (work review #148): it ends
+ * applied, or held again, never reopened with nothing replayed, and a crash
+ * in between leaves a chargeback Retry still works on. Nothing is decided by
+ * hand. A dry run first: a refusal (a settled chargeback, no stored event) is
+ * said in words and journals nothing. Only "committed" is reported as done.
+ * docs/production-runbook.md §5d.
+ */
+export async function adminRetryDisputeRecovery(_prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+  const recoveryId = field(formData, "recovery_id");
+  const reason = field(formData, "reason");
+  if (!/^[0-9a-f-]{36}$/i.test(recoveryId)) return { error: "Missing recovery case." };
+  if (!reason) return { error: "A reason is required — it goes in the audit log." };
+  const { data: recovery } = await ctx.admin.from("payment_recoveries").select("id, recovery_key, order_id").eq("id", recoveryId).maybeSingle();
+  const disputeId = recovery?.recovery_key?.startsWith("stripe:dispute:") ? recovery.recovery_key.slice("stripe:dispute:".length) : null;
+  if (!recovery || !disputeId) return { error: "That isn't a chargeback held for review." };
+
+  const check = await ctx.admin.rpc("admin_retry_dispute_recovery", { p_dispute: disputeId, p_actor: ctx.userId, p_dry_run: true });
+  if (check.error) return { error: check.error.message };
+  const before = check.data as unknown as DisputeRetryCheck;
+
+  let outcome: string | null;
+  try {
+    const replay = await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: "recovery.retry_dispute",
+        subjectType: "payment",
+        subjectId: recoveryId,
+        orderId: recovery.order_id ?? undefined,
+        reason,
+        metadata: { disputeId, eventId: before.event_id, before: before.before },
+      },
+      async () => {
+        const { data, error } = await ctx.admin.rpc("admin_retry_dispute_recovery", { p_dispute: disputeId, p_actor: ctx.userId });
+        if (error) throw new RefusedOperationError(error.message);
+        const eventId = (data as unknown as DisputeRetryCheck).event_id;
+        const { data: row, error: rowError } = await ctx.admin.from("webhook_events").select("id, payload").eq("id", eventId).maybeSingle();
+        if (rowError || !row?.payload) throw new Error(`Stripe event ${eventId} couldn't be read to replay, so the chargeback is still held. Try again; the next event from Stripe is handled normally.`);
+        return { eventId, outcome: (await dispatchRecordedWebhookEvent(ctx.admin, row.id, row.payload)) as string };
+      }
+    );
+    outcome = replay.outcome;
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not retry the chargeback." };
+  }
+  revalidatePath("/admin", "layout");
+  const { data: after } = await ctx.admin.from("stripe_dispute_journal").select("state").eq("dispute_id", disputeId).maybeSingle();
+  if (after?.state === "recovery") return { error: "Replayed, and Stripe's record still doesn't match the payment: it's held for review again." };
+  if (outcome !== "committed") {
+    return { error: `The replay didn't finish (${outcome ?? "no answer"}): the chargeback is ${after?.state ?? "unresolved"} and its payout stays frozen until Stripe's next event or a later retry settles it.` };
+  }
+  // Applied, and not yet decided: Stripe's outcome closes the case by itself.
+  if (after?.state === "open") {
+    return { ok: "Replayed Stripe's event: it now matches the payment, and the chargeback is open again, waiting for the bank. Its case stays listed until Stripe's outcome arrives, then closes by itself. There is nothing more to retry." };
+  }
+  return { ok: `Replayed Stripe's event: the chargeback is now ${after?.state ?? "updated"}.` };
+}
+
 // ---------- Stuck account deletions (20261110110000, report five #106/#108) ----------
 
 /**
@@ -1148,7 +1224,7 @@ export async function adminResumeAccountDeletion(_prev: AdminActionState, formDa
 
   // Asked first, so a refusal ("the order is still open") is said before
   // anything is journalled and never leaves an operation to reconcile.
-  const check = await ctx.admin.rpc("admin_resume_account_deletion", { p_user: userId, p_dry_run: true });
+  const check = await ctx.admin.rpc("admin_resume_account_deletion", { p_actor: ctx.userId, p_user: userId, p_dry_run: true });
   if (check.error) return { error: check.error.message };
 
   try {
@@ -1162,7 +1238,7 @@ export async function adminResumeAccountDeletion(_prev: AdminActionState, formDa
         reason,
       },
       async () => {
-        const { data, error } = await ctx.admin.rpc("admin_resume_account_deletion", { p_user: userId, p_dry_run: false });
+        const { data, error } = await ctx.admin.rpc("admin_resume_account_deletion", { p_actor: ctx.userId, p_user: userId, p_dry_run: false });
         if (error) throw new RefusedOperationError(error.message);
         return data;
       }

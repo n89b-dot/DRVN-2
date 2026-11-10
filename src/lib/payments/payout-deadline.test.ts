@@ -28,6 +28,8 @@ function adminFor(claim: unknown, settle: (order: string) => Rpc = () => ({ data
   const rpc = vi.fn(async (name: string, args: Record<string, unknown>) => {
     if (name === "claim_payout_deadline_cancellations") return { data: claim, error: null };
     if (name === "settle_payout_deadline_cancellation") return settle(args.p_order as string);
+    // #116: the pass ends by raising the day 3/7/12 payout-setup reminders.
+    if (name === "raise_payout_setup_reminders" || name === "raise_dispatch_reminders") return { data: 0, error: null };
     throw new Error(`unexpected rpc ${name}`);
   });
   return { rpc };
@@ -125,3 +127,16 @@ describe("payout deadline pass (N244)", () => {
     expect(mocks.refundOrder).not.toHaveBeenCalled();
   });
 });
+
+describe("payout setup reminders (OS-W41, report five #116)", () => {
+  it("are raised after the deadline sweep, and a failure there never fails the sweep", async () => {
+    const admin = { rpc: vi.fn(async (name: string) => (name === "claim_payout_deadline_cancellations" ? { data: {}, error: null } : { data: null, error: { message: "boom" } })) };
+    const summary = await processPayoutDeadlines(admin as never);
+    // The payout reminders, then the dispatch reminders (N1063), each after the sweep and each on its own.
+    expect(admin.rpc.mock.calls.map(([name]) => name).slice(-2)).toEqual(["raise_payout_setup_reminders", "raise_dispatch_reminders"]);
+    expect(summary).toMatchObject({ failed: 0, retrying: 0 });
+    expect(mocks.reportError).toHaveBeenCalledWith("[payout-deadline] setup reminders failed", expect.anything());
+    expect(mocks.reportError).toHaveBeenCalledWith("[payout-deadline] dispatch reminders failed", expect.anything());
+  });
+});
+
