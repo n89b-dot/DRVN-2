@@ -141,12 +141,24 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #194 | 2026-11-10 | N715: the proxy also gates the admin console | waived | — | waived (ruling, 10 Nov) |
 | #196 | 2026-11-10 | OS-W41 N954: member photo links are stable across servers, and a refused link s… | waived | — | waived (ruling, 10 Nov) |
 | #197 | 2026-11-10 | OS-W42 N943: audit query for agent ids mangled before PR #158 (report five #107) | waived | — | waived (ruling, 10 Nov) |
+| #198 | 2026-11-10 | OS-W42 N944 N734 N1038 N1039 N1070 N1073: account deletions: a runbook for every state, an audited Resume deletion… (batch 2, #230) | waived | — | waived (ruling, 10 Nov) |
 | #200 | 2026-11-10 | OS-W42: a copyright takedown stays taken down (report five #109) | waived | — | waived (ruling, 10 Nov) |
 | #201 | 2026-11-10 | OS-W42: earlier members confirm 18+ on their next visit, however long their ses… | waived | — | waived (ruling, 10 Nov) |
 | #202 | 2026-11-10 | OS-W40 N951: the pooler route is refused for record-only and dry runs too (foll… | waived | — | waived (ruling, 10 Nov) |
+| #203 | 2026-11-10 | OS-W41 N955 N1074: photo uploads stay under what a serverless host accepts, and shrink a second way… (batch 2, #230) | waived | — | waived (ruling, 10 Nov) |
 | #205 | 2026-11-10 | N717: decision defaults for N786 and R-retention, deleted-photo caching closed… | skipped | — | docs only (ruling, 7 Nov) |
 | #212 | 2026-11-10 | docs(review): 10 Nov review of the work of 9 November | skipped | — | docs only (ruling, 7 Nov) |
 | #213 | 2026-11-10 | docs(plans): two remediation plans from the 10 November review | skipped | — | docs only (ruling, 7 Nov) |
 | #214 | 2026-11-10 | N725: owed Codex reviews are waived by ruling, and the queue test accepts a waived row (work… | waived | — | waived (ruling, 10 Nov) |
 | #215 | 2026-11-10 | Plan 2 A0: a documents-only pull request skips the browser suite | waived | — | waived (ruling, 10 Nov) |
+| #216 | 2026-11-10 | docs(plans): the plan 2 record (Part A) (landed in batch 1, #228) | skipped | — | docs only (ruling, 7 Nov) |
+| #218 | 2026-11-10 | N715 N962 N957 N714: admin gate on every console path, key kinds checked at boot… (batch 1, #228) | waived | — | waived (ruling, 10 Nov) |
+| #219 | 2026-11-10 | N634: the deploy's migration check uses a read-only database login… (batch 1, #228) | waived | — | waived (ruling, 10 Nov) |
+| #220 | 2026-11-10 | N667 N943: the catalogue import reports matched curated generations… (batch 1, #228) | waived | — | waived (ruling, 10 Nov) |
 | #221 | 2026-11-10 | docs: the 10 November working rules are written into MIGRATIONS.md and the pull-request… | skipped | — | docs only (ruling, 7 Nov) |
+| #222 | 2026-11-10 | N662 N686: accounts from before the 18+ confirmation are not asked; the earlier-member path is removed… (batch 2, #230) | waived | — | waived (ruling, 10 Nov) |
+| #223 | 2026-11-10 | test(ci): a report's table for the Intelligence OS is checked here… (batch 1, #228) | waived | — | waived (ruling, 10 Nov) |
+| #224 | 2026-11-10 | Plan 2 A5: the launch switch settings are recorded… (batch 1, #228) | waived | — | waived (ruling, 10 Nov) |
+| #225 | 2026-11-10 | docs: plan 1 record brought current, the by-hand counter-notice procedure… (batch 1, #228) | skipped | — | docs only (ruling, 7 Nov) |
+| #228 | 2026-11-10 | Batch 1: #225 #218 #220 #223 #219 #216 #224 | waived | — | waived (ruling, 10 Nov) |
+| #230 | 2026-11-10 | Batch 2: #203 #198 #222 | waived | — | waived (ruling, 10 Nov) |

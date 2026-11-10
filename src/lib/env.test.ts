@@ -230,6 +230,9 @@ describe("Stripe test mode boots on the isolated loopback stack, and nowhere els
     ["with an http site URL that is not loopback", { NEXT_PUBLIC_SITE_URL: "http://drvn.example" }],
     ["with a hosted database", { NEXT_PUBLIC_SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co" }],
     ["with the local database on another port", { NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:5432" }],
+    // A hosted project names itself (src/lib/deployment.ts); a named deployment is never the isolated stack.
+    ["on a deployment that names itself staging", { DRVN_DEPLOY_ENV: "staging" }],
+    ["on a deployment that names itself production", { DRVN_DEPLOY_ENV: "production" }],
   ])("still refuses an http site URL %s", (_, change) => {
     expect(isolatedStripeTestStack({ ...LANE, ...change })).toBe(false);
     expect(() => validatePaymentsEnv({ ...LANE, ...change })).toThrow(/Production operations configuration is invalid: NEXT_PUBLIC_SITE_URL\./);

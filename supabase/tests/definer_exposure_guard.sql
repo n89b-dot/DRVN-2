@@ -35,7 +35,6 @@ declare
   -- Callable by signed-in members (not visitors): each answers or acts only
   -- for the caller, or requires an admin. Reviewed 17 Oct 2026 (A0).
   member_reviewed text[] := array[
-    'my_age_confirmation_due()', -- reads only the caller's own account and age record (20261110130000, N662)
     'admin_set_agent_control(text,uuid,boolean,text)', -- refuses anyone but an admin with step-up (20261021100100)
     'admin_set_agent_beta_step(text,boolean,text)', -- refuses anyone but an admin with step-up (20261024100000)
     'admin_set_agent_spend_limits(numeric,numeric,text)', -- refuses anyone but an admin with step-up (20261024100000)

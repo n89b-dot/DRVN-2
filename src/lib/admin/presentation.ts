@@ -68,3 +68,14 @@ export function deletionBlockerLabel(code: string | null | undefined): string | 
   if (!code) return null;
   return DELETION_BLOCKER_LABEL[code] ?? code.replaceAll("_", " ");
 }
+
+/**
+ * #108: which cases the console offers to resume. The database is the one that
+ * decides (admin_resume_account_deletion, 20261110110000) and re-checks the
+ * hold; this only decides when to show the control.
+ */
+export function deletionResumable(outcome: string, blockerCode: string | null, jobStatus: string | null): boolean {
+  if (outcome === "completed" || !jobStatus) return false;
+  if (jobStatus === "failed") return true;
+  return outcome === "operator_attention" && blockerCode === "late_hold_after_scrub" && jobStatus === "completed";
+}

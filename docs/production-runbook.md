@@ -217,6 +217,7 @@ if any is missing or invalid.
 | `SENTRY_DSN` | required (live) | must be an `https:` DSN with a key and a numeric project path (`https://<key>@<host>/<project id>`) |
 | `ADMIN_ALERT_WEBHOOK_URL` | required (live), `https:` | operator alerts (Slack-compatible body). Outside live-money mode it may be unset; alerts then accumulate as `disabled` outbox rows in Admin → Payments |
 | `NEXT_PUBLIC_SITE_URL` | required (live), `https:` | the canonical origin only — no path, query, fragment or credentials. Unset, links fall back to `https://` + Vercel's `VERCEL_PROJECT_PRODUCTION_URL` (set by the platform), then `http://localhost:3000` |
+| `DRVN_DEPLOY_ENV` | required (hosted) | `production` on the production project, `staging` on staging. Only `production` is indexable by search engines; any other value but those two refuses boot, and so does a hosted deploy without it (`src/lib/deployment.ts`). Fixed at build, like `NEXT_PUBLIC_*` (the build reads it through `vercel pull`, so it must not be marked Sensitive), and the build fails on the same shapes. Sitemaps are served only where it is `production`; everywhere else they answer 404. After each deploy the workflow checks the served `/robots.txt`, `X-Robots-Tag` and sitemaps against the deployment it meant to ship (`scripts/deploy.mjs version <origin> <sha> staging|production`) and fails the deploy if they disagree |
 | `CRON_SECRET` | required (live), ≥ 32 chars | bearer for every `/api/jobs/*` route and `/api/health/workers`; the same value goes in `job_config.transfer_worker_secret` and the monitor's `DRVN_MONITOR_SECRET` |
 | `GUEST_RECEIPT_SECRET` | required (live), ≥ 32 chars | signs guest receipt and checkout-identity cookies and keys the hashed network identity used for guest abuse limits. Any production build without it throws on the first guest checkout or anonymous rate-limit check. Rotating it invalidates outstanding guest receipts |
 | `ACCOUNT_EMAIL_DIGEST_KEY` | optional (recommended before launch), ≥ 32 chars | keys the HMAC kept in place of a deleted account's email (N16, `account_deletion_requests.email_digest`). Unset, a key derived from `GUEST_RECEIPT_SECRET` is used and recorded as `derived-v1`, so rotating that secret changes later digests; each digest records which key made it. Never rotate it once set |
@@ -465,6 +466,125 @@ refused at `/_next/image` straight away (451). So a deleted photo stays
 reachable for at most about two hours, and only to someone who already held
 its live link. Photos uploaded before 10 Nov 2026 carry a year's
 Cache-Control on their object, but the proxy's expiry check covers them too.
+
+## 5d. Account deletions: every state and the safe action (#106, #108)
+
+Admin → People → "Account deletions not finished" lists every case that isn't
+complete, oldest first, with its state, why it waits, the next step and, when
+the worker gave up, its last error. The member sees the same state in Settings
+or at `/account-deletion/<reference>`. **Every state in the table has a safe
+action in the console. Three situations do not, and are set out after it
+under "What the console cannot finish":** a failed job whose Stripe customer
+belongs to someone else, a request with no job behind it, and a chargeback
+held for an operator.
+
+| State in the console | What it means | Safe action |
+|---|---|---|
+| **Cleaning up** | The worker is removing data. It usually finishes within a day; a long storage drain runs over several passes | None. If it has said "Cleaning up" for more than a day, check Admin → Settings → Background jobs (`deletions` family) |
+| **Cleaning up**, with "The worker gave up after 10 tries: …" | The job failed ten times. The error says why: a Stripe customer whose metadata names someone else ("Customer ownership requires operator review"), Storage or Auth failing, or a lost lease | Fix the cause first, then **Resume deletion**. It comes back here if the cause remains. A customer mismatch cannot be fixed from the console: see "What the console cannot finish", 1 |
+| **On hold: money still moving** | Before anything was deleted, the member has an open order, return, refund, payout or bank chargeback. Their sign-in is kept so they can settle it | None. The member settles it, and the worker rechecks every hour. A chargeback is the bank's to decide; it resumes on its own afterwards |
+| **Needs an operator**, "Late hold after scrub" | A return, refund, payout or chargeback opened **after** the member's personal data was removed. The account stays disabled and is never restored (ruled 8 Nov 2026), so nobody can settle it as the member | Settle the money without them, by the normal rules: refund the buyer from the order page; recover a seller-side chargeback loss from held funds, or write it off (Admin → Payments, recovery case). If the case's job is still in the queue, it finishes by itself once the hold is gone. If **Resume deletion** shows, the job had already finished: press it after the money has settled. While anything still holds the case it refuses, saying so |
+| **Needs an operator**, "Transaction records kept" | Finished. Personal data is removed. Order and payment keys are kept until the retention date shown (six years), because the law needs the transaction record | None. What happens when the retention period ends is not yet ruled (`policy_decisions_pending`) |
+
+**Resume deletion** (`deletion.resume`) is audited like every other console
+action and needs a reason. The database decides, under the deletion lock
+(`admin_resume_account_deletion`, 20261110110000). It acts only on a failed
+job, or on a late hold whose order has settled, and refuses everything else in
+words. The next pass runs every hold check again, and a member whose data is
+already removed is never let back in.
+
+### What the console cannot finish
+
+Three situations need more than the console (work review #154). The first
+two need SQL, run in the dashboard's SQL editor by the operator, one member
+at a time, with the member's id in place of `<member id>`. Read the first
+query's answer before running the second statement, and write what you did
+and why on the member's case. The third has no safe SQL at all.
+
+**1. A failed job whose Stripe customer belongs to someone else.** The
+console shows "The worker gave up after 10 tries: Customer ownership requires
+operator review". The job holds a Stripe customer id whose `user_id` metadata
+is not this member, so the worker refuses to delete it, every time. Open that
+customer in Stripe first.
+
+- If it is this member's customer and only its metadata is wrong or missing,
+  set its `user_id` metadata to the member's id in Stripe, then **Resume
+  deletion**. No SQL.
+- If it is someone else's customer, never delete it. Take it off this job, so
+  the worker stops asking Stripe about it:
+
+  ```sql
+  -- What the job holds now.
+  select id, status, attempts, last_error, payload
+    from public.remediation_jobs
+   where kind = 'delete_account' and dedup_key = 'delete:<member id>';
+
+  -- Only for a failed job, and only once Stripe shows the customer is not this member's.
+  update public.remediation_jobs
+     set payload = payload || jsonb_build_object('stripe_customer_id', null)
+   where kind = 'delete_account' and dedup_key = 'delete:<member id>' and status = 'failed';
+  ```
+
+  The key is set to null, not removed: with the key missing the worker reads
+  the id from the member's profile again and fails the same way. Then
+  **Resume deletion**. Last, search Stripe's customers for metadata
+  `user_id` equal to the member's id; if the member has a customer of their
+  own, delete it there, which removes their saved cards.
+
+**2. A deletion request with no job behind it.** The case is listed, never
+moves, shows no job state, and **Resume deletion** answers "This deletion has
+no job to resume". The worker only ever picks up a job, so nothing will
+happen to this request until one exists.
+
+  ```sql
+  -- A request whose "job" column comes back empty has none.
+  select r.user_id, r.outcome, r.blocker_code, r.scrubbed_at, j.id as job, j.status
+    from public.account_deletion_requests r
+    left join public.remediation_jobs j
+      on j.kind = 'delete_account' and j.dedup_key = 'delete:' || r.user_id::text
+   where r.user_id = '<member id>';
+
+  -- Only when job is empty and outcome is not 'completed': make the job the
+  -- request should have had, and point the request at it.
+  with made as (
+    insert into public.remediation_jobs (kind, dedup_key, payload)
+    values ('delete_account', 'delete:<member id>', jsonb_build_object('user_id', '<member id>'::uuid))
+    on conflict (dedup_key) do nothing
+    returning id
+  )
+  update public.account_deletion_requests r
+     set job_id = made.id
+    from made
+   where r.user_id = '<member id>';
+  ```
+
+  The job is created queued, so the worker takes it on its next pass and runs
+  every hold check before it removes anything. Nothing else needs doing; if
+  the case then shows a hold or a failure, treat it by its row in the table.
+
+**3. A chargeback held for an operator** (the journal state `recovery`). A bank
+chargeback that doesn't match its payment basket exactly is frozen for review:
+the orders go to `disputed`, a recovery case opens (Admin → Payments,
+"Card dispute requires reconciliation"), and the seller's payout and any
+deletion of either party wait. **Closing the recovery case does not lift the
+freeze**, because the journal still says `recovery`. Until the console's
+Retry for a held chargeback ships
+([#208](https://github.com/n89b-dot/DRVN-2/pull/208)), such a case **blocks
+Resume deletion for both parties, with no console way out and no safe SQL**:
+the journal's state drives payouts and refunds, and a hand edit can pay a
+seller for a sale the bank reversed. The safe action meanwhile is: read the
+dispute's final status in Stripe, record it on the recovery case's note, and
+leave the case open. Do not edit `stripe_dispute_journal` by hand. Writing
+off a chargeback the bank kept is a separate control
+([#207](https://github.com/n89b-dot/DRVN-2/pull/207)), set aside until after
+launch; DRVN absorbs that loss, counted from the bank's decision (decisions
+D1 and D4 of `docs/plans/2026-11-work-review-remediation-plan.md`).
+
+If a **Resume deletion** is refused after the console offered it (a hold that
+committed in between, or a passing error), the refusal closes its own journal
+entry (`release_refused_deletion_resume`), so the next try is not blocked as
+"awaiting reconciliation". If the job was already queued when it failed, the
+entry is kept for reconciliation as usual.
 
 ## 5c. Old photos that still carry metadata (one-off, N627)
 

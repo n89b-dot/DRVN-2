@@ -67,10 +67,11 @@ All artifacts are keyed by the commit sha and kept 30 days.
 |---|---|---|
 | `test-results-<sha>-verify` | verify | `test-results/vitest.xml` (JUnit, `npm test`) |
 | `test-results-<sha>-sql-guard` | sql-guard | `test-results/sql-guards.xml` (JUnit: one `<testcase>` per guard, named by the file's basename without `.sql`; a failure's body is the guard's `FAIL` lines verbatim) |
-| `test-results-<sha>-e2e` | e2e | `test-results/operations.xml` (JUnit, `test:operations`), `test-results/playwright.xml` (JUnit, Playwright) |
+| `test-results-<sha>-e2e` | e2e | `test-results/operations.xml` (JUnit, `test:operations`), `test-results/playwright.xml` (JUnit, Playwright). The browser suite runs as four parts (`e2e/parts.json`); this file is the four parts' files merged: every `<testsuite>` (one per spec file and browser, as before) under one root whose counts are the sums |
 | `test-results-<sha>-e2e-launch` | e2e-launch | `test-results/playwright-launch.xml` (JUnit, the launch-configuration browser lane, `test:e2e:launch`) |
 | `test-results-<sha>-stripe-integration` | stripe-integration | `test-results/stripe.xml` (JUnit, `test:stripe`) |
-| `browser-release-summary-<sha>` | e2e | `browser-release-<sha>.json`, the browser suite's counts |
+| `browser-release-summary-<sha>` | e2e | `browser-release-<sha>.json`, the browser suite's counts, summed over the four parts; `releaseStatus` is `passed` only when every part's was; `parts` says how many parts reported |
+| `e2e-part-<n>-<sha>` (n = 1 to 4) | e2e-parts | One part's own results before merging: `part.json` (`ran`, `first_attempt_passed`), its `playwright.xml`, its browser summary, and `operations.xml` from the one part that runs the drills. A reader that wants the whole suite uses the two merged artifacts above |
 | `release-gate-<sha>` | release-gate | `release-gate-<sha>.json`: the gate's result and each requirement's outcome, written even when the gate fails. `scope` is `full`, or `documents-only` on a pull request that changed documents only and so skipped the browser suite (`docs/owner/branch-protection.md`); a run on `main` is always `full` |
 
 To collect every JUnit file for a run, list the run's artifacts and take every name that starts with `test-results-<sha>-`.

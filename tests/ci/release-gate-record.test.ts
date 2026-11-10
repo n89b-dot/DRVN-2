@@ -51,7 +51,7 @@ describe("release-gate record (OS-signals)", () => {
       NODE_ENV: "test" as const,
       PATH: process.env.PATH,
       RUNNER_TEMP: tmp,
-      EVENT: "pull_request", CHANGES: "success", DOCS_ONLY: "false",
+      EVENT: "pull_request", CHANGES: "success", DOCS_ONLY: "false", E2E_PARTS: "success",
       VERIFY: "success", SECRETS: "success", SECRETS_FULL: "success", SQL: "failure", E2E: "success",
       STRIPE: "success", E2E_RAN: "true", E2E_FIRST_ATTEMPT: "true", STRIPE_RAN: "true",
       LAUNCH: "success", LAUNCH_RAN: "true", LAUNCH_PASSED: "true",
@@ -72,8 +72,9 @@ describe("release-gate record (OS-signals)", () => {
       first_attempt_passed: true,
       browser_counts: { selected: 3, expected: 3 },
     });
-    expect(Object.keys(record.requirements)).toHaveLength(13);
+    expect(Object.keys(record.requirements)).toHaveLength(14);
     expect(record.requirements["e2e-launch"]).toEqual({ value: "success", needs: "success", ok: true });
+    expect(record.requirements["e2e parts (all four)"]).toEqual({ value: "success", needs: "success", ok: true });
     expect(record.requirements["change scope decided"]).toEqual({ value: "success", needs: "success", ok: true });
     expect(record.requirements["sql-guard"]).toEqual({ value: "failure", needs: "success", ok: false });
     expect(record.requirements.verify).toEqual({ value: "success", needs: "success", ok: true });

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { joinedBeforeAgeConfirmation, type AgeConfirmationSource } from "@/lib/age-confirmation";
+import type { AgeConfirmationSource } from "@/lib/age-confirmation";
 import { reportError } from "@/lib/monitoring";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -27,7 +27,7 @@ export async function recordAgeConfirmation(userId: string, source: AgeConfirmat
   return false;
 }
 
-/** Whether `userId` has already confirmed (at sign-up or a guest checkout). */
+/** Whether `userId` has already confirmed (at sign-up or a guest checkout); onboarding asks when not. */
 export async function hasAgeConfirmation(userId: string): Promise<boolean> {
   const { data, error } = await createAdminClient()
     .from("age_confirmations")
@@ -41,14 +41,3 @@ export async function hasAgeConfirmation(userId: string): Promise<boolean> {
   }
   return Boolean(data);
 }
-
-/**
- * N686: whether a signed-in member must confirm before going on: an account
- * from before the confirmation existed, with no record yet. Later accounts
- * never need the lookup.
- */
-export async function needsReturningAgeConfirmation(user: { id: string; created_at?: string | null }): Promise<boolean> {
-  if (!joinedBeforeAgeConfirmation(user.created_at)) return false;
-  return !(await hasAgeConfirmation(user.id));
-}
-

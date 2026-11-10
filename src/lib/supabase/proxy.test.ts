@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Scenario = { claims: Record<string, unknown> | null; refresh: boolean; throws?: boolean };
 let scenario: Scenario = { claims: null, refresh: false };
-// #110: whether the signed-in member still owes the 18+ answer (my_age_confirmation_due).
+// N662: what the removed age check would be told, and whether anything asks (nothing may).
 const age = { due: false as boolean, error: null as unknown, calls: 0, signal: null as AbortSignal | null };
 
 const ROTATED = [
@@ -46,7 +49,7 @@ vi.mock("@/lib/env", () => ({
 }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 
-import { AGE_CHECK_TIMEOUT_MS, AGE_COOKIE, CONSOLE_NOT_FOUND, ageCheckApplies, isConsolePath, updateSession } from "./proxy";
+import { CONSOLE_NOT_FOUND, isConsolePath, updateSession } from "./proxy";
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
 
@@ -164,94 +167,29 @@ describe("updateSession signs out a Server Action into a sign-in, not a failed c
   });
 });
 
-describe("earlier members are asked to confirm 18+ on their next visit (N662, report five #110)", () => {
+// N662: accounts from before the 18+ confirmation are test accounts and are
+// not asked (Neil's ruling, 10 November 2026). The proxy makes no age check.
+describe("the proxy asks no 18+ question on a page request (N662)", () => {
   beforeEach(() => {
     scenario = { claims: { sub: "u1" }, refresh: false };
-    age.due = false;
+    age.due = true;
     age.error = null;
     age.calls = 0;
   });
-  const withCookie = (path: string, value: string) => {
-    const r = request(path);
-    r.cookies.set(AGE_COOKIE, value);
-    return r;
-  };
 
-  it("sends a member who still owes the answer to /confirm-age, keeping where they were going", async () => {
-    age.due = true;
-    const response = await updateSession(request("/garage?tab=mods"));
-    const location = new URL(response.headers.get("location")!);
-    expect(location.pathname).toBe("/confirm-age");
-    expect(location.searchParams.get("next")).toBe("/garage?tab=mods");
-  });
-
-  it("remembers an answered member in this browser, and asks the database no more", async () => {
-    const response = await updateSession(request("/marketplace"));
-    expect(response.headers.get("location")).toBeNull();
-    expect(response.cookies.get(AGE_COOKIE)?.value).toBe("u1");
-    await updateSession(withCookie("/marketplace", "u1"));
-    expect(age.calls).toBe(1);
-  });
-
-  it("asks again for a different account in the same browser", async () => {
-    age.due = true;
-    const response = await updateSession(withCookie("/home", "someone-else"));
-    expect(new URL(response.headers.get("location")!).pathname).toBe("/confirm-age");
-  });
-
-  it("never asks on the question itself, sign-in pages, legal pages, the API, actions or prefetches", async () => {
-    age.due = true;
-    for (const path of ["/confirm-age", "/onboarding", "/terms", "/privacy", "/fees", "/protection", "/cart/complete", "/settings/payouts/return", "/notifications/open/n1", "/robots.txt", "/api/version", "/logout"]) {
-      expect((await updateSession(request(path))).headers.get("location"), path).toBeNull();
+  it("N662: a signed-in member's page loads with no database call, no redirect and no remember-cookie, whatever the database would answer", async () => {
+    for (const path of ["/marketplace", "/garage?tab=mods", "/home", "/settings"]) {
+      const response = await updateSession(request(path));
+      expect(response.headers.get("location"), path).toBeNull();
+      expect(response.cookies.get("drvn_age_checked"), path).toBeUndefined();
     }
-    expect((await updateSession(action("/settings"))).headers.get("location")).toBeNull();
-    const prefetch = new NextRequest(new URL("/home", "https://drvn.test"), { headers: { "next-router-prefetch": "1" } });
-    expect((await updateSession(prefetch)).headers.get("location")).toBeNull();
-    expect(ageCheckApplies(request("/admin-verify"), false)).toBe(false);
-    expect(age.calls).toBe(0);
-  });
-
-  it("lets the page load, unremembered, when the check fails", async () => {
-    age.error = { message: "timeout" };
-    const response = await updateSession(request("/home"));
-    expect(response.headers.get("location")).toBeNull();
-    expect(response.cookies.get(AGE_COOKIE)).toBeUndefined();
-  });
-
-  it("gives the database 1.5 seconds, so a stalled one can't hang a navigation", async () => {
-    await updateSession(request("/home"));
-    expect(age.signal).toBeInstanceOf(AbortSignal);
-    expect(AGE_CHECK_TIMEOUT_MS).toBe(1500);
-  });
-
-  it("keeps rotated session cookies on the age redirect", async () => {
-    age.due = true;
-    scenario = { claims: { sub: "u1" }, refresh: true };
-    const response = await updateSession(request("/garage"));
-    expect(new URL(response.headers.get("location")!).pathname).toBe("/confirm-age");
-    expect(response.cookies.get("sb-test-auth-token.0")?.value).toBe("rotated-chunk-0");
-    expect(response.cookies.get("sb-test-auth-token.2")?.value).toBe("");
-  });
-
-  it("asks on / before sending a member to /home, and remembers the answer on that redirect", async () => {
-    age.due = true;
-    expect(new URL((await updateSession(request("/"))).headers.get("location")!).searchParams.get("next")).toBe("/");
-    age.due = false;
     const home = await updateSession(request("/"));
     expect(new URL(home.headers.get("location")!).pathname).toBe("/home");
-    expect(home.cookies.get(AGE_COOKIE)?.value).toBe("u1");
-  });
-
-  it("asks on a client navigation (an RSC request) the same as a page load", async () => {
-    age.due = true;
-    const rsc = new NextRequest(new URL("/garage", "https://drvn.test"), { headers: { rsc: "1" } });
-    expect(new URL((await updateSession(rsc)).headers.get("location")!).pathname).toBe("/confirm-age");
-  });
-
-  it("asks nobody signed out", async () => {
-    scenario = { claims: null, refresh: false };
-    await updateSession(request("/marketplace"));
     expect(age.calls).toBe(0);
+  });
+
+  it("N662: the earlier-member question has no page of its own any more", () => {
+    expect(fs.existsSync(path.resolve(__dirname, "../../app/(auth)/confirm-age"))).toBe(false);
   });
 });
 
