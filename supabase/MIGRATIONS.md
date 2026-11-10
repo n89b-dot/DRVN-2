@@ -39,6 +39,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 10 — an operator resumes a stuck account deletion: report five #106/#108 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110110000_admin_resume_account_deletion.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
+
+Adds `public.admin_resume_account_deletion(p_user, p_dry_run)`, service role only, which the console's **Resume deletion** (`deletion.resume`) calls through `auditedAction`. It puts a failed deletion job, or a late-hold case whose hold has settled, back in the worker's queue under the deletion lock, and refuses every other state. Additive. Also `public.release_refused_deletion_resume(p_actor, p_operation, p_detail)`, service role only, which closes a refused resume's journal entry when the job is not queued, so the next resume isn't blocked as awaiting reconciliation. The control appears with the app from the same PR; applied first, the function waits unused.
+
 ## November 10 — earlier members asked to confirm 18+ on their next visit: report five #110 (not applied anywhere)
 
 | File | Applied to |
