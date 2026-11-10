@@ -23,7 +23,14 @@ recorded file is skipped, and a destructive baseline (0001) is refused on a
 database with any table in `public`. Details: "Applying without Docker or
 psql" below.
 
-**Staging stays level with shared dev** (R-staging-behind). A migration PR is applied to shared dev *and* staging before it merges, by the same session, with both cells filled. `tests/ci/migrations-md.test.ts` lets a row name `shared-dev` without `staging` (or say `not applied`) only while the file is less than two days old by its timestamp. A session that cannot reach staging lists the file in `supabase/migrations-staging-pending.json` with the reason, and the next session with the credential applies it and removes the entry.
+**Working rules for a migration pull request** (in force from 10 November 2026; `docs/plans/2026-11-work-review-remediation-plan.md`, workstream 1, from the work review's findings #125, #126 and #128):
+
+- **Approved, then applied (R2).** A migration is applied to shared dev or staging only after the reviewing session has approved its pull request. The order is: review approves, apply with the runner to shared dev, then staging, fill both cells, then merge. Three migrations were applied to both databases before review on 9 November; a database ahead of `main` cannot be reviewed back.
+- **Dated when next to merge (R3).** Give a migration file its timestamp when its pull request is next to merge, not when it is written. A timestamp chosen early fixes the merge order in advance and forces a rename when another pull request merges first.
+- **An applied file is never edited.** Once a file has been applied to any database, its bytes are final, merged or not. A further change is a new migration.
+- **At most three in review (R1).** No more than three pull requests that carry a migration are in review at once, across every session.
+
+**Staging stays level with shared dev** (R-staging-behind). A migration PR is applied to shared dev *and* staging after its review is approved (R2 above) and before it merges, by the same session, with both cells filled. `tests/ci/migrations-md.test.ts` lets a row name `shared-dev` without `staging` (or say `not applied`) only while the file is less than two days old by its timestamp. A session that cannot reach staging lists the file in `supabase/migrations-staging-pending.json` with the reason, and the next session with the credential applies it and removes the entry.
 
 **A merged migration is never renamed** (#97). Apply order on every target is merge order, so filename order must stay the same as merge order. A pull request may only add migration files, each with a timestamp later than every file already on `main`, and may never rename or remove a file `main` has. If `main` gains a later file before yours merges, rename yours (it is not merged yet) to a timestamp after it. `tests/ci/migration-order.test.ts` fails a PR that breaks either rule, naming the file. Find what a merge added with `git diff --diff-filter=A`, never by name.
 
