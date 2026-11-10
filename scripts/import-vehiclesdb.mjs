@@ -12,7 +12,8 @@
 //
 // Usage:
 //   node scripts/import-vehiclesdb.mjs --target <name> [--env-file <path>]           dry run: fetch, verify, count
-//   node scripts/import-vehiclesdb.mjs --target <name> [--env-file <path>] --apply   import, then seed generations
+//   node scripts/import-vehiclesdb.mjs --target <name> [--env-file <path>] --apply --confirm <code>
+//     import, then seed generations; the code is the one the dry run printed
 //
 // Reads SUPABASE_DB_PASSWORD and NEXT_PUBLIC_SUPABASE_URL from the env file
 // (default .env.local), the way scripts/apply-migration.mjs does. The target
@@ -24,13 +25,14 @@ import { parseArgs } from "node:util";
 import { Client } from "pg";
 
 import { directClientConfig, loadTargets, readDbEnv, resolveTarget } from "./lib/supabase-db.mjs";
-import { VEHICLESDB, generationSeedSql, makePopularity, verifiedJson, vehiclesDbUrl } from "./lib/vehicle-catalog.mjs";
+import { VEHICLESDB, generationSeedSql, importConfirmationCode, makePopularity, verifiedJson, vehiclesDbUrl } from "./lib/vehicle-catalog.mjs";
 
 const { values } = parseArgs({
   options: {
     target: { type: "string" },
     "env-file": { type: "string", default: ".env.local" },
     apply: { type: "boolean", default: false },
+    confirm: { type: "string" },
   },
 });
 const { password: pwd, ref } = readDbEnv(readFileSync(values["env-file"], "utf8"));
@@ -72,10 +74,18 @@ async function totals() {
 
 const before = await totals();
 console.log(`catalogue now: ${before.makes} makes, ${before.models} models, ${before.generations} generations`);
+const code = importConfirmationCode(target.ref, seedSql);
 if (!values.apply) {
-  console.log("Dry run: nothing was changed. Re-run with --apply to import and seed generations.");
+  console.log(`Dry run: nothing was changed. To import and seed generations, re-run with --apply --confirm ${code}`);
   await client.end();
   process.exit(0);
+}
+if (values.confirm !== code) {
+  console.error(values.confirm
+    ? "--confirm doesn't match this project and this release: run the dry run again"
+    : "--apply needs --confirm <code>: run the dry run first, read it, then pass the code it prints");
+  await client.end();
+  process.exit(1);
 }
 
 const popularity = makePopularity(models);

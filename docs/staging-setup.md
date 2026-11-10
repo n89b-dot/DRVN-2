@@ -153,7 +153,7 @@ any tester signs up:
 
 ```bash
 node scripts/import-vehiclesdb.mjs --target staging            # dry run: fetches, verifies, counts
-node scripts/import-vehiclesdb.mjs --target staging --apply    # imports, then re-runs the generations seed
+node scripts/import-vehiclesdb.mjs --target staging --apply --confirm <code from the dry run>   # imports, then re-runs the generations seed
 ```
 
 The script reads the env file the way the migration runner does
@@ -162,9 +162,15 @@ The script reads the env file the way the migration runner does
 sha256 per file; other bytes are refused). It upserts makes and models, then
 runs the generations migration's own curated seed and backfill again, all in
 one transaction. Expect about 300 makes, about 5,500 models and a non-zero
-generation count. All of it is idempotent, so re-running after a VehiclesDB
-upgrade (a PR that changes the pin) is safe. Attribution ("Vehicle data by
-VehiclesDB") is already in the Add Car dialog; the data is CC BY 4.0.
+generation count. Re-running the same release is idempotent. A VehiclesDB
+upgrade (a PR that changes the pin) is safe to try, but a release that
+renames a make or model to a name another row already has fails on the
+`lower(name)` or `vdb_id` unique index, and the whole run rolls back. Read the
+error, fix the clash in a reviewed PR, then run again. Attribution ("Vehicle
+data by VehiclesDB") is already in the Add Car dialog. **Licence:** CC BY 4.0,
+read on 9 Nov 2026 from `LICENSE` at the pinned commit `d0e40c9`, which covers
+`catalog/**`. GitHub's own licence detector reports none, because the file's
+wording isn't one it matches.
 
 ## 3. Supabase Auth [OWNER clicks, ENGINEER can drive]
 

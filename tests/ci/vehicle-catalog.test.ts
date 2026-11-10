@@ -55,3 +55,24 @@ describe("vehicle catalogue on a new database (N667, report five #119)", () => {
     expect(deciles.has("none")).toBe(false);
   });
 });
+
+describe("an import needs the dry run's code (N667, #119 review)", () => {
+  it("binds the code to the project, the pinned release and the seed", async () => {
+    const { importConfirmationCode } = await import("../../scripts/lib/vehicle-catalog.mjs");
+    const seed = generationSeedSql();
+    const code = importConfirmationCode("abcdefghijklmnopqrst", seed);
+    expect(code).toMatch(/^[0-9a-f]{12}$/);
+    expect(importConfirmationCode("abcdefghijklmnopqrst", seed)).toBe(code);
+    expect(importConfirmationCode("zyxwvutsrqponmlkjihg", seed)).not.toBe(code);
+    expect(importConfirmationCode("abcdefghijklmnopqrst", `${seed}\n-- edited`)).not.toBe(code);
+    expect(importConfirmationCode("abcdefghijklmnopqrst", seed, { ...VEHICLESDB, commit: "0".repeat(40) })).not.toBe(code);
+  });
+
+  it("the importer refuses --apply without the matching code before writing", () => {
+    const script = fs.readFileSync(path.join(repo, "scripts/import-vehiclesdb.mjs"), "utf8");
+    const refusal = script.indexOf("if (values.confirm !== code)");
+    const firstWrite = script.indexOf('await client.query("begin")');
+    expect(refusal).toBeGreaterThan(0);
+    expect(refusal).toBeLessThan(firstWrite);
+  });
+});

@@ -91,3 +91,21 @@ export function generationSeedSql(text = readFileSync(GENERATIONS_MIGRATION, "ut
   }
   return sql;
 }
+
+/**
+ * The code a dry run prints and `--apply --confirm <code>` must repeat, as
+ * scripts/apply-migration.mjs does (#119 review): bound to the project and
+ * to every byte this run would write from (the pinned release and the
+ * generations seed), so an apply can only do what a dry run showed.
+ *
+ * @param {string} ref
+ * @param {string} seedSql
+ * @param {PinnedSource} [source]
+ */
+export function importConfirmationCode(ref, seedSql, source = VEHICLESDB) {
+  const hash = createHash("sha256").update(`drvn-import-vehiclesdb v1\n${ref}\n${source.commit}\n`);
+  for (const [file, sha] of Object.entries(source.files).sort()) hash.update(`${file} ${sha}\n`);
+  hash.update(createHash("sha256").update(seedSql).digest("hex"));
+  return hash.digest("hex").slice(0, 12);
+}
+
