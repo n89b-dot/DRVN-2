@@ -75,22 +75,45 @@ describe("which paths are documents (plan 2 A0)", () => {
 describe("change scope of an event (plan 2 A0)", () => {
   const docs = ["docs/a.md", "README.md"];
 
-  it("a pull request whose every path is a document is documents-only", () => {
-    expect(classify({ event: "pull_request", files: docs })).toMatchObject({ docsOnly: true });
+  it("a pull request into the default branch whose every path is a document is documents-only", () => {
+    expect(classify({ event: "pull_request", files: docs, baseRef: "main", defaultBranch: "main" })).toMatchObject({ docsOnly: true });
+  });
+
+  // A verdict is attached to the head commit, and GitHub does not rerun CI when
+  // a pull request's base is changed. So a pull request stacked on another
+  // branch must never be judged documents-only: its diff is against that
+  // branch, and retargeting it onto main would carry that branch's code in
+  // under a verdict that never looked at it.
+  it.each([
+    ["another pull request's branch", "ci/a0-docs-only-e2e"],
+    ["a release branch", "rc-20261110"],
+    ["a branch whose name only starts like the default", "main-old"],
+    ["no base at all", ""],
+    ["an unknown base", undefined],
+  ])("a documents-only diff against %s is a full run", (_, baseRef) => {
+    const result = classify({ event: "pull_request", files: docs, baseRef, defaultBranch: "main" });
+    expect(result.docsOnly).toBe(false);
+    expect(result.reason).toMatch(/base/);
+  });
+
+  it("follows the repository's default branch, whatever it is called", () => {
+    expect(classify({ event: "pull_request", files: docs, baseRef: "trunk", defaultBranch: "trunk" }).docsOnly).toBe(true);
+    expect(classify({ event: "pull_request", files: docs, baseRef: "main", defaultBranch: "trunk" }).docsOnly).toBe(false);
+    expect(classify({ event: "pull_request", files: docs, baseRef: "main", defaultBranch: "" }).docsOnly).toBe(false);
   });
 
   it("one code path among many documents makes it a full run", () => {
-    const result = classify({ event: "pull_request", files: [...docs, "src/lib/payments/settlement.ts"] });
+    const result = classify({ event: "pull_request", files: [...docs, "src/lib/payments/settlement.ts"], baseRef: "main", defaultBranch: "main" });
     expect(result.docsOnly).toBe(false);
     expect(result.reason).toContain("src/lib/payments/settlement.ts");
   });
 
   it.each(["push", "workflow_dispatch", "merge_group", "schedule", ""])("event '%s' is always a full run, documents or not", (event) => {
-    expect(classify({ event, files: docs }).docsOnly).toBe(false);
+    expect(classify({ event, files: docs, baseRef: "main", defaultBranch: "main" }).docsOnly).toBe(false);
   });
 
   it("an empty diff is a full run", () => {
-    expect(classify({ event: "pull_request", files: [] }).docsOnly).toBe(false);
+    expect(classify({ event: "pull_request", files: [], baseRef: "main", defaultBranch: "main" }).docsOnly).toBe(false);
   });
 });
 
@@ -120,18 +143,23 @@ describe("the diff the scope is read from (plan 2 A0)", () => {
     try {
       const files = changedFiles("HEAD^1", "HEAD");
       expect(files.sort()).toEqual(["docs/notes.md", "src/notes.ts"]);
-      expect(classify({ event: "pull_request", files }).docsOnly).toBe(false);
+      expect(classify({ event: "pull_request", files, baseRef: "main", defaultBranch: "main" }).docsOnly).toBe(false);
     } finally {
       process.chdir(cwd);
     }
   });
 
   it("the script answers docs_only=true for a documents-only commit and false for a code commit", () => {
-    const run = (dir: string, event: string) => {
-      const output = path.join(dir, "..", `${path.basename(dir)}-${event}.out`);
+    // What the runner provides: the base branch's name, and the event's own
+    // payload, which names the repository's default branch.
+    const payload = path.join(tmp, "event.json");
+    fs.writeFileSync(payload, JSON.stringify({ repository: { default_branch: "main" } }));
+    let n = 0;
+    const run = (dir: string, event: string, baseRef = "main", eventPath: string | null = payload) => {
+      const output = path.join(dir, "..", `${path.basename(dir)}-${event}-${n++}.out`);
       execFileSync("node", [path.join(root, "scripts/ci-change-scope.mjs")], {
         cwd: dir,
-        env: { NODE_ENV: "test", PATH: process.env.PATH, GITHUB_EVENT_NAME: event, GITHUB_OUTPUT: output },
+        env: { NODE_ENV: "test", PATH: process.env.PATH, GITHUB_EVENT_NAME: event, GITHUB_OUTPUT: output, GITHUB_BASE_REF: baseRef, GITHUB_EVENT_PATH: eventPath ?? undefined },
         encoding: "utf8",
       });
       return fs.readFileSync(output, "utf8").trim();
@@ -144,6 +172,11 @@ describe("the diff the scope is read from (plan 2 A0)", () => {
     expect(run(docsOnly, "pull_request")).toBe("docs_only=true");
     expect(run(docsOnly, "push")).toBe("docs_only=false");
     expect(run(mixed, "pull_request")).toBe("docs_only=false");
+    // The same documents-only commit, in a pull request stacked on another branch.
+    expect(run(docsOnly, "pull_request", "ci/a0-docs-only-e2e")).toBe("docs_only=false");
+    // No readable event payload: the default branch is unknown, so nothing is documents-only.
+    expect(run(docsOnly, "pull_request", "main", path.join(tmp, "missing.json"))).toBe("docs_only=false");
+    expect(run(docsOnly, "pull_request", "main", null)).toBe("docs_only=false");
   });
 
   it("answers full when the diff cannot be read", () => {
