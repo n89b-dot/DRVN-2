@@ -118,6 +118,17 @@ Plan 2 lists returns and pickup codes among the money code the first release doe
 
 The independent monitor still requires all three to be present in the answer: a deployment cannot hide a job by dropping it.
 
+## What the browser lane holds in GitHub
+
+The launch-configuration browser lane (`e2e-launch`, plan 2 item A4) runs this configuration against Stripe's test mode. It needs two values in the repository's settings (Settings → Secrets and variables → Actions). Neither is a live key, and the lane refuses any key that is not a test key.
+
+| Kind | Name | What it is | Recorded |
+|---|---|---|---|
+| Secret | `STRIPE_TEST_SECRET_KEY` | The Stripe test-mode secret key (`sk_test_…`). Also used by the `stripe-integration` job | set 2026-09-05 |
+| Variable | `STRIPE_TEST_PUBLISHABLE_KEY` | The test-mode publishable key (`pk_test_…`) of the same Stripe account, so the lane can show Stripe's real card form. A publishable key is public by design: it ships in every page of the site. It can be removed on that settings page; the lane then fails on its first step and names it | set 2026-11-10 by the plan 2 building session, on the orchestrator's approval, from the test key already in the main checkout's `.env.local`; the value is written nowhere in this repository |
+
+The lane's second step asks Stripe whether the two are a pair (`e2e-launch/check-stripe-pair.mjs`) and stops with that reason if they are not.
+
 ## Changing a setting
 
 Change the host's variable, then change both files here in the same pull request. The test fails if the two disagree, or if the app's code no longer resolves the record to what it says.

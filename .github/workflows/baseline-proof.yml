@@ -1,0 +1,67 @@
+name: Baseline proof
+
+# Plan 2 item A6 (N1075, N786): the migration history becomes one baseline
+# file. Before that file replaces the history it must build the same database
+# in both kinds of test database: the guard build (the sql-guard job's recipe,
+# compared on a developer's machine and in ci.yml) and the stack build
+# (`supabase start`: real Storage and Auth tables, files applied as postgres),
+# which the browser suite and the Stripe lane run on. Two local stacks do not
+# fit on the build machine, so the stack comparison runs here.
+#
+# Started by hand, on the branch that carries the baseline, and never by a
+# push or a pull request. It is not part of release-gate and reads no secret.
+# The comparison itself lives in scripts/baseline/stack-proof.sh on that
+# branch; on a branch without it this workflow fails and says so.
+#
+# Kept after A6: the same proof is wanted the day a production database is
+# first built from the baseline.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stack-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          # The history as well as the tree: the comparison builds one stack
+          # from the files the baseline replaces.
+          fetch-depth: 0
+
+      - name: This branch carries the comparison
+        run: |
+          if [ ! -f scripts/baseline/stack-proof.sh ]; then
+            echo "::error title=Nothing to prove on this branch::scripts/baseline/stack-proof.sh is not on $GITHUB_REF_NAME. Start this workflow on the branch that carries the baseline (plan 2 item A6)."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.22.0
+          cache: npm
+      - run: npm ci
+
+      - name: Build both stacks and compare them
+        env:
+          PROOF_OUT: ${{ runner.temp }}/baseline-proof
+        run: bash scripts/baseline/stack-proof.sh
+
+      # The two snapshots and every difference, whatever the outcome: an
+      # empty comparison is evidence too.
+      - name: Keep the comparison
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: baseline-proof-${{ github.sha }}
+          path: ${{ runner.temp }}/baseline-proof/
+          if-no-files-found: warn
+          retention-days: 90

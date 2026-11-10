@@ -363,7 +363,14 @@ begin
     values (gen_random_uuid(), car, seller, 'Bait', jsonb_build_array(
       jsonb_build_object('type', 'text', 'text', base || 'car-images/' || buyer || '/victim.webp'),
       jsonb_build_object('type', 'text', 'text', 'https://evil.example/storage/v1/object/public/car-images/' || seller || '/offsite.webp')), now());
-  insert into public.listing_images(listing_id, url, position) values (listing, base || 'listing-images/' || buyer || '/theirs.webp', 1);
+  -- Since 20261110190000 a gallery row naming someone else's upload can't
+  -- exist, whoever writes it, so it can't bait the cleanup either.
+  blocked := false;
+  begin
+    insert into public.listing_images(listing_id, url, position) values (listing, base || 'listing-images/' || buyer || '/theirs.webp', 1);
+  exception when insufficient_privilege then blocked := true;
+  end;
+  if not blocked then raise exception 'FAIL 6: a trusted writer put another member''s upload on a listing (N940)'; end if;
   -- A pin whose photo has since left the gallery: only the hotspot names it.
   insert into public.car_hotspots(car_id, image_url, x, y, label)
     values (car, base || 'car-images/' || seller || '/' || car || '/pin.webp', 0.5, 0.5, 'Turbo');

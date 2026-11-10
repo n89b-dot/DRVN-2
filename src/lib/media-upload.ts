@@ -29,11 +29,9 @@ export type UploadImagesResult = { uploaded: UploadedImage[]; failed: UploadFail
  */
 const SERVER_NORMALIZED_BUCKETS = ["avatars", "car-images", "activity-images", "listing-images", "message-photos", "agent-chat-photos"];
 
-import { SERVER_UPLOAD_MAX_BYTES, serverUploadMaxBytes } from "@/lib/upload-limits";
+import { PHOTO_SHRINK, SERVER_UPLOAD_MAX_BYTES, serverUploadMaxBytes, shrinkFor } from "@/lib/upload-limits";
 
 export { SERVER_UPLOAD_MAX_BYTES };
-/** The shrink aims under this, leaving headroom below the cap for the form. */
-const SHRINK_TARGET_BYTES = 3_500_000;
 
 /** What to do with a photo that is still too large after shrinking. */
 export const tooLargeReason = (name: string, maxMb: number) =>
@@ -85,9 +83,11 @@ async function decodeForCanvas(file: File): Promise<Drawable> {
  * data; the server re-encode above is. Dispute evidence must NOT go through
  * this — evidence keeps its original bytes.
  */
-export async function normalizePublicPhoto(file: File): Promise<File> {
-  const MAX_EDGE = 2560;
-  const SKIP_UNDER_BYTES = 1_500_000;
+export async function normalizePublicPhoto(file: File, shrink: { maxEdge: number; targetBytes: number } = PHOTO_SHRINK): Promise<File> {
+  const MAX_EDGE = shrink.maxEdge;
+  const SHRINK_TARGET_BYTES = shrink.targetBytes;
+  // Left alone below this when it is also within the edge limit; never above the target itself.
+  const SKIP_UNDER_BYTES = Math.min(1_500_000, shrink.targetBytes);
   const heic = isHeicFile(file);
   if ((!file.type.startsWith("image/") && !heic) || file.type === "image/gif") return file;
   try {
@@ -201,12 +201,16 @@ export async function uploadImages({
         continue;
       }
       const original = file;
-      file = await normalizePublicPhoto(file);
+      file = await normalizePublicPhoto(file, shrinkFor(bucket));
       if (isHeicFile(file)) {
         failed.push({ file: original, reason: HEIC_PUBLIC_REASON(original.name), retryable: false });
         continue;
       }
-    } else if (normalize) file = await normalizePublicPhoto(file);
+    } else if (normalize || bucket === "avatars") {
+      // A profile photo is always shrunk, whatever the caller asked (N1074):
+      // its cap is 2 MB, and almost every camera photo is over that.
+      file = await normalizePublicPhoto(file, shrinkFor(bucket));
+    }
     // Through the photo route, never more than the host will accept (#118).
     const limit = serverNormalized ? Math.min(maxBytes, SERVER_UPLOAD_MAX_BYTES) : maxBytes;
     if (file.size > limit) {

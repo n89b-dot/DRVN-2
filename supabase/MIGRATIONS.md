@@ -39,6 +39,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 10 — photo signing signs only what the database guards: N940 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110190000_photo_signing_rules.sql` | shared-dev 2026-11-10; staging 2026-11-10 |
+
+Review of #196 (report five #105 follow-up). `private.photo_signable_positions()` lists the only places the app signs a member photo (seven photo columns, a post body's image blocks, four RPC answer paths); `src/lib/photo-urls.ts` `PHOTO_POSITIONS` must equal it. New triggers `photo_owner_folder_guard` (`private.guard_photo_owner_folder` / `_body`) refuse, for every writer, a photo at a listed place that names an object in a signed bucket outside the row owner's folder, the owner resolved from the row's car, listing, post or order (the seller, for `order_item_snapshot_images`, guarded for the first time). `private.activity_body_media` is restated to strings only, the exact shape the signer walks. Applying it moves rows that already break the rule into `private.photo_refs_quarantined` (whole rows kept): gallery, pin and snapshot rows are deleted, a cover or part thumbnail is cleared, a post body loses only the offending photos; the NOTICE says how many. With more than ten to move it refuses unless the apply sets `drvn.photo_quarantine_confirm` to the total. A reference whose owner can't be resolved (an order whose seller was deleted) is never moved, only counted as `owner_unknown`. `private.restore_quarantined_photo_ref(id)` puts one back where the rule now holds (a stripped photo goes back into the post's current body, refused if the post was edited since). Quarantined rows last 90 days: `private.prune_cron_history()` is restated from `20261110100000` with that one delete added (job unchanged), and a trigger on `account_deletion_requests.scrubbed_at` removes a scrubbed member's rows, so `scrub_deleted_account` is not restated. The cars trigger also fires on `owner_id`. New `public.photo_signing_ready()` (service role): the app signs nothing until it returns true. Apply after `20261110120000` (#200) where both are pending; it touches none of that file's functions. **Apply before the app from the same PR deploys** (plan 1 step 2.7): until this is applied that app signs nothing at the boundary (every member photo shows the no-photo plate) and an account export fails and is retried rather than being written with links that cannot open. Once the database has said the guards are there, a check that times out leaves that answer standing (work review #146, N1062).
+
 ## November 10 — the earlier-member 18+ check is removed (Neil's ruling, 10 November)
 
 | File | Applied to |
@@ -51,7 +59,7 @@ Three functions take over the four changes to `orders.status` and `orders.pre_di
 
 | File | Applied to |
 |---|---|
-| `20261110180000_order_status_moves.sql` | not applied |
+| `20261111010000_order_status_moves.sql` | not applied |
 
 Drops `public.my_age_confirmation_due()`. Every account from before the 18+ confirmation is a test account, so nothing asks them any more: the app from the same PR no longer calls the function, has no `/confirm-age` page and no check in the request proxy. The 18+ box at sign-up, onboarding and guest checkout, the `age_confirmations` table and its rows are untouched. Apply at any time before a first deploy; an older app that still calls the function reports a failed check and lets the page load. After this the next paragraph's function no longer exists.
 
