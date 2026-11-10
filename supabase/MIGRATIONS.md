@@ -39,6 +39,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 10 — the earlier-member 18+ check is removed (Neil's ruling, 10 November)
+
+| File | Applied to |
+|---|---|
+| `20261110131000_drop_age_confirmation_due.sql` | not applied |
+
+Drops `public.my_age_confirmation_due()`. Every account from before the 18+ confirmation is a test account, so nothing asks them any more: the app from the same PR no longer calls the function, has no `/confirm-age` page and no check in the request proxy. The 18+ box at sign-up, onboarding and guest checkout, the `age_confirmations` table and its rows are untouched. Apply at any time before a first deploy; an older app that still calls the function reports a failed check and lets the page load. After this the next paragraph's function no longer exists.
+
 ## November 10 — an operator resumes a stuck account deletion: report five #106/#108 (not applied anywhere)
 
 | File | Applied to |
