@@ -32,6 +32,10 @@ as $function$
    then public.marketplace_match_evidence(l.id,g.make,g.model,coalesce(g.year,0),p_viewer) in ('seller_stated','source_model') else false end))
  and (trim(p_query)='' or l.id in(select public.marketplace_search_ids(p_query)));
 $function$;
+
+-- This script's own helpers are called while acting as other roles. A new
+-- function is closed by default (architecture plan 2, item A3), so they are opened here.
+grant execute on all routines in schema pg_temp to public;
 do $$
 declare
   member uuid := (select owner_id from public.cars group by owner_id

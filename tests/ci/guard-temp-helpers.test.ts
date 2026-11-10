@@ -71,4 +71,20 @@ describe("a guard's temporary helpers are opened after they are made (plan 2 A3)
       'New functions are closed by default, a guard\'s pg_temp helpers included. After the last helper add:\n  grant execute on all routines in schema pg_temp to public;',
     ).toEqual([]);
   });
+
+  it("every scripts/perf/ file that calls its temporary helpers as another role opens them", () => {
+    const dir = path.join(root, "scripts/perf");
+    const problems = fs
+      .readdirSync(dir)
+      .filter((name) => name.endsWith(".sql"))
+      .map((name) => [name, fs.readFileSync(path.join(dir, name), "utf8")] as const)
+      .filter(([, sql]) => /set_config\('role'|\bset (local )?role\b/i.test(sql))
+      .map(([name, sql]) => [name, tempHelperProblem(sql)] as const)
+      .filter(([, problem]) => problem !== null)
+      .map(([name, problem]) => `scripts/perf/${name} ${problem}`);
+    expect(
+      problems,
+      'New functions are closed by default, a script\'s pg_temp helpers included. After the last helper add:\n  grant execute on all routines in schema pg_temp to public;',
+    ).toEqual([]);
+  });
 });
