@@ -5,7 +5,7 @@ import path from "node:path";
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 
-import { GITHUB_ACTIONS_APP_ID, environmentProblems, mergedHeadProblems, protectionProblems } from "../../scripts/check-branch-protection.mjs";
+import { GITHUB_ACTIONS_APP_ID, environmentProblems, mergedHeadProblems, protectionProblems, watchArgs } from "../../scripts/check-branch-protection.mjs";
 
 const root = path.resolve(__dirname, "../..");
 
@@ -64,7 +64,7 @@ describe("branch protection watch (N949, report five #112)", () => {
     expect(Object.keys(doc.on).sort()).toEqual(["push", "schedule", "workflow_dispatch"]);
     expect(doc.on.push).toEqual({ branches: ["main"] });
     expect(doc.permissions).toEqual({ contents: "read" });
-    expect(doc.jobs.protection.steps.some((step) => step.run?.startsWith("node scripts/check-branch-protection.mjs"))).toBe(true);
+    expect(doc.jobs.protection.steps.some((step) => step.run?.includes("node scripts/check-branch-protection.mjs"))).toBe(true);
   });
 });
 
@@ -107,6 +107,29 @@ describe("N949: the watch also checks how main's head got there, and tells the a
     expect(mergedHeadProblems({ sha: "abc1234fff", parents: [{ sha: "896fafbc" }] }, [], null)).toEqual(["abc1234 is not a merge commit (1 parent): it was pushed to the branch without a pull request"]);
   });
 
+  it("N949: a push run judges the commit it was started for, not whatever is at main's head when it runs", () => {
+    const sha = "0f3c9a1b2d4e5f60718293a4b5c6d7e8f9012345";
+    // The commit named on the command line is the one judged; without it, the branch's head.
+    expect(watchArgs(["n89b-dot/DRVN-2", "main", "--commit", sha])).toEqual({ repo: "n89b-dot/DRVN-2", branch: "main", commit: sha, environment: null });
+    expect(watchArgs(["--commit", "0f3c9a1", "n89b-dot/DRVN-2"])).toMatchObject({ repo: "n89b-dot/DRVN-2", branch: "main", commit: "0f3c9a1" });
+    expect(watchArgs(["n89b-dot/DRVN-2", "main"])).toMatchObject({ commit: null, environment: null });
+    expect(watchArgs([], { GITHUB_REPOSITORY: "o/r" })).toEqual({ repo: "o/r", branch: "main", commit: null, environment: null });
+    expect(watchArgs(["--environment", "production", "o/r"])).toEqual({ repo: "o/r", branch: "main", commit: null, environment: "production" });
+    // Not a sha, no value, or both checks at once: refused, not guessed at.
+    expect(() => watchArgs(["o/r", "main", "--commit", "main"])).toThrow(/--commit takes a commit sha/);
+    expect(() => watchArgs(["o/r", "main", "--commit"])).toThrow(/--commit needs a value/);
+    expect(() => watchArgs(["--environment", "--commit", sha])).toThrow(/--environment needs a value/);
+    expect(() => watchArgs(["--environment", "production", "--commit", sha])).toThrow(/separate checks/);
+
+    // The workflow: on a push it passes its own sha; on the hourly and by-hand runs it does not.
+    const doc = yaml.load(fs.readFileSync(path.join(root, ".github/workflows/protection-watch.yml"), "utf8")) as { jobs: Record<string, { steps: { run?: string }[] }> };
+    const run = doc.jobs.protection.steps.find((step) => step.run?.includes("check-branch-protection.mjs"))!.run!;
+    expect(run).toMatch(/if \[ "\$GITHUB_EVENT_NAME" = "push" \]; then\s+node scripts\/check-branch-protection\.mjs "\$GITHUB_REPOSITORY" main --commit "\$GITHUB_SHA"\s+else\s+node scripts\/check-branch-protection\.mjs "\$GITHUB_REPOSITORY" main\s+fi/);
+    // And the script reads that commit, not the branch, when one is named.
+    const script = fs.readFileSync(path.join(root, "scripts/check-branch-protection.mjs"), "utf8");
+    expect(script).toContain("`/repos/${repo}/commits/${encodeURIComponent(judged ?? branch)}`");
+  });
+
   it("reads check runs and environments as well as rules, and alerts on failure", () => {
     const doc = yaml.load(fs.readFileSync(path.join(root, ".github/workflows/protection-watch.yml"), "utf8")) as {
       jobs: Record<string, { permissions?: Record<string, string>; steps: { name?: string; if?: string; run?: string; env?: Record<string, string> }[] }>;
@@ -146,7 +169,7 @@ describe("N950: a production deploy checks its environment is guarded before it 
     expect(environmentProblems("production", 403, null)).toEqual(["GitHub answered 403 for the production environment"]);
   });
 
-  it("the production job needs a guard job that names no environment and runs main's own check", () => {
+  it("the production job needs a guard job that names no environment and runs the dispatched ref's check, not the release tag's", () => {
     const deploy = yaml.load(fs.readFileSync(path.join(root, ".github/workflows/deploy.yml"), "utf8")) as {
       jobs: Record<string, { if?: string; needs?: string | string[]; environment?: string; permissions?: Record<string, string>; steps: { run?: string; with?: Record<string, unknown> }[] }>;
     };
@@ -154,7 +177,7 @@ describe("N950: a production deploy checks its environment is guarded before it 
     expect(guard.if).toBe("github.event_name == 'workflow_dispatch'");
     // Naming the environment is what makes GitHub create it; the guard must not.
     expect(guard.environment).toBeUndefined();
-    // It checks out the workflow's own ref (main), not the tag: an old tag's script would not have the check.
+    // It checks out the dispatched ref, not the tag: an old tag's script would not have the check.
     expect(guard.steps[0].with?.ref).toBeUndefined();
     expect(guard.steps.some((step) => step.run === 'node scripts/check-branch-protection.mjs --environment production "$GITHUB_REPOSITORY"')).toBe(true);
     for (const level of Object.values(guard.permissions ?? {})) expect(level).toBe("read");

@@ -154,6 +154,10 @@ describe("a superseded staging run deploys nothing (N634, Codex on #175)", () =>
     expect(staging.steps[head].run).toContain('>> "$GITHUB_OUTPUT"');
     expect(staging.steps[ship].if).toBe("steps.head.outputs.current == 'true'");
     expect(staging.steps[version].if).toBe("steps.head.outputs.current == 'true'");
+    // A superseded run ends "success" having deployed nothing: the alert says that, not "deploy: success".
+    const alert = staging.steps.at(-1)!;
+    expect(alert.env?.CURRENT).toBe("${{ steps.head.outputs.current }}");
+    expect(alert.run).toMatch(/if \[ "\$STATUS" = "success" \] && \[ "\$CURRENT" != "true" \]; then\s+node scripts\/deploy\.mjs alert "[^"]*superseded[^"]*deployed nothing"\s+else\s+node scripts\/deploy\.mjs alert "DRVN staging deploy of \$\{GITHUB_SHA::7\}: \$STATUS"/);
   });
 
   it("only main's exact head counts as current", () => {

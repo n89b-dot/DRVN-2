@@ -124,17 +124,27 @@ jobs:
 
       - name: Tell the alert channel
         if: always()
+        # A run that found a newer commit on main deploys nothing and still
+        # ends "success": say so, not "deploy: success".
         run: |
-          node scripts/deploy.mjs alert "DRVN staging deploy of ${GITHUB_SHA::7}: $STATUS"
+          if [ "$STATUS" = "success" ] && [ "$CURRENT" != "true" ]; then
+            node scripts/deploy.mjs alert "DRVN staging: ${GITHUB_SHA::7} was superseded by a newer commit on main, so this run deployed nothing"
+          else
+            node scripts/deploy.mjs alert "DRVN staging deploy of ${GITHUB_SHA::7}: $STATUS"
+          fi
         env:
           STATUS: ${{ job.status }}
+          CURRENT: ${{ steps.head.outputs.current }}
           ADMIN_ALERT_WEBHOOK_URL: ${{ secrets.ADMIN_ALERT_WEBHOOK_URL }}
 
   # Work review #139: a job that names an environment which does not exist
   # makes GitHub create it, empty and unprotected, and run. So this job, which
-  # names no environment and runs main's own script, checks first that
-  # "production" exists, has required reviewers and restricts what may deploy
-  # to it. The production job cannot start until it passes.
+  # names no environment and runs the dispatched ref's script (not the release
+  # tag's, which may predate the check), checks first that "production"
+  # exists, has required reviewers and restricts what may deploy to it. The
+  # production job cannot start until it passes. A run dispatched from another
+  # branch brings its own workflow file; the environment's branch restriction
+  # is what stops that, and this is the check that the restriction exists.
   production-guard:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04

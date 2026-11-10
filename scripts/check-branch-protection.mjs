@@ -12,8 +12,13 @@
 // request head that passed release-gate while level with main), and that the
 // production environment, once it exists, has required reviewers.
 //
-//   node scripts/check-branch-protection.mjs [owner/repo] [branch]
+//   node scripts/check-branch-protection.mjs [owner/repo] [branch] [--commit <sha>]
 //   node scripts/check-branch-protection.mjs --environment production [owner/repo]
+//
+// --commit names the commit to judge. A push run passes its own commit: by
+// the time it starts, the branch's head may already be a later, ordinary
+// merge, and a commit pushed while protection was off would never be looked
+// at. The hourly and by-hand runs judge the head.
 import { fileURLToPath } from 'node:url';
 
 /** GitHub Actions' app id: a required check pinned to it can only be met by a workflow run. */
@@ -106,6 +111,30 @@ export function environmentProblems(name, status, body) {
   return problems;
 }
 
+/**
+ * What the command line asks for: the repository and branch, the commit to
+ * judge when one is named (a full or short hex sha), or one environment.
+ *
+ * @param {string[]} argv
+ * @param {Record<string, string | undefined>} [env]
+ */
+export function watchArgs(argv, env = process.env) {
+  const args = [...argv];
+  const take = (flag) => {
+    const at = args.indexOf(flag);
+    if (at < 0) return undefined;
+    const value = args[at + 1];
+    if (!value || value.startsWith('--')) throw new Error(`${flag} needs a value`);
+    args.splice(at, 2);
+    return value;
+  };
+  const environment = take('--environment') ?? null;
+  const commit = take('--commit') ?? null;
+  if (commit !== null && !/^[0-9a-f]{7,40}$/i.test(commit)) throw new Error(`--commit takes a commit sha, not "${commit}"`);
+  if (environment && commit) throw new Error('--environment and --commit are separate checks');
+  return { repo: args[0] || env.GITHUB_REPOSITORY || 'n89b-dot/DRVN-2', branch: args[1] || 'main', commit, environment };
+}
+
 const api = (path, headers) => fetch(`https://api.github.com${path}`, { headers });
 
 function requestHeaders() {
@@ -126,24 +155,18 @@ async function checkEnvironment(repo, name) {
 }
 
 async function main() {
-  const args = process.argv.slice(2);
-  const flag = args.indexOf('--environment');
-  if (flag >= 0) {
-    const name = args[flag + 1];
-    if (!name) throw new Error('--environment needs the environment\'s name');
-    const rest = args.filter((_, index) => index !== flag && index !== flag + 1);
-    return checkEnvironment(rest[0] || process.env.GITHUB_REPOSITORY || 'n89b-dot/DRVN-2', name);
-  }
-  const repo = args[0] || process.env.GITHUB_REPOSITORY || 'n89b-dot/DRVN-2';
-  const branch = args[1] || 'main';
+  const { repo, branch, commit: judged, environment } = watchArgs(process.argv.slice(2));
+  if (environment) return checkEnvironment(repo, environment);
   const headers = requestHeaders();
   const res = await api(`/repos/${repo}/rules/branches/${encodeURIComponent(branch)}`, headers);
   if (!res.ok) throw new Error(`GitHub answered ${res.status} for the rules on ${repo}@${branch}`);
   const problems = protectionProblems(await res.json());
 
-  // How the commit now at the head got there (a removal that was put back leaves the rules looking fine).
-  const commitRes = await api(`/repos/${repo}/commits/${encodeURIComponent(branch)}`, headers);
-  if (!commitRes.ok) throw new Error(`GitHub answered ${commitRes.status} for the head of ${repo}@${branch}`);
+  // How the commit got there (a removal that was put back leaves the rules
+  // looking fine). The named commit when there is one, which is the commit a
+  // push run was started for; otherwise the branch's head.
+  const commitRes = await api(`/repos/${repo}/commits/${encodeURIComponent(judged ?? branch)}`, headers);
+  if (!commitRes.ok) throw new Error(`GitHub answered ${commitRes.status} for ${judged ? `commit ${judged}` : `the head of ${repo}@${branch}`}`);
   const commit = await commitRes.json();
   let checkRuns = [];
   let compare = null;
