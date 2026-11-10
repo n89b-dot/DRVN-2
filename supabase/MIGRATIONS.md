@@ -39,6 +39,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 10 — a deleted member's words leave every feed: Codex on #181 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110220000_deletion_scrub_previews_repair.sql` | not applied |
+
+Adds `private.scrub_member_notices(p_user, p_username)`: a leaver's words leave other members' notifications, found by actor and by the offer or order a notice is about (actor-less offer notices, `offer_agent_deal_reached` on `/orders/<id>/checkout`, `order_disputed`'s dispute text, a party's cancel reason). They are replaced by a line that still reads; bodies with none of the leaver's words stay. Restates `public.scrub_deleted_account` (from `20261108180000`) to call it, nothing else changed. Adds `private.repair_scrubbed_previews(p_batch)` and runs it once: the same rules for members scrubbed before `20261108180000`, and links to retired handles cleared in batches. The counts are printed as a NOTICE when applied; record them here. Idempotent. After the 10 November work review (#153, N1069): `private.notification_member_text(kind)` says whose words each notification kind carries (the actor's, a listing's title, an order party's reason, matched listing titles, or none), and the scrub reads it instead of a hand-written list; a kind it does not know is scrubbed as a member's words. A trigger on `public.notifications` (`notification_kind_classified`) refuses an unclassified kind only where `drvn.strict_notification_kinds` is `on`, which `scripts/test-sql-guards.sh` sets on the test database and production never does. `private.scrub_member_digest_items(p_user)` takes the leaver's listings out of saved-search emails (`saved_search_email_digests.items`): an unsent email loses those items and is not sent when none is left (new `skip_reason` `listings_removed`, so the table's skip-reason check is restated), a sent one keeps its shape with a neutral title. Saved-search notices that named the leaver's listing lose that title. The scrub and the one-time repair both run these, and the repair's NOTICE gains two counts.
+
 ## November 10 — the console's open operations are one query: N718 (not applied anywhere)
 
 | File | Applied to |
