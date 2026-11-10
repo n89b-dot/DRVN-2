@@ -45,6 +45,30 @@ emergency door, add yourself as a bypass actor in the UI (Settings → Rules →
 Rulesets → protect-main → Bypass list, "for pull requests only") and write
 down when you use it.
 
+**Watched (#112).** `.github/workflows/protection-watch.yml` runs
+`scripts/check-branch-protection.mjs` on every push to `main`, hourly and by
+hand. It fails, and GitHub emails the failure, when `main` has lost the pull
+request rule, `release-gate` (pinned to GitHub Actions, on an up-to-date
+branch), the force-push block or the deletion block. Re-apply with
+`--apply` below. Run it yourself any time:
+`node scripts/check-branch-protection.mjs`.
+
+**What the watch checks beyond the rules (work review #156, #139).** Reading
+the rules only shows the present: protection that was removed, used and put
+back within the hour would look fine. So each run also asks how the commit
+now at `main`'s head got there. It must be a merge commit whose second
+parent, the pull request's head, passed `release-gate` and was level with
+`main` when it merged; a commit pushed straight to `main`, or merged before
+its checks finished, fails the run. It also checks the `production`
+deployment environment once that exists: it must have required reviewers and
+a restriction on which branches and tags may deploy. And the production
+deploy itself starts with a job that names no environment and refuses to go
+on unless `production` exists and is guarded, because a job that names a
+missing environment makes GitHub create it unprotected. A failed watch posts
+to the alert channel (`ADMIN_ALERT_WEBHOOK_URL`), not only GitHub's own
+email. Run it by hand with `node scripts/check-branch-protection.mjs`, or
+`node scripts/check-branch-protection.mjs --environment production`.
+
 Re-running `--apply` updates the existing ruleset (found by name) instead of
 creating a second one.
 

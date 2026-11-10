@@ -1,0 +1,60 @@
+# Report five #112: fail loudly when main loses the protect-main ruleset or
+# stops requiring release-gate on an up-to-date branch. Runs on every push to
+# main (so a merge made while protection was off is caught at once), every
+# hour (GitHub may delay or drop scheduled runs on a quiet repository; the
+# push trigger is the dependable one), and by hand. Reads only public data.
+#
+# Work review #156: reading the rules after a merge misses protection that was
+# removed, used and put back. So the check also asks how the commit now at
+# main's head got there (a pull request head that passed release-gate while
+# level with main), and that the production environment, once it exists, has
+# required reviewers (#139). A failure goes to the alert channel, not only to
+# GitHub's own email.
+name: Branch protection watch
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  protection:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    # Read-only, and only what the check asks GitHub: the rules, the head
+    # commit's check runs, and the production environment's settings.
+    permissions:
+      contents: read
+      checks: read
+      actions: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.22.0
+      # A push run judges the commit it was started for, not whatever is at
+      # main's head by the time it runs: a commit pushed while protection was
+      # off, followed a minute later by an ordinary merge, would otherwise
+      # never be looked at. The hourly and by-hand runs judge the head.
+      - name: main is protected, and this commit reached it properly
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            node scripts/check-branch-protection.mjs "$GITHUB_REPOSITORY" main --commit "$GITHUB_SHA"
+          else
+            node scripts/check-branch-protection.mjs "$GITHUB_REPOSITORY" main
+          fi
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Tell the alert channel
+        if: failure()
+        run: |
+          node scripts/deploy.mjs alert "DRVN main protection check FAILED on ${GITHUB_SHA::7} ($GITHUB_EVENT_NAME). Run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+        env:
+          ADMIN_ALERT_WEBHOOK_URL: ${{ secrets.ADMIN_ALERT_WEBHOOK_URL }}

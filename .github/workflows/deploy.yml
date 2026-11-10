@@ -8,6 +8,9 @@
 # rc-YYYYMMDD[-n] on main whose release-gate passed, through the "production"
 # environment (the owner sets its required reviewers), with the same
 # migration check and the sandbox overrides absent from the host (N540).
+# The tag must be annotated (who made it, and when), not cryptographically
+# signed: the sign-off is the production environment's required reviewer,
+# who approves the run in GitHub (report five #113).
 #
 # Neither job applies a migration: migrations are applied by the session that
 # merges them, before the merge (supabase/MIGRATIONS.md). A missing file stops
@@ -19,7 +22,18 @@
 # VERCEL_PRODUCTION_PROJECT_ID, STAGING_SUPABASE_READER_PASSWORD,
 # PRODUCTION_SUPABASE_READER_PASSWORD, ADMIN_ALERT_WEBHOOK_URL. Variables:
 # DRVN_DEPLOY_STAGING, DRVN_STAGING_ORIGIN, DRVN_PRODUCTION_ORIGIN,
-# DRVN_STAGING_SUPABASE_URL, DRVN_PRODUCTION_SUPABASE_URL.
+# DRVN_STAGING_SUPABASE_URL, DRVN_PRODUCTION_SUPABASE_URL. The two database
+# secrets belong on the staging and production environments, not the
+# repository (#123). On each hosting project (not here): DRVN_DEPLOY_ENV =
+# staging or production, read at build through `vercel pull` (#121); the
+# build refuses a hosted production build without it.
+#
+# Each hosted project names itself with DRVN_DEPLOY_ENV ("staging" or
+# "production") in the host's own settings (docs/staging-setup.md §4), which
+# decides at build whether the site may be indexed. The last check of each job
+# asks the served site: staging must disallow every crawler, send noindex and
+# serve no sitemap; production must be open. A staging site that would be
+# indexed, or a production site hidden from search, fails the deploy.
 #
 # The migration check only reads one table, so it signs in as deploy_reader, a
 # read-only database login (docs/staging-setup.md §11.4), and this workflow
@@ -33,7 +47,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to deploy to production (rc-YYYYMMDD or rc-YYYYMMDD-n, signed off in the release packet)
+        description: Release tag to deploy to production (an annotated rc-YYYYMMDD or rc-YYYYMMDD-n tag on main; the production environment's reviewer approves the run)
         required: true
         type: string
 
@@ -83,7 +97,16 @@ jobs:
           rm -f "$RUNNER_TEMP/target.env"
           node scripts/deploy.mjs migrations "$RUNNER_TEMP/status.json"
 
+      # Codex on #175: a delayed or re-run older run must not deploy over a
+      # newer one. Asked again here, just before the build and deploy.
+      - name: This commit is still main's head
+        id: head
+        run: node scripts/deploy.mjs current "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
       - name: Build and deploy this commit
+        if: steps.head.outputs.current == 'true'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -94,24 +117,68 @@ jobs:
           npx --yes vercel@65.2.0 deploy --prebuilt --prod --env GIT_COMMIT_SHA="$GITHUB_SHA" --token="$VERCEL_TOKEN"
 
       - name: Staging reports this commit
-        run: node scripts/deploy.mjs version "$ORIGIN" "$GITHUB_SHA"
+        if: steps.head.outputs.current == 'true'
+        run: node scripts/deploy.mjs version "$ORIGIN" "$GITHUB_SHA" staging
         env:
           ORIGIN: ${{ vars.DRVN_STAGING_ORIGIN }}
 
       - name: Tell the alert channel
         if: always()
+        # A run that found a newer commit on main deploys nothing and still
+        # ends "success": say so, not "deploy: success".
         run: |
-          node scripts/deploy.mjs alert "DRVN staging deploy of ${GITHUB_SHA::7}: $STATUS"
+          if [ "$STATUS" = "success" ] && [ "$CURRENT" != "true" ]; then
+            node scripts/deploy.mjs alert "DRVN staging: ${GITHUB_SHA::7} was superseded by a newer commit on main, so this run deployed nothing"
+          else
+            node scripts/deploy.mjs alert "DRVN staging deploy of ${GITHUB_SHA::7}: $STATUS"
+          fi
         env:
           STATUS: ${{ job.status }}
+          CURRENT: ${{ steps.head.outputs.current }}
+          ADMIN_ALERT_WEBHOOK_URL: ${{ secrets.ADMIN_ALERT_WEBHOOK_URL }}
+
+  # Work review #139: a job that names an environment which does not exist
+  # makes GitHub create it, empty and unprotected, and run. So this job, which
+  # names no environment and runs the dispatched ref's script (not the release
+  # tag's, which may predate the check), checks first that "production"
+  # exists, has required reviewers and restricts what may deploy to it. The
+  # production job cannot start until it passes. A run dispatched from another
+  # branch brings its own workflow file; the environment's branch restriction
+  # is what stops that, and this is the check that the restriction exists.
+  production-guard:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.22.0
+      - name: The production environment is guarded
+        run: node scripts/check-branch-protection.mjs --environment production "$GITHUB_REPOSITORY"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Tell the alert channel
+        if: failure()
+        run: |
+          node scripts/deploy.mjs alert "DRVN production deploy of $TAG REFUSED before it started. The production environment is not guarded (see the run)."
+        env:
+          TAG: ${{ inputs.tag }}
           ADMIN_ALERT_WEBHOOK_URL: ${{ secrets.ADMIN_ALERT_WEBHOOK_URL }}
 
   production:
     if: github.event_name == 'workflow_dispatch'
+    needs: production-guard
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     # The owner gives this environment required reviewers in GitHub, so a
     # production deploy waits for a person's approval as well as the tag.
+    # production-guard has just checked that it does.
     environment: production
     permissions:
       contents: read
@@ -130,7 +197,7 @@ jobs:
         run: |
           node scripts/deploy.mjs tag "$TAG"
           if [ "$(git cat-file -t "refs/tags/$TAG")" != "tag" ]; then
-            echo "::error::$TAG must be an annotated tag: the release packet signs one"
+            echo "::error::$TAG must be an annotated tag (git tag -a): a lightweight tag records no author or date"
             exit 1
           fi
           git merge-base --is-ancestor HEAD origin/main || { echo "::error::$TAG is not on main"; exit 1; }
@@ -182,7 +249,7 @@ jobs:
           npx --yes vercel@65.2.0 deploy --prebuilt --prod --env GIT_COMMIT_SHA="$SHA" --token="$VERCEL_TOKEN"
 
       - name: Production reports the tagged commit
-        run: node scripts/deploy.mjs version "$ORIGIN" "$SHA"
+        run: node scripts/deploy.mjs version "$ORIGIN" "$SHA" production
         env:
           ORIGIN: ${{ vars.DRVN_PRODUCTION_ORIGIN }}
           SHA: ${{ steps.tag.outputs.sha }}
