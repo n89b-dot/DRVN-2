@@ -178,6 +178,55 @@ describe("gate order and the optimiser's other spellings (N940, #196 review)", (
   });
 });
 
+describe("a signed link is judged as Storage reads it, however it is spelled (N940, #196 review D)", () => {
+  const OWNER = "8f6c2a52-3d1e-4b8a-9c3f-2b1d4e5f6a7b";
+  const now = Math.floor(Date.now() / 1000);
+  const token = (exp: number) => ["eyJhbGciOiJIUzI1NiJ9", Buffer.from(JSON.stringify({ url: "x", exp })).toString("base64url"), "sig"].join(".");
+  const base = `https://project.supabase.co/storage/v1/object/sign/car-images/${OWNER}/a.webp`;
+  const gate = (source: string, extra = "") => proxy(new NextRequest(`https://drvn.example/_next/image?url=${encodeURIComponent(source)}${extra}&w=640&q=75`));
+
+  it.each([
+    ["a percent-encoded token (?token=%65yJ…)", `${base}?token=%65${token(now - 60).slice(1)}`],
+    ["no token at all", base],
+    ["a token under another parameter only", `${base}?download=1`],
+    ["two tokens, the first one live", `${base}?token=${token(now + 3600)}&token=${token(now - 60)}`],
+    ["an encoded route (/%73ign/)", `${base.replace("/sign/", "/%73ign/")}?token=${token(now - 60)}`],
+    ["the image render route", `${base.replace("/object/sign/", "/render/image/sign/")}?token=${token(now - 60)}`],
+    ["a dot-segment route", `${base.replace("/object/", "/x/../object/")}?token=${token(now - 60)}`],
+    ["an unreadable token", `${base}?token=%zz`],
+  ])("refuses %s with a 404 and nothing cacheable", async (_case, source) => {
+    blocked.keys.mockResolvedValue(new Set());
+    const response = await gate(source);
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("refuses a request that names two sources, so the gate and the optimiser can't read different ones", async () => {
+    blocked.keys.mockResolvedValue(new Set());
+    const response = await gate(`${base}?token=${token(now + 3600)}`, `&url=${encodeURIComponent(`${base}?token=${token(now - 60)}`)}`);
+    expect(response.status).toBe(404);
+  });
+
+  it("refuses the same expired link on a HEAD request and at every width and quality (each is its own cached copy)", async () => {
+    blocked.keys.mockResolvedValue(new Set());
+    const source = encodeURIComponent(`${base}?token=${token(now - 60)}`);
+    const head = await proxy(new NextRequest(`https://drvn.example/_next/image?url=${source}&w=640&q=75`, { method: "HEAD" }));
+    expect(head.status).toBe(404);
+    for (const [w, q] of [["16", "1"], ["3840", "100"], ["640", ""]]) {
+      const response = await proxy(new NextRequest(`https://drvn.example/_next/image?w=${w}&q=${q}&url=${source}`));
+      expect(response.status, `w=${w} q=${q}`).toBe(404);
+    }
+  });
+
+  it("still passes a live link, its token percent-encoded or not", async () => {
+    blocked.keys.mockResolvedValue(new Set());
+    for (const source of [`${base}?token=${token(now + 3600)}`, `${base}?token=%65${token(now + 3600).slice(1)}`]) {
+      const response = await gate(source);
+      expect(response.headers.get("x-middleware-next"), source).toBe("1");
+    }
+  });
+});
+
 describe("N715: the proxy's matcher runs on every console path (work review #143)", () => {
   const runs = (url: string) => unstable_doesMiddlewareMatch({ config, url });
 

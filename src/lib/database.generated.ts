@@ -8470,6 +8470,7 @@ export type Database = {
           signed_url: string
         }[]
       }
+      photo_signing_ready: { Args: never; Returns: boolean }
       pickup_mint_pass: {
         Args: {
           p_buyer_id: string

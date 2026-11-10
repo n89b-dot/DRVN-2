@@ -18,7 +18,6 @@ import { loadChat, resolveAbout, type ChatAbout } from "./chat-load";
 import { reportError } from "@/lib/monitoring";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { signPhotosIn } from "@/lib/supabase/photo-signing";
 import { createClient } from "@/lib/supabase/server";
 import { SUSPENDED_MESSAGE } from "@/lib/suspension";
 
@@ -235,16 +234,16 @@ export async function pollAgentReply(requestId: string): Promise<ChatState> {
 /** R81: a private chat photo is shown through a short-lived signed link. */
 async function toChatMessages(rows: StoredMessage[], resolved: Map<string, ResolvedCard>): Promise<ChatMessage[]> {
   const signed = await signChatPhotos(createAdminClient(), rows.flatMap((row) => row.images ?? []));
-  // #105: the rows come back through the service role's chat functions, so a
-  // card's member photo (a build change's part thumbnail) is still canonical.
-  return signPhotosIn(rows.map((row) => ({
+  // A card's member photo (a build change's part thumbnail) is signed where
+  // the card is resolved, and only from the member's own folder (N940).
+  return rows.map((row) => ({
     id: row.id,
     role: row.role as ChatMessage["role"],
     body: row.body,
     cards: ((row.cards ?? []) as TurnCard[]).flatMap((card) => (resolved.has(card.id) ? [resolved.get(card.id)!] : [])),
     images: (row.images ?? []).flatMap((url) => (signed.has(url) ? [signed.get(url)!] : [])),
     created_at: row.created_at,
-  })));
+  }));
 }
 
 /**
