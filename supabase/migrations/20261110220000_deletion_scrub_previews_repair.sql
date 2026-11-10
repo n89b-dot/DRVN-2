@@ -1,5 +1,5 @@
 -- ============================================================================
--- 20261110150000 — a deleted member's words leave other members' feeds, for
+-- 20261110220000 — a deleted member's words leave other members' feeds, for
 -- every case (Codex's review of #181, two P1s; report five follow-up)
 --
 -- 1. Cases scrubbed before 20261108180000 kept their previews. #149's scrub
@@ -430,7 +430,7 @@ begin
   delete from public.activity_comments where author_id = p_user;
   get diagnostics n = row_count; v_counts := v_counts || jsonb_build_object('comments', n);
 
-  -- N418 and 20261110150000: what they wrote, as other members'
+  -- N418 and 20261110220000: what they wrote, as other members'
   -- notifications copied it, found by actor and by the offer or order the
   -- notice is about (private.scrub_member_notices, below).
   v_counts := v_counts || private.scrub_member_notices(p_user, v_username);
@@ -537,7 +537,7 @@ do $$
 declare
   r jsonb := private.repair_scrubbed_previews();
 begin
-  raise notice '20261110150000 repair: % notifications of already-scrubbed members rewritten, % offer and % order notice bodies made neutral, % links to retired handles cleared, % saved-search notices and % saved-search emails cleared of a departed member''s listing titles',
+  raise notice '20261110220000 repair: % notifications of already-scrubbed members rewritten, % offer and % order notice bodies made neutral, % links to retired handles cleared, % saved-search notices and % saved-search emails cleared of a departed member''s listing titles',
     r->>'actor_rows', r->>'offer_bodies', r->>'order_bodies', r->>'retired_links', r->>'saved_search_notices', r->>'saved_search_digests';
 end $$;
 

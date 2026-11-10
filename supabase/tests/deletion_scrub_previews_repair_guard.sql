@@ -1,4 +1,4 @@
--- 20261110150000 (Codex's review of #181): a deleted member's words leave
+-- 20261110220000 (Codex's review of #181): a deleted member's words leave
 -- other members' feeds, for every case.
 --   O  the scrub replaces the leaving seller's listing title in every offer
 --      notice their buyers got, with an actor or without (declined, expired,
