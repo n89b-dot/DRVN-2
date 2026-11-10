@@ -42,7 +42,7 @@ export const JOB_INVENTORY: readonly ScheduledJob[] = [
     job: "drvn-transfer-worker",
     schedule: "*/10 * * * *",
     // The whole money pass (runMoneyWorkerPass).
-    families: ["expiries", "captures", "transfers", "transferReconciliation", "refunds", "labelVoids", "returns", "disputes", "payoutDeadlines", "alerts", "receipts", "analytics"],
+    families: ["expiries", "captures", "transfers", "transferReconciliation", "refunds", "labelVoids", "returns", "disputes", "payoutDeadlines", "alerts", "receipts", "analytics", "orderEmails"],
     budgetMinutes: 30,
   },
 ];

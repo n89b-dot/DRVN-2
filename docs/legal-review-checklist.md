@@ -118,6 +118,11 @@ payments or public launch; none of them has been decided in code.
       ("our hosting provider"), email delivery/SMTP provider ("our email
       delivery provider"), search provider if Typesense is enabled, and the
       operator alert destination (receives order ids and amounts).
+- [ ] **The email provider, once configured** (#116): order emails go
+      through it (Resend if confirmed, R-email). Add it to the privacy page's
+      processor list only when `EMAIL_PROVIDER` is actually set on a live
+      deployment, not before. It receives each recipient's address, the
+      order reference and part title, never message or dispute text.
 - [ ] **Processor agreements (DPAs)** signed with each processor.
 - [ ] **Provider erasure.** Deleting an account deletes the Stripe Customer;
       EasyPost, PostHog and Sentry copies are not erased by the app. Decide

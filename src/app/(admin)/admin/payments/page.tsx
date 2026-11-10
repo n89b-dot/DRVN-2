@@ -6,6 +6,7 @@ import {
   adminReplayWebhookEvent,
   adminReplaceFailedRefund,
   adminResolveRecovery,
+  adminRetryDisputeRecovery,
   adminRetryCarryPayout,
   adminRetryTransfer,
   adminRunTransferWorker,
@@ -117,6 +118,20 @@ export default async function AdminPaymentsPage({
                     ]}
                     submitLabel="Issue replacement refund"
                   />}
+                  {r.recovery_key?.startsWith("stripe:dispute:") ? (
+                    // #108: a chargeback held for review closes through its
+                    // journal, or the seller's payout stays frozen.
+                    <ActionDialog
+                      action={adminRetryDisputeRecovery}
+                      title="Retry this chargeback"
+                      trigger="Retry"
+                      triggerClassName="relbtn !static"
+                      hidden={{ recovery_id: r.id }}
+                      confirmNote={`Chargeback ${r.recovery_key.slice("stripe:dispute:".length)} on ${r.order_id ? r.orderTitle : "orders not yet attributed"}, ${r.amount_cents != null ? formatPrice(r.amount_cents) : "amount unknown"}. Replays the Stripe event that held it (or the newest since) through the normal handling, which checks it against the payment again. If it still doesn't match, it stays held for review. A chargeback already settled before the hold can't be retried. Nothing is decided by hand.`}
+                      fields={[{ kind: "reason", placeholder: "e.g. The payment record was corrected" }]}
+                      submitLabel="Retry"
+                    />
+                  ) : (
                   <ActionDialog
                     action={adminResolveRecovery}
                     title="Close recovery case"
@@ -142,6 +157,7 @@ export default async function AdminPaymentsPage({
                     ]}
                     submitLabel="Close case"
                   />
+                  )}
                 </div>
               </div>
             ))}

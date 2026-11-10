@@ -116,5 +116,23 @@ export async function processPayoutDeadlines(
       reportError("[payout-deadline] order failed", { orderId: order.order_id, error });
     }
   }
+  // Then the reminders to set payouts up, on days 3, 7 and 12 of a sale
+  // (#116, a default Neil can change): one in-app notice, and so one order
+  // email, a day per seller, covering every unpaid sale. A failure here never holds
+  // back the deadline above, and isn't counted against it.
+  try {
+    const { error: reminderError } = await admin.rpc("raise_payout_setup_reminders");
+    if (reminderError) throw reminderError;
+  } catch (reminderFailure) {
+    reportError("[payout-deadline] setup reminders failed", { error: reminderFailure });
+  }
+  // And one reminder per paid order, a day before its dispatch date (work
+  // review #147). The same rule: its failure is reported, never counted here.
+  try {
+    const { error: dispatchError } = await admin.rpc("raise_dispatch_reminders");
+    if (dispatchError) throw dispatchError;
+  } catch (dispatchFailure) {
+    reportError("[payout-deadline] dispatch reminders failed", { error: dispatchFailure });
+  }
   return summary;
 }

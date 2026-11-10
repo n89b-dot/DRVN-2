@@ -215,6 +215,9 @@ if any is missing or invalid.
 | `STRIPE_CONNECT_WEBHOOK_SECRET` | required (live) | signing secret of the Connect endpoint (`account.updated` on sellers' accounts) |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | required (live) | live publishable key |
 | `SENTRY_DSN` | required (live) | must be an `https:` DSN with a key and a numeric project path (`https://<key>@<host>/<project id>`) |
+| `EMAIL_PROVIDER` | recommended (live) | `resend`, the one transport (`src/lib/email/resend.ts`, #116). Unset: order emails are skipped as `email_off` (never sent later as a backlog) and saved-search digests are recorded unsent. The provider is the owner's to confirm (R-email) |
+| `EMAIL_FROM` | with `EMAIL_PROVIDER` | the sender, an address on the provider's verified sending domain, e.g. `DRVN <orders@<domain>>`. Without it email stays off and the misconfiguration is reported |
+| `RESEND_API_KEY` | with `EMAIL_PROVIDER=resend` | a sending-only Resend API key. Without it every email is refused as `rejected` |
 | `ADMIN_ALERT_WEBHOOK_URL` | required (live), `https:` | operator alerts (Slack-compatible body). Outside live-money mode it may be unset; alerts then accumulate as `disabled` outbox rows in Admin → Payments |
 | `NEXT_PUBLIC_SITE_URL` | required (live), `https:` | the canonical origin only — no path, query, fragment or credentials. Unset, links fall back to `https://` + Vercel's `VERCEL_PROJECT_PRODUCTION_URL` (set by the platform), then `http://localhost:3000` |
 | `DRVN_DEPLOY_ENV` | required (hosted) | `production` on the production project, `staging` on staging. Only `production` is indexable by search engines; any other value but those two refuses boot, and so does a hosted deploy without it (`src/lib/deployment.ts`). Fixed at build, like `NEXT_PUBLIC_*` (the build reads it through `vercel pull`, so it must not be marked Sensitive), and the build fails on the same shapes. Sitemaps are served only where it is `production`; everywhere else they answer 404. After each deploy the workflow checks the served `/robots.txt`, `X-Robots-Tag` and sitemaps against the deployment it meant to ship (`scripts/deploy.mjs version <origin> <sha> staging|production`) and fails the deploy if they disagree |
@@ -363,7 +366,7 @@ every family below.
 - `drvn-saved-search-digests`: `savedSearchDigests`
 - `drvn-saved-search-worker`: `savedSearches`
 - `drvn-search-worker`: `search`
-- `drvn-transfer-worker`: `expiries`, `captures`, `transfers`, `transferReconciliation`, `refunds`, `labelVoids`, `returns`, `disputes`, `payoutDeadlines`, `alerts`, `receipts`, `analytics`
+- `drvn-transfer-worker`: `expiries`, `captures`, `transfers`, `transferReconciliation`, `refunds`, `labelVoids`, `returns`, `disputes`, `payoutDeadlines`, `alerts`, `receipts`, `analytics`, `orderEmails` (last, after every money family, #116)
 <!-- job-families:end -->
 
 `select jobname, schedule from cron.job order by 1;` must return exactly
@@ -420,6 +423,20 @@ first, then open `/admin`: since N715 a signed-out visit gets the ordinary
 
 Every money queue is durable and visible in **Admin → Payments**:
 
+**A chargeback held for review** (#108, 20261110230000). A bank chargeback
+that doesn't match its payment basket is held: its orders are disputed, a
+recovery case opens ("Card dispute requires reconciliation") and the seller's
+payout and any deletion of either party wait. Its case has **Retry** in place
+of Close case, audited and needing a reason. Correct what didn't match first
+(a payment record, an order total), then press it. It reopens the chargeback
+and replays the Stripe event that held it (or the newest since) through the
+normal handling. If it still doesn't match, it's held again. Once Stripe's
+outcome is applied, the case closes by itself. Retry refuses, in words, a
+chargeback that was already won, closed or lost before a conflicting event
+held it, one held while a loss was being booked, and one with no stored event
+to replay. Those stay for the owner; the write-off after 90 days is a
+separate control, still to come. Never edit `stripe_dispute_journal` by hand.
+
 - **Refund operations** (`refund_operations`, 0026): anything not `completed`
   appears here. The worker pass (`/api/jobs/transfers`) resumes abandoned
   operations automatically (`resumeIncompleteRefunds`) — reconciling against
@@ -467,6 +484,49 @@ reachable for at most about two hours, and only to someone who already held
 its live link. Photos uploaded before 10 Nov 2026 carry a year's
 Cache-Control on their object, but the proxy's expiry check covers them too.
 
+### How long a link that is already out keeps working (work review #132 to #137)
+
+A member photo is only ever handed out as a signed link, and a signed link
+cannot be called back: it works until its own time runs out or the object is
+deleted. What changes at once is that no new link is made for anyone who can
+no longer see the row the photo belongs to.
+
+| What happened | New links | A link someone already holds |
+|---|---|---|
+| A build is made private; a listing is paused, taken down or goes back to draft | None for anyone but the owner, from their next page load | Works until it runs out: between one and two hours after it was signed. Links are signed for the current clock hour and the one after (`signingWindow` in `src/lib/photo-urls.ts`) |
+| The photo itself is removed (the member deletes it, or an account deletion empties their storage) | None | Stops when the object is deleted. Our image optimiser can answer from its own copy until the link's time runs out, so at most about two hours, and only for someone who held the live link |
+| A member is banned | None for other people: their listings are paused and their builds read as empty | As the first row: up to two hours. A ban deletes no photo |
+| A copyright takedown | None | Refused at once on our pages (451 at `/_next/image`), and the object is deleted |
+| A member's data export | Not applicable | Each photo link inside the export works for seven days from when the export was built (`EXPORT_PHOTO_LINK_SECONDS` in `src/lib/supabase/photo-signing.ts`), whatever the member does to the build or listing afterwards. It stops early only when the object is deleted: the member deletes the photo, or the account |
+
+To cut one link short, delete the object (the member's own delete, or by hand
+in Storage). There is no way to call back one link and keep the photo.
+Supabase signs these links with the project's JWT secret, so changing that
+secret ends every link at once; it also signs every member out and changes
+the API keys. Treat it as a last resort and read Supabase's current
+documentation first.
+
+Link previews are different. The picture in a preview is a card generated at
+an address of ours (`opengraph-image`), with the photo drawn into it, made
+new for each request and read as a signed-out visitor. Once a listing is no
+longer on sale or sold, or a build is private, the card has no photo. A chat
+or a search engine that fetched the card earlier keeps its own copy for as
+long as it chooses; we cannot call that back.
+
+If photos are missing on a page: a member photo that reaches the browser
+unsigned is reported to monitoring as a warning, "A member photo reached a
+page unsigned (bucket)", tagged with the bucket and the first part of the
+page's address (never the rest of it), at most once for each such area in a
+page load and at most thirty a minute across all visitors. One area means a
+read that skipped the signing wrapper (`tests/ci/unsigned-photo-reads.test.ts`
+is the check for the service-role kind). Many areas at once, together with
+"signing failed" or "signing ran past its budget" from the server, means the
+photo store is failing or slow for that bucket: a page waits at most two and
+a half seconds for it, that bucket alone is paused (two seconds, doubling to
+thirty while it keeps failing) and tried again by itself, and links signed in
+the last hour go on being shown meanwhile. An export page is not written
+while the store does not answer; its job is tried again.
+
 ## 5d. Account deletions: every state and the safe action (#106, #108)
 
 Admin → People → "Account deletions not finished" lists every case that isn't
@@ -488,9 +548,10 @@ held for an operator.
 
 **Resume deletion** (`deletion.resume`) is audited like every other console
 action and needs a reason. The database decides, under the deletion lock
-(`admin_resume_account_deletion`, 20261110110000). It acts only on a failed
-job, or on a late hold whose order has settled, and refuses everything else in
-words. The next pass runs every hold check again, and a member whose data is
+(`admin_resume_account_deletion`, 20261110110000), and checks for itself that
+the caller acts for a full admin before it reads anything (20261111080000).
+It acts only on a failed job, or on a late hold whose order has settled, and
+refuses everything else in words. The next pass runs every hold check again, and a member whose data is
 already removed is never let back in.
 
 ### What the console cannot finish
@@ -567,14 +628,24 @@ chargeback that doesn't match its payment basket exactly is frozen for review:
 the orders go to `disputed`, a recovery case opens (Admin → Payments,
 "Card dispute requires reconciliation"), and the seller's payout and any
 deletion of either party wait. **Closing the recovery case does not lift the
-freeze**, because the journal still says `recovery`. Until the console's
-Retry for a held chargeback ships
-([#208](https://github.com/n89b-dot/DRVN-2/pull/208)), such a case **blocks
-Resume deletion for both parties, with no console way out and no safe SQL**:
-the journal's state drives payouts and refunds, and a hand edit can pay a
-seller for a sale the bank reversed. The safe action meanwhile is: read the
-dispute's final status in Stripe, record it on the recovery case's note, and
-leave the case open. Do not edit `stripe_dispute_journal` by hand. Writing
+freeze**, because the journal still says `recovery`. The control that moves
+it is **Retry**, on the case's row in Admin → Payments
+([#208](https://github.com/n89b-dot/DRVN-2/pull/208)): correct what did not
+match (usually the payment record), then Retry with a reason. It replays the
+Stripe event that held the chargeback, or the newest since, through the
+normal handling, which checks it against the payment again in one step: it
+ends applied, or held again saying so, and the case closes by itself when
+Stripe's outcome is applied. When the event replayed is not the bank's
+decision, the chargeback is open again and **its case stays listed until
+Stripe's outcome arrives**: that is the expected state after "Replayed", and
+there is nothing more to retry. Retry refuses a chargeback that was already
+settled, or was mid-booking, when a conflicting event held it, one held
+before 10 November 2026 (what it was held from was not recorded then, so it
+is treated as unknown), and one with no stored event: those stay for the owner, and still **block Resume deletion
+for both parties**. For those the safe action is: read the dispute's final
+status in Stripe, record it on the recovery case's note, and leave the case
+open. A case that was closed opens again by itself if a later Stripe event
+holds the chargeback again. Do not edit `stripe_dispute_journal` by hand. Writing
 off a chargeback the bank kept is a separate control
 ([#207](https://github.com/n89b-dot/DRVN-2/pull/207)), set aside until after
 launch; DRVN absorbs that loss, counted from the bank's decision (decisions
@@ -1074,6 +1145,40 @@ While `EMAIL_PROVIDER` is unset, `/api/health/workers` lists the job
 `analytics` families without their providers: a job with nothing to send
 cannot page anyone. Setting `EMAIL_PROVIDER` puts both back in the check, and
 a provider that is set but misconfigured stays in it.
+
+**Order emails (#116, work review #147).** Every in-app order notice (sold,
+receipt, dispatched, delivered, auto-confirmed, dispute opened and decided,
+refunded, part-refunded, cancelled, DRVN support's updates, the day 3/7/12
+payout-setup reminders and a reminder a day before an order's dispatch date)
+queues one row in `public.order_email_outbox` in the same transaction
+(20261111090000). The row holds the recipient's user id and the order id
+only. The money pass drains it last (`orderEmails`, `src/lib/order-emails.ts`),
+one row at a time until the queue is empty or its time is up (up to two
+minutes, and never past the pass's own limit), with a 10-second limit per
+send. An ordinary failure is retried after 10, 20, 40 and 80 minutes, then
+fails. Rows older than 24 hours are skipped. So are deleted, suspended or
+address-less accounts and muted kinds (receipts, refunds, cancellations,
+payout notices and support updates can't be muted). Past 20 an hour to one
+person, the rest wait half an hour. A guest buyer is emailed only about
+their own order, with no link of ours.
+
+**When the provider refuses our account** (a rotated or suspended API key, a
+sending domain that is no longer verified, a plan's quota): every email
+would fail the same way, so the pass stops at the first one. That row goes
+back to waiting without the attempt counted, nothing is dropped, and rows
+held this way are kept 72 hours, not 24. An alert "Order emails are not
+going out" is raised at most once an hour (Admin → Payments, and the alert
+channel), the `orderEmails` family shows as failing in
+`/api/health/workers`, and Sentry gets the provider's status and error name
+(never an address). Fix the key, the domain or the plan; the next pass
+sends what waited. **An email that will never be sent** (five failed
+attempts, or a message the provider refuses) raises its own alert naming
+the order, once.
+
+Settled rows (sent, skipped, failed) and the two reminder ledgers are
+removed after 90 days by the daily prune job. To see what's waiting or what
+failed:
+`select status, skip_reason, last_error, count(*) from public.order_email_outbox group by 1, 2, 3;`
 
 `/api/jobs/media-gc` and `/api/jobs/listing-imports` are scheduled the same
 way. To run any of them by hand:
