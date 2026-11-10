@@ -87,3 +87,70 @@ describe("migration status (OS-signals)", () => {
     expect(migrationStatus("t", new Set(), ["0001_a.sql"])).toMatchObject({ applied: [], missing: ["0001"], newest: null, count: 0 });
   });
 });
+
+describe("--status over the session pooler (N951, report five #114)", () => {
+  const pooled = {
+    "fixture-dev": { ref: REF, note: "fixture", pooler: "aws-0-us-east-1.pooler.supabase.com", statusRoute: "pooler" },
+  };
+
+  async function run2(argv: string[], targets: Record<string, unknown>) {
+    const out: string[] = [];
+    const err: string[] = [];
+    const configs: Array<Record<string, unknown>> = [];
+    const client = fakeClient(["20261107100000"]);
+    const code = await run([...argv, "--env-file", path.join(dir, "env.fixture")], {
+      log: (line: string) => out.push(line),
+      error: (line: string) => err.push(line),
+      targets,
+      ca: "fixture-ca",
+      allowed: {},
+      migrationsDir: "/fixture/supabase/migrations",
+      listMigrations: () => ["20261107100000_a.sql"],
+      createClient: (config: Record<string, unknown>) => { configs.push(config); return client; },
+    });
+    return { code, out, err, configs };
+  }
+
+  it("uses the target's pinned pooler host and the ref-qualified user, with verified TLS for that host", async () => {
+    const { code, configs } = await run2(["--target", "fixture-dev", "--status"], pooled);
+    expect(code).toBe(0);
+    expect(configs[0]).toMatchObject({ host: "aws-0-us-east-1.pooler.supabase.com", port: 5432, user: `postgres.${REF}` });
+    expect(configs[0].ssl).toMatchObject({ ca: "fixture-ca", servername: "aws-0-us-east-1.pooler.supabase.com", rejectUnauthorized: true });
+  });
+
+  it("--route direct overrides the target's statusRoute", async () => {
+    const { code, configs } = await run2(["--target", "fixture-dev", "--status", "--route", "direct"], pooled);
+    expect(code).toBe(0);
+    expect(configs[0]).toMatchObject({ host: `db.${REF}.supabase.co`, user: "postgres" });
+  });
+
+  it("stays direct when the target names no status route", async () => {
+    const { configs } = await run2(["--target", "fixture-dev", "--status"], { "fixture-dev": { ref: REF } });
+    expect(configs[0]).toMatchObject({ host: `db.${REF}.supabase.co`, user: "postgres" });
+  });
+
+  it("refuses the pooler for anything but --status, and for a target with no pinned pooler", async () => {
+    const apply = await run2(["--target", "fixture-dev", "--route", "pooler", "supabase/migrations/x.sql"], pooled);
+    expect(apply.code).toBe(1);
+    expect(apply.err.join("\n")).toMatch(/--route pooler is for --status only/);
+    expect(apply.configs).toEqual([]);
+    const unpinned = await run2(["--target", "fixture-dev", "--status", "--route", "pooler"], { "fixture-dev": { ref: REF } });
+    expect(unpinned.code).toBe(1);
+    expect(unpinned.err.join("\n")).toMatch(/no pooler host/);
+    expect(unpinned.configs).toEqual([]);
+    const bogus = await run2(["--target", "fixture-dev", "--status", "--route", "sideways"], pooled);
+    expect(bogus.code).toBe(1);
+    expect(bogus.configs).toEqual([]);
+  });
+
+  it("the committed allow-list pins staging's pooler and validates pooler hosts", async () => {
+    const { loadTargets } = await import("../../scripts/lib/supabase-db.mjs");
+    const committed = loadTargets();
+    expect(committed.staging).toMatchObject({ pooler: "aws-0-us-east-1.pooler.supabase.com", statusRoute: "pooler" });
+    const bad = path.join(dir, "targets-bad.json");
+    fs.writeFileSync(bad, JSON.stringify({ targets: { x: { ref: REF, pooler: "evil.example.com" } } }));
+    expect(() => loadTargets(bad)).toThrow(/not a Supabase session-pooler host/);
+    fs.writeFileSync(bad, JSON.stringify({ targets: { x: { ref: REF, statusRoute: "pooler" } } }));
+    expect(() => loadTargets(bad)).toThrow(/no pooler host/);
+  });
+});

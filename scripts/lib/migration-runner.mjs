@@ -470,7 +470,10 @@ export const USAGE = `usage:
   --apply             apply for real; needs --confirm with the code the dry run printed for these files
   --record-only       don't run the files: record the history row of each one whose every object is
                       verified on the target (functions by signature and body); list the rest with reasons
-  --status            read-only: print {target, applied, onDisk, missing, extra, newest, count} as JSON`;
+  --status            read-only: print {target, applied, onDisk, missing, extra, newest, count} as JSON
+  --route <r>         direct (db.<ref>.supabase.co, IPv6 only without Supabase's IPv4 add-on) or pooler
+                      (the target's pinned session-pooler host, reachable over IPv4). Only --status may use
+                      the pooler; it defaults to the target's statusRoute. Applies always go direct`;
 
 /**
  * What a target has applied against what is in supabase/migrations/, for the
@@ -519,6 +522,7 @@ export async function run(argv, deps = {}) {
         "record-only": { type: "boolean", default: false },
         "env-file": { type: "string", default: ".env.local" },
         status: { type: "boolean", default: false },
+        route: { type: "string" },
         help: { type: "boolean", default: false },
       },
     });
@@ -533,6 +537,12 @@ export async function run(argv, deps = {}) {
   }
   if (values.status && (positionals.length || values.apply || values.confirm || values["dry-run"] || values["record-only"])) {
     fail("--status takes only --target and --env-file: it reads the whole history and changes nothing");
+    return 1;
+  }
+  if (values.route === "pooler" && !values.status) {
+    // Applies, record-only and dry runs stay on the direct host: a DDL
+    // session through a shared pooler is not something this runner trusts.
+    fail("--route pooler is for --status only: applies and dry runs connect direct");
     return 1;
   }
   if (!positionals.length && !values.status) {
@@ -557,7 +567,9 @@ export async function run(argv, deps = {}) {
     const env = readDbEnv(readFile(values["env-file"]));
     password = env.password;
     const targets = deps.targets ?? loadTargets();
-    target = resolveTarget({ targets, name: values.target, envRef: env.ref });
+    const listed = Object.hasOwn(targets, values.target ?? "") ? targets[values.target] : undefined;
+    const route = values.route ?? (values.status ? listed?.statusRoute : undefined) ?? "direct";
+    target = resolveTarget({ targets, name: values.target, envRef: env.ref, route });
     if (!password) throw new Error(`${values["env-file"]} has no SUPABASE_DB_PASSWORD`);
     ca = deps.ca ?? loadSupabaseRootCa();
     allowed = deps.allowed ?? loadDynamicSqlAllowed();
@@ -589,7 +601,7 @@ export async function run(argv, deps = {}) {
     return 1;
   }
 
-  const config = directClientConfig({ host: target.host, password, ca, applicationName: "drvn-apply-migration" });
+  const config = directClientConfig({ host: target.host, user: target.user, password, ca, applicationName: "drvn-apply-migration" });
   const client = deps.createClient ? deps.createClient(config) : await defaultClient(config);
   client.on?.("notice", (notice) => log(`NOTICE: ${notice.message}`));
   try {
