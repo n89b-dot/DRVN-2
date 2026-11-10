@@ -29,6 +29,54 @@ export type UploadImagesResult = { uploaded: UploadedImage[]; failed: UploadFail
  */
 const SERVER_NORMALIZED_BUCKETS = ["avatars", "car-images", "activity-images", "listing-images", "message-photos", "agent-chat-photos"];
 
+import { SERVER_UPLOAD_MAX_BYTES, serverUploadMaxBytes } from "@/lib/upload-limits";
+
+export { SERVER_UPLOAD_MAX_BYTES };
+/** The shrink aims under this, leaving headroom below the cap for the form. */
+const SHRINK_TARGET_BYTES = 3_500_000;
+
+/** What to do with a photo that is still too large after shrinking. */
+export const tooLargeReason = (name: string, maxMb: number) =>
+  `${name} is too large to upload (over ${maxMb} MB). Save a smaller copy and try again: most phones can resize a photo from its share or edit menu, and a screenshot of it works too.`;
+
+/** A decoded photo ready to draw, the right way up, and how to let go of it. */
+type Drawable = { source: CanvasImageSource; width: number; height: number; release: () => void };
+
+/**
+ * Decodes a photo for drawing, two ways (work review #158, N955).
+ *
+ * First `createImageBitmap` with the orientation option, the fast path.
+ * Some browsers do not have it for a File, or reject the options argument
+ * (older Safari and iOS web views among them), and before this every phone
+ * photo over the server's 4 MB cap was refused there with advice to resize
+ * it by hand. So second: an ordinary `<img>` reading the same file from an
+ * object URL. Every current browser decodes its own photo formats that way
+ * and applies the photo's EXIF orientation itself when drawing it.
+ */
+async function decodeForCanvas(file: File): Promise<Drawable> {
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    return { source: bitmap, width: bitmap.width, height: bitmap.height, release: () => bitmap.close() };
+  } catch {
+    const url = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      image.decoding = "async";
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error("The photo could not be decoded."));
+        image.src = url;
+      });
+      if (!image.naturalWidth || !image.naturalHeight) throw new Error("The photo has no size.");
+      // The object URL is kept until the pixels are drawn.
+      return { source: image, width: image.naturalWidth, height: image.naturalHeight, release: () => URL.revokeObjectURL(url) };
+    } catch (error) {
+      URL.revokeObjectURL(url);
+      throw error;
+    }
+  }
+}
+
 /**
  * Client-side pre-shrink for photography (brief §S4): correct orientation,
  * cap the long edge at 2560px, re-encode as JPEG q0.85. This only saves
@@ -43,7 +91,7 @@ export async function normalizePublicPhoto(file: File): Promise<File> {
   const heic = isHeicFile(file);
   if ((!file.type.startsWith("image/") && !heic) || file.type === "image/gif") return file;
   try {
-    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const bitmap = await decodeForCanvas(file);
     const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
     // Already small in bytes and pixels → keep the original (EXIF intact is
     // acceptable only when we're not re-encoding; GPS-bearing camera files
@@ -51,7 +99,7 @@ export async function normalizePublicPhoto(file: File): Promise<File> {
     // A HEIC is always converted: the server's image library can't decode
     // the HEVC photos iPhones take (N64), so it must arrive as JPEG.
     if (!heic && file.size < SKIP_UNDER_BYTES && scale === 1) {
-      bitmap.close();
+      bitmap.release();
       return file;
     }
     const canvas = document.createElement("canvas");
@@ -59,14 +107,19 @@ export async function normalizePublicPhoto(file: File): Promise<File> {
     canvas.height = Math.round(bitmap.height * scale);
     const ctx = canvas.getContext("2d");
     if (!ctx) {
-      bitmap.close();
+      bitmap.release();
       return file;
     }
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", 0.85),
-    );
+    ctx.drawImage(bitmap.source, 0, 0, canvas.width, canvas.height);
+    bitmap.release();
+    // q0.85 puts a 2560px phone photo at about 1–2.5 MB. A very detailed one
+    // can come out larger, so step the quality down until it fits the
+    // target, leaving headroom under SERVER_UPLOAD_MAX_BYTES (#118).
+    let blob: Blob | null = null;
+    for (const quality of [0.85, 0.75, 0.65]) {
+      blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+      if (!blob || blob.size <= SHRINK_TARGET_BYTES) break;
+    }
     if (!blob || (!heic && blob.size >= file.size)) return file;
     const name = file.name.replace(/\.[a-z0-9]+$/i, "") + ".jpg";
     return new File([blob], name, { type: "image/jpeg" });
@@ -90,9 +143,9 @@ const HEIC_EVIDENCE_REASON = (name: string) =>
  * uploading. Several of its refusals have no body (413) or a generic one, and
  * a raw "Unexpected end of JSON input" told nobody anything (N64).
  */
-export function publicPhotoFailureReason(name: string, status: number, error?: string): { reason: string; retryable: boolean } {
+export function publicPhotoFailureReason(name: string, status: number, error?: string, bucket = ""): { reason: string; retryable: boolean } {
   if (status === 401) return { reason: "Sign in again to upload photos.", retryable: false };
-  if (status === 413) return { reason: `${name} is too large to upload.`, retryable: false };
+  if (status === 413) return { reason: tooLargeReason(name, Math.round(serverUploadMaxBytes(bucket) / (1024 * 1024))), retryable: false };
   if (status === 415) return { reason: error || `${name} isn't a photo format DRVN can use. Try a JPEG, PNG or WebP.`, retryable: false };
   if (status === 422) return { reason: error || `${name} couldn't be processed. Try it as a JPEG, PNG or WebP.`, retryable: false };
   if (status === 429) return { reason: error || "Upload limit reached. Try again later.", retryable: true };
@@ -123,14 +176,13 @@ export async function uploadImages({
   bucket: string;
   /** Folder prefix, usually `${userId}` or `${userId}/${objectId}`. */
   pathPrefix: string;
-  /** Per-file size ceiling. Default 10MB (avatars pass 2MB). */
+  /** Per-file size ceiling. Default 10MB (avatars pass 2MB); photos through the photo route are capped at SERVER_UPLOAD_MAX_BYTES whatever this says. */
   maxBytes?: number;
   /** Run normalizePublicPhoto first (public photography only — never evidence). */
   normalize?: boolean;
 }): Promise<UploadImagesResult> {
   const uploaded: UploadedImage[] = [];
   const failed: UploadFailure[] = [];
-  const maxMb = Math.round(maxBytes / (1024 * 1024));
 
   for (let file of Array.from(files)) {
     // The picker filters via accept="image/*", but drag-and-drop hands us
@@ -155,8 +207,10 @@ export async function uploadImages({
         continue;
       }
     } else if (normalize) file = await normalizePublicPhoto(file);
-    if (file.size > maxBytes) {
-      failed.push({ file, reason: `${file.name} is over ${maxMb}MB.`, retryable: false });
+    // Through the photo route, never more than the host will accept (#118).
+    const limit = serverNormalized ? Math.min(maxBytes, SERVER_UPLOAD_MAX_BYTES) : maxBytes;
+    if (file.size > limit) {
+      failed.push({ file, reason: tooLargeReason(file.name, Math.round(limit / (1024 * 1024))), retryable: false });
       continue;
     }
     if (serverNormalized) {
@@ -171,12 +225,12 @@ export async function uploadImages({
           headers: { "x-upload-bucket": bucket },
         });
       } catch {
-        failed.push({ file, ...publicPhotoFailureReason(file.name, 0) });
+        failed.push({ file, ...publicPhotoFailureReason(file.name, 0, undefined, bucket) });
         continue;
       }
       const result = (await response.json().catch(() => null)) as { url?: string; path?: string; error?: string } | null;
       if (!response.ok || !result?.url || !result.path) {
-        failed.push({ file, ...publicPhotoFailureReason(file.name, response.ok ? 0 : response.status, result?.error) });
+        failed.push({ file, ...publicPhotoFailureReason(file.name, response.ok ? 0 : response.status, result?.error, bucket) });
         continue;
       }
       uploaded.push({ url: result.url, path: result.path, file });

@@ -62,3 +62,67 @@ describe("member photo spellings (N455)", () => {
     expect(signingWindow((start + SIGNING_WINDOW_SECONDS) * 1000).window).toBe(early.window + 1);
   });
 });
+
+describe("photo fields and expired links (N940, #178 review)", () => {
+  it("signs only guarded columns, and inside JSON only a post body's image blocks", async () => {
+    const { isPhotoFieldKey } = await import("./photo-urls");
+    for (const key of ["url", "image_url", "cover_image_url", "image", "cover", "cover_url"]) expect(isPhotoFieldKey(key, {}, null), key).toBe(true);
+    for (const key of ["body", "bio", "description", "product_url", "source_url", "video_url", "imported_images", "links", "urls", "src", "thumbnail"]) {
+      expect(isPhotoFieldKey(key, {}, null), key).toBe(false);
+    }
+    expect(isPhotoFieldKey("urls", { type: "images" }, "body")).toBe(true);
+    expect(isPhotoFieldKey("beforeUrl", { type: "before_after" }, "body")).toBe(true);
+    expect(isPhotoFieldKey("url", { type: "embed" }, "body")).toBe(false);
+    expect(isPhotoFieldKey("url", {}, "links")).toBe(false);
+    expect(isPhotoFieldKey("url", {}, "imported_images")).toBe(false);
+  });
+
+  it("an expired or malformed signed link reads as expired; a live one and anything else does not", async () => {
+    const { signedPhotoLinkExpired } = await import("./photo-urls");
+    const at = Date.UTC(2026, 10, 10, 12);
+    const link = (payload: object | null) =>
+      `https://p.supabase.co/storage/v1/object/sign/listing-images/u/a.webp?token=e30.${payload ? Buffer.from(JSON.stringify(payload)).toString("base64url") : ""}.s`;
+    expect(signedPhotoLinkExpired(link({ exp: at / 1000 - 1 }), at)).toBe(true);
+    expect(signedPhotoLinkExpired(link({ exp: at / 1000 + 600 }), at)).toBe(false);
+    expect(signedPhotoLinkExpired(link({}), at)).toBe(true);
+    expect(signedPhotoLinkExpired(link(null), at)).toBe(true);
+    expect(signedPhotoLinkExpired("https://p.supabase.co/storage/v1/object/public/listing-images/u/a.webp", at)).toBe(false);
+    expect(signedPhotoLinkExpired("/hero.png", at)).toBe(false);
+    expect(signedPhotoLinkExpired(null, at)).toBe(false);
+  });
+});
+
+describe("the signer's photo keys match the database guards (N940, #196 review)", () => {
+  it("every signed column is one member_media_ref_ok guards, and the body paths are the ones its body guard checks", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { GUARDED_PHOTO_COLUMNS } = await import("./photo-urls");
+    const integrity = fs.readFileSync(path.resolve(__dirname, "../../supabase/migrations/20261107203000_media_integrity.sql"), "utf8");
+    const guarded = new Set([...integrity.matchAll(/before insert or update of ([a-z_]+)[, ]/g)].map((m) => m[1]));
+    // The RPC aliases read guarded columns: image (a listing's first
+    // listing_images.url), cover and cover_url (a car's cover_image_url).
+    for (const column of GUARDED_PHOTO_COLUMNS) {
+      if (["image", "cover", "cover_url"].includes(column)) continue;
+      expect(guarded.has(column), `${column} has no member_media_ref_ok guard`).toBe(true);
+    }
+    expect(integrity).toContain("b -> 'urls'");
+    expect(integrity).toContain("b ->> 'type' = 'images'");
+    expect(integrity).toContain("b ->> 'beforeUrl'");
+    expect(integrity).toContain("b ->> 'afterUrl'");
+  });
+
+  it("classifies every JSON column in the generated schema as member-writable or server-only", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { MEMBER_JSON_COLUMNS, SERVER_JSON_COLUMNS } = await import("./json-columns");
+    const types = fs.readFileSync(path.resolve(__dirname, "database.generated.ts"), "utf8");
+    const tables = types.slice(types.indexOf("    Tables: {"), types.indexOf("    Views: {"));
+    const json = new Set<string>();
+    for (const table of tables.matchAll(/\n {6}[a-z_]+: \{\n {8}Row: \{\n([\s\S]*?)\n {8}\}/g)) {
+      for (const column of `\n${table[1]}\n`.matchAll(/\n {10}([a-z_]+): Json( \| null)?\n/g)) json.add(column[1]);
+    }
+    expect(json.size).toBeGreaterThan(10);
+    const known = new Set([...MEMBER_JSON_COLUMNS, ...SERVER_JSON_COLUMNS]);
+    expect([...json].filter((c) => !known.has(c)), "classify these JSON columns in src/lib/json-columns.ts").toEqual([]);
+  });
+});

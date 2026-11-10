@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 
 import type { CarHotspot, CarImage, ModItem } from "@/lib/database.types";
-import { Button, TileHead } from "@/components/ui";
+import { Button, PhotoImage, TileHead } from "@/components/ui";
 import { cx } from "@/lib/format";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
@@ -96,8 +96,8 @@ export function ShowcaseEditor({
               }
             }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={image.url} alt={image.alt ?? "Car photo"} className="h-full w-full object-cover" />
+            { }
+            <PhotoImage plain src={image.url} alt={image.alt ?? "Car photo"} className="h-full w-full object-cover" />
           </button>
         ))}
       </div>
@@ -132,8 +132,8 @@ export function ShowcaseEditor({
                 if (event.detail === 0) setFocusKey(key);
               }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={imageUrl} alt="Showcase" className="block w-full" draggable={false} />
+              { }
+              <PhotoImage plain src={imageUrl} alt="Showcase" className="block w-full" draggable={false} />
             </button>
             {pins.map((pin, index) => (
               <button

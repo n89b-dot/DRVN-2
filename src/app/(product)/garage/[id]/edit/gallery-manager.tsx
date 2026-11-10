@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react";
 
 import type { CarImage } from "@/lib/database.types";
 import { uploadFailureMessage, uploadImages } from "@/lib/media-upload";
-import { Button, ConfirmDialog, Dialog, DropZone, Media, SortableGrid, SortableItem, TileHead } from "@/components/ui";
+import { Button, ConfirmDialog, Dialog, DropZone, Media, PhotoImage, SortableGrid, SortableItem, TileHead } from "@/components/ui";
 
 import {
   addCarImage,
@@ -327,7 +327,7 @@ export function GalleryManager({
         title={ordered.length ? "Add more photos" : "Add the first photos"}
         body={
           ordered.length
-            ? "Drop images here, or click to choose. 10MB max each."
+            ? "Drop images here, or click to choose. 4 MB max each; larger photos are shrunk first."
             : "Drop images here, or click to choose. The first upload becomes the cover."
         }
       />
@@ -377,8 +377,8 @@ function FramingDialog({
             });
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={coverUrl} alt="Cover" className="block w-full" draggable={false} />
+          { }
+          <PhotoImage plain src={coverUrl} alt="Cover" className="block w-full" draggable={false} />
           <span
             aria-hidden="true"
             className="pointer-events-none absolute h-8 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--on-ink)] shadow-[0_0_0_2px_var(--scrim)]"
@@ -393,8 +393,8 @@ function FramingDialog({
           ].map(([ratio, label]) => (
             <figure key={label} className="m-0">
               <span className={`block overflow-hidden rounded-ctl ${ratio}`}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <PhotoImage
+                  plain
                   src={coverUrl}
                   alt=""
                   className="h-full w-full object-cover"

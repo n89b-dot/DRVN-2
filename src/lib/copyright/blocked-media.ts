@@ -10,8 +10,9 @@ import { pagedRows } from "@/lib/supabase/paged-rows";
  * Photos a copyright takedown removed (R69-dmca), as the proxy sees them.
  *
  * A takedown deletes every reference and queues the storage object for
- * deletion, but Next.js keeps resized copies of an image (`images.minimumCacheTTL`,
- * next.config.ts: an hour since N455, a month before) and has no way to evict one. So
+ * deletion, but Next.js keeps resized copies of an image (the larger of
+ * `images.minimumCacheTTL` and the object's own Cache-Control, which is a year
+ * for photos uploaded before 10 Nov 2026) and has no way to evict one. So
  * the proxy refuses `/_next/image` for any object in
  * public.copyright_blocked_media (20261107231002), cached copy or not.
  *

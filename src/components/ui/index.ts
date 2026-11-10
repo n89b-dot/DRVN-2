@@ -43,6 +43,7 @@ export {
   HorizontalGallery,
   TabNav,
 } from "./primitives";
+export { PhotoImage, usePhotoFallback } from "./photo-image";
 export { VehicleCard, type VehicleSummary } from "./vehicle-card";
 export { Button, ButtonLink, buttonClass, type ButtonVariant } from "./button";
 export { ShareButton } from "./share-button";

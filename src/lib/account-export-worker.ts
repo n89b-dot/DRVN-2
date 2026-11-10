@@ -134,8 +134,8 @@ async function readPage(admin: UntypedAdmin, request: ExportRequest, section: Ex
   });
   // N455: car, listing and post photos are private objects; the member's
   // export carries links that open for seven days instead of stored URLs
-  // that no longer do.
-  return signPhotosForExport(rows);
+  // that no longer do. Only the member's own objects (#178 review).
+  return signPhotosForExport(rows, request.user_id);
 }
 
 async function persistPart(admin: UntypedAdmin, request: ExportRequest, sectionKey: string, page: number, body: Uint8Array, rowCount: number, contentType = "application/json") {

@@ -21,6 +21,7 @@ import { countOpenIdentityReviews } from "./product-identity";
 import { signEvidenceUrls } from "@/lib/evidence-urls";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { adminReadClient } from "./guard";
+import { deletionResumable } from "./presentation";
 import { reportError } from "@/lib/monitoring";
 import { pagedRows } from "@/lib/supabase/paged-rows";
 import { postHeadline } from "@/lib/activity/headline";
@@ -986,6 +987,10 @@ export type AccountDeletionCase = {
   reviewAt: string | null;
   /** N16: transaction keys are kept until then (6 years on the scrub's clock). */
   retainUntil: string | null;
+  /** The worker's job for the case (#106): pending, processing, completed or failed, with its last error. */
+  job: { status: string; lastError: string | null; attempts: number } | null;
+  /** #108: an operator can put it back in the queue (adminResumeAccountDeletion); the database re-checks. */
+  resumable: boolean;
 };
 
 export const ACCOUNT_DELETIONS_PAGE_SIZE = 50;
@@ -1011,6 +1016,18 @@ export async function getAccountDeletionCases(page = 0): Promise<{ rows: Account
   unlessFailed("account deletions", error);
   const rows = data ?? [];
   const people = await partiesFor(a, rows.map((r) => r.user_id));
+  // The worker's job per case: a page holds at most 50, one read.
+  const keys = rows.flatMap((r) => (r.user_id ? [`delete:${r.user_id}`] : []));
+  const jobs = new Map<string, { status: string; lastError: string | null; attempts: number }>();
+  if (keys.length) {
+    const { data: jobRows, error: jobError } = await a
+      .from("remediation_jobs")
+      .select("dedup_key, status, last_error, attempts")
+      .eq("kind", "delete_account")
+      .in("dedup_key", keys);
+    unlessFailed("account deletion jobs", jobError);
+    for (const j of jobRows ?? []) jobs.set(j.dedup_key, { status: j.status, lastError: j.last_error, attempts: j.attempts });
+  }
   const total = count ?? from + rows.length;
   return {
     total,
@@ -1029,6 +1046,8 @@ export async function getAccountDeletionCases(page = 0): Promise<{ rows: Account
       requestedAt: r.requested_at,
       reviewAt: r.review_at,
       retainUntil: r.retain_until,
+      job: r.user_id ? (jobs.get(`delete:${r.user_id}`) ?? null) : null,
+      resumable: deletionResumable(r.outcome, r.blocker_code, r.user_id ? (jobs.get(`delete:${r.user_id}`)?.status ?? null) : null),
     })),
   };
 }

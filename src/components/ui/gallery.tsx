@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Dialog } from "./dialog";
+import { PhotoImage } from "./photo-image";
 
 export type GalleryImage = { url: string; alt?: string | null };
 
@@ -48,7 +48,7 @@ export function Gallery({
           hero.alt ? `, ${hero.alt}` : ""
         }`}
       >
-        <Image
+        <PhotoImage
           key={hero.url}
           src={hero.url}
           alt={hero.alt ?? label}
@@ -74,7 +74,7 @@ export function Gallery({
               onClick={() => setActive(index)}
               className={`gallery__thumb thumb ${index === clampedActive ? "is-active" : ""}`}
             >
-              <Image src={image.url} alt="" fill sizes="88px" className="object-cover" />
+              <PhotoImage src={image.url} alt="" fill sizes="88px" className="object-cover" />
             </button>
           ))}
         </div>
@@ -196,8 +196,7 @@ export function GalleryLightbox({
         >
           {/* A plain img, not next/image: zoom needs to render past whatever
               box the optimizer would otherwise fit it to. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={current.url} alt={current.alt ?? label} />
+          <PhotoImage plain src={current.url} alt={current.alt ?? label} />
         </button>
 
         {count > 1 && (

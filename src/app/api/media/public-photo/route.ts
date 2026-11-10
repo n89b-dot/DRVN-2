@@ -3,8 +3,10 @@ import sharp from "sharp";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { allowAction } from "@/lib/rate-limit";
+import { SERVER_UPLOAD_MAX_BYTES, serverUploadMaxBytes } from "@/lib/upload-limits";
 import { ensureMediaStorageOrigin } from "@/lib/media-lifecycle";
 import { AGENT_CHAT_BUCKET, chatPhotoRef } from "@/lib/agent/chat-photo-ref";
+import { SIGNED_PHOTO_BUCKETS } from "@/lib/photo-urls";
 import { signedPhotoUrl } from "@/lib/supabase/photo-signing";
 
 const BUCKETS = new Set(["avatars", "car-images", "activity-images", "listing-images"]);
@@ -26,7 +28,9 @@ const MESSAGE_BUCKET = "message-photos";
  */
 const CHAT_BUCKET = AGENT_CHAT_BUCKET;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const LIMIT = 11 * 1024 * 1024;
+// #118: the photo (at most SERVER_UPLOAD_MAX_BYTES, 4 MB) plus its form; a
+// serverless host refuses bodies past about 4.5 MB before this code runs.
+const LIMIT = SERVER_UPLOAD_MAX_BYTES + 256 * 1024;
 const HEIC_REFUSAL = "This HEIC photo can't be processed. Save it as a JPEG and try again — on iPhone, Settings › Camera › Formats › Most Compatible takes JPEGs.";
 const PUBLIC_RULE = { action: "public-photo", limit: 60, windowSeconds: 3600, failClosed: true };
 // A busy conversation sends more photos than a profile ever uploads; the
@@ -71,7 +75,7 @@ export async function POST(request: Request) {
     const prefix = String(form.get("pathPrefix"));
     const file = form.get("file");
     if ((bucket === MESSAGE_BUCKET) !== (target === MESSAGE_BUCKET) || !validPrefix(bucket, prefix, user.id) || !(file instanceof File)) return new Response(null, { status: 400 });
-    if (file.size > (bucket === "avatars" ? 2 : 10) * 1024 * 1024) return new Response(null, { status: 413 });
+    if (file.size > serverUploadMaxBytes(bucket)) return new Response(null, { status: 413 });
     // Always decode and re-encode. Sharp drops EXIF/XMP/GPS by default.
     const photo = sharp(Buffer.from(await file.arrayBuffer()), { limitInputPixels: 40_000_000, animated: false, failOn: "warning" });
     const meta = await photo.metadata();
@@ -99,8 +103,13 @@ export async function POST(request: Request) {
     const staged = await admin.from("staged_uploads").insert({ owner_id: user.id, bucket, path, url });
     if (staged.error) throw new Error("Staging unavailable");
     // Paths are a fresh UUID per upload and never overwritten (upsert: false),
-    // so browsers and the CDN may keep the object for a year.
-    const result = await admin.storage.from(bucket).upload(path, normalized, { contentType: "image/webp", upsert: false, cacheControl: "31536000" });
+    // so a public avatar may be kept for a year. A member photo is private
+    // (N455) and read through a signed link that lives at most two hours; the
+    // image optimiser keeps its copy for the larger of its own TTL and this
+    // header, so a year here kept resized copies a year after the link died
+    // (#178 review). An hour matches the signing window.
+    const cacheControl = (SIGNED_PHOTO_BUCKETS as readonly string[]).includes(bucket) ? "3600" : "31536000";
+    const result = await admin.storage.from(bucket).upload(path, normalized, { contentType: "image/webp", upsert: false, cacheControl });
     if (result.error) throw new Error("Storage unavailable");
     // N455: car, listing and post photos are private objects. The ledger and
     // the database keep the canonical URL; the browser gets a signed one to
