@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+import { deployEnvProblem, isIndexable } from "./src/lib/deployment";
+
 /** Supabase storage host, derived from the project URL. */
 function supabaseHost(): string | null {
   try {
@@ -10,6 +12,14 @@ function supabaseHost(): string | null {
     return null;
   }
 }
+
+// Indexing is decided when the app is BUILT (headers() below and the
+// prerendered robots.txt read DRVN_DEPLOY_ENV on the build machine), so the
+// build refuses the same shapes boot does: a hosted production-mode build
+// with no name, or a misspelt one, would otherwise bake "noindex" into
+// production while boot, seeing the runtime value, passes (#121 review).
+const deployProblem = deployEnvProblem();
+if (deployProblem) throw new Error(`Build refused: ${deployProblem}`);
 
 const host = supabaseHost();
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL) : null;
@@ -94,6 +104,11 @@ const nextConfig: NextConfig = {
             key: "Permissions-Policy",
             value: 'camera=(), microphone=(), geolocation=(), payment=(self "https://js.stripe.com" "https://*.js.stripe.com")',
           },
+          // #121: staging and every other deployment not named production
+          // tell search engines to stay away (src/lib/deployment.ts). The
+          // host's own deployment protection is not used: it would also
+          // block the scheduled jobs and Stripe's webhooks.
+          ...(isIndexable() ? [] : [{ key: "X-Robots-Tag", value: "noindex, nofollow" }]),
         ],
       },
     ];

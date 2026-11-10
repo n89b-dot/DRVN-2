@@ -309,11 +309,11 @@ Emails:
    project's id and the team's id, not a Git link. Note the two ids for
    §11.4: the project id from `project inspect` (or Settings → General →
    Project ID) is `VERCEL_STAGING_PROJECT_ID`; the team id (Team Settings →
-   General → Team ID) is `VERCEL_ORG_ID`. If your version of the CLI has no
-   `project update`, set the same four things in the dashboard (Settings →
-   Build and Deployment: framework Next.js, Node 22.x, build `npm run
-   build`, install `npm ci`); CI builds on Node 22.22.0. These commands were
-   checked against Vercel's CLI reference on 10 November 2026, not run
+   General → Team ID) is `VERCEL_ORG_ID`. The same four settings can be made
+   in the dashboard instead (Settings → Build and Deployment: framework
+   Next.js, Node 22.x, build `npm run build`, install `npm ci`); CI builds
+   on Node 22.22.0. The subcommands and flags above were confirmed in
+   `vercel@65.2.0`'s own `--help` on 10 November 2026 and have not been run
    against an account: the first time through, read what each prints.
 2. Attach the staging domain; confirm HTTPS.
 3. Set the environment variables below for the deployment environment that
@@ -325,6 +325,7 @@ Emails:
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | step 1.3 |
 | `SUPABASE_SECRET_KEY` | step 1.3 — server only |
 | `NEXT_PUBLIC_SITE_URL` | the staging origin, `https://…`, no path |
+| `DRVN_DEPLOY_ENV` | `staging` (the production project gets `production`). Required: a hosted deploy without it refuses to boot. Anything but `production` answers robots.txt with `Disallow: /` and sends `X-Robots-Tag: noindex`, so staging stays out of search engines, and error reports carry it as their environment (`src/lib/deployment.ts`). **Fixed at build, like `NEXT_PUBLIC_*`:** the deploy workflow's build reads it through `vercel pull`, so set it before the first deploy, don't mark it Sensitive (a Sensitive value isn't pulled), and re-run the Deploy workflow after changing it. A hosted production-mode build without it, or with a misspelt value, fails. **Checked after every deploy:** once the site reports its commit, the Deploy workflow asks the served site itself and fails the deploy unless staging disallows every crawler in `/robots.txt`, sends `X-Robots-Tag: noindex` and answers 404 for `/sitemap.xml` and the catalogue sitemaps (production must be the reverse). So a staging project set to `production` by mistake fails its first deploy, loudly, with the reasons |
 | `PAYMENTS_MODE` | `stripe` |
 | `STRIPE_SECRET_KEY` | Stripe **test mode** → Developers → API keys (`sk_test_…`). A test key keeps the site's test-mode notices on |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | same page (`pk_test_…`) |
