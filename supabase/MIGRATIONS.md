@@ -32,6 +32,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 10 — an operator resumes a stuck account deletion: report five #106/#108 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261110110000_admin_resume_account_deletion.sql` | not applied |
+
+Adds `public.admin_resume_account_deletion(p_user, p_dry_run)`, service role only, which the console's **Resume deletion** (`deletion.resume`) calls through `auditedAction`. It puts a failed deletion job, or a late-hold case whose hold has settled, back in the worker's queue under the deletion lock, and refuses every other state. Additive. The control appears with the app from the same PR; applied first, the function waits unused.
+
 ## November 8 — deletion: late holds after the scrub, other members' notifications, the tombstone race, old retained cases: N418 (not applied anywhere)
 
 | File | Applied to |

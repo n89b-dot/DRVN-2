@@ -397,6 +397,39 @@ Every money queue is durable and visible in **Admin → Payments**:
   URL unauthenticated must 400/403. (0027 self-checks assert this at apply
   time.)
 
+## 5d. Account deletions: every state and the safe action (#106, #108)
+
+Admin → People → "Account deletions not finished" lists every case that isn't
+complete, oldest first, with its state, why it waits, the next step and, when
+the worker gave up, its last error. The member sees the same state in Settings
+or at `/account-deletion/<reference>`. **No state below needs SQL.**
+
+| State in the console | What it means | Safe action |
+|---|---|---|
+| **Cleaning up** | The worker is removing data. It usually finishes within a day; a long storage drain runs over several passes | None. If it has said "Cleaning up" for more than a day, check Admin → Settings → Background jobs (`deletions` family) |
+| **Cleaning up**, with "The worker gave up after 10 tries: …" | The job failed ten times. The error says why: a Stripe customer whose metadata names someone else ("Customer ownership requires operator review"), Storage or Auth failing, or a lost lease | Fix the cause first. For a customer mismatch, look the customer up in Stripe and check whose it is; never delete another member's customer by hand. Then **Resume deletion**. It comes back here if the cause remains |
+| **On hold: money still moving** | Before anything was deleted, the member has an open order, return, refund, payout or bank chargeback. Their sign-in is kept so they can settle it | None. The member settles it, and the worker rechecks every hour. A chargeback is the bank's to decide; it resumes on its own afterwards |
+| **Needs an operator**, "late hold after the scrub" | A return, refund, payout or chargeback opened **after** the member's personal data was removed. The account stays disabled and is never restored (ruled 8 Nov 2026), so nobody can settle it as the member | Settle the money without them, by the normal rules: refund the buyer from the order page; recover a seller-side chargeback loss from held funds, or write it off (Admin → Payments, recovery case). If the case's job is still in the queue, it finishes by itself once the hold is gone. If **Resume deletion** shows, the job had already finished: press it after the money has settled. While anything still holds the case it refuses, saying so |
+| **Needs an operator**, "retained identity" | Finished. Personal data is removed. Order and payment keys are kept until the retention date shown (six years), because the law needs the transaction record | None. What happens when the retention period ends is not yet ruled (`policy_decisions_pending`) |
+
+**Resume deletion** (`deletion.resume`) is audited like every other console
+action and needs a reason. The database decides, under the deletion lock
+(`admin_resume_account_deletion`, 20261110110000). It acts only on a failed
+job, or on a late hold whose order has settled, and refuses everything else in
+words. The next pass runs every hold check again, and a member whose data is
+already removed is never let back in.
+
+**A chargeback held for an operator** (the journal state `recovery`). A bank
+chargeback that doesn't match its payment basket exactly is frozen for review:
+the orders go to `disputed`, a recovery case opens (Admin → Payments,
+"Card dispute requires reconciliation"), and the seller's payout and any
+deletion of either party wait. **Closing the recovery case does not lift the
+freeze**, because the journal still says `recovery`. Until the console control
+for the journal ships (it needs a ruling on how a manual "lost" books the
+loss), the safe action is: read the dispute's final status in Stripe, record
+it on the recovery case's note, and leave the case open. Do not edit
+`stripe_dispute_journal` by hand.
+
 ## 5c. Old photos that still carry metadata (one-off, N627)
 
 Message photos sent before 20261005100000 went into `message-photos` straight

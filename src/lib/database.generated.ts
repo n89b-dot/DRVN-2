@@ -6815,6 +6815,10 @@ export type Database = {
         Args: { p_from: string; p_to: string }
         Returns: Json
       }
+      admin_resume_account_deletion: {
+        Args: { p_dry_run?: boolean; p_user: string }
+        Returns: Json
+      }
       admin_retry_seller_carry_payout: { Args: { p_id: string }; Returns: Json }
       admin_retry_transfer_intent: { Args: { p_order: string }; Returns: Json }
       admin_role: { Args: never; Returns: string }
