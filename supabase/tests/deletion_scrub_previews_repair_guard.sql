@@ -22,7 +22,92 @@
 --      classification does not know is scrubbed as the actor's words, DRVN's
 --      own text stays, every kind a function writes by name is classified,
 --      and with drvn.strict_notification_kinds on an unclassified kind is refused
+--      (U5 to U8, first in the file: also when the row is written with the
+--      server key, which cannot reach schema private, and by a member's own
+--      action; the trigger must not run on the writer's permissions)
 -- Every failed check is collected and reported together at the end.
+-- U5 to U8 run first, each in a transaction of its own (N1069, review of
+-- #206). A trigger function runs as the role that writes the row, and
+-- PL/pgSQL checks a called function's permission when it sets an expression
+-- up, once per transaction: after one insert by the owner, a later insert by
+-- another role in the same transaction is no longer checked. So the first
+-- write to public.notifications in each of these transactions is made by the
+-- role under test: the server key (service_role, which cannot reach schema
+-- private), and a member whose follow raises a notice.
+begin;
+do $$
+declare
+  member uuid := gen_random_uuid();
+  mode text;
+  msg text;
+  refused boolean := false;
+  fails text[] := '{}';
+begin
+  insert into auth.users (id, email, raw_user_meta_data) values (member, 'n1069-server-key@drvn.test', '{}');
+  if exists (select 1 from public.notifications where user_id = member) then
+    raise exception 'Fixture: creating a member wrote a notification as the owner, so this transaction no longer proves the server key''s write (N1069)';
+  end if;
+  if has_schema_privilege('service_role', 'private', 'usage') then
+    raise exception 'FAIL U7: the server key can reach schema private, so this no longer proves the trigger works without it (N1069)';
+  end if;
+  perform set_config('role', 'service_role', true);
+  foreach mode in array array['off', 'on'] loop
+    perform set_config('drvn.strict_notification_kinds', mode, true);
+    begin
+      insert into public.notifications (user_id, kind, section, title) values (member, 'policy_updated', 'marketplace', 'Written with the server key, strict ' || mode);
+    exception when others then
+      get stacked diagnostics msg = message_text;
+      fails := fails || format('FAIL U5: with the server key and strict kinds %s, a classified notification was refused: %s (N1069)', mode, msg);
+    end;
+  end loop;
+  begin
+    insert into public.notifications (user_id, kind, section, title) values (member, 'n1069_server_key_new_kind', 'engagement', 'x');
+  exception
+    when check_violation then refused := true;
+    when others then
+      get stacked diagnostics msg = message_text;
+      refused := true;
+      fails := fails || format('FAIL U6: with the server key, an unclassified kind failed for another reason than being unclassified: %s (N1069)', msg);
+  end;
+  if not refused then
+    fails := fails || 'FAIL U6: with the server key and strict kinds on, an unclassified notification kind was accepted (N1069)'::text;
+  end if;
+  perform set_config('role', 'none', true);
+  if cardinality(fails) > 0 then
+    raise exception 'A notification written with the server key (N1069): %', E'\n' || array_to_string(fails, E'\n');
+  end if;
+end $$;
+rollback;
+
+begin;
+do $$
+declare
+  follower uuid := gen_random_uuid();
+  followed uuid := gen_random_uuid();
+  msg text;
+begin
+  insert into auth.users (id, email, raw_user_meta_data) values
+    (follower, 'n1069-follower@drvn.test', '{}'), (followed, 'n1069-followed@drvn.test', '{}');
+  if exists (select 1 from public.notifications where user_id in (follower, followed)) then
+    raise exception 'Fixture: creating members wrote a notification as the owner, so this transaction no longer proves a member''s write (N1069)';
+  end if;
+  perform set_config('drvn.strict_notification_kinds', 'on', true);
+  perform set_config('request.jwt.claims', jsonb_build_object('sub', follower, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+  begin
+    insert into public.follows (follower_id, target_type, target_id) values (follower, 'profile', followed);
+  exception when others then
+    get stacked diagnostics msg = message_text;
+    perform set_config('role', 'none', true);
+    raise exception 'FAIL U8: a member''s follow could not raise its notification: % (N1069)', msg;
+  end;
+  perform set_config('role', 'none', true);
+  if not exists (select 1 from public.notifications where user_id = followed and kind = 'follow' and actor_id = follower) then
+    raise exception 'FAIL U8: a member''s follow raised no notification (N1069)';
+  end if;
+end $$;
+rollback;
+
 begin;
 
 set constraints all immediate;

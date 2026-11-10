@@ -79,9 +79,16 @@ as $$
 $$;
 revoke all on function private.notification_member_text(text) from public, anon, authenticated;
 
+-- SECURITY DEFINER, like the three triggers already on this table: a trigger
+-- function runs as the role that writes the row, and the app writes
+-- notifications with the server key (service_role), which has no USAGE on
+-- schema private. Without it every such insert failed with "permission
+-- denied for function notification_member_text", strict mode on or off,
+-- because the permission is checked when the IF is set up (review of #206).
 create or replace function private.guard_notification_kind()
 returns trigger
 language plpgsql
+security definer
 set search_path = pg_catalog, pg_temp
 as $$
 begin
