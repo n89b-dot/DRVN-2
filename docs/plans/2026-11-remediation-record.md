@@ -157,7 +157,7 @@ Status words: **merged** (on `main`, CI green) · **in review** (PR up, waiting 
 
 | Item | Findings | Ids | PR | Merge commit | Status |
 |---|---|---|---|---|---|
-| A0 Documents-only pull requests skip the browser suite | | | #215, #227 | `9103915` | merged 10 November: the `changes` job and `scripts/ci-change-scope.mjs`; `release-gate` accepts a skipped `e2e` only on a documents-only pull request; the Stripe lane no longer waits on `e2e`. Measured on #216: mergeable in 4m48s. #227 (approved, in batch 2) closes a gap found afterwards: only a pull request into `main` can be documents-only, because a verdict worked out against another branch would survive a retarget |
+| A0 Documents-only pull requests skip the browser suite | | | #215, #227 | `9103915` | merged 10 November: the `changes` job and `scripts/ci-change-scope.mjs`; `release-gate` accepts a skipped `e2e` only on a documents-only pull request; the Stripe lane no longer waits on `e2e`. Measured on #216: mergeable in 4m48s. #227 (approved, in the plan 2 batch) closes a gap found afterwards: only a pull request into `main` can be documents-only, because a verdict worked out against another branch would survive a retarget |
 | A0b The browser suite as four parts side by side (added 10 November, approved by Neil) | | | #229 | | in review: `e2e/parts.json` splits the spec files by measured time; four jobs, each with its own database and build; the `e2e` job judges and merges them; the same 331 tests, each once, proven by listing |
 | A1 A checked-in copy of the database | `#159` | N1075 | branch `db/a1-schema-snapshot` | | prepared: `scripts/schema-snapshot.mjs` writes `supabase/schema/` (1,098 files) and `sql-guard` checks it. Two builds gave identical folders, and CI's own database matched the folder made on a Mac (run 42839710828). Opens at the quiet point, regenerated |
 | A2 The database owns every change to an order | | | | | not started (quiet point). Pre-study done and ruled on: six direct writes, not three; the guard applies to every role; see judgement calls |
@@ -172,7 +172,7 @@ Nothing is blocked on these. Each is information with the default already applie
 
 - **Carrier tracking at launch:** off by default because no EasyPost account exists; without it an order counts as delivered when the buyer confirms or after 21 days, so a seller's payout waits on that. Turning it on is one EasyPost key.
 - **Listing importer at launch:** off by default because it uses the same Anthropic key as the agent; turning it on is that key with the agent left off.
-- **Stripe Link on the card form:** checkout shows Bank and Klarna beside Card because Link is switched on in the Stripe account; switching it off is a Stripe dashboard setting.
+- **Stripe Link on the card form:** checkout shows Bank and Klarna beside Card because Link is switched on in the Stripe account. DRVN's code assumes a card-style payment; before launch, either switch Link off in the Stripe dashboard or make one test payment with a Link bank account so its timing and refund behaviour are known.
 
 ## Plan 2: judgement calls
 
@@ -195,4 +195,5 @@ Reported to the orchestrator; none is in plan 2's scope.
 - The database does not itself refuse `shipping_mode = 'drvn'` when DRVN Shipping is off; the app does. No money can move that way. **After launch:** it becomes a small database guard when DRVN Shipping is next worked on (orchestrator's ruling on #224).
 - How Stripe presents a Link bank or Klarna payment to an integration that creates card-only payments (card-like, or with bank-debit timing) could not be established from Stripe's documentation. No refund, dispute or payout path reads a card-only field. One test payment with a Link bank account, by whoever sets Stripe up, would settle it.
 - Stripe's card form offers Bank and Klarna (Stripe Link options) beside Card, from the Stripe account's settings.
+- **After launch:** today's schema grants `all` on 27 tables to `anon`, the signed-out role, `orders` among them; row-level security is the only thing that stands between a visitor and those rows. The A6 baseline carries today's grants exactly, as it must. Narrowing them is outside plan 2 Part A and is not acted on (orchestrator's ruling, 10 November); it is listed here so that it reaches the final review.
 - Under a local `next start` the app's own redirects are built on `localhost` whatever address the browser used, so a guest returning from Stripe to `127.0.0.1` loses their order cookie. It does not apply to a hosted deployment.
