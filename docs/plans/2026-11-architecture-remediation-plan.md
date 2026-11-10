@@ -4,6 +4,8 @@ Written 10 November 2026 from `main` at `3a2ddc5`. It takes the architecture fin
 
 This file lives under `docs/plans/`, so the OS does not read it as a report. Each pull request names the OS id for its item (`docs/ids.md`); the OS session assigns ids for items that have none before the work starts.
 
+**Status: approved.** On 10 November 2026 Neil approved this plan and every recommended default in its decisions table, including A6 (one proven baseline before production). It is run as plan 1's section "How the work is run" describes: one building thread, orchestrated and reviewed by the session "Yesterday's work review and improvements", with a plain-language work log and no per-change Codex reviews.
+
 ---
 
 ## In plain words
@@ -47,7 +49,7 @@ Sizes: **S** is a few days of session work with review, **M** is one to two week
 - **Problem.** A CI run takes 17 to 46 minutes and the browser tests are most of it. A pull request that changes only documents still runs them.
 - **Fix.** A path filter on the `e2e` job in `.github/workflows/ci.yml`, with the job still reporting a result so branch protection is satisfied; the Stripe lane stops waiting on `e2e`.
 - **Done when:** a documents-only pull request reaches a mergeable state in under ten minutes.
-- **Note.** It edits a workflow file, so Neil merges it in the browser, or runs `gh auth refresh -s workflow` once.
+- **Note.** It edits a workflow file, so the orchestrator merges it in the browser.
 
 ### A1. A checked-in copy of the database as it stands (S, first at the quiet point)
 
@@ -130,6 +132,8 @@ Order within Part B is by what real use shows. B5 goes first if a money fault is
 ---
 
 ## The decisions, in one table
+
+**Ruled 10 November 2026: Neil approved every recommended default below.**
 
 | # | Decision | Recommended default | When |
 |---|---|---|---|

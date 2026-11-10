@@ -4,6 +4,8 @@ Written 10 November 2026 from `main` at `3a2ddc5` (merge of PR #200). It takes e
 
 This file lives under `docs/plans/`, so the OS does not read it as a report. The OS closes items through merged pull requests that name the item id (`docs/ids.md`); each item below names the OS id it works under where one exists. Where none exists, the OS session assigns one before the pull request is written.
 
+**Status: approved.** On 10 November 2026 Neil approved this plan and every recommended default in its decisions table ("Yes, all defaults"), and asked for it to be finished without involving him unless he is absolutely needed. The section "How the work is run" says who does what.
+
 ---
 
 ## In plain words
@@ -17,7 +19,7 @@ This plan does four things, in this order:
 3. **Fix what the review found in code that has already merged.** These are grouped into three small changes that do not touch the database, so they can be built alongside step 2.
 4. **Fix the Intelligence OS's three rules that can close or reopen an item wrongly.** This is in the OS's own repository and is done by the OS session.
 
-Neil has six decisions to make (about half an hour in all, each with a recommended default) and two changes to merge in the browser. Nothing here waits on the hosting account, and nothing here delays it.
+Neil's six decisions are made (all recommended defaults, 10 November). Nothing here waits on the hosting account, and nothing here delays it.
 
 **The end result** is a `main` with no change waiting in review, both shared databases level with `main` with no stray history, private photos that are actually private, and an OS that does not mis-close items. That is the "quiet point" at which plan 2 begins.
 
@@ -41,6 +43,17 @@ Working time: about seven to nine days of session work with review, most of it w
 **Three things from plan 2 do not wait**, because they do not touch the database and they speed this plan up: skipping browser tests on documents-only pull requests (plan 2 item A0), the launch-configuration test lane (A4), and keeping DRVN Shipping switched off (A5).
 
 **One builder at a time on the database.** At no point in either plan are more than three database pull requests in review.
+
+---
+
+## How the work is run
+
+- **Two building threads.** One works this plan; one works plan 2. Each has its own worktree and never edits a branch the other is using.
+- **One orchestrator, who is also the reviewer:** the session "Yesterday's work review and improvements". It reviews every pull request before it merges and before its migration reaches shared dev or staging, decides the order, and holds both threads to the rules below. A thread that is ready for review says so and moves to its next item; it does not wait idle and does not merge unreviewed work.
+- **The Intelligence OS session** does workstream 4 in the OS repository and keeps the OS current as work lands.
+- **No per-change Codex reviews (Neil, 10 November).** Rows owed in `docs/review-evidence/codex-queue.md` are marked waived. The orchestrator runs one Codex review over the whole of both plans' work when both are finished.
+- **A plain-language work log.** Each building thread keeps a visual page that it updates at every step: what was finished, in plain words, with the pull request beside it.
+- **Neil is involved only when he is absolutely needed.** Anything that needs him is written under "Needs Neil" in `docs/plans/2026-11-remediation-record.md` and on the thread's work log, and work continues on everything else. Pull requests that edit a workflow file are merged in the browser by the orchestrator, on Neil's authority of 10 November.
 
 ---
 
@@ -69,11 +82,11 @@ Thirteen pull requests were in review at 14:00 UTC on 10 November. They are take
 | Step | Pull request | Fix required before it merges | Finding | OS id |
 |---|---|---|---|---|
 | 2.1 | PR #198, deletion runbook and Resume | Keep the file name `20261110110000` and add one named exception to `tests/ci/migration-order.test.ts` (file, date, pull request, reason), with a test that any unlisted back-dated file is still refused (decision D6). The applied file is not edited; any further change goes in a new migration. Add the three states that still need SQL to the runbook. Replace the guard's `exception when others then null`. It merges after step 2.2. | `#126`, `#154`, `#157` | N944, N734 |
-| 2.2 | PR #201, 18+ on long sessions | Sign the skip cookie. Enforce the confirmation on the actions that matter (message, offer, checkout, list), not only on page loads. Remove the prefetch exemption that never fires. | `#152` | N662 |
+| 2.2 | PR #201, 18+ on long sessions | PR #201 merged at 14:12 UTC on 10 November as written, before this plan was in force. A follow-up pull request does the fix: sign the skip cookie, enforce the confirmation on the actions that matter (message, offer, checkout, list), and remove the prefetch exemption that never fires. | `#152` | N662 |
 | 2.3 | PR #203, upload size | Add a second shrink method for browsers where the first fails, and a test of the server's 413. | `#158` | N955 |
 | 2.4 | PR #188, staging out of search | One definition of "hosted". The deploy's version step also checks `/robots.txt` and `X-Robots-Tag`. The sitemap answers 404 when the site is not indexable. | `#156` | N958, N961 |
 | 2.5 | PR #190, set-up order | Split the owner README's row 6 into before and after the first deploy; say exactly how to create the Vercel project without a deploy; restrict environments to `main` and `rc-*`. | `#156` | N952 |
-| 2.6 | PR #195, protection watch | **Neil merges in the browser** (it edits a workflow). A follow-up adds: verify the merged pull request's `release-gate`, send failures to the alert channel, and assert the `production` environment has required reviewers. | `#156`, `#139` | N949, N950 |
+| 2.6 | PR #195, protection watch | The orchestrator merges it in the browser (it edits a workflow, which the command-line token cannot merge). A follow-up adds: verify the merged pull request's `release-gate`, send failures to the alert channel, and assert the `production` environment has required reviewers. | `#156`, `#139` | N949, N950 |
 | 2.7 | PR #210, photo signing rules | Keep the last known "ready" answer on a timeout. Count the rows the clean-up would remove on staging and get Neil's yes or no. Apply `20261110190000` before the code deploys. | `#131`, `#146` | N940 |
 | 2.8 | PR #199, 1,000-row limits | Fix the four reads still on `main`. Add a ratchet test for unbounded reads used as counts. The two heavy loops (blocklist reload, audit-log walk) become database lookups. | `#155` | N718 |
 | 2.9 | PR #206, a deleted member's words | Scrub or skip `saved_search_email_digests.items`. Give each notification kind a "carries member text" flag with a guard on unclassified kinds. | `#153` | new |
@@ -113,7 +126,7 @@ None of these adds a migration, so they are built alongside workstream 2, in thr
 - The agent-id audit matches a marker with a hex digit on either side, is run on staging, and the runbook's statement about staging is corrected (`#145`).
 - **Done when:** staging's catalogue has makes, models and generations, with the counts recorded.
 
-**3.4 Codex reviews** of the ten merges of 9 November, rationed as before, findings filed against the pull request that introduced them (`#129`, OS id N725).
+**3.4 Codex reviews: waived.** Neil's ruling of 10 November: no per-change Codex reviews. The rows owed in `docs/review-evidence/codex-queue.md` are marked waived with that ruling, and `tests/ci/codex-queue.test.ts` accepts a waived row. One Codex review of the whole of both plans' work is run by the orchestrator at the end (`#129`, OS id N725).
 
 ---
 
@@ -138,6 +151,8 @@ Done in the OS repository by the OS session, in this order. These are from the r
 
 ## The decisions, in one table
 
+**Ruled 10 November 2026: Neil approved every recommended default below (D1 to D6).** For D3 the orchestrator judges "small" as within the migration's own limit of ten rows; a larger count goes to Needs Neil.
+
 | # | Decision | Recommended default | If undecided |
 |---|---|---|---|
 | D1 | Set PR #207 (chargeback write-off) aside until after launch? | Yes. It cannot be used until 90 days after a first chargeback. | It stays a draft; nothing is lost. |
@@ -147,18 +162,18 @@ Done in the OS repository by the OS session, in this order. These are from the r
 | D5 | Should published photos have permanent public addresses, with signing kept for drafts and private builds? | Yes, built after launch as plan 2 item B7. Until then the current design stays and PR #210 still merges. | The current design stays. |
 | D6 | PR #198's migration is dated before one already on `main`, and both shared databases already hold it. Keep its name with a named exception in the order test, or rename it and rewrite the history row on both databases? | Keep the name. Both databases applied it before `20261110120000`, which is the order a new database will apply by name, so nothing is out of step; renaming would mean writing to the migration history of two shared databases to cure a problem that exists only in merge order. The reviewing session proposed this and the reviewer of 10 November agrees. | The exception is used. It is temporary: plan 2 item A6 replaces the migration history with one baseline and the exception goes with it. |
 
-Two owner steps are not decisions: merge PR #195 in the browser (or run `gh auth refresh -s workflow` once), and the hosting account (OS id R-hosting), which no item in this plan waits on.
+One owner step remains and no item in this plan waits on it: the hosting account (OS id R-hosting).
 
 ---
 
 ## Sequence
 
-| When | Builder session | Reviewer session | OS session | Neil |
+| When | Building thread | Orchestrator | OS session | Neil |
 |---|---|---|---|---|
-| Day 1 | Rules acknowledged. Steps 2.1 to 2.3. | Approves before any database apply. | Steps 4.1 to 4.4. | D1 to D4; merge PR #195. |
-| Days 2 to 3 | Steps 2.4 to 2.8. Workstream 3.2 and 3.3 alongside. | Reviews each; runs owed Codex reviews (3.4). | Steps 4.5 to 4.7. | D3's count, when shown. |
-| Days 4 to 6 | Steps 2.9 to 2.11. Workstream 3.1. | As above. | Step 4.8. | D5. |
-| Day 7 | Check the quiet point; hand over to plan 2. | Signs off the record. | | |
+| Day 1 | Rules acknowledged. Steps 2.1 to 2.3. | Reviews and approves before any database apply; merges PR #195 in the browser. | Steps 4.1 to 4.4. | Nothing. |
+| Days 2 to 3 | Steps 2.4 to 2.8. Workstream 3.2 and 3.3 alongside. | Reviews each; judges the count for D3. | Steps 4.5 to 4.7. | Nothing, unless D3's count is over ten. |
+| Days 4 to 6 | Steps 2.9 to 2.11. Workstream 3.1. | As above. | Step 4.8. | Nothing. |
+| Day 7 | Check the quiet point. | Declares the quiet point to the plan 2 thread; signs off the record. | | |
 
 The owner path in `docs/plans/2026-11-remediation-plan.md` (hosting, entity, email, Stripe) runs in parallel throughout and is not changed by this plan.
 
