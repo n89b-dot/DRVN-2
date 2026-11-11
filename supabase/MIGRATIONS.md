@@ -50,11 +50,11 @@ with any table in `public`. Details: "Applying without Docker or psql" below.
 
 ## November 11 — one baseline in place of the migration history (architecture plan 2, item A6)
 
-`20261111130000_baseline.sql` builds, on an empty database, what the 298 files from `0001_v3_schema.sql` to `20261111120000_order_status_guard.sql` built: 564 functions, 146 tables, 143 policies, 289 triggers, 21 scheduled jobs, 8 storage buckets, the `agent_worker` role, every grant written out from the catalog, the reference rows, and A3's default privileges last. It refuses, with its own message, a database that already has tables in `public` or `private`. Proven on the guard build and the stack build (`docs/plans/2026-11-a6-baseline-proof.md`). On shared dev and staging it is **recorded, not run** (step 5 in `docs/plans/2026-11-a6-step5-runbook.md`): the 298 (staging) and 291 (shared dev) old history rows are copied to `supabase_migrations.schema_migrations_archive_<yyyymmdd>` and replaced by the baseline's one row, after `--record-only` has verified every object the file creates on the target. The curated vehicle generations it does not carry are in `supabase/reference/curated-vehicle-generations.sql`.
+`20261111130000_baseline.sql` builds, on an empty database, what the 298 files from `0001_v3_schema.sql` to `20261111120000_order_status_guard.sql` built: 564 functions, 146 tables, 143 policies, 289 triggers, 21 scheduled jobs, 8 storage buckets, the `agent_worker` role, every grant written out from the catalog, the reference rows, and A3's default privileges last. It refuses, with its own message, a database that already has tables in `public` or `private`. Proven on the guard build and the stack build (`docs/plans/2026-11-a6-baseline-proof.md`). On shared dev and staging it is **recorded, not run** (11 November 2026, PR #255: staging 298 rows archived, shared dev 291, each history now the baseline's one row) (step 5 in `docs/plans/2026-11-a6-step5-runbook.md`): the 298 (staging) and 291 (shared dev) old history rows are copied to `supabase_migrations.schema_migrations_archive_<yyyymmdd>` and replaced by the baseline's one row, after `--record-only` has verified every object the file creates on the target. The curated vehicle generations it does not carry are in `supabase/reference/curated-vehicle-generations.sql`.
 
 | File | Applied to |
 |---|---|
-| `20261111130000_baseline.sql` | not applied |
+| `20261111130000_baseline.sql` | staging 2026-11-11; shared-dev 2026-11-11 |
 
 ## How the runner works
 

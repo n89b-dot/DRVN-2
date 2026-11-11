@@ -39,6 +39,18 @@ Staging matches the baseline in all nine. Shared dev's three differences are tes
 
 ## Step 5: replace the history rows (staging first, then shared dev)
 
+**Done on 11 November 2026** after the lead's `APPROVED A6 STEP 5`, from #255 at `12540c4d` (the baseline `20261111130000`, sha256 `09abd847…`), staging first:
+
+| | Staging | Shared dev |
+|---|---|---|
+| 1. `--status` before | count 298, newest `20261111120000`, missing `20261111130000`, extra 298 | count 291, newest `20261111120000`, missing `20261111130000`, extra 291 |
+| 2. `--record-only` dry run | `record`, 3,727 objects verified, 0 refused | `record`, 3,727 objects verified, 0 refused |
+| 3. Replace, dry run | 298 rows seen; verification 3,727 | 291 rows seen; verification 3,727 |
+| 4. Replace | before 298, archived 298 to `supabase_migrations.schema_migrations_archive_20261111`, after 1; 3,727 objects verified inside the transaction | before 291, archived 291 to `supabase_migrations.schema_migrations_archive_20261111`, after 1; 3,727 verified inside the transaction |
+| 5. `--status` after | count 1, newest `20261111130000`, missing [], extra [] | count 1, newest `20261111130000`, missing [], extra [] |
+
+The baseline's row carries the provenance `pr=255`. N786 (shared dev's twelve unrecorded history rows) is closed: the old rows are in the archive table, and the history is the baseline's one row. To undo on either: `--undo schema_migrations_archive_20261111` (below).
+
 Only the history is written. No table, function or row of member data changes, so undoing the history rows returns the database to exactly where it was. The tool is `scripts/baseline/replace-history.mjs`; it signs in as the owner (`--env-file`, as the runner does) and refuses any target not in `supabase/migration-targets.json` or not the one the env file points at.
 
 For each database, **staging first**, from the repository root at the A6 pull request's approved head:
