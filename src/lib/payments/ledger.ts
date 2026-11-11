@@ -168,32 +168,32 @@ export async function getSellerLedger(
     id: string; status: OrderStatus; subtotal_cents: number; shipping_cents: number; platform_fee_cents: number; total_cents: number;
     refunded_cents: number; currency: string; created_at: string; delivered_at: string | null; transfer_reference: string | null;
   };
-  const [unpaid, paid] = await Promise.all([
-    // Every sale not yet paid out, by id (keyset), however many and however old.
-    pagedRows<OrderRow, "id">(
-      (after, size) => {
-        const query = supabase.from("orders").select(ORDER_COLUMNS).eq("seller_id", sellerId).in("status", CAPTURED_STATUSES).is("transfer_reference", null).order("id").limit(size);
-        return (after === null ? query : query.gt("id", after)) as unknown as PromiseLike<{ data: OrderRow[] | null; error: unknown }>;
-      },
-      "id",
-    ),
-    // The newest paid-out sales: history, labelled as such when capped.
-    supabase
-      .from("orders")
-      .select(ORDER_COLUMNS)
-      .eq("seller_id", sellerId)
-      .in("status", CAPTURED_STATUSES)
-      .not("transfer_reference", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(FETCH_CAP) as unknown as PromiseLike<{ data: OrderRow[] | null; error: unknown }>,
-  ]);
+  // Every captured sale in one keyset read by id, split here into unpaid and
+  // paid. Each sale is read once, so its paid/unpaid state comes from that one
+  // read: a transfer recorded while the ledger loads can no longer put a sale
+  // in both sets (or in neither), as two separate queries could (codex
+  // review, 11 Nov 2026).
+  const all = await pagedRows<OrderRow, "id">(
+    (after, size) => {
+      const query = supabase.from("orders").select(ORDER_COLUMNS).eq("seller_id", sellerId).in("status", CAPTURED_STATUSES).order("id").limit(size);
+      return (after === null ? query : query.gt("id", after)) as unknown as PromiseLike<{ data: OrderRow[] | null; error: unknown }>;
+    },
+    "id",
+  );
 
-  if (unpaid.error || !unpaid.rows || paid.error || !paid.data) {
-    reportError("[payouts] failed to load orders", { sellerId, error: unpaid.error ?? paid.error });
+  if (all.error || !all.rows) {
+    reportError("[payouts] failed to load orders", { sellerId, error: all.error });
     return { status: "unavailable" };
   }
 
-  const captured = [...unpaid.rows, ...paid.data].sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0));
+  const newestFirst = (a: OrderRow, b: OrderRow) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0);
+  // Every sale not yet paid out, however many and however old (N718).
+  const unpaid = all.rows.filter((o) => o.transfer_reference === null);
+  // The newest paid-out sales: history, labelled as such when capped.
+  const paidAll = all.rows.filter((o) => o.transfer_reference !== null).sort(newestFirst);
+  const paid = paidAll.slice(0, FETCH_CAP);
+
+  const captured = [...unpaid, ...paid].sort(newestFirst);
   const orderIds = captured.map((o) => o.id);
 
   const [{ rows: items, error: itemsError }, adjustments, carry, hold, { data: payoutDates, error: payoutDatesError }] = await Promise.all([
@@ -334,7 +334,7 @@ export async function getSellerLedger(
       owedCents: carry.owedCents,
       creditCents: carry.creditCents,
       hold,
-      truncated: paid.data.length === FETCH_CAP,
+      truncated: paidAll.length > FETCH_CAP,
     },
   };
 }

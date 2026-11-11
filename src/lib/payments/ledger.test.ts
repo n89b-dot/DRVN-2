@@ -8,19 +8,23 @@ import { getSellerLedger } from "./ledger";
 type Result = { data: unknown; error: unknown };
 
 /** A query builder that answers each table — and each function, by name —
- *  with a fixed result. */
-function fakeClient(tables: Record<string, Result>) {
+ *  with a fixed result, or with what that table holds at the moment of each
+ *  read (a function, asked once per query). */
+function fakeClient(tables: Record<string, Result | (() => Result)>) {
   return {
     rpc(name: string) {
-      return Promise.resolve(tables[name] ?? { data: [], error: null });
+      const entry = tables[name];
+      return Promise.resolve((typeof entry === "function" ? entry() : entry) ?? { data: [], error: null });
     },
     from(table: string) {
-      const result = tables[table] ?? { data: [], error: null };
+      const entry = tables[table];
+      const result = (typeof entry === "function" ? entry() : entry) ?? { data: [], error: null };
       const builder: Record<string, unknown> = {};
       // Keyset paging (N718): order(id) → limit(n) → gt(id, after), and the
       // paid/unpaid split on transfer_reference. Rows without an id get one.
-      const state: { limit?: number; gt?: [string, string]; filters: ((row: Record<string, unknown>) => boolean)[] } = { filters: [] };
-      for (const method of ["select", "eq", "in", "order"]) builder[method] = () => builder;
+      const state: { limit?: number; gt?: [string, string]; byId?: boolean; filters: ((row: Record<string, unknown>) => boolean)[] } = { filters: [] };
+      for (const method of ["select", "eq", "in"]) builder[method] = () => builder;
+      builder.order = (column: string) => { if (column === "id") state.byId = true; return builder; };
       builder.limit = (n: number) => { state.limit = n; return builder; };
       builder.gt = (column: string, after: string) => { state.gt = [column, after]; return builder; };
       builder.is = (column: string) => { state.filters.push((row) => row[column] == null); return builder; };
@@ -29,6 +33,7 @@ function fakeClient(tables: Record<string, Result>) {
         if (!Array.isArray(result.data)) return resolve(result);
         let rows = (result.data as Record<string, unknown>[]).map((row, i) => ("id" in row ? row : { id: `row-${String(i).padStart(6, "0")}`, ...row }));
         for (const keep of state.filters) rows = rows.filter(keep);
+        if (state.byId) rows = [...rows].sort((a, b) => (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0));
         if (state.gt) { const [column, after] = state.gt; rows = rows.filter((row) => String(row[column]) > after); }
         if (state.limit !== undefined) rows = rows.slice(0, state.limit);
         return resolve({ data: rows, error: result.error });
@@ -280,7 +285,7 @@ describe("a seller's lines past PostgREST's 1,000 rows (N718)", () => {
   });
 
   it("holds every unpaid sale, however many paid ones are newer (N718)", async () => {
-    const paid = Array.from({ length: 500 }, (_, i) => ({ ...order, id: `paid-${i}`, refunded_cents: 0, transfer_reference: `tr_${i}`, created_at: "2026-10-01T00:00:00Z" }));
+    const paid = Array.from({ length: 501 }, (_, i) => ({ ...order, id: `paid-${i}`, refunded_cents: 0, transfer_reference: `tr_${i}`, created_at: "2026-10-01T00:00:00Z" }));
     const old = { ...order, id: "old-disputed", status: "disputed", refunded_cents: 0, created_at: "2025-01-01T00:00:00Z" };
     const result = await getSellerLedger(fakeClient({ orders: { data: [...paid, old], error: null } }), "seller");
     expect(result.status).toBe("ok");
@@ -288,5 +293,21 @@ describe("a seller's lines past PostgREST's 1,000 rows (N718)", () => {
     expect(result.ledger.lines.find((line) => line.orderId === "old-disputed")?.state).toBe("held");
     expect(result.ledger.heldCents).toBeGreaterThan(0);
     expect(result.ledger.truncated).toBe(true);
+  });
+
+  it("counts a sale once when its transfer is recorded while the ledger reads", async () => {
+    // The first read of orders sees the $90 sale unpaid; every later read
+    // sees the transfer that landed in between.
+    let reads = 0;
+    const sale = { ...order, refunded_cents: 0, delivered_at: "2026-01-02T00:00:00Z" };
+    const orders = () => {
+      reads += 1;
+      return { data: [reads === 1 ? sale : { ...sale, transfer_reference: "tr_1" }], error: null };
+    };
+    const result = await getSellerLedger(fakeClient({ orders }), "seller");
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.ledger.lines.filter((line) => line.orderId === "order-1")).toHaveLength(1);
+    expect(result.ledger.availableCents + result.ledger.paidOutCents).toBe(9_000);
   });
 });
