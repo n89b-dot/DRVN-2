@@ -9,6 +9,7 @@ AS $function$
 declare
   left_drvn constant text := 'A member who has since left DRVN';
   a_listing constant text := 'A listing by a member who has since left DRVN';
+  a_matches constant text := 'Listings matched your saved search, including one by a member who has since left DRVN.';
   v_actor integer;
   v_offer integer;
   v_order integer;
@@ -100,9 +101,14 @@ begin
            select left(nt.title, length(nt.title) - length(m.title)) || a_listing from mine m
             where nt.title like 'New match for %' and right(nt.title, length(m.title) + 2) = ': ' || m.title
             order by length(m.title) desc limit 1), nt.title),
+         -- A title is cut out whole, in its place. One that cannot be (it
+         -- contains the separator, so no piece equals it, or any of their
+         -- titles is still in what is left) takes the whole body with it
+         -- (20261111140000, Codex's final review).
          body = (
-           select string_agg(case when exists (select 1 from mine m where m.title = e.t) then a_listing else e.t end, ' · ' order by e.ord)
-             from unnest(string_to_array(nt.body, ' · ')) with ordinality as e(t, ord))
+           select case when exists (select 1 from mine m where strpos(c.cut, m.title) > 0) then a_matches else c.cut end
+             from (select string_agg(case when exists (select 1 from mine m where m.title = e.t) then a_listing else e.t end, ' · ' order by e.ord) as cut
+                     from unnest(string_to_array(nt.body, ' · ')) with ordinality as e(t, ord)) c)
    where private.notification_member_text(nt.kind) = 'matched_titles'
      and nt.user_id <> p_user
      and exists (

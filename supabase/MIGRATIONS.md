@@ -41,6 +41,7 @@ with any table in `public`. Details: "Applying without Docker or psql" below.
 - **Dated when next to merge (R3).** Give a migration file its timestamp when its pull request is next to merge, not when it is written.
 - **An applied file is never edited.** Once a file has been applied to any database, its bytes are final, merged or not. A further change is a new migration.
 - **At most three in review (R1).** No more than three pull requests that carry a migration are in review at once, across every session.
+- **Functions are closed by default (A3).** A new function is not executable by `PUBLIC`, `anon` or `authenticated` until a migration grants it, and pins its `search_path`. A helper function that is called on a member's behalf (from a trigger function, a policy or a default that is not `SECURITY DEFINER`) needs its own grants, because new functions are closed by default. Functions made by `create extension` are closed to `PUBLIC` too: grant what queries use, and check the snapshot.
 
 **Staging stays level with shared dev** (R-staging-behind). A migration PR is applied to shared dev *and* staging after its review is approved and before it merges, by the same session, with both cells filled. `tests/ci/migrations-md.test.ts` lets a row name `shared-dev` without `staging` (or say `not applied`) only while the file is less than two days old by its timestamp. A session that cannot reach staging lists the file in `supabase/migrations-staging-pending.json` with the reason, and the next session with the credential applies it and removes the entry.
 
@@ -50,11 +51,19 @@ with any table in `public`. Details: "Applying without Docker or psql" below.
 
 ## November 11 — an order email the provider may have taken is not sent again after its key expires (Codex's final review)
 
-`20261111150000_order_email_resend_window.sql`. Apply with the app from the same PR (`src/lib/order-emails.ts` passes `p_reason => 'not_sent'` on a retry made before any send; the old app against the new database only ends such a row sooner). A provider-held row stayed retryable for 72 hours while the provider (Resend) keeps an idempotency key for 24, so an attempt it accepted before the worker died could be sent again a day later. New column `order_email_outbox.handed_to_provider_at`: when the first attempt the provider may have accepted began, set when a claim takes back a row whose lease ran out and on a retry (not on a refusal of our account, a rate limit, a rejection or `not_sent`). Restates `public.claim_order_emails` and `public.complete_order_email` (from `20261111090000`): a row with that time more than 20 hours ago is not claimed; it becomes `failed` and queues an `order_email_failed` alert (`admin_alert_outbox`, dedup `order-email-failed:<row>`). Rows never handed to the provider keep their 24- and 72-hour windows. Changes no data. Guard: `supabase/tests/order_email_resend_window_guard.sql`.
+`20261111150000_order_email_resend_window.sql`. Apply with the app from the same PR (`src/lib/order-emails.ts` passes `p_reason => 'not_sent'` on a retry made before any send; the old app against the new database only ends such a row sooner). A provider-held row stayed retryable for 72 hours while the provider (Resend) keeps an idempotency key for 24, so an attempt it accepted before the worker died could be sent again a day later. New column `order_email_outbox.handed_to_provider_at`: when the first attempt the provider may have accepted began, set when a claim takes back a row whose lease ran out and on a retry (not on a refusal of our account, a rate limit, a rejection or `not_sent`). Restates `public.claim_order_emails` and `public.complete_order_email` (from `20261111090000`): a row with that time more than 20 hours ago is not claimed; it becomes `failed` and queues an `order_email_failed` alert (`admin_alert_outbox`, dedup `order-email-failed:<row>`). Rows never handed to the provider keep their 24- and 72-hour windows. Changes no data: rows waiting or being sent beforehand (read-only), 0 on shared dev and 0 on staging. Guard: `supabase/tests/order_email_resend_window_guard.sql`.
 
 | File | Applied to |
 |---|---|
-| `20261111150000_order_email_resend_window.sql` | not applied |
+| `20261111150000_order_email_resend_window.sql` | shared-dev 2026-11-11; staging 2026-11-11 |
+
+## November 11 — a deleted member's title with " · " leaves saved-search notices (Codex's final review)
+
+`20261111140000_deletion_scrub_separator.sql`. A saved-search notice's body is up to three listing titles joined by ` · `; the scrub cut out a leaver's title by comparing each piece with the whole title, so a title containing the separator (`Alice 07123 · turbo`), or ending in ` ·`, stayed. Restates `private.scrub_member_notices` (from `20261110220000`) with one change: when a title of theirs is still in what the cut leaves, the whole body becomes `Listings matched your saved search, including one by a member who has since left DRVN.` Adds `private.repair_ambiguous_matched_titles()` (no grants) and runs it once: the body of a saved-search notice that still carries, whole between separators, a listing title of a member whose scrub is recorded becomes that line; nothing else is touched, and a second run changes nothing. The count is printed as a NOTICE when applied: 0 on shared dev and 0 on staging (the read-only count beforehand was 0 on each). The read-only count to take beforehand is in the file's header. Guard: `supabase/tests/deletion_scrub_separator_guard.sql`.
+
+| File | Applied to |
+|---|---|
+| `20261111140000_deletion_scrub_separator.sql` | shared-dev 2026-11-11; staging 2026-11-11 |
 
 ## November 11 — one baseline in place of the migration history (architecture plan 2, item A6)
 

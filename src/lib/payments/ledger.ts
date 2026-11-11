@@ -168,32 +168,36 @@ export async function getSellerLedger(
     id: string; status: OrderStatus; subtotal_cents: number; shipping_cents: number; platform_fee_cents: number; total_cents: number;
     refunded_cents: number; currency: string; created_at: string; delivered_at: string | null; transfer_reference: string | null;
   };
-  const [unpaid, paid] = await Promise.all([
-    // Every sale not yet paid out, by id (keyset), however many and however old.
-    pagedRows<OrderRow, "id">(
-      (after, size) => {
-        const query = supabase.from("orders").select(ORDER_COLUMNS).eq("seller_id", sellerId).in("status", CAPTURED_STATUSES).is("transfer_reference", null).order("id").limit(size);
-        return (after === null ? query : query.gt("id", after)) as unknown as PromiseLike<{ data: OrderRow[] | null; error: unknown }>;
-      },
-      "id",
-    ),
-    // The newest paid-out sales: history, labelled as such when capped.
-    supabase
-      .from("orders")
-      .select(ORDER_COLUMNS)
-      .eq("seller_id", sellerId)
-      .in("status", CAPTURED_STATUSES)
-      .not("transfer_reference", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(FETCH_CAP) as unknown as PromiseLike<{ data: OrderRow[] | null; error: unknown }>,
-  ]);
+  // The two reads run one after the other, never together (codex review,
+  // 11 Nov 2026). transfer_reference only goes from null to set, so with the
+  // unpaid read finished before the paid read starts, a transfer recorded in
+  // between can put a sale in both (dropped from unpaid below: the later read
+  // wins, the sale is paid) but never in neither.
+  // Every sale not yet paid out, by id (keyset), however many and however old.
+  const unpaid = await pagedRows<OrderRow, "id">(
+    (after, size) => {
+      const query = supabase.from("orders").select(ORDER_COLUMNS).eq("seller_id", sellerId).in("status", CAPTURED_STATUSES).is("transfer_reference", null).order("id").limit(size);
+      return (after === null ? query : query.gt("id", after)) as unknown as PromiseLike<{ data: OrderRow[] | null; error: unknown }>;
+    },
+    "id",
+  );
+  // The newest paid-out sales: history, labelled as such when capped.
+  const paid = await (supabase
+    .from("orders")
+    .select(ORDER_COLUMNS)
+    .eq("seller_id", sellerId)
+    .in("status", CAPTURED_STATUSES)
+    .not("transfer_reference", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(FETCH_CAP) as unknown as PromiseLike<{ data: OrderRow[] | null; error: unknown }>);
 
   if (unpaid.error || !unpaid.rows || paid.error || !paid.data) {
     reportError("[payouts] failed to load orders", { sellerId, error: unpaid.error ?? paid.error });
     return { status: "unavailable" };
   }
 
-  const captured = [...unpaid.rows, ...paid.data].sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0));
+  const paidIds = new Set(paid.data.map((o) => o.id));
+  const captured = [...unpaid.rows.filter((o) => !paidIds.has(o.id)), ...paid.data].sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0));
   const orderIds = captured.map((o) => o.id);
 
   const [{ rows: items, error: itemsError }, adjustments, carry, hold, { data: payoutDates, error: payoutDatesError }] = await Promise.all([
