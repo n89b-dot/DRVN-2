@@ -491,6 +491,11 @@ update public.orders set status = '<to>' where id = '<order>';
 commit;
 ```
 
+Use `set local`, never a plain `set`: a plain `set` lasts for the whole
+connection, so every later status change on it would skip the judge (each
+still audited) until the connection closes. `set local` ends with the
+transaction.
+
 It is honoured only when both `current_user` and `session_user` are
 `postgres` or `supabase_admin`; the server key, even inside a database
 function, is refused. Each change made under it is written to

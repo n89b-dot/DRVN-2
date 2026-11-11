@@ -109,13 +109,24 @@ begin
     raise exception 'FAIL 1e: a legal move names no function that makes it: %', bad;
   end if;
 
-  -- Scheduled jobs run with session_user postgres, so they could use the override. None does.
+  -- Scheduled jobs run with session_user postgres, so they could use the
+  -- override. Every job's command calls a function, and a function called by
+  -- a job runs with both roles postgres: so no function but the guard itself
+  -- may mention the setting, and no job's command either.
+  select string_agg(n.nspname || '.' || p.proname, ', ') into bad
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname in ('public', 'private')
+     and p.prosrc ilike '%order_status_override%'
+     and not (n.nspname = 'public' and p.proname = 'guard_order_status');
+  if bad is not null then
+    raise exception 'FAIL 1f: functions mention drvn.order_status_override: %', bad;
+  end if;
   select string_agg(jobname, ', ') into bad from cron.job where command ilike '%order_status_override%';
   if bad is not null then
     raise exception 'FAIL 1f: scheduled jobs set drvn.order_status_override: %', bad;
   end if;
 
-  raise notice 'PASS 1: the judge agrees with the table on all 90 changes (25 legal), the case rules hold, every move names its functions, no job sets the override';
+  raise notice 'PASS 1: the judge agrees with the table on all 90 changes (25 legal), the case rules hold, every move names its functions, no function or job but the guard mentions the override';
 end $$;
 rollback;
 
