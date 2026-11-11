@@ -10,7 +10,7 @@ type Result = { data: unknown; error: unknown };
 /** A query builder that answers each table — and each function, by name —
  *  with a fixed result, or with what that table holds at the moment of each
  *  read (a function, asked once per query). */
-function fakeClient(tables: Record<string, Result | (() => Result)>) {
+function fakeClient(tables: Record<string, Result | (() => Result)>, reads?: string[]) {
   return {
     rpc(name: string) {
       const entry = tables[name];
@@ -22,14 +22,16 @@ function fakeClient(tables: Record<string, Result | (() => Result)>) {
       const builder: Record<string, unknown> = {};
       // Keyset paging (N718): order(id) → limit(n) → gt(id, after), and the
       // paid/unpaid split on transfer_reference. Rows without an id get one.
-      const state: { limit?: number; gt?: [string, string]; byId?: boolean; filters: ((row: Record<string, unknown>) => boolean)[] } = { filters: [] };
+      const state: { limit?: number; gt?: [string, string]; byId?: boolean; split?: string; filters: ((row: Record<string, unknown>) => boolean)[] } = { filters: [] };
       for (const method of ["select", "eq", "in"]) builder[method] = () => builder;
       builder.order = (column: string) => { if (column === "id") state.byId = true; return builder; };
       builder.limit = (n: number) => { state.limit = n; return builder; };
       builder.gt = (column: string, after: string) => { state.gt = [column, after]; return builder; };
-      builder.is = (column: string) => { state.filters.push((row) => row[column] == null); return builder; };
-      builder.not = (column: string) => { state.filters.push((row) => row[column] != null); return builder; };
+      builder.is = (column: string) => { state.filters.push((row) => row[column] == null); if (column === "transfer_reference") state.split = "unpaid"; return builder; };
+      builder.not = (column: string) => { state.filters.push((row) => row[column] != null); if (column === "transfer_reference") state.split = "paid"; return builder; };
       builder.then = (resolve: (value: Result) => unknown) => {
+        // The order the reads were sent in, by which side of the split they ask for.
+        if (state.split) reads?.push(state.split);
         if (!Array.isArray(result.data)) return resolve(result);
         let rows = (result.data as Record<string, unknown>[]).map((row, i) => ("id" in row ? row : { id: `row-${String(i).padStart(6, "0")}`, ...row }));
         for (const keep of state.filters) rows = rows.filter(keep);
@@ -285,7 +287,7 @@ describe("a seller's lines past PostgREST's 1,000 rows (N718)", () => {
   });
 
   it("holds every unpaid sale, however many paid ones are newer (N718)", async () => {
-    const paid = Array.from({ length: 501 }, (_, i) => ({ ...order, id: `paid-${i}`, refunded_cents: 0, transfer_reference: `tr_${i}`, created_at: "2026-10-01T00:00:00Z" }));
+    const paid = Array.from({ length: 500 }, (_, i) => ({ ...order, id: `paid-${i}`, refunded_cents: 0, transfer_reference: `tr_${i}`, created_at: "2026-10-01T00:00:00Z" }));
     const old = { ...order, id: "old-disputed", status: "disputed", refunded_cents: 0, created_at: "2025-01-01T00:00:00Z" };
     const result = await getSellerLedger(fakeClient({ orders: { data: [...paid, old], error: null } }), "seller");
     expect(result.status).toBe("ok");
@@ -308,6 +310,16 @@ describe("a seller's lines past PostgREST's 1,000 rows (N718)", () => {
     expect(result.status).toBe("ok");
     if (result.status !== "ok") return;
     expect(result.ledger.lines.filter((line) => line.orderId === "order-1")).toHaveLength(1);
-    expect(result.ledger.availableCents + result.ledger.paidOutCents).toBe(9_000);
+    expect(result.ledger.paidOutCents).toBe(9_000);
+    expect(result.ledger.availableCents).toBe(0);
+  });
+
+  it("starts the paid read only once the unpaid read has finished", async () => {
+    const reads: string[] = [];
+    const unpaid = Array.from({ length: 1001 }, (_, i) => ({ ...order, id: `unpaid-${String(i).padStart(4, "0")}`, refunded_cents: 0 }));
+    const paid = { ...order, id: "paid-1", refunded_cents: 0, transfer_reference: "tr_1" };
+    const result = await getSellerLedger(fakeClient({ orders: { data: [...unpaid, paid], error: null } }, reads), "seller");
+    expect(result.status).toBe("ok");
+    expect(reads).toEqual([...reads.filter((read) => read === "unpaid"), "paid"]);
   });
 });

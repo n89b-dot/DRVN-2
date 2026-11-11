@@ -117,6 +117,13 @@ describe("N949: the watch also checks how main's head got there, and tells the a
     expect(mergedHeadProblems({ ...MERGE, commit: {} }, [run(-30, -20)], LEVEL)).toEqual(["could not tell when 76a209a merged, so not whether release-gate had passed on c8f8720 by then"]);
   });
 
+  it("reads every release-gate run on the merged head, not only the latest (codex review, 11 Nov 2026)", () => {
+    // GitHub's default filter=latest keeps only the newest run per check name:
+    // a rerun after the merge would hide the pass that finished before it.
+    const script = fs.readFileSync(path.join(root, "scripts/check-branch-protection.mjs"), "utf8");
+    expect(script).toMatch(/\/check-runs\?check_name=release-gate&filter=all&per_page=100`/);
+  });
+
   it("fails a commit pushed straight to main", () => {
     expect(mergedHeadProblems({ sha: "abc1234fff", parents: [{ sha: "896fafbc" }] }, [], null)).toEqual(["abc1234 is not a merge commit (1 parent): it was pushed to the branch without a pull request"]);
   });

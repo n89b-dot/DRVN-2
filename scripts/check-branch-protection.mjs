@@ -81,7 +81,8 @@ export function mergedHeadProblems(commit, checkRuns, compare) {
   const gates = (checkRuns ?? []).filter((run) => run?.name === 'release-gate');
   // Only what the gate had said by the time of the merge counts (codex
   // review, 11 Nov 2026): a run that finished after it, pass or fail, is
-  // disregarded. Of the runs finished by then, the newest decides.
+  // disregarded. Of the runs finished by then, the newest decides. A
+  // completed run with no completed_at drops out here (NaN), the safe way.
   const mergedAt = Date.parse(commit?.commit?.committer?.date ?? '');
   const finishedBefore = gates
     .filter((run) => run.status === 'completed' && Date.parse(run.completed_at ?? '') <= mergedAt)
@@ -181,7 +182,9 @@ async function main() {
   let compare = null;
   if ((commit.parents ?? []).length === 2) {
     const [base, head] = commit.parents.map((parent) => parent.sha);
-    const runsRes = await api(`/repos/${repo}/commits/${head}/check-runs?check_name=release-gate&per_page=100`, headers);
+    // filter=all: GitHub's default keeps only the newest run, and a rerun
+    // after the merge would hide the pass that finished before it.
+    const runsRes = await api(`/repos/${repo}/commits/${head}/check-runs?check_name=release-gate&filter=all&per_page=100`, headers);
     if (!runsRes.ok) throw new Error(`GitHub answered ${runsRes.status} for the check runs on ${head}`);
     checkRuns = (await runsRes.json()).check_runs;
     const compareRes = await api(`/repos/${repo}/compare/${base}...${head}`, headers);
