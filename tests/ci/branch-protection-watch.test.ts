@@ -80,27 +80,48 @@ describe("the production deploy and its header agree on the release tag (N950, r
 });
 
 describe("N949: the watch also checks how main's head got there, and tells the alert channel (work review #156, N1072)", () => {
-  const MERGE = { sha: "76a209a9aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", parents: [{ sha: "896fafbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" }, { sha: "c8f87209cccccccccccccccccccccccccccccccc" }] };
-  const gate = (status: string, conclusion: string | null, started_at: string) => ({ name: "release-gate", status, conclusion, started_at });
-  const PASSED = [gate("completed", "success", "2026-11-10T16:00:00Z")];
+  // Times relative to now: the merge is recorded ten minutes ago.
+  const at = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
+  const MERGE = { sha: "76a209a9aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", parents: [{ sha: "896fafbcbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" }, { sha: "c8f87209cccccccccccccccccccccccccccccccc" }], commit: { committer: { date: at(-10) } } };
+  const gate = (status: string, conclusion: string | null, started: number) => ({ name: "release-gate", status, conclusion, started_at: at(started), completed_at: status === "completed" ? at(started + 5) : null });
+  const PASSED = [gate("completed", "success", -30)];
   const LEVEL = { behind_by: 0, ahead_by: 9 };
 
   it("accepts a merge of a pull request head that passed release-gate while level with main", () => {
     expect(mergedHeadProblems(MERGE, PASSED, LEVEL)).toEqual([]);
     // A rerun that passed after a failure counts: the newest run decides.
-    expect(mergedHeadProblems(MERGE, [gate("completed", "failure", "2026-11-10T15:00:00Z"), ...PASSED], LEVEL)).toEqual([]);
+    expect(mergedHeadProblems(MERGE, [gate("completed", "failure", -90), ...PASSED], LEVEL)).toEqual([]);
   });
 
   it("fails a merge made while protection was off, even if protection is back by the time anyone looks", () => {
     // Merged before its checks finished.
-    expect(mergedHeadProblems(MERGE, [gate("in_progress", null, "2026-11-10T16:00:00Z")], LEVEL)).toEqual(["release-gate was in_progress on c8f8720 when it merged as 76a209a"]);
+    expect(mergedHeadProblems(MERGE, [gate("in_progress", null, -30)], LEVEL)).toEqual(["release-gate had not finished on c8f8720 when it merged as 76a209a"]);
     // Merged on a failed gate.
-    expect(mergedHeadProblems(MERGE, [gate("completed", "failure", "2026-11-10T16:00:00Z")], LEVEL)).toEqual(["release-gate was failure on c8f8720 when it merged as 76a209a"]);
+    expect(mergedHeadProblems(MERGE, [gate("completed", "failure", -30)], LEVEL)).toEqual(["release-gate was failure on c8f8720 when it merged as 76a209a"]);
     // Merged with no gate run at all (other checks present do not count).
     expect(mergedHeadProblems(MERGE, [{ name: "verify", status: "completed", conclusion: "success" }], LEVEL)).toEqual(["release-gate never ran on c8f8720, the pull request head merged as 76a209a"]);
     // Merged while behind main.
     expect(mergedHeadProblems(MERGE, PASSED, { behind_by: 2 })).toEqual(["c8f8720 was 2 commit(s) behind main when it merged as 76a209a"]);
     expect(mergedHeadProblems(MERGE, PASSED, null)).toEqual(["could not tell whether c8f8720 was level with main when it merged"]);
+  });
+
+  it("fails a merge made before its gate finished, even if the gate passed later (codex review, 11 Nov 2026)", () => {
+    const run = (started: number, completed: number) => ({ name: "release-gate", status: "completed", conclusion: "success", started_at: at(started), completed_at: at(completed) });
+    // Started after the merge, passed later.
+    expect(mergedHeadProblems(MERGE, [run(-5, -2)], LEVEL)).not.toEqual([]);
+    // Started before the merge, finished after it.
+    expect(mergedHeadProblems(MERGE, [run(-20, -2)], LEVEL)).not.toEqual([]);
+    // A pass that finished before the merge counts; a later run is disregarded.
+    expect(mergedHeadProblems(MERGE, [run(-30, -20), { ...run(-5, -2), conclusion: "failure" }], LEVEL)).toEqual([]);
+    // No recorded merge time: no way to tell, so a problem.
+    expect(mergedHeadProblems({ ...MERGE, commit: {} }, [run(-30, -20)], LEVEL)).toEqual(["could not tell when 76a209a merged, so not whether release-gate had passed on c8f8720 by then"]);
+  });
+
+  it("reads every release-gate run on the merged head, not only the latest (codex review, 11 Nov 2026)", () => {
+    // GitHub's default filter=latest keeps only the newest run per check name:
+    // a rerun after the merge would hide the pass that finished before it.
+    const script = fs.readFileSync(path.join(root, "scripts/check-branch-protection.mjs"), "utf8");
+    expect(script).toMatch(/\/check-runs\?check_name=release-gate&filter=all&per_page=100`/);
   });
 
   it("fails a commit pushed straight to main", () => {
