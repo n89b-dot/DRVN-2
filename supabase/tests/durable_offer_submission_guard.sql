@@ -16,6 +16,10 @@ begin
   if new.body='[force-offer-message-failure]' then raise exception 'forced opening message failure'; end if;
   return new;
 end $$;
+
+-- This guard's own helpers are called while acting as other roles. A new
+-- function is closed by default (architecture plan 2, item A3), so they are opened here.
+grant execute on all routines in schema pg_temp to public;
 create trigger force_opening_offer_message_failure before insert on public.messages
 for each row execute function pg_temp.fail_opening_offer_message();
 

@@ -39,6 +39,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 11 — new functions are closed by default (architecture plan 2, item A3)
+
+Two `alter default privileges` statements for the role that applies migrations: a function created from here on is not executable by `PUBLIC`, `anon` or `authenticated` until a migration grants it. `service_role` keeps the platform's grant in `public`. Nothing that exists changes. Guard: `supabase/tests/functions_closed_by_default_guard.sql`. A new function that another function calls on a member's behalf (from a trigger function, a policy or a default that is not `SECURITY DEFINER`) needs its own grant, or the member's write is refused; before this the PUBLIC default hid that. A migration that runs `create extension` makes that extension's functions closed to PUBLIC for the role that ran it: grant what queries use, and check the snapshot.
+
+| File | Applied to |
+|---|---|
+| `20261111100000_functions_closed_by_default.sql` | shared-dev 2026-11-11; staging 2026-11-11 |
+
 ## November 10 — order emails through an outbox: report five #116
 
 | File | Applied to |

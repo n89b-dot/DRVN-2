@@ -7,6 +7,10 @@ begin;
 create function pg_temp.save_sheet(p_car uuid, p_items jsonb) returns jsonb
 language sql as $$ select public.save_mod_items(p_car, p_items, public.mod_sheet_revision(p_car)) $$;
 
+-- This guard's own helpers are called while acting as other roles. A new
+-- function is closed by default (architecture plan 2, item A3), so they are opened here.
+grant execute on all routines in schema pg_temp to public;
+
 do $$
 declare
   owner_id uuid := gen_random_uuid();
