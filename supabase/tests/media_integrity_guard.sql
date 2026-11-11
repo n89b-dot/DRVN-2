@@ -47,7 +47,7 @@ begin
     (stranger, 'media-guard-stranger@drvn.test');
   insert into public.orders(buyer_id, seller_id, status, subtotal_cents, platform_fee_cents, total_cents, currency)
     values (buyer, seller, 'paid', 5000, 500, 5000, 'USD') returning id into dispute;
-  update public.orders set status = 'disputed' where id = dispute;
+  update public.orders set status = 'disputed', pre_dispute_status = status where id = dispute;
   insert into public.orders(buyer_id, seller_id, status, subtotal_cents, platform_fee_cents, total_cents, currency)
     values (buyer, seller, 'paid', 5000, 500, 5000, 'USD') returning id into calm;
   insert into public.cars(id, owner_id, slug, name, is_public) values (car, seller, 'media-guard-car', 'Media guard', true);

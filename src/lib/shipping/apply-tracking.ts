@@ -404,60 +404,44 @@ async function markReturnDelivered(
   return false;
 }
 
+/**
+ * What the two tracking functions in the database answer (plan 2 item A2:
+ * the database makes the change; this file no longer writes an order's
+ * status). 'moved': the order moved. 'moved_in_case': the order is in an open
+ * case, which now resolves to the new status. Otherwise the status the order
+ * has, or null when there is no such order.
+ */
+type TrackingMove = { moved: boolean; status: string | null };
+
+function readTrackingMove(answer: unknown): TrackingMove {
+  if (answer === "moved" || answer === "moved_in_case") return { moved: true, status: null };
+  if (typeof answer === "string" && answer.startsWith("unchanged:")) return { moved: false, status: answer.slice("unchanged:".length) };
+  return { moved: false, status: null };
+}
+
 /** paid → shipped, once, mirroring carrier/tracking onto the order's legacy
- *  columns (existing UI + nextAction read them). */
+ *  columns (existing UI + nextAction read them). An open not-received case on
+ *  an undispatched order (N6) stays open: dispatch and tracking stay
+ *  possible, and resolving the case lands on 'shipped'. */
 async function markOrderShipped(admin: Admin, shipment: Shipment): Promise<boolean> {
-  const { data, error } = await admin
-    .from("orders")
-    .update({
-      status: "shipped",
-      shipped_at: shipment.shipped_at ?? new Date().toISOString(),
-      carrier: shipment.carrier,
-      tracking_number: shipment.tracking_code,
-    })
-    .eq("id", shipment.order_id)
-    .eq("status", "paid")
-    .select("id")
-    .maybeSingle();
+  const { data, error } = await admin.rpc("order_mark_shipped_from_tracking", {
+    p_order: shipment.order_id,
+    p_shipped_at: shipment.shipped_at ?? new Date().toISOString(),
+    // Left out when the shipment has none: the function's default is null,
+    // which is what the order's column then holds.
+    p_carrier: shipment.carrier ?? undefined,
+    p_tracking: shipment.tracking_code ?? undefined,
+  });
   if (error) persistenceFailure("order shipped update failed", { orderId: shipment.order_id, error });
-  if (data) return true;
-  // An open not-received case on an undispatched order (N6): dispatch and
-  // tracking stay possible. The case stays open; resolving it lands on
-  // 'shipped'.
-  const { data: inCase, error: caseError } = await admin
-    .from("orders")
-    .update({
-      pre_dispute_status: "shipped",
-      shipped_at: shipment.shipped_at ?? new Date().toISOString(),
-      carrier: shipment.carrier,
-      tracking_number: shipment.tracking_code,
-    })
-    .eq("id", shipment.order_id)
-    .eq("status", "disputed")
-    .eq("pre_dispute_status", "paid")
-    .select("id")
-    .maybeSingle();
-  if (caseError) persistenceFailure("disputed order shipped update failed", { orderId: shipment.order_id, caseError });
-  if (inCase) return true;
-  const { data: existing, error: lookupError } = await admin
-    .from("orders")
-    .select("status")
-    .eq("id", shipment.order_id)
-    .maybeSingle();
-  if (lookupError || !existing) {
-    persistenceFailure("order shipped update could not be verified", {
-      orderId: shipment.order_id,
-      lookupError,
-    });
+  const move = readTrackingMove(data);
+  if (move.moved) return true;
+  if (move.status === null) {
+    persistenceFailure("order shipped update could not be verified", { orderId: shipment.order_id });
   }
-  if (
-    !["shipped", "delivered", "completed", "disputed", "refunded", "cancelled"].includes(
-      existing.status
-    )
-  ) {
+  if (!["shipped", "delivered", "completed", "disputed", "refunded", "cancelled"].includes(move.status)) {
     persistenceFailure("order shipped update affected no row", {
       orderId: shipment.order_id,
-      status: existing.status,
+      status: move.status,
     });
   }
   return false;
@@ -478,40 +462,23 @@ export async function maybeMarkOrderDelivered(admin: Admin, orderId: string): Pr
   const live = shipments.filter((s) => !["cancelled", "failed"].includes(s.status));
   if (!live.length || !live.every((s) => s.status === "delivered")) return false;
 
-  const { data, error: updateError } = await admin
-    .from("orders")
-    .update({ status: "delivered", delivered_at: new Date().toISOString() })
-    .eq("id", orderId)
-    .eq("status", "shipped")
-    .select("id")
-    .maybeSingle();
-  if (updateError) persistenceFailure("order delivered update failed", { orderId, updateError });
-  if (data) return true;
   // Delivered while a case is open: the case stays open, and resolving it
   // lands on 'delivered' with this delivery's date, as it would have without
   // the case.
-  const { data: inCase, error: caseError } = await admin
-    .from("orders")
-    .update({ pre_dispute_status: "delivered", delivered_at: new Date().toISOString() })
-    .eq("id", orderId)
-    .eq("status", "disputed")
-    .eq("pre_dispute_status", "shipped")
-    .select("id")
-    .maybeSingle();
-  if (caseError) persistenceFailure("disputed order delivered update failed", { orderId, caseError });
-  if (inCase) return true;
-  const { data: existing, error: lookupError } = await admin
-    .from("orders")
-    .select("status")
-    .eq("id", orderId)
-    .maybeSingle();
-  if (lookupError || !existing) {
-    persistenceFailure("order delivered update could not be verified", { orderId, lookupError });
+  const { data, error: updateError } = await admin.rpc("order_mark_delivered_from_tracking", {
+    p_order: orderId,
+    p_delivered_at: new Date().toISOString(),
+  });
+  if (updateError) persistenceFailure("order delivered update failed", { orderId, updateError });
+  const move = readTrackingMove(data);
+  if (move.moved) return true;
+  if (move.status === null) {
+    persistenceFailure("order delivered update could not be verified", { orderId });
   }
-  if (!["delivered", "completed", "disputed", "refunded", "cancelled"].includes(existing.status)) {
+  if (!["delivered", "completed", "disputed", "refunded", "cancelled"].includes(move.status)) {
     persistenceFailure("order delivered update affected no row", {
       orderId,
-      status: existing.status,
+      status: move.status,
     });
   }
   return false;

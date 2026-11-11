@@ -193,3 +193,4 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #249 | 2026-11-10 | Batch 9: #247 #244 #204 | waived | — | waived (ruling, 10 Nov) |
 | #250 | 2026-11-10 | docs: the plan 1 record after batches 8 and 9, and MIGRATIONS.md headings made true | skipped | — | docs only (ruling, 7 Nov) |
 | #251 | 2026-11-11 | N1075: A1, a checked-in copy of the database schema, kept current by CI | waived | — | waived (ruling, 10 Nov) |
+| #252 | 2026-11-11 | A3: a new database function is closed unless a migration opens it | waived | — | waived (ruling, 10 Nov) |

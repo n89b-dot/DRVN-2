@@ -22,19 +22,19 @@ Enforced by: CHECK constraints mod_items_status_check + mod_items_removed_at_agr
 
 ### Orders
 
-Enforced by: CHECK constraint (0007) + purchase RPCs + dispute paths (0014/0021) + open_order_dispute and the orders_guard_dispute finality trigger (20261107210300)
+Enforced by: private.order_status_transitions + the guard_order_status trigger on every role (20261111120000, plan 2 A2); the orders_guard_dispute finality trigger (20261107210300)
 
 | From | May move to |
 | --- | --- |
-| `pending` | `requires_action` · `paid` · `payment_failed` · `cancelled` |
-| `requires_action` | `paid` · `payment_failed` · `cancelled` |
-| `payment_failed` | `cancelled` |
-| `paid` | `shipped` · `cancelled` · `refunded` · `disputed` |
+| `pending` | `paid` · `payment_failed` · `cancelled` · `refunded` |
+| `requires_action` | `paid` · `payment_failed` · `refunded` |
+| `payment_failed` | `refunded` |
+| `paid` | `shipped` · `delivered` · `disputed` · `refunded` |
 | `shipped` | `delivered` · `disputed` · `refunded` |
-| `delivered` | `completed` · `disputed` · `refunded` |
+| `delivered` | `disputed` · `refunded` |
 | `completed` | `disputed` · `refunded` |
 | `disputed` | `paid` · `shipped` · `delivered` · `completed` · `refunded` |
-| `cancelled` | **terminal** |
+| `cancelled` | `refunded` |
 | `refunded` | **terminal** |
 
 ### Listings
@@ -192,6 +192,15 @@ Enforced by: CHECK (20261021100000); agent_claim_jobs / agent_finish_job / agent
   live offer at a time. Every move goes through `offer_open` / `offer_move`,
   which check turn, round, bounds and limits in one transaction and record the
   move in `offer_rounds`; see `docs/decisions/negotiation-v2.md`.
+- **Leaving a case is its own rule.** The database holds the order map
+  (`private.order_status_transitions`, `20261111120000`) and refuses any
+  other change of `orders.status`, for every role. A `disputed` order goes
+  back only to its `pre_dispute_status` (to `paid` or `delivered` when none was
+  recorded), or to `refunded`; entering a case records the old status there;
+  while the case is open, `pre_dispute_status` itself moves only along the map
+  (dispatch, delivery or a pickup during the case). Each move's owning
+  functions are in the table's `owners` column. The one exception is an
+  owner session's audited override (runbook 5b1).
 - **Reserved is visible.** A `reserved` listing — held by a checkout
   (15 min) or an accepted offer (24 h) — is publicly readable with its
   photos, fitment, part numbers and Q&A (`20260928150000`), and the listing

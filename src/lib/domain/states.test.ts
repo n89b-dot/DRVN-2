@@ -63,9 +63,10 @@ describe("domain state definitions", () => {
   });
 
   it("encodes the load-bearing money rules", () => {
-    // A refunded or cancelled order never moves again.
+    // A refunded order never moves again; a cancelled one only when a payment
+    // captured after the cancellation is refunded in full (20261111120000).
     expect(ORDER_TRANSITIONS.refunded).toEqual([]);
-    expect(ORDER_TRANSITIONS.cancelled).toEqual([]);
+    expect(ORDER_TRANSITIONS.cancelled).toEqual(["refunded"]);
     // A transferred transfer never re-runs; blocked intents can recover.
     expect(TRANSFER_TRANSITIONS.transferred).toEqual([]);
     expect(canTransition(TRANSFER_TRANSITIONS, "blocked_unpayable", "ready")).toBe(true);
