@@ -156,11 +156,13 @@ describe("parsing a migration file", () => {
       .map((name) => parseMigrationFile(path.join(dirPath, name), fs.readFileSync(path.join(dirPath, name), "utf8"), { migrationsDir: dirPath }));
   };
 
-  it("flags the real 0001 as a destructive baseline, and no file in the tree as unrunnable", () => {
+  // Plan 2 item A6 (N1075): the tree is one baseline, which the runner refuses
+  // on a database that has tables, as it refused the old 0001.
+  it("flags the real baseline as destructive, and no file in the tree as unrunnable (N1075)", () => {
     const all = tree();
     expect(all.filter((m) => m.problems.length).map((m) => [m.base, m.problems])).toEqual([]);
     expect(all.filter((m) => m.destructive.length).map((m) => [m.base, m.destructive])).toEqual([
-      ["0001_v3_schema.sql", ["marked DESTRUCTIVE", "a DO block runs destructive dynamic SQL (execute 'drop table if exists public.%I cascade')"]],
+      [expect.stringMatching(/^\d{14}_baseline\.sql$/), ["marked DESTRUCTIVE"]],
     ]);
   });
 

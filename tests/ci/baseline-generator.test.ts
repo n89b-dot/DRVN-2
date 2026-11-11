@@ -322,7 +322,7 @@ describe("the file as a whole (N1075)", () => {
   it("ends with A3's two default-privilege statements, exactly, so a later migration's new function is closed (20261111100000)", () => {
     const tail = text.slice(text.indexOf("perform cron.schedule"));
     for (const statement of DEFAULT_PRIVILEGE_STATEMENTS) expect(tail).toContain(`\n${statement}\n`);
-    const migration = fs.readFileSync(path.join(root, "supabase/migrations/20261111100000_functions_closed_by_default.sql"), "utf8");
+    const migration = fs.readFileSync(path.join(root, "supabase/migrations-archive/20261111100000_functions_closed_by_default.sql"), "utf8");
     const a3 = migration.split("\n").filter((line) => /^alter default privileges/.test(line));
     expect(a3).toEqual(DEFAULT_PRIVILEGE_STATEMENTS);
   });

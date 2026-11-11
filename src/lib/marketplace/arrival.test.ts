@@ -43,11 +43,9 @@ describe("OS-R-arrival: a listing view names the surface it came from", () => {
   });
 
   it("only ever reports a value the database accepts", () => {
-    const migration = readFileSync(
-      join(process.cwd(), "supabase/migrations/20261107220200_listing_view_arrivals.sql"),
-      "utf8"
-    );
-    const check = migration.match(/arrival text not null check \(arrival in \(([\s\S]*?)\)\)/);
+    // The table as the database holds it (supabase/schema/, plan 2 items A1 and A6).
+    const table = readFileSync(join(process.cwd(), "supabase/schema/tables/public.listing_view_arrivals.sql"), "utf8");
+    const check = table.match(/listing_view_arrivals_arrival_check CHECK \(\(?arrival = ANY \(ARRAY\[([^\]]*)\]/);
     expect(check).not.toBeNull();
     const allowed = [...check![1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]);
     expect(allowed).toEqual([...LISTING_ARRIVALS]);

@@ -14,7 +14,9 @@ import {
   readMeasure,
 } from "./measures";
 
-const sql = readFileSync(join(process.cwd(), "supabase/migrations/20261024100000_agent_admin_measure.sql"), "utf8");
+// The function that computes the measures, as the database holds it
+// (supabase/schema/, plan 2 items A1 and A6); first written by 20261024100000.
+const sql = readFileSync(join(process.cwd(), "supabase/schema/functions/public.agent_compute_metrics.sql"), "utf8");
 const doc = readFileSync(join(process.cwd(), "docs/site/agent-measures.md"), "utf8");
 
 function def(scope: MeasureDef["scope"], measure: string): MeasureDef {

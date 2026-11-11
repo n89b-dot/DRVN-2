@@ -16,7 +16,8 @@ import path from "node:path";
 
 import { splitStatements } from "../lib/sql-statements.mjs";
 
-const dir = path.resolve("supabase/migrations");
+// The history the baseline replaced is archived once A6 has moved it.
+const dir = path.resolve(fs.existsSync("supabase/migrations-archive") ? "supabase/migrations-archive" : "supabase/migrations");
 const one = (s) => s.replace(/\s+/g, " ").trim();
 
 const DDL = /^(create|alter|drop|grant|revoke|comment|set|reset|begin|start|commit|end|rollback|savepoint|release|lock|security\s+label|reindex|cluster|vacuum)\b/i;

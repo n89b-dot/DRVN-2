@@ -29,8 +29,8 @@ describe("the agent's privacy promise matches the code (N422)", () => {
   });
 
   it("says staff may open the chat for a report the member made, because admin_open_agent_chat allows it", () => {
-    const sql = readFileSync("supabase/migrations/20261026100000_agent_hosted_schedule.sql", "utf8");
-    const fn = sql.slice(sql.indexOf("create or replace function public.admin_open_agent_chat"));
+    // The function as the database holds it (supabase/schema/, plan 2 items A1 and A6).
+    const fn = readFileSync("supabase/schema/functions/public.admin_open_agent_chat.sql", "utf8");
     // The reports it accepts: one the member filed, one about them, one about a listing of theirs.
     expect(fn).toContain("r.reporter_id = p_member");
     expect(fn).toContain("r.subject_type = 'user' and r.subject_id = p_member");

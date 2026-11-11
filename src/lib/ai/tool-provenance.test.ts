@@ -119,7 +119,7 @@ describe("audit vocabulary (P2)", () => {
   });
 
   it("the database's lists are the app's: every capability, unknown_tool, and the same id keys", () => {
-    const sql = readFileSync(fileURLToPath(new URL("../../../supabase/migrations/20261107210200_agent_tool_audit.sql", import.meta.url)), "utf8");
+    const sql = readFileSync(fileURLToPath(new URL("../../../supabase/schema/functions/public.agent_audit_vocabulary.sql", import.meta.url)), "utf8");
     const list = (name: string) => {
       const match = sql.match(new RegExp(`when '${name}' then array\\[([^\\]]*)\\]`));
       expect(match, name).not.toBeNull();

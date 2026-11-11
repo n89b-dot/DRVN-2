@@ -12,15 +12,6 @@
       "statusRoute": "pooler"
     }
   },
-  "dynamicSqlAllowed_description": "Files allowed to run risky SQL on a database that already has tables: a top-level TRUNCATE or DROP TABLE, or dynamic SQL (EXECUTE in a DO block, or in a function the file creates and calls) that the runner can't show to be safe. Each entry names the file, the sha256 of its exact bytes (the dry run prints the first 12 characters; `shasum -a 256 <file>` gives all of it) and why it's safe. A destructive baseline (0001) can't be allowed here.",
-  "dynamicSqlAllowed": {
-    "20261011100000_listing_vehicle_fit.sql": {
-      "sha256": "fbfcb7d6bcf35a93bc169835d77909432e2bf7b2cbf69c7b7ef42cd78053d49c",
-      "reason": "empties listing_vehicle_fit, a table derived from listings, and rebuilds it from the active listings in the same transaction"
-    },
-    "20261107220800_open_beta_and_guest_holds.sql": {
-      "sha256": "bcc44bfb5e731c10937225e57e1b6587037d115fb8674c7b333d1e29c761dc23",
-      "reason": "OS-W31 (Neil's ruling: remove the invite-only beta) drops public.beta_access_config, its one-row on/off switch, and private.beta_signup_claims, short-lived signup claims nothing reads once the beta is gone; invitation and membership history is kept"
-    }
-  }
+  "dynamicSqlAllowed_description": "Files allowed to run risky SQL on a database that already has tables: a top-level TRUNCATE or DROP TABLE, or dynamic SQL (EXECUTE in a DO block, or in a function the file creates and calls) that the runner can't show to be safe. Each entry names the file, the sha256 of its exact bytes (the dry run prints the first 12 characters; `shasum -a 256 <file>` gives all of it) and why it's safe. A destructive baseline can't be allowed here. Empty since plan 2 item A6: the two files once allowed (20261011100000_listing_vehicle_fit.sql, 20261107220800_open_beta_and_guest_holds.sql) are in supabase/migrations-archive/, out of the runner's path.",
+  "dynamicSqlAllowed": {}
 }

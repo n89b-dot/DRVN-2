@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
@@ -10,10 +10,13 @@ vi.mock("@/lib/monitoring", () => ({ captureMessage: vi.fn() }));
 import { DB_QUOTA_SQLSTATE, DB_WRITE_QUOTAS, isDatabaseQuotaError } from "./db-write-quotas";
 import { RATE_LIMITS } from "./rate-limit";
 
-const migration = readFileSync(
-  join(process.cwd(), "supabase/migrations/20261107220000_social_write_quotas.sql"),
-  "utf8"
-);
+// The quota function and every trigger as the database holds them
+// (supabase/schema/, plan 2 items A1 and A6), not one migration's text.
+const schema = join(process.cwd(), "supabase/schema");
+const migration = [
+  readFileSync(join(schema, "functions/private.member_write_quota.sql"), "utf8"),
+  ...readdirSync(join(schema, "triggers")).sort().map((file) => readFileSync(join(schema, "triggers", file), "utf8")),
+].join("\n");
 
 function seconds(window: string): number {
   const [n, unit] = window.split(" ");
@@ -23,7 +26,7 @@ function seconds(window: string): number {
 describe("N247 database write quotas", () => {
   const triggers = [
     ...migration.matchAll(
-      /before insert on public\.(\w+)\s+for each row execute function private\.member_write_quota\('([\w-]+)', '(\d+)', '([^']+)'\)/g
+      /before insert on public\.(\w+)\s+for each row execute function private\.member_write_quota\('([\w-]+)', '(\d+)', '([^']+)'\)/gi
     ),
   ].map(([, table, action, limit, window]) => ({ table, action, limit: Number(limit), windowSeconds: seconds(window) }));
 

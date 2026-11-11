@@ -11,6 +11,7 @@ import {
   coverageLines,
   curatedCoverageSql,
   generationSeedSql,
+  importConfirmationCode,
   incomingPairs,
   makePopularity,
   summariseCoverage,
@@ -41,7 +42,7 @@ describe("vehicle catalogue on a new database (N667, report five #119)", () => {
     expect(() => verifiedJson("catalog/car/other.json", bytes, source)).toThrow(/not a pinned/);
   });
 
-  it("re-runs the generations migration's own idempotent seed and backfill, and not its schema", () => {
+  it("re-runs the curated generations' idempotent seed and backfill, and not the schema", () => {
     const sql = generationSeedSql();
     expect(sql).toMatch(/^-- ---------- curated seed ----------/);
     expect(sql).toMatch(/insert into public\.vehicle_generations/);
@@ -156,5 +157,37 @@ describe("N667: the import says which curated generations found a catalogue mode
     const helper = script.slice(script.indexOf("async function coverage("), script.indexOf("const before = await totals();"));
     expect(helper).toContain('"begin transaction read only"');
     expect(helper).toContain('"rollback"');
+  });
+});
+
+// Plan 2 item A6: the curated list moved out of the migration history into
+// supabase/reference/ when the history became one baseline. The import runs
+// the extracted text, and its confirmation code is a hash of it, so the move
+// must not change one byte of what is extracted.
+describe("the curated generations survive the baseline (N1075)", () => {
+  const archived = path.join(repo, "supabase/migrations-archive/20261020100000_vehicle_generations.sql");
+  // The extraction the import made before the move, with the migration's own markers.
+  const fromMigration = (text: string) =>
+    text.slice(text.indexOf("-- ---------- curated seed ----------"), text.indexOf("-- ============================================================\n-- Self-checks")).trim();
+
+  it("extracts exactly the text the generations migration held", () => {
+    const before = fromMigration(fs.readFileSync(archived, "utf8"));
+    expect(before.length).toBeGreaterThan(10_000);
+    expect(generationSeedSql()).toBe(before);
+    // Pinned as well, so the archive and the reference file cannot drift together.
+    expect(createHash("sha256").update(generationSeedSql()).digest("hex")).toBe(
+      "cff5622e0694b1ca882da225e3ecc47bf99d9d11abd1c41d0bcc0057220ba3ac",
+    );
+  });
+
+  it("gives the import the same confirmation code as before the move", () => {
+    const before = fromMigration(fs.readFileSync(archived, "utf8"));
+    expect(importConfirmationCode("example-project-ref", generationSeedSql())).toBe(importConfirmationCode("example-project-ref", before));
+  });
+
+  it("is not a migration: nothing in the migrations folder carries the list", () => {
+    for (const file of fs.readdirSync(path.join(repo, "supabase/migrations"))) {
+      expect(fs.readFileSync(path.join(repo, "supabase/migrations", file), "utf8")).not.toContain("-- ---------- curated seed ----------");
+    }
   });
 });

@@ -503,7 +503,9 @@ function main() {
     if (major !== doc.server.major) throw new Error(`pg_dump is version ${major} and the database is ${doc.server.major}; use a matching pg_dump or pass --structure <file>`);
     structure = execFileSync("pg_dump", ["--schema-only", "--no-owner", "--no-privileges", "-n", "public", "-n", "private", databaseUrl], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
   }
-  const migrations = fs.readdirSync("supabase/migrations").filter((f) => f.endsWith(".sql")).sort();
+  // The files database A was built from: the archived history once A6 has moved it.
+  const history = fs.existsSync("supabase/migrations-archive") ? "supabase/migrations-archive" : "supabase/migrations";
+  const migrations = fs.readdirSync(history).filter((f) => f.endsWith(".sql")).sort();
   const text = renderBaseline({ doc, rows, extras, structure, source: `${migrations.length} migration files, ${migrations[0]} to ${migrations[migrations.length - 1]}` });
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, text);

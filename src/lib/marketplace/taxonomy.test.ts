@@ -10,10 +10,15 @@ it("accepts unknown part types but rejects invalid parents and leaves from other
 });
 
 it("keeps database catalog integrity aligned with the authored taxonomy", () => {
-  const migration = readFileSync("supabase/migrations/20260913014222_marketplace_category_integrity.sql", "utf8");
-  const snapshot = JSON.parse(migration.match(/^-- catalog-snapshot: (.+)$/m)![1]);
-  expect(snapshot).toEqual(CATEGORIES.map(c => ({ slug: c.slug, subcategories: c.subcategories.map(s => s.slug) })));
+  // The constraint as the database holds it (supabase/schema/, plan 2 items A1
+  // and A6), not the text of the migration that first wrote it.
+  const table = readFileSync("supabase/schema/tables/public.listings.sql", "utf8");
+  const check = table.match(/^alter table public\.listings add constraint listings_catalog_assignment CHECK (.+);$/m)![1];
+  const text = (slug: string) => `'${slug}'::text`;
+  expect(check).toContain(`(category = ANY (ARRAY[${CATEGORIES.map(c => text(c.slug)).join(", ")}]))`);
   for (const category of CATEGORIES) {
-    expect(migration).toContain(`category = '${category.slug}' and subcategory in (${category.subcategories.map(s => `'${s.slug}'`).join(", ")})`);
+    expect(check).toContain(`category = ${text(category.slug)} AND (subcategory = ANY (ARRAY[${category.subcategories.map(s => text(s.slug)).join(", ")}]))`);
   }
+  // Nothing else: one top-level list and one subcategory list per category.
+  expect(check.match(/subcategory = ANY/g)).toHaveLength(CATEGORIES.length);
 });

@@ -6,7 +6,7 @@
 #
 # It builds two throwaway databases the way CI's sql-guard job builds one
 # (scripts/disposable-db.sh): A on 55440 from every file in
-# supabase/migrations/, B on 55441 from the baseline alone. Then, in order,
+# supabase/migrations-archive/ (supabase/migrations/ before A6 moved it), B on 55441 from the baseline alone. Then, in order,
 # and stopping at the first that fails:
 #
 #   0. applied by psql to A, which has tables, the baseline refuses and A is
@@ -42,7 +42,9 @@ step() { printf '\n== %s\n' "$*"; }
 fail() { printf 'prove: %s\n' "$*" >&2; exit 1; }
 
 step "A: every migration file"
-bash "$root/scripts/disposable-db.sh" start "$port_a" >"$out/build-A.log" 2>&1 || { cat "$out/build-A.log"; fail "database A did not build"; }
+# After A6 moved the history, A is built from supabase/migrations-archive/.
+if [ -d "$root/supabase/migrations-archive" ]; then history=("$root"/supabase/migrations-archive/*.sql); else history=(); fi
+bash "$root/scripts/disposable-db.sh" start "$port_a" ${history[@]+"${history[@]}"} >"$out/build-A.log" 2>&1 || { cat "$out/build-A.log"; fail "database A did not build"; }
 head -1 "$out/build-A.log"
 
 if [ "$generate" = 1 ]; then
