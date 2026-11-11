@@ -104,9 +104,14 @@ begin
          -- A title is cut out whole, in its place. One that cannot be (it
          -- contains the separator, so no piece equals it, or any of their
          -- titles is still in what is left) takes the whole body with it
-         -- (20261111140000, Codex's final review).
+         -- (20261111140000, Codex's final review). So does a title of theirs
+         -- whole in the original body that is not itself a piece (20261111160000).
          body = (
-           select case when exists (select 1 from mine m where strpos(c.cut, m.title) > 0) then a_matches else c.cut end
+           select case when exists (select 1 from mine m where strpos(c.cut, m.title) > 0)
+                         or exists (select 1 from mine m
+                                     where strpos(' · ' || nt.body || ' · ', ' · ' || m.title || ' · ') > 0
+                                       and not (m.title = any (string_to_array(nt.body, ' · '))))
+                       then a_matches else c.cut end
              from (select string_agg(case when exists (select 1 from mine m where m.title = e.t) then a_listing else e.t end, ' · ' order by e.ord) as cut
                      from unnest(string_to_array(nt.body, ' · ')) with ordinality as e(t, ord)) c)
    where private.notification_member_text(nt.kind) = 'matched_titles'
