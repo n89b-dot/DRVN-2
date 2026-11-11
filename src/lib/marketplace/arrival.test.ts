@@ -42,7 +42,7 @@ describe("OS-R-arrival: a listing view names the surface it came from", () => {
     expect(classifyArrival(at("/cars/x"), null)).toBe("external");
   });
 
-  it("only ever reports a value the database accepts", () => {
+  it("only ever reports a value the database accepts (N1075)", () => {
     // The table as the database holds it (supabase/schema/, plan 2 items A1 and A6).
     const table = readFileSync(join(process.cwd(), "supabase/schema/tables/public.listing_view_arrivals.sql"), "utf8");
     const check = table.match(/listing_view_arrivals_arrival_check CHECK \(\(?arrival = ANY \(ARRAY\[([^\]]*)\]/);

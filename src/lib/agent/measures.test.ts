@@ -29,7 +29,7 @@ function def(scope: MeasureDef["scope"], measure: string): MeasureDef {
 const hasDigit = (text: string) => /\d/.test(text);
 
 describe("agent measures", () => {
-  it("every measure with a number is one the database computes; every other one isn't; all are documented", () => {
+  it("every measure with a number is one the database computes; every other one isn't; all are documented (N1075)", () => {
     for (const item of AGENT_MEASURES) {
       const computed = item.basis.kind === "computed" || item.basis.kind === "approximation";
       if (computed) expect(sql, `${item.measure} isn't computed`).toContain(`'${item.measure}'`);
