@@ -65,7 +65,7 @@ export function protectionProblems(rules) {
  * commit whose second parent is the pull request's head, and that head must
  * have passed `release-gate` while level with the first parent.
  *
- * @param {{ sha: string, parents: { sha: string }[] }} commit   GET /repos/{repo}/commits/{sha}
+ * @param {{ sha: string, parents: { sha: string }[], commit?: { committer?: { date?: string } } }} commit   GET /repos/{repo}/commits/{sha}; the committer date is when it merged
  * @param {any[]} checkRuns   check runs on the second parent (the pull request's head)
  * @param {{ behind_by?: number } | null} compare   GET /compare/{first parent}...{second parent}
  * @returns {string[]}
@@ -79,10 +79,20 @@ export function mergedHeadProblems(commit, checkRuns, compare) {
   const head = parents[1].sha;
   const problems = [];
   const gates = (checkRuns ?? []).filter((run) => run?.name === 'release-gate');
-  const newest = [...gates].sort((a, b) => Date.parse(b.started_at ?? 0) - Date.parse(a.started_at ?? 0))[0];
-  if (!newest) problems.push(`release-gate never ran on ${short(head)}, the pull request head merged as ${short(commit.sha)}`);
-  else if (newest.status !== 'completed' || newest.conclusion !== 'success') {
-    problems.push(`release-gate was ${newest.status === 'completed' ? newest.conclusion : newest.status} on ${short(head)} when it merged as ${short(commit.sha)}`);
+  // Only what the gate had said by the time of the merge counts (codex
+  // review, 11 Nov 2026): a run that finished after it, pass or fail, is
+  // disregarded. Of the runs finished by then, the newest decides. A
+  // completed run with no completed_at drops out here (NaN), the safe way.
+  const mergedAt = Date.parse(commit?.commit?.committer?.date ?? '');
+  const finishedBefore = gates
+    .filter((run) => run.status === 'completed' && Date.parse(run.completed_at ?? '') <= mergedAt)
+    .sort((a, b) => Date.parse(b.completed_at) - Date.parse(a.completed_at));
+  const newest = finishedBefore[0];
+  if (!gates.length) problems.push(`release-gate never ran on ${short(head)}, the pull request head merged as ${short(commit.sha)}`);
+  else if (Number.isNaN(mergedAt)) problems.push(`could not tell when ${short(commit.sha)} merged, so not whether release-gate had passed on ${short(head)} by then`);
+  else if (!newest) problems.push(`release-gate had not finished on ${short(head)} when it merged as ${short(commit.sha)}`);
+  else if (newest.conclusion !== 'success') {
+    problems.push(`release-gate was ${newest.conclusion} on ${short(head)} when it merged as ${short(commit.sha)}`);
   }
   if (!compare || typeof compare.behind_by !== 'number') problems.push(`could not tell whether ${short(head)} was level with main when it merged`);
   else if (compare.behind_by > 0) problems.push(`${short(head)} was ${compare.behind_by} commit(s) behind main when it merged as ${short(commit.sha)}`);
@@ -172,7 +182,9 @@ async function main() {
   let compare = null;
   if ((commit.parents ?? []).length === 2) {
     const [base, head] = commit.parents.map((parent) => parent.sha);
-    const runsRes = await api(`/repos/${repo}/commits/${head}/check-runs?check_name=release-gate&per_page=100`, headers);
+    // filter=all: GitHub's default keeps only the newest run, and a rerun
+    // after the merge would hide the pass that finished before it.
+    const runsRes = await api(`/repos/${repo}/commits/${head}/check-runs?check_name=release-gate&filter=all&per_page=100`, headers);
     if (!runsRes.ok) throw new Error(`GitHub answered ${runsRes.status} for the check runs on ${head}`);
     checkRuns = (await runsRes.json()).check_runs;
     const compareRes = await api(`/repos/${repo}/compare/${base}...${head}`, headers);

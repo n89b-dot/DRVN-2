@@ -29,7 +29,6 @@ afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 describe("which paths are documents (plan 2 A0)", () => {
   it.each([
     "docs/plans/2026-11-remediation-record.md",
-    "docs/release-evidence/launch-configuration.json",
     "docs/design/agent-a3/buyer-760.png",
     "docs/remediation-evidence/2026-09-05/csp-browsers.jsonl",
     "docs/readiness-progress/index.html",
@@ -58,6 +57,8 @@ describe("which paths are documents (plan 2 A0)", () => {
     ".github/workflows/ci.yml",
     ".github/workflows/notes.md",
     "docs/review-evidence/2026-09-04/control-flow-probes.cjs",
+    // CI's launch-configuration lane runs on it (codex review, 11 Nov 2026).
+    "docs/release-evidence/launch-configuration.json",
     "docs/site/example.ts",
     "docs/Makefile",
     "docs/.env",

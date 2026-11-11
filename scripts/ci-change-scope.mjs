@@ -35,6 +35,9 @@ export function isDocument(file) {
   // Workflows decide what runs. Nothing under .github/workflows is a document,
   // whatever its extension.
   if (file.startsWith(".github/workflows/")) return false;
+  // CI's launch-configuration lane runs on this file: it is configuration,
+  // not a document (codex review, 11 Nov 2026).
+  if (file === "docs/release-evidence/launch-configuration.json") return false;
   const name = file.slice(file.lastIndexOf("/") + 1);
   const dot = name.lastIndexOf(".");
   if (dot <= 0) return false;
