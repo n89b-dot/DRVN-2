@@ -45,7 +45,7 @@ Adds `private.order_status_transitions` (the legal moves of `orders.status`, eac
 
 | File | Applied to |
 |---|---|
-| `20261111120000_order_status_guard.sql` | not applied |
+| `20261111120000_order_status_guard.sql` | shared-dev 2026-11-11; staging 2026-11-11 |
 
 ## November 11 — the database owns every change to an order's status (architecture plan 2, item A2, first of two)
 
@@ -53,7 +53,7 @@ Three functions take over the six updates of `orders.status` or `orders.pre_disp
 
 | File | Applied to |
 |---|---|
-| `20261111110000_order_status_moves.sql` | not applied |
+| `20261111110000_order_status_moves.sql` | shared-dev 2026-11-11; staging 2026-11-11 |
 
 ## November 11 — new functions are closed by default (architecture plan 2, item A3)
 
