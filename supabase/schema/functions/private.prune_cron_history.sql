@@ -16,6 +16,12 @@ begin
    where d.ctid in (select x.ctid from private.photo_signatures x
                      where x.created_at < now() - interval '2 hours'
                      for update skip locked);
+  -- 20261110190000: quarantined photo references past their 90 days.
+  delete from private.photo_refs_quarantined where expires_at < now();
+  -- 20261111090000: settled order emails and reminder ledgers past 90 days.
+  delete from public.order_email_outbox where status in ('sent', 'skipped', 'failed') and updated_at < now() - interval '90 days';
+  delete from public.payout_setup_reminders where created_at < now() - interval '90 days';
+  delete from public.dispatch_reminders where created_at < now() - interval '90 days';
   return removed;
 end;
 $function$;

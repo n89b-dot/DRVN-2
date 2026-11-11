@@ -28,7 +28,7 @@ AS $function$
     ('drvn-search-words', '23 * * * *', 'select public.refresh_search_words();', array[]::text[], interval '3 hours'),
     ('drvn-search-worker', '*/2 * * * *', 'select public.invoke_remediation_worker(''search'');', array['search'], interval '30 minutes'),
     ('drvn-transfer-worker', '*/10 * * * *', 'select public.mark_due_transfer_intents(); select public.invoke_transfer_worker();',
-      array['expiries','captures','transfers','transferReconciliation','refunds','labelVoids','returns','disputes','payoutDeadlines','alerts','receipts','analytics'],
+      array['expiries','captures','transfers','transferReconciliation','refunds','labelVoids','returns','disputes','payoutDeadlines','alerts','receipts','analytics','orderEmails'],
       interval '30 minutes')
 $function$;
 

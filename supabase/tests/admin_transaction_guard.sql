@@ -1,6 +1,10 @@
 begin;
 create function pg_temp.reject_test_audit() returns trigger language plpgsql as $$
 begin if new.reason='injected audit outage' then raise exception 'Injected audit failure'; end if; return new; end $$;
+
+-- This guard's own helpers are called while acting as other roles. A new
+-- function is closed by default (architecture plan 2, item A3), so they are opened here.
+grant execute on all routines in schema pg_temp to public;
 create trigger injected_audit_failure before insert on public.admin_audit_log for each row execute function pg_temp.reject_test_audit();
 do $$
 declare actor uuid:=gen_random_uuid(); subject uuid:=gen_random_uuid();

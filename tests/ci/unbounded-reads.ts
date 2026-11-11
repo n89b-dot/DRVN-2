@@ -87,6 +87,26 @@ function commentsAbove(lines: string[], index: number): string {
   return comments;
 }
 
+export type Call = { name: string; args: string };
+
+/** The method calls chained on from index `from` (`.select(…).eq(…)`), with the comments between them. */
+export function chainAfter(source: string, from: number): { calls: Call[]; comments: string } {
+  const calls: Call[] = [];
+  let comments = "";
+  let i = from;
+  for (;;) {
+    const gap = skipGap(source, i);
+    const call = /^(?:\?\.|!\.|\.)([A-Za-z_$][A-Za-z0-9_$]*)\s*(?:<[^()]*>)?\s*\(/.exec(source.slice(gap.at, gap.at + 200));
+    if (!call) break;
+    comments += gap.comments;
+    const open = gap.at + call[0].length - 1;
+    const end = closing(source, open);
+    calls.push({ name: call[1], args: source.slice(open + 1, end - 1) });
+    i = end;
+  }
+  return { calls, comments };
+}
+
 /** Every database read in a source file, with whether it states a bound. */
 export function readsIn(source: string): Read[] {
   const reads: Read[] = [];
@@ -94,19 +114,7 @@ export function readsIn(source: string): Read[] {
     const start = match.index!;
     // Storage buckets are not tables: `.storage.from("bucket")`.
     if (/\.storage\s*$/.test(source.slice(Math.max(0, start - 40), start))) continue;
-    const methods: { name: string; args: string }[] = [];
-    let comments = "";
-    let i = start + match[0].length;
-    for (;;) {
-      const gap = skipGap(source, i);
-      const call = /^(?:\?\.|!\.|\.)([A-Za-z_$][A-Za-z0-9_$]*)\s*(?:<[^()]*>)?\s*\(/.exec(source.slice(gap.at, gap.at + 200));
-      if (!call) break;
-      comments += gap.comments;
-      const open = gap.at + call[0].length - 1;
-      const end = closing(source, open);
-      methods.push({ name: call[1], args: source.slice(open + 1, end - 1) });
-      i = end;
-    }
+    const { calls: methods, comments } = chainAfter(source, start + match[0].length);
     const line = source.slice(0, start).split("\n").length;
     const above = commentsAbove(source.split("\n"), line - 1);
     const names = methods.map((m) => m.name);

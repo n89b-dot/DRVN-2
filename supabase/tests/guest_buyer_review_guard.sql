@@ -6,6 +6,10 @@ create function pg_temp.impersonate(uid uuid) returns void language sql as $$
   select set_config('role', 'authenticated', true);
   select set_config('request.jwt.claims', json_build_object('sub', uid::text, 'role', 'authenticated', 'aal', 'aal1')::text, true);
 $$;
+
+-- This guard's own helpers are called while acting as other roles. A new
+-- function is closed by default (architecture plan 2, item A3), so they are opened here.
+grant execute on all routines in schema pg_temp to public;
 do $$
 declare
   member uuid := gen_random_uuid();   -- signed in, confirmed address

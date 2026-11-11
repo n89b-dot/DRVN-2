@@ -38,6 +38,10 @@ create function pg_temp.run(p_job text, p_status text, p_start timestamptz, p_en
   select nextval('pg_temp.fixture_run'), j.jobid, p_status, p_start, p_end from cron.job j where j.jobname = p_job
 $$;
 
+-- This guard's own helpers are called while acting as other roles. A new
+-- function is closed by default (architecture plan 2, item A3), so they are opened here.
+grant execute on all routines in schema pg_temp to public;
+
 do $$
 declare
   seller uuid := gen_random_uuid();
@@ -100,7 +104,8 @@ begin
     ('drvn-transfer-worker', 'payoutDeadlines'),
     ('drvn-transfer-worker', 'alerts'),
     ('drvn-transfer-worker', 'receipts'),
-    ('drvn-transfer-worker', 'analytics');
+    ('drvn-transfer-worker', 'analytics'),
+    ('drvn-transfer-worker', 'orderEmails');
   select string_agg(e.job || ':' || e.family, ', ' order by e.job, e.family) into missing
   from pg_temp.expected_families e
   where not exists (select 1 from private.scheduled_job_inventory() i where i.job = e.job and e.family = any(i.families));

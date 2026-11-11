@@ -1,12 +1,22 @@
 # Email delivery for Supabase Auth
 
-DRVN sends no email of its own. Every email a member or guest gets comes from
-Supabase Auth: signup confirmation, password reset, email change, and the
-guest order-access link (`deliverOrderAccessLink` in
+Two kinds of email leave DRVN. **Sign-in email** (this page's subject)
+comes from Supabase Auth: signup confirmation, password reset, email change,
+and the guest order-access link (`deliverOrderAccessLink` in
 `src/features/commerce/guest-buyer.ts`, called by the receipt worker
 `src/lib/receipt-worker.ts`). Supabase's built-in sender is rate-limited to a
 handful of messages an hour and is not meant for real recipients, so staging
 and production need **custom SMTP**.
+
+**Order emails** (#116: sold, receipt, dispatched, delivered, disputes,
+refunds, payout-setup reminders) and saved-search digests are DRVN's own.
+They go through the provider's API, not SMTP: `EMAIL_PROVIDER=resend`,
+`RESEND_API_KEY` (a sending-only key) and `EMAIL_FROM`, set on the hosting
+project (`docs/production-runbook.md` §4). The code supports Resend today,
+behind `src/lib/email/send.ts`, so another provider is one small file. Use
+the same verified domain as the SMTP settings below. **Resend is the
+suggestion, not yet Neil's confirmed choice (R-email).** Until it's set,
+order emails are skipped and none are sent later.
 
 There are no beta invitations: #126 removed the invite-only beta, so sign-up
 is open. Supabase's "Invite user" email is never used.

@@ -25,6 +25,7 @@ alter table public.admin_audit_log add constraint admin_audit_log_subject_type_c
 CREATE INDEX admin_audit_log_actor_idx ON public.admin_audit_log USING btree (actor_id, created_at DESC);
 CREATE UNIQUE INDEX admin_audit_log_operation_terminal_idx ON public.admin_audit_log USING btree (((metadata ->> 'operationId'::text))) WHERE ((metadata ->> 'phase'::text) = ANY (ARRAY['completed'::text, 'reconciled'::text]));
 CREATE INDEX admin_audit_log_order_idx ON public.admin_audit_log USING btree (order_id) WHERE (order_id IS NOT NULL);
+CREATE INDEX admin_audit_log_requested_idx ON public.admin_audit_log USING btree (id DESC) WHERE ((metadata ->> 'phase'::text) = 'requested'::text);
 CREATE INDEX admin_audit_log_subject_idx ON public.admin_audit_log USING btree (subject_type, subject_id, created_at DESC);
 
 -- Grants

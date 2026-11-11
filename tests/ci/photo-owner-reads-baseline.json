@@ -1,0 +1,23 @@
+{
+  "src/app/(auth)/layout.tsx": 1,
+  "src/app/(discover)/cars/[slug]/activity/[postId]/opengraph-image.tsx": 1,
+  "src/app/(discover)/cars/[slug]/opengraph-image.tsx": 1,
+  "src/app/(discover)/cars/[slug]/page.tsx": 1,
+  "src/app/(discover)/listings/[id]/page.tsx": 3,
+  "src/app/(discover)/posts/[postId]/page.tsx": 1,
+  "src/app/(discover)/u/[username]/page.tsx": 1,
+  "src/app/(product)/garage/[id]/edit/page.tsx": 2,
+  "src/app/(product)/garage/[id]/update/new/page.tsx": 1,
+  "src/app/(product)/garage/actions.ts": 1,
+  "src/app/(product)/garage/garage-data.ts": 1,
+  "src/app/(product)/garage/page.tsx": 1,
+  "src/app/(product)/home/page.tsx": 2,
+  "src/app/(product)/profile/page.tsx": 1,
+  "src/app/(product)/saved/page.tsx": 2,
+  "src/app/(product)/selling/page.tsx": 1,
+  "src/app/api/explore/suggest/route.ts": 1,
+  "src/features/composer/taggable-parts.ts": 1,
+  "src/lib/admin/queries.ts": 1,
+  "src/lib/explore/search/indexing.ts": 1,
+  "src/lib/profile-data.ts": 5
+}
