@@ -180,8 +180,10 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #236 | 2026-11-10 | Plan 2 batch 1: #227 #229 #231 #232 | waived | — | waived (ruling, 10 Nov) |
 | #237 | 2026-11-10 | Batch 4: #210 | waived | — | waived (ruling, 10 Nov) |
 | #238 | 2026-11-10 | docs+test: the plan 1 record after batch 4, a current Needs Neil, and the table the Intelligence OS reads (batch 5, #240) | waived | — | waived (ruling, 10 Nov) |
+| #239 | 2026-11-10 | Plan 2 F1: the Stripe test lane is skipped on a documents-only pull request; one Stripe sandbox per deployment | waived | — | waived (ruling, 10 Nov) |
 | #240 | 2026-11-10 | Batch 5: #238 #199 | waived | — | waived (ruling, 10 Nov) |
 | #241 | 2026-11-10 | docs: the plan 1 record after batch 5, the OS's rows, and B1 marked fixed in the 3 November report (batch 7, #245) | skipped | — | docs only (ruling, 7 Nov) |
+| #242 | 2026-11-10 | docs(plans): plan 2 record: rows for the Intelligence OS, the Stripe sandbox steps, A0b and A4 merged | skipped | — | docs only (ruling, 7 Nov) |
 | #243 | 2026-11-10 | Batch 6: #206 | waived | — | waived (ruling, 10 Nov) |
 | #244 | 2026-11-10 | OS-W41 N1048 N1051 N1052 N1053: a listing's share image that does not run out, a signer tests can drive, a signing time budget… (batch 9, #249) | waived | — | waived (ruling, 10 Nov) |
 | #245 | 2026-11-10 | Batch 7: #241 #208 | waived | — | waived (ruling, 10 Nov) |
@@ -189,3 +191,6 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #247 | 2026-11-10 | docs: the plan 1 record after batches 6 and 7, with the order-email and photo reviews (batch 9, #249) | skipped | — | docs only (ruling, 7 Nov) |
 | #248 | 2026-11-10 | Batch 8: #246 | waived | — | waived (ruling, 10 Nov) |
 | #249 | 2026-11-10 | Batch 9: #247 #244 #204 | waived | — | waived (ruling, 10 Nov) |
+| #250 | 2026-11-10 | docs: the plan 1 record after batches 8 and 9, and MIGRATIONS.md headings made true | skipped | — | docs only (ruling, 7 Nov) |
+| #251 | 2026-11-11 | N1075: A1, a checked-in copy of the database schema, kept current by CI | waived | — | waived (ruling, 10 Nov) |
+| #252 | 2026-11-11 | A3: a new database function is closed unless a migration opens it | waived | — | waived (ruling, 10 Nov) |
