@@ -39,6 +39,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 11 — the database owns every change to an order's status (architecture plan 2, item A2, first of two)
+
+Three functions take over the six updates of `orders.status` or `orders.pre_dispute_status` the application made itself (tracking, the admin console's dispute resolution, the buyer closing a case; the two in `applyDisputeEvent` were unreachable and are removed): `order_mark_shipped_from_tracking`, `order_mark_delivered_from_tracking` and `order_close_dispute`. Same conditions as the updates they replace; service role only. Nothing is changed or backfilled in existing rows. Guard: `supabase/tests/order_status_moves_guard.sql`.
+
+| File | Applied to |
+|---|---|
+| `20261111110000_order_status_moves.sql` | shared-dev 2026-11-11; staging 2026-11-11 |
+
 ## November 11 — new functions are closed by default (architecture plan 2, item A3)
 
 Two `alter default privileges` statements for the role that applies migrations: a function created from here on is not executable by `PUBLIC`, `anon` or `authenticated` until a migration grants it. `service_role` keeps the platform's grant in `public`. Nothing that exists changes. Guard: `supabase/tests/functions_closed_by_default_guard.sql`. A new function that another function calls on a member's behalf (from a trigger function, a policy or a default that is not `SECURITY DEFINER`) needs its own grant, or the member's write is refused; before this the PUBLIC default hid that. A migration that runs `create extension` makes that extension's functions closed to PUBLIC for the role that ran it: grant what queries use, and check the snapshot.

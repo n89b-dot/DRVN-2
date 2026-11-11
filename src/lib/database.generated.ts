@@ -8548,7 +8548,29 @@ export type Database = {
         Returns: number
       }
       order_buyer_reviewable: { Args: { p_order: string }; Returns: boolean }
+      order_close_dispute: {
+        Args: {
+          p_buyer?: string
+          p_order: string
+          p_outcome: string
+          p_resolved_at: string
+        }
+        Returns: string
+      }
       order_has_valid_tracking: { Args: { p_order: string }; Returns: boolean }
+      order_mark_delivered_from_tracking: {
+        Args: { p_delivered_at: string; p_order: string }
+        Returns: string
+      }
+      order_mark_shipped_from_tracking: {
+        Args: {
+          p_carrier?: string
+          p_order: string
+          p_shipped_at: string
+          p_tracking?: string
+        }
+        Returns: string
+      }
       pause_account_deletion_hold: {
         Args: { p_job: string; p_lease: string; p_user: string }
         Returns: undefined

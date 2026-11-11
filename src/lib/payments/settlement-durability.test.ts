@@ -343,106 +343,25 @@ describe("webhook persistence failures", () => {
     );
   });
 
-  it("returns retry for a dispute whose local mapping is not present yet", async () => {
+  it("returns retry for a lost dispute whose local mapping is not present yet", async () => {
     const admin = adminWith({ data: [], error: null });
-    const dispute = { id: "dp_1", payment_intent: "pi_late" } as Stripe.Dispute;
-    await expect(applyDisputeEvent(admin as never, dispute, false)).resolves.toBe("retry");
+    const dispute = { id: "dp_1", payment_intent: "pi_late", status: "lost" } as Stripe.Dispute;
+    await expect(applyDisputeEvent(admin as never, dispute, true)).resolves.toBe("retry");
   });
 
-  it("replays safely after the second order in a dispute fails to update", async () => {
-    const dispute = {
-      id: "dp_multi",
-      payment_intent: "pi_multi",
-      reason: "fraudulent",
-    } as Stripe.Dispute;
-    const firstAttempt = adminWith(
-      {
-        data: [{ order_id: "order_1" }, { order_id: "order_2" }],
-        error: null,
-      },
-      {
-        data: [
-          { id: "order_1", status: "paid", dispute_resolved_at: null },
-          { id: "order_2", status: "paid", dispute_resolved_at: null },
-        ],
-        error: null,
-      },
-      { data: [{ id: "order_1" }], error: null },
-      { data: null, error: { code: "08006" } }
+  // Plan 2 item A2: opening a dispute and winning one are the database's
+  // (apply_stripe_dispute_event); this function used to write the order's
+  // status for both and no longer writes it at all.
+  it.each([
+    ["a dispute being opened", { id: "dp_open", payment_intent: "pi_1", reason: "fraudulent" }, false],
+    ["a dispute that was won", { id: "dp_won", payment_intent: "pi_1", status: "won" }, true],
+    ["a won dispute delivered as still open", { id: "dp_won", payment_intent: "pi_1", status: "won" }, false],
+  ])("refuses %s without reading or writing anything (plan 2 A2)", async (_, dispute, closed) => {
+    const admin = adminWith();
+    await expect(applyDisputeEvent(admin as never, dispute as Stripe.Dispute, closed)).rejects.toThrow(
+      "applyDisputeEvent books a lost dispute only"
     );
-    await expect(applyDisputeEvent(firstAttempt as never, dispute, false)).rejects.toThrow(
-      "dispute transition failed; retry required"
-    );
-
-    const replay = adminWith(
-      {
-        data: [{ order_id: "order_1" }, { order_id: "order_2" }],
-        error: null,
-      },
-      {
-        data: [
-          { id: "order_1", status: "disputed", dispute_resolved_at: null },
-          { id: "order_2", status: "paid", dispute_resolved_at: null },
-        ],
-        error: null,
-      },
-      { data: [{ id: "order_2" }], error: null }
-    );
-    await expect(applyDisputeEvent(replay as never, dispute, false)).resolves.toBe("committed");
-  });
-
-  it("accepts a concurrent dispute transition only after verifying its state", async () => {
-    const admin = adminWith(
-      { data: [{ order_id: "order_1" }], error: null },
-      { data: [{ id: "order_1", status: "paid", dispute_resolved_at: null }], error: null },
-      { data: [], error: null },
-      { data: { status: "disputed", dispute_resolved_at: null }, error: null }
-    );
-    const dispute = {
-      id: "dp_concurrent",
-      payment_intent: "pi_1",
-      reason: "fraudulent",
-    } as Stripe.Dispute;
-    await expect(applyDisputeEvent(admin as never, dispute, false)).resolves.toBe("committed");
-  });
-
-  it("opens a new Stripe dispute after an earlier in-app dispute was resolved", async () => {
-    const admin = adminWith(
-      { data: [{ order_id: "order_1" }], error: null },
-      { data: [{ id: "order_1", status: "paid" }], error: null },
-      { data: [{ id: "order_1" }], error: null }
-    );
-    const dispute = {
-      id: "dp_new",
-      payment_intent: "pi_1",
-      reason: "fraudulent",
-    } as Stripe.Dispute;
-
-    await expect(applyDisputeEvent(admin as never, dispute, false)).resolves.toBe("committed");
-    const update = admin.from.mock.results[2].value.update as ReturnType<typeof vi.fn>;
-    expect(update.mock.calls[0][0]).toMatchObject({
-      status: "disputed",
-      dispute_resolved_at: null,
-      dispute_outcome: null,
-    });
-  });
-
-  it("does not overwrite a concurrent terminal status while closing a won dispute", async () => {
-    const admin = adminWith(
-      { data: [{ order_id: "order_1" }], error: null },
-      { data: [{ id: "order_1", pre_dispute_status: "paid" }], error: null },
-      { data: [], error: null },
-      { data: { status: "refunded" }, error: null }
-    );
-    const dispute = {
-      id: "dp_won",
-      payment_intent: "pi_1",
-      status: "won",
-    } as Stripe.Dispute;
-
-    await expect(applyDisputeEvent(admin as never, dispute, true)).resolves.toBe("committed");
-    const updateBuilder = admin.from.mock.results[2].value;
-    expect(updateBuilder.eq).toHaveBeenCalledWith("status", "disputed");
+    expect(admin.from).not.toHaveBeenCalled();
   });
 
   it("does not swallow a requires-action write failure", async () => {
