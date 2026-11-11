@@ -51,11 +51,11 @@ with any table in `public`. Details: "Applying without Docker or psql" below.
 
 ## November 11 — a deleted member's title with " · " leaves saved-search notices (Codex's final review)
 
-`20261111140000_deletion_scrub_separator.sql`. A saved-search notice's body is up to three listing titles joined by ` · `; the scrub cut out a leaver's title by comparing each piece with the whole title, so a title containing the separator (`Alice 07123 · turbo`), or ending in ` ·`, stayed. Restates `private.scrub_member_notices` (from `20261110220000`) with one change: when a title of theirs is still in what the cut leaves, the whole body becomes `Listings matched your saved search, including one by a member who has since left DRVN.` Adds `private.repair_ambiguous_matched_titles()` (no grants) and runs it once: the body of a saved-search notice that still carries, whole between separators, a listing title of a member whose scrub is recorded becomes that line; nothing else is touched, and a second run changes nothing. The count is printed as a NOTICE when applied; record it here. The read-only count to take beforehand is in the file's header. Guard: `supabase/tests/deletion_scrub_separator_guard.sql`.
+`20261111140000_deletion_scrub_separator.sql`. A saved-search notice's body is up to three listing titles joined by ` · `; the scrub cut out a leaver's title by comparing each piece with the whole title, so a title containing the separator (`Alice 07123 · turbo`), or ending in ` ·`, stayed. Restates `private.scrub_member_notices` (from `20261110220000`) with one change: when a title of theirs is still in what the cut leaves, the whole body becomes `Listings matched your saved search, including one by a member who has since left DRVN.` Adds `private.repair_ambiguous_matched_titles()` (no grants) and runs it once: the body of a saved-search notice that still carries, whole between separators, a listing title of a member whose scrub is recorded becomes that line; nothing else is touched, and a second run changes nothing. The count is printed as a NOTICE when applied: 0 on shared dev and 0 on staging (the read-only count beforehand was 0 on each). The read-only count to take beforehand is in the file's header. Guard: `supabase/tests/deletion_scrub_separator_guard.sql`.
 
 | File | Applied to |
 |---|---|
-| `20261111140000_deletion_scrub_separator.sql` | not applied |
+| `20261111140000_deletion_scrub_separator.sql` | shared-dev 2026-11-11; staging 2026-11-11 |
 
 ## November 11 — one baseline in place of the migration history (architecture plan 2, item A6)
 
