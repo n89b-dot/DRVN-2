@@ -39,6 +39,14 @@ history rows without running the files, only for files whose every object it
 verifies on the target, read-only. Same dry run, `--confirm`, allow-list and
 TLS. Details: "Recording without running" below.
 
+## November 11 — the database refuses any other change to an order's status (architecture plan 2, item A2, second of two)
+
+Adds `private.order_status_transitions` (the legal moves of `orders.status`, each with the functions that make it), the judge `public.order_status_change_problem` (security definer, service role only) and the trigger `orders_status_transition_guard` (`public.guard_order_status`, not security definer) on every UPDATE that changes `status` or `pre_dispute_status`, for every role. Leaving a case goes back to `pre_dispute_status` or to refunded; entering one records the old status. The one escape hatch is `set local drvn.order_status_override = '<reason>'`, honoured only when both `current_user` and `session_user` are `postgres` or `supabase_admin`, and audited in `private.order_status_overrides` (runbook 5b1). Every move the functions make today is a row, so nothing changes in behaviour; no row is moved. Apply after `20261111110000`. Guard: `supabase/tests/order_status_guard_guard.sql`.
+
+| File | Applied to |
+|---|---|
+| `20261111120000_order_status_guard.sql` | shared-dev 2026-11-11; staging 2026-11-11 |
+
 ## November 11 — the database owns every change to an order's status (architecture plan 2, item A2, first of two)
 
 Three functions take over the six updates of `orders.status` or `orders.pre_dispute_status` the application made itself (tracking, the admin console's dispute resolution, the buyer closing a case; the two in `applyDisputeEvent` were unreachable and are removed): `order_mark_shipped_from_tracking`, `order_mark_delivered_from_tracking` and `order_close_dispute`. Same conditions as the updates they replace; service role only. Nothing is changed or backfilled in existing rows. Guard: `supabase/tests/order_status_moves_guard.sql`.

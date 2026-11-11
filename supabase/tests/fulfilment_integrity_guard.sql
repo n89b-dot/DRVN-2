@@ -79,7 +79,10 @@ begin
   end if;
   -- Even a mint that saw a stale 'paid' order (the race N93 describes) can't
   -- reset a redeemed pass.
+  -- A fixture move the order status guard refuses (plan 2 A2); made under its audited override.
+  perform set_config('drvn.order_status_override', 'guard fixture: a redeemed pickup seen as paid again', true);
   update public.orders set status = 'paid' where id = pickup;
+  perform set_config('drvn.order_status_override', '', true);
   result := public.pickup_mint_pass(pickup, buyer, 'tok-4', 'code-4', now() + interval '1 hour');
   if result->>'reason' is distinct from 'already_redeemed'
      or (select (redeemed_at, redeemed_by, token_hash) from public.pickup_confirmations where order_id = pickup)

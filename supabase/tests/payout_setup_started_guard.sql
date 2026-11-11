@@ -234,7 +234,10 @@ begin
   end;
   if not rejected then raise exception 'FAIL 2f: an order claimed for refund was dispatched'; end if;
   update public.orders set status = 'shipped', shipped_at = now() where id = o_young;
+  -- A fixture move the order status guard refuses (plan 2 A2); made under its audited override.
+  perform set_config('drvn.order_status_override', 'guard fixture: the order put back to paid for the next check', true);
   update public.orders set status = 'paid', shipped_at = null where id = o_young;
+  perform set_config('drvn.order_status_override', '', true);
   raise notice 'PASS 2: day 14 restricts, pauses live listings, claims the undispatched order once, and fences its dispatch';
 
   -- ==========================================================

@@ -11,7 +11,7 @@ begin
  -- Evidence uploads need an open dispute the uploader is party to (20261107203000).
  insert into public.orders(buyer_id,seller_id,status,subtotal_cents,platform_fee_cents,total_cents,currency)
  values(sender,recipient,'paid',1000,100,1000,'USD') returning id into dispute;
- update public.orders set status='disputed' where id=dispute;
+ update public.orders set status='disputed',pre_dispute_status=status where id=dispute;
  perform set_config('role','authenticated',true);
  perform set_config('request.jwt.claims',json_build_object('sub',sender,'role','authenticated')::text,true);
  blocked:=false;

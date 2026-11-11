@@ -1,0 +1,25 @@
+{"note":"a case or a card dispute opened","owners":"open_order_dispute, hold_stripe_dispute, apply_stripe_dispute_event, execute_admin_command","to_status":"disputed","from_status":"completed"}
+{"note":"a case or a card dispute opened","owners":"open_order_dispute, hold_stripe_dispute, apply_stripe_dispute_event, execute_admin_command","to_status":"disputed","from_status":"delivered"}
+{"note":"a case or a card dispute opened","owners":"open_order_dispute, hold_stripe_dispute, apply_stripe_dispute_event, execute_admin_command","to_status":"disputed","from_status":"paid"}
+{"note":"a case or a card dispute opened","owners":"open_order_dispute, hold_stripe_dispute, apply_stripe_dispute_event, execute_admin_command","to_status":"disputed","from_status":"shipped"}
+{"note":"a full refund of a payment captured after the order failed","owners":"settle_refund_operation","to_status":"refunded","from_status":"payment_failed"}
+{"note":"a full refund of a payment captured after the order was cancelled","owners":"settle_refund_operation","to_status":"refunded","from_status":"cancelled"}
+{"note":"a full refund settled","owners":"settle_refund_operation","to_status":"refunded","from_status":"completed"}
+{"note":"a full refund settled","owners":"settle_refund_operation","to_status":"refunded","from_status":"delivered"}
+{"note":"a full refund settled","owners":"settle_refund_operation","to_status":"refunded","from_status":"disputed"}
+{"note":"a full refund settled","owners":"settle_refund_operation","to_status":"refunded","from_status":"paid"}
+{"note":"a full refund settled","owners":"settle_refund_operation","to_status":"refunded","from_status":"pending"}
+{"note":"a full refund settled","owners":"settle_refund_operation","to_status":"refunded","from_status":"requires_action"}
+{"note":"a full refund settled","owners":"settle_refund_operation","to_status":"refunded","from_status":"shipped"}
+{"note":"collected in person","owners":"pickup_redeem","to_status":"delivered","from_status":"paid"}
+{"note":"delivered","owners":"mark_order_received, auto_confirm_delivery, order_mark_delivered_from_tracking","to_status":"delivered","from_status":"shipped"}
+{"note":"dispatched","owners":"mark_order_dispatched, order_mark_shipped_from_tracking","to_status":"shipped","from_status":"paid"}
+{"note":"only back to pre_dispute_status","owners":"apply_stripe_dispute_event, order_close_dispute, execute_admin_command, settle_refund_operation","to_status":"completed","from_status":"disputed"}
+{"note":"only back to pre_dispute_status","owners":"apply_stripe_dispute_event, order_close_dispute, execute_admin_command, settle_refund_operation","to_status":"delivered","from_status":"disputed"}
+{"note":"only back to pre_dispute_status","owners":"apply_stripe_dispute_event, order_close_dispute, execute_admin_command, settle_refund_operation","to_status":"paid","from_status":"disputed"}
+{"note":"only back to pre_dispute_status","owners":"apply_stripe_dispute_event, order_close_dispute, execute_admin_command, settle_refund_operation","to_status":"shipped","from_status":"disputed"}
+{"note":"payment failed","owners":"purchase_finalize","to_status":"payment_failed","from_status":"requires_action"}
+{"note":"payment failed, or the reservation expired","owners":"purchase_finalize","to_status":"payment_failed","from_status":"pending"}
+{"note":"payment succeeded","owners":"purchase_finalize","to_status":"paid","from_status":"pending"}
+{"note":"payment succeeded","owners":"purchase_finalize","to_status":"paid","from_status":"requires_action"}
+{"note":"the seller cancelled before payment","owners":"settle_seller_cancellation","to_status":"cancelled","from_status":"pending"}
