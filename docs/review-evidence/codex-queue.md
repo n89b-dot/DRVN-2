@@ -195,3 +195,4 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #251 | 2026-11-11 | N1075: A1, a checked-in copy of the database schema, kept current by CI | waived | — | waived (ruling, 10 Nov) |
 | #252 | 2026-11-11 | A3: a new database function is closed unless a migration opens it | waived | — | waived (ruling, 10 Nov) |
 | #253 | 2026-11-11 | A2 (1 of 2): the database makes every change to an order's status; fixes a dispute close that could overwrite a delivery recorded during it | waived | — | waived (ruling, 10 Nov) |
+| #254 | 2026-11-11 | A2 (2 of 2): the database refuses any change of an order's status its transition table does not hold, for every role | waived | — | waived (ruling, 10 Nov) |
