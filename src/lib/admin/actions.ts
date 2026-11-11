@@ -320,7 +320,9 @@ export async function adminResolveForSeller(
           "DRVN support resolved this dispute",
           "The dispute was closed in the seller's favour after review."
         );
-        return { restored: order.pre_dispute_status };
+        // The status the database restored, not the one read before the call:
+        // a delivery recorded in between changes it (plan 2 A2).
+        return { restored };
       }
     );
     revalidateOrder(orderId);
