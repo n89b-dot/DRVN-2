@@ -28,7 +28,9 @@ concurrency:
 jobs:
   stack-proof:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Two stacks, two whole browser-suite runs (22 minutes each, the baseline and the
+    # control) and the fault drill (plan 2 item A6, lead review of #255).
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:

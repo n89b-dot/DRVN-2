@@ -156,12 +156,24 @@ describe("parsing a migration file", () => {
       .map((name) => parseMigrationFile(path.join(dirPath, name), fs.readFileSync(path.join(dirPath, name), "utf8"), { migrationsDir: dirPath }));
   };
 
-  it("flags the real 0001 as a destructive baseline, and no file in the tree as unrunnable", () => {
+  // Plan 2 item A6 (N1075): the tree is one baseline, which the runner refuses
+  // on a database that has tables, as it refused the old 0001.
+  it("flags the real baseline as destructive, and no file in the tree as unrunnable (N1075)", () => {
     const all = tree();
     expect(all.filter((m) => m.problems.length).map((m) => [m.base, m.problems])).toEqual([]);
     expect(all.filter((m) => m.destructive.length).map((m) => [m.base, m.destructive])).toEqual([
-      ["0001_v3_schema.sql", ["marked DESTRUCTIVE", "a DO block runs destructive dynamic SQL (execute 'drop table if exists public.%I cascade')"]],
+      [expect.stringMatching(/^\d{14}_baseline\.sql$/), ["marked DESTRUCTIVE"]],
     ]);
+  });
+
+  // The real-file check of the dynamic-drop detector, kept on the archived 0001
+  // (the baseline has no DO block that drops): a destructive file's risky
+  // dynamic SQL is reported as destructive too (N1075).
+  it("still reads the archived 0001 as a destructive baseline with a dynamic drop (N1075)", () => {
+    const dir = path.join(repo, "supabase/migrations-archive");
+    const m = parseMigrationFile(path.join(dir, "0001_v3_schema.sql"), fs.readFileSync(path.join(dir, "0001_v3_schema.sql"), "utf8"), { migrationsDir: dir });
+    expect(m.destructive).toEqual(["marked DESTRUCTIVE", "a DO block runs destructive dynamic SQL (execute 'drop table if exists public.%I cascade')"]);
+    expect(m.risky).toEqual([]);
   });
 
   it("has an allow-list entry, for its exact bytes, for every risky file in the tree and no other", () => {

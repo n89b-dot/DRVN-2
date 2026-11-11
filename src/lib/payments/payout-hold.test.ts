@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
@@ -17,10 +17,14 @@ import {
   returnWindowDays,
 } from "./payout-hold";
 
-const MIGRATION = readFileSync("supabase/migrations/20261006100000_payout_hold_setting.sql", "utf8");
-// R-hold (20261107220900): the column default and payout_available_at()'s missing-row fallback.
-const FALLBACK = readFileSync("supabase/migrations/20261107220900_payout_hold_fallback_two_days.sql", "utf8");
-const BOUNDARY = readFileSync("supabase/migrations/20261107210000_listing_write_boundary.sql", "utf8");
+// The table and functions as the database holds them (supabase/schema/, plan 2
+// items A1 and A6), not the migrations that wrote them (20261006100000, and
+// R-hold's 20261107220900: the column default and payout_available_at()'s
+// missing-row fallback; 20261107210000: the public projection).
+const schema = (file: string) => readFileSync(`supabase/schema/${file}`, "utf8");
+const TABLE = schema("tables/public.settlement_settings.sql");
+const FALLBACK = schema("functions/public.payout_available_at.sql");
+const PROJECTION = schema("functions/public.settlement_hold_policy.sql");
 
 function fakeClient(result: { data: unknown; error: unknown }) {
   return {
@@ -60,8 +64,8 @@ const POLICY_ROW = {
 describe("payout hold", () => {
   it("mirrors the SQL defaults and the problem window it hard-codes", () => {
     // payout_available_at() can't import a TS constant; these keep the two in step.
-    expect(MIGRATION).toMatch(/payout_hold_mode text not null default 'fixed',/);
-    expect(FALLBACK).toContain("alter table public.settlement_settings alter column payout_hold_days set default 2;");
+    expect(TABLE).toContain("  payout_hold_mode text default 'fixed'::text not null,");
+    expect(TABLE).toContain("  payout_hold_days integer default 2 not null,");
     expect(FALLBACK).toContain("from public.settlement_settings s where s.id), 2) as days,");
     expect(FALLBACK).toContain("from public.settlement_settings s where s.id), 'fixed') as mode");
     expect(FALLBACK).toContain(`greatest(policy.days, ${DISPUTE_WINDOW_DAYS}, coalesce(shop.window_days, 0))`);
@@ -123,7 +127,7 @@ describe("payout hold", () => {
       readSettlementRisk(fakeClient({ data: [{ ...row, card_verification_from_cents: -5 }], error: null }))
     ).resolves.toBeNull();
     // The SQL falls back to the same 3 days when the row is missing.
-    expect(readFileSync("supabase/migrations/20261009100000_payout_release_risk_controls.sql", "utf8")).toContain(
+    expect(schema("functions/public.mark_order_received.sql")).toContain(
       "(select s.receipt_release_after_days from public.settlement_settings s where s.id),3)"
     );
   });
@@ -163,11 +167,11 @@ describe("payout hold", () => {
     ).resolves.toBeNull();
     // The projection the public reads has no amount column, and the row
     // holding the amounts is closed to visitors and members.
-    const projection = BOUNDARY.slice(BOUNDARY.indexOf("create or replace function public.settlement_hold_policy()"));
-    const columns = projection.slice(projection.indexOf("returns table ("), projection.indexOf(")\nlanguage sql"));
+    const columns = PROJECTION.slice(PROJECTION.indexOf("RETURNS TABLE("), PROJECTION.indexOf(")\n LANGUAGE sql"));
     expect(columns).toContain("payout_hold_days");
     expect(columns).not.toMatch(/cents/);
-    expect(BOUNDARY).toContain("revoke all on public.settlement_settings from anon, authenticated;");
-    expect(BOUNDARY).toContain('drop policy if exists "settlement settings are public" on public.settlement_settings;');
+    // Only the service role holds a grant on the table, and no policy opens it.
+    expect(TABLE.slice(TABLE.indexOf("-- Grants"))).toBe("-- Grants\ngrant all on table public.settlement_settings to service_role;\n");
+    expect(readdirSync("supabase/schema/policies").filter((file) => file.startsWith("public.settlement_settings."))).toEqual([]);
   });
 });

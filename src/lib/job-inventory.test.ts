@@ -19,11 +19,9 @@ function scheduledByMigrations(): Map<string, string> {
   return jobs;
 }
 
-/** The rows of the latest private.scheduled_job_inventory() definition. */
+/** The rows of private.scheduled_job_inventory() as the database holds it (supabase/schema/, plan 2 items A1 and A6). */
 function databaseInventory(): Map<string, { schedule: string; families: string[]; budget: string }> {
-  const latest = files.filter((name) => read(name).includes("function private.scheduled_job_inventory()")).at(-1);
-  if (!latest) throw new Error("no migration defines private.scheduled_job_inventory()");
-  const body = read(latest).split("function private.scheduled_job_inventory()")[1].split("$$;")[0];
+  const body = readFileSync(resolve(__dirname, "..", "..", "supabase", "schema", "functions", "private.scheduled_job_inventory.sql"), "utf8");
   const rows = new Map<string, { schedule: string; families: string[]; budget: string }>();
   const row = /\('(drvn-[^']+)',\s*'([^']+)',\s*'(?:[^']|'')*',\s*array\[([^\]]*)\](?:::text\[\])?,\s*interval '([^']+)'\)/g;
   for (const match of body.matchAll(row)) {

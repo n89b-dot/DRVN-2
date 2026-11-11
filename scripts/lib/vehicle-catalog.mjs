@@ -67,23 +67,26 @@ export function makePopularity(models) {
   return new Map(ranked.map(([id], index) => [id, Math.min(10, Math.floor((index / ranked.length) * 10) + 1)]));
 }
 
-export const GENERATIONS_MIGRATION = path.join(repoRoot, "supabase/migrations/20261020100000_vehicle_generations.sql");
+// Plan 2 item A6 (N1075): the curated list left the migration history, byte
+// for byte, when the history became one baseline; the old migration is kept in
+// supabase/migrations-archive/. The name stays so callers do not change.
+export const GENERATIONS_MIGRATION = path.join(repoRoot, "supabase/reference/curated-vehicle-generations.sql");
 const SEED_START = "-- ---------- curated seed ----------";
-const SEED_END = "-- ============================================================\n-- Self-checks";
+const SEED_END = "-- ---------- end of curated seed ----------";
 
 /**
- * The generations migration's curated seed and backfill, verbatim. Its seed
- * joins to the catalogue, so on a new project (empty catalogue) it inserts
- * nothing; re-running exactly these statements after an import fills it in.
- * Both are idempotent (`on conflict do nothing`, and an update that writes
- * only cars whose answer changes). Taking them from the migration keeps one
- * copy of the curated list.
+ * The curated generations seed and the cars backfill, verbatim (they were the
+ * generations migration's, 20261020100000). The seed joins to the catalogue,
+ * so on a new project (empty catalogue) it inserts nothing; re-running exactly
+ * these statements after an import fills it in. Both are idempotent (`on
+ * conflict do nothing`, and an update that writes only cars whose answer
+ * changes). One copy of the curated list, in supabase/reference/.
  */
 export function generationSeedSql(text = readFileSync(GENERATIONS_MIGRATION, "utf8")) {
   const start = text.indexOf(SEED_START);
   const end = text.indexOf(SEED_END);
   if (start < 0 || end < 0 || end < start) {
-    throw new Error("the generations migration no longer has its curated seed between the markers");
+    throw new Error("the curated generations file no longer has its curated seed between the markers");
   }
   const sql = text.slice(start, end).trim();
   if (!/insert into public\.vehicle_generations/.test(sql) || !/on conflict \(model_id, lower\(name\)\) do nothing/.test(sql)) {

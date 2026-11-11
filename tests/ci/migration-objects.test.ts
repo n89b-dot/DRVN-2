@@ -255,8 +255,10 @@ describe("the tree's latest definition", () => {
   });
 });
 
-describe("the real tree", () => {
-  const dir = path.resolve(__dirname, "../../supabase/migrations");
+// Plan 2 item A6 (N1075): the history the baseline replaced is kept in
+// supabase/migrations-archive/, and the parser is still held to reading all of it.
+describe("the real tree: the archived history (N1075)", () => {
+  const dir = path.resolve(__dirname, "../../supabase/migrations-archive");
   const tree = analyseTree(
     fs
       .readdirSync(dir)
@@ -277,5 +279,23 @@ describe("the real tree", () => {
     expect(flagged).toEqual(expect.arrayContaining(["0007_commerce_lifecycle.sql", "20260905011618_remediation_integrity.sql"]));
     expect(flagged).not.toContain("20261020120000_products.sql");
     expect(tree.files.get("20261020120000_products.sql")!.creates.map((c: Create) => c.key)).toContain("con:public.admin_audit_log.admin_audit_log_subject_type_check");
+  });
+});
+
+// Step 5 records the baseline on shared dev and staging with --record-only,
+// which checks every object the file creates against the target. So the
+// parser must read the whole baseline: every function, with its body.
+describe("the real tree: the baseline (N1075)", () => {
+  const dir = path.resolve(__dirname, "../../supabase/migrations");
+  const files = fs.readdirSync(dir).filter((name) => name.endsWith(".sql"));
+  const tree = analyseTree(files.map((base) => ({ base, text: fs.readFileSync(path.join(dir, base), "utf8") })));
+
+  it("is one file, and every function it creates has a signature and a literal body", () => {
+    expect(files).toEqual([expect.stringMatching(/^\d{14}_baseline\.sql$/)]);
+    const [entry] = [...tree.files.values()];
+    const functions = entry.creates.filter((c: Create) => c.kind === "function");
+    expect(functions.length).toBeGreaterThan(500);
+    expect(functions.filter((c: Create) => c.final.op === "create" && c.final.body == null).map((c: Create) => c.label)).toEqual([]);
+    expect(entry.notes).toEqual([]);
   });
 });

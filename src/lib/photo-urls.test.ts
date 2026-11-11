@@ -82,16 +82,16 @@ const theirs = `${O}/storage/v1/object/public/car-images/${STRANGER}/private.web
 /** The canonical photos an answer to `request` would have signed. */
 const signedAt = (request: string, value: unknown) => photoFieldUrls(value, signingContext(`${O}/rest/v1/${request}`), O);
 
-describe("the signable places are the latest migration's list (N940, #196 review A)", () => {
-  it("PHOTO_POSITIONS equals private.photo_signable_positions() in the latest migration that defines it", () => {
-    const dir = path.resolve(__dirname, "../../supabase/migrations");
-    const file = fs.readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()
-      .filter((f) => fs.readFileSync(path.join(dir, f), "utf8").includes("function private.photo_signable_positions()"))
-      .pop();
-    expect(file, "no migration defines private.photo_signable_positions()").toBeTruthy();
-    const sql = fs.readFileSync(path.join(dir, file!), "utf8");
-    const body = sql.slice(sql.indexOf("function private.photo_signable_positions()"));
-    const values = body.slice(body.indexOf("values"), body.indexOf("$$;"));
+describe("the signable places are the database's list (N940, #196 review A)", () => {
+  it("PHOTO_POSITIONS equals private.photo_signable_positions() as the database holds it", () => {
+    // The function as the database holds it (supabase/schema/, plan 2 items A1 and A6).
+    const body = fs.readFileSync(path.resolve(__dirname, "../../supabase/schema/functions/private.photo_signable_positions.sql"), "utf8");
+    // The snapshot writes the body between $function$ quotes; bound the list to that body.
+    const start = body.indexOf("AS $function$");
+    const end = body.indexOf("$function$;", start + 1);
+    expect(start).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(start);
+    const values = body.slice(body.indexOf("values", start), end);
     const rows = [...values.matchAll(/\('(\w+)', '(\w+)', '([\w.]+)', (?:null::text|'([\w.]+)')\)/g)]
       .map((m) => `${m[1]} ${m[2]} ${m[3]} ${m[4] ?? "-"}`);
     expect(rows.length).toBeGreaterThan(10);

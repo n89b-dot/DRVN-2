@@ -22,17 +22,17 @@ with fixture(id,title,description,category,subcategory) as (values
 insert into public.listings(id,seller_id,title,description,category,subcategory,price_cents,status,currency)
 select f.id::uuid,o.id,f.title,f.description,f.category,f.subcategory,1000,'active','USD'
 from fixture f cross join review_owner o;
-\ir ../migrations/20260913144218_marketplace_evidenced_part_types.sql
+\ir ../migrations-archive/20260913144218_marketplace_evidenced_part_types.sql
 -- Repeatability: populated classifications must not be overwritten.
-\ir ../migrations/20260913144218_marketplace_evidenced_part_types.sql
+\ir ../migrations-archive/20260913144218_marketplace_evidenced_part_types.sql
 do $$ begin
- if (select count(*) from public.listings where seller_id=(select id from review_owner) and subcategory is not null)<>15 then raise exception 'Expected fifteen classified parts'; end if;
+ if (select count(*) from public.listings where seller_id=(select id from review_owner) and subcategory is not null)<>15 then raise exception 'Expected fifteen classified parts (the archived one-time backfill, N1075)'; end if;
  if (select category from public.listings where id='95d81551-19bf-4490-9107-63d92baa0e1a')<>'brakes-suspension' then raise exception 'Coilovers still in wrong parent'; end if;
  if (select subcategory from public.listings where id='d935d3e8-a367-4836-8978-4db74e344f8c') is not null then raise exception 'Roof box classification was guessed'; end if;
 end $$;
 update public.listings set subcategory=null,title='Seller changed the part' where id='daace295-f0ae-4e0c-adb1-df3c46abef06';
 update public.listings set subcategory='tuning' where id='f0cf8b5c-0ce3-4f68-a52d-bc40bc38fbd0';
-\ir ../migrations/20260913144218_marketplace_evidenced_part_types.sql
+\ir ../migrations-archive/20260913144218_marketplace_evidenced_part_types.sql
 do $$ begin
  if (select subcategory from public.listings where id='daace295-f0ae-4e0c-adb1-df3c46abef06') is not null then raise exception 'Changed facts overwritten'; end if;
  if (select subcategory from public.listings where id='f0cf8b5c-0ce3-4f68-a52d-bc40bc38fbd0')<>'tuning' then raise exception 'Seller classification overwritten'; end if;

@@ -25,14 +25,9 @@ describe("notification kinds registry", () => {
  */
 const ROOT = resolve(__dirname, "..", "..", "..");
 
-/** kind → class, from the newest migration that defines the function. */
+/** kind → class, from the function as the database holds it (supabase/schema/, plan 2 items A1 and A6). */
 function classifiedKinds(): Map<string, string> {
-  const dir = join(ROOT, "supabase", "migrations");
-  const file = readdirSync(dir).sort().reverse().find((name) => readFileSync(join(dir, name), "utf8").includes("create or replace function private.notification_member_text("));
-  if (!file) throw new Error("No migration defines private.notification_member_text");
-  const sql = readFileSync(join(dir, file), "utf8");
-  const start = sql.indexOf("create or replace function private.notification_member_text(");
-  const body = sql.slice(start, sql.indexOf("$$;", start));
+  const body = readFileSync(join(ROOT, "supabase", "schema", "functions", "private.notification_member_text.sql"), "utf8");
   const kinds = new Map<string, string>();
   for (const match of body.matchAll(/when p_kind (?:in \(([^)]*)\)|= '([a-z_]+)') then '([a-z_]+)'/g)) {
     for (const kind of (match[1] ?? `'${match[2]}'`).matchAll(/'([a-z_]+)'/g)) kinds.set(kind[1], match[3]);

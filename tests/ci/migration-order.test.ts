@@ -10,7 +10,6 @@
 // main, the branch the file will land on. Locally the base is the merge base
 // with origin/main. With no base to compare against, the PR check is skipped.
 import { execFileSync } from "node:child_process";
-import fs from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -29,44 +28,68 @@ export function version(file: string): string {
 const key = (file: string) => version(file).padStart(14, "0");
 
 /**
- * Back-dated files that are let in by name (work review #126, decision D6 of
- * docs/plans/2026-11-work-review-remediation-plan.md). A file listed here may
- * be added although a later-dated file is already on the base branch. Every
- * other rule still holds for it, and any file not listed is still refused.
- *
- * An entry is the exact file name, the day it was let in, its pull request
- * and why. It is for a file that both shared databases already hold under
- * that name, in the order a new database will apply the files by name, so
- * that renaming it would mean rewriting two databases' history to cure a
- * problem that exists only in merge order. It is not a way to skip a rename
- * of a file that is applied nowhere: rename that file.
- *
- * Temporary: plan 2 item A6 replaces the migration history with one baseline
- * and this list goes with it.
+ * Plan 2 item A6 (N1075): the migration history became one baseline, and the
+ * files it replaced moved, byte for byte, to supabase/migrations-archive/.
+ * That move is the one way a file may leave supabase/migrations/: it must
+ * arrive in the archive with the same bytes (the same git blob). The archive
+ * itself never changes: nothing in it is edited, renamed or removed. (Work
+ * review #126's named exception for PR #198 went with the history.)
  */
-export const BACKDATED_EXCEPTIONS: Record<string, { date: string; pullRequest: number; reason: string }> = {
-  "20261110110000_admin_resume_account_deletion.sql": {
-    date: "2026-11-10",
-    pullRequest: 198,
-    reason: "applied to shared dev and staging on 10 Nov before merge; #200 merged first",
-  },
-};
+export const ARCHIVE = "supabase/migrations-archive/";
 
-/** What is wrong with the migration files a change adds or removes, given the base's files. */
-export function orderProblems(baseFiles: string[], headFiles: string[], exceptions: Record<string, unknown> = BACKDATED_EXCEPTIONS): string[] {
+/** What is wrong with the migration files a change adds, removes or archives, given the base's files. */
+export function orderProblems(
+  baseFiles: string[],
+  headFiles: string[],
+  archive: { base: Map<string, string>; head: Map<string, string>; baseBlobs: Map<string, string> } = { base: new Map(), head: new Map(), baseBlobs: new Map() },
+): string[] {
   const base = new Set(baseFiles);
   const head = new Set(headFiles);
   const problems: string[] = [];
   for (const file of baseFiles) {
-    if (!head.has(file)) problems.push(`${file} is on the base branch and this change renames or removes it; a merged migration is never renamed`);
+    if (head.has(file)) continue;
+    // The move happens once: only while the base branch has no archive (A6's own pull request).
+    const blob = archive.baseBlobs.get(file);
+    if (archive.base.size === 0 && blob && archive.head.get(file) === blob) continue;
+    problems.push(
+      archive.head.has(file) && archive.base.size > 0
+        ? `${file} is on the base branch and this change archives it; the history moved to ${ARCHIVE} once, with A6, and a merged migration is never archived since`
+        : archive.head.has(file)
+          ? `${file} is on the base branch and this change archives it with different bytes; a file moves to ${ARCHIVE} unchanged`
+          : `${file} is on the base branch and this change renames or removes it; a merged migration is never renamed`,
+    );
+  }
+  for (const [file, blob] of archive.base) {
+    if (archive.head.get(file) !== blob) problems.push(`${file} is in ${ARCHIVE} on the base branch and this change edits, renames or removes it; the archive never changes`);
+  }
+  for (const file of archive.head.keys()) {
+    if (!archive.base.has(file) && !(archive.base.size === 0 && archive.baseBlobs.has(file) && !head.has(file))) {
+      problems.push(`${file} is new in ${ARCHIVE} and was not moved there from supabase/migrations/ unchanged; only the history the baseline replaced is archived`);
+    }
   }
   const newest = [...base].sort((a, b) => key(a).localeCompare(key(b))).at(-1);
   for (const file of headFiles.filter((f) => !base.has(f)).sort()) {
-    if (newest && key(file) <= key(newest) && !Object.hasOwn(exceptions, file)) {
+    if (newest && key(file) <= key(newest)) {
       problems.push(`${file} is dated at or before ${newest}, already on the base branch; give it a timestamp later than every merged file`);
     }
   }
   return problems;
+}
+
+/** name → git blob of every .sql file in one folder at one commit (empty when the folder is not there). */
+function blobsAt(ref: string, dir: string): Map<string, string> {
+  try {
+    const listing = execFileSync("git", ["ls-tree", `${ref}:${dir}`], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    return new Map(
+      listing
+        .split("\n")
+        .map((line) => /^\d+ blob ([0-9a-f]+)\t(.+\.sql)$/.exec(line))
+        .filter((m): m is RegExpExecArray => m !== null)
+        .map((m) => [m[2], m[1]]),
+    );
+  } catch {
+    return new Map();
+  }
 }
 
 function migrationsAt(ref: string): string[] {
@@ -109,38 +132,60 @@ describe("migration files are added in date order and never renamed (#97)", () =
     expect(orderProblems(["20260905011618_c.sql"], ["20260905011618_c.sql", "0058_d.sql"])).toHaveLength(1);
   });
 
-  it("N944: lets in a back-dated file only when it is named in the exceptions, and still refuses every other one (work review #126)", () => {
-    const base = ["20261110100000_a.sql", "20261110120000_takedown.sql", "20261110130000_age.sql"];
-    const listed = "20261110110000_admin_resume_account_deletion.sql";
-    expect(Object.keys(BACKDATED_EXCEPTIONS)).toContain(listed);
-    // The listed file is accepted although two later files are already on the base.
-    expect(orderProblems(base, [...base, listed])).toEqual([]);
-    // An unlisted file with the same date, or any other back-dated file, is refused as before.
-    expect(orderProblems(base, [...base, "20261110110000_something_else.sql"])).toEqual([
-      "20261110110000_something_else.sql is dated at or before 20261110130000_age.sql, already on the base branch; give it a timestamp later than every merged file",
+  it("lets the history move to the archive unchanged, and nothing else (N1075)", () => {
+    const blobs = new Map([["0001_a.sql", "aaa"], ["20261111120000_b.sql", "bbb"]]);
+    const moved = { base: new Map<string, string>(), head: new Map(blobs), baseBlobs: blobs };
+    // The A6 change: both files archived as they were, one baseline dated after them.
+    expect(orderProblems([...blobs.keys()], ["20261111130000_baseline.sql"], moved)).toEqual([]);
+    // Archived with different bytes.
+    expect(orderProblems([...blobs.keys()], ["20261111130000_baseline.sql"], { ...moved, head: new Map([["0001_a.sql", "aaa"], ["20261111120000_b.sql", "xxx"]]) })).toEqual([
+      "20261111120000_b.sql is on the base branch and this change archives it with different bytes; a file moves to supabase/migrations-archive/ unchanged",
     ]);
-    expect(orderProblems(base, [...base, listed, "20261110125959_late.sql"])).toHaveLength(1);
-    // With no exceptions at all, the listed file is refused: the list is what lets it in.
-    expect(orderProblems(base, [...base, listed], {})).toHaveLength(1);
-    // An exception never covers a rename or a removal.
-    expect(orderProblems([...base, listed], base)).toEqual([`${listed} is on the base branch and this change renames or removes it; a merged migration is never renamed`]);
+    // Removed, not archived.
+    expect(orderProblems([...blobs.keys()], ["20261111130000_baseline.sql"], { ...moved, head: new Map([["0001_a.sql", "aaa"]]) })).toEqual([
+      "20261111120000_b.sql is on the base branch and this change renames or removes it; a merged migration is never renamed",
+    ]);
+    // A file put in the archive that was never in the migrations folder.
+    expect(orderProblems([...blobs.keys()], ["20261111130000_baseline.sql"], { ...moved, head: new Map([...blobs, ["20990101000000_new.sql", "nnn"]]) })).toEqual([
+      "20990101000000_new.sql is new in supabase/migrations-archive/ and was not moved there from supabase/migrations/ unchanged; only the history the baseline replaced is archived",
+    ]);
+    // A back-dated baseline is refused like any back-dated file.
+    expect(orderProblems([...blobs.keys()], ["20261111110000_baseline.sql"], moved)).toHaveLength(1);
   });
 
-  it("N944: every exception names a file that exists, with its day, pull request and reason", () => {
-    const onDisk = new Set(fs.readdirSync(path.join(root, DIR)));
-    for (const [file, entry] of Object.entries(BACKDATED_EXCEPTIONS)) {
-      expect(onDisk.has(file), `${file} is listed as an exception and is not in ${DIR}`).toBe(true);
-      expect(entry.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      expect(Number.isInteger(entry.pullRequest) && entry.pullRequest > 0).toBe(true);
-      expect(entry.reason.length).toBeGreaterThan(20);
-    }
-    // One entry, for one known file. Adding another is a decision to record, not a convenience.
-    expect(Object.keys(BACKDATED_EXCEPTIONS)).toEqual(["20261110110000_admin_resume_account_deletion.sql"]);
+  it("never lets the archive change once it is on the base branch (N1075)", () => {
+    const archived = new Map([["0001_a.sql", "aaa"], ["20261111120000_b.sql", "bbb"]]);
+    const after = (head: Map<string, string>) => orderProblems(["20261111130000_baseline.sql"], ["20261111130000_baseline.sql", "20261112000000_next.sql"], { base: archived, head, baseBlobs: new Map() });
+    expect(after(new Map(archived))).toEqual([]);
+    expect(after(new Map([["0001_a.sql", "aaa"], ["20261111120000_b.sql", "edited"]]))).toEqual([
+      "20261111120000_b.sql is in supabase/migrations-archive/ on the base branch and this change edits, renames or removes it; the archive never changes",
+    ]);
+    expect(after(new Map([["0001_a.sql", "aaa"]]))).toHaveLength(1);
+  });
+
+  it("allows the move to the archive once: never a merged migration after A6 (N1075)", () => {
+    const archived = new Map([["0001_a.sql", "aaa"]]);
+    const base = ["20261111130000_baseline.sql", "20261112000000_later.sql"];
+    // A later pull request archives a merged migration unchanged: refused.
+    expect(
+      orderProblems(base, ["20261111130000_baseline.sql"], {
+        base: archived,
+        head: new Map([...archived, ["20261112000000_later.sql", "lll"]]),
+        baseBlobs: new Map([["20261111130000_baseline.sql", "bbb"], ["20261112000000_later.sql", "lll"]]),
+      }),
+    ).toEqual([
+      "20261112000000_later.sql is on the base branch and this change archives it; the history moved to supabase/migrations-archive/ once, with A6, and a merged migration is never archived since",
+      "20261112000000_later.sql is new in supabase/migrations-archive/ and was not moved there from supabase/migrations/ unchanged; only the history the baseline replaced is archived",
+    ]);
   });
 
   const base = resolveBase();
   it.skipIf(!base)("this change adds migrations only after the base branch's newest, and renames none", () => {
-    const problems = orderProblems(migrationsAt(base!), migrationsAt("HEAD"));
+    const problems = orderProblems(migrationsAt(base!), migrationsAt("HEAD"), {
+      base: blobsAt(base!, ARCHIVE),
+      head: blobsAt("HEAD", ARCHIVE),
+      baseBlobs: blobsAt(base!, DIR),
+    });
     expect(problems, `Migration order (supabase/MIGRATIONS.md):\n- ${problems.join("\n- ")}`).toEqual([]);
   });
 });
