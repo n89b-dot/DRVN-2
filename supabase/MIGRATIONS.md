@@ -45,7 +45,7 @@ Three functions take over the six updates of `orders.status` or `orders.pre_disp
 
 | File | Applied to |
 |---|---|
-| `20261111110000_order_status_moves.sql` | not applied |
+| `20261111110000_order_status_moves.sql` | shared-dev 2026-11-11; staging 2026-11-11 |
 
 ## November 11 — new functions are closed by default (architecture plan 2, item A3)
 
