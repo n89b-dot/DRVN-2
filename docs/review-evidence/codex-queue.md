@@ -196,3 +196,4 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #252 | 2026-11-11 | A3: a new database function is closed unless a migration opens it | waived | — | waived (ruling, 10 Nov) |
 | #253 | 2026-11-11 | A2 (1 of 2): the database makes every change to an order's status; fixes a dispute close that could overwrite a delivery recorded during it | waived | — | waived (ruling, 10 Nov) |
 | #254 | 2026-11-11 | A2 (2 of 2): the database refuses any change of an order's status its transition table does not hold, for every role | waived | — | waived (ruling, 10 Nov) |
+| #255 | 2026-11-11 | N1075 A6: one baseline in place of the migration history | waived | — | waived (ruling, 10 Nov) |
