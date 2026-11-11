@@ -5,12 +5,16 @@
 // a database: PUBLIC is revoked by name and first, nothing is left to a default
 // privilege, pg_dump cannot smuggle in a grant or a psql meta-command, and the
 // generator refuses what it does not know how to write.
+import fs from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
   BETWEEN_CONSTRAINTS,
   cleanStructure,
   cronStatements,
+  DEFAULT_PRIVILEGE_STATEMENTS,
   grants,
   outsideStatements,
   permissionStatements,
@@ -21,6 +25,8 @@ import {
   rowStatements,
 } from "../../scripts/baseline/build-baseline.mjs";
 import { parseMigrationFile } from "../../scripts/lib/migration-runner.mjs";
+
+const root = path.resolve(__dirname, "../..");
 
 type Acl = Array<{ grantee: string; privilege: string; grantable: boolean }>;
 const acl = (grantee: string, ...privileges: string[]): Acl => privileges.map((privilege) => ({ grantee, privilege, grantable: false }));
@@ -308,8 +314,16 @@ describe("the file as a whole (N1075)", () => {
   });
 
   it("is in the order the analysis fixes: roles before structure, structure before permissions, permissions before rows and jobs", () => {
-    const order = ["create role agent_worker", "CREATE TABLE public.orders", "revoke all on schema private from public;", "create policy \"members never delete evidence\"", "insert into storage.buckets", "perform cron.schedule", "\ncommit;"].map((marker) => text.indexOf(marker));
+    const order = ["create role agent_worker", "CREATE TABLE public.orders", "revoke all on schema private from public;", "create policy \"members never delete evidence\"", "insert into storage.buckets", "perform cron.schedule", "alter default privileges revoke execute on functions from public;", "\ncommit;"].map((marker) => text.indexOf(marker));
     expect(order.every((at) => at > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it("ends with A3's two default-privilege statements, exactly, so a later migration's new function is closed (20261111100000)", () => {
+    const tail = text.slice(text.indexOf("perform cron.schedule"));
+    for (const statement of DEFAULT_PRIVILEGE_STATEMENTS) expect(tail).toContain(`\n${statement}\n`);
+    const migration = fs.readFileSync(path.join(root, "supabase/migrations/20261111100000_functions_closed_by_default.sql"), "utf8");
+    const a3 = migration.split("\n").filter((line) => /^alter default privileges/.test(line));
+    expect(a3).toEqual(DEFAULT_PRIVILEGE_STATEMENTS);
   });
 });

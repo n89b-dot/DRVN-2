@@ -402,6 +402,18 @@ export function preludeStatements(doc, extras) {
   return lines;
 }
 
+/**
+ * A3 (20261111100000): a function created from here on is closed to PUBLIC,
+ * anon and authenticated until a migration grants it. Default privileges bind
+ * only what is created after them, so they come last: every function above has
+ * its permissions written out, and later migrations meet the rule A3 set. Both
+ * statements are for the role applying the baseline, as A3's are.
+ */
+export const DEFAULT_PRIVILEGE_STATEMENTS = [
+  "alter default privileges revoke execute on functions from public;",
+  "alter default privileges in schema public revoke execute on functions from anon, authenticated;",
+];
+
 const GUARD = [
   "-- A baseline builds a database from nothing. Applied to a database that already has",
   "-- tables of ours it would fail part-way; refuse before anything is created.",
@@ -446,6 +458,7 @@ export function renderBaseline({ doc, rows, extras, structure, source, betweenCo
     ...section("Storage rules, sign-in triggers, live-update tables", outsideStatements(doc)),
     ...section("Storage buckets and reference rows", rowStatements(doc, rows)),
     ...section("Scheduled jobs", cronStatements(extras.cron_jobs ?? [])),
+    ...section("New functions closed by default (A3, 20261111100000), last so they bind only what comes after", DEFAULT_PRIVILEGE_STATEMENTS),
     "",
     "commit;",
     "",
