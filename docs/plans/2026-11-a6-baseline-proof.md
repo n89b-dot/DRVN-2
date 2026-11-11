@@ -99,8 +99,8 @@ Run 42950129754 on `db/a6-baseline-tools` at `fbbd1b04`, `scripts/baseline/stack
 | B: a stack from the baseline alone | started; captured the same counts |
 | 1. The four comparisons of A and B | **all four identical** (accepted: `public.product_grow_runs\|1\|0`; not counted: `public.worker_runs`) |
 | 2. May `postgres` revoke on schema `public` from `pg_database_owner`? | **Yes**: inside a rolled-back transaction the ACL of schema `public` changed (`revoke-answer.txt` in the run's artifact). The baseline's revoke is kept as it is |
-| 3. The whole browser suite on B, in one run | 324 passed, 5 failed, all in offers and negotiation (`offer-action-recovery` ×2, `negotiation-three-rounds`, `seller-agent`, `buyer-agent`): an accepted offer did not reach its order. A and B are identical in all four comparisons, so the database is the one main's CI tests; these tests pass on `main`, where the suite runs as four parts, each on its own fresh stack. The same four parts run on the baseline's stack in this pull request's `ci.yml` e2e jobs, which settle it |
-| 4. The Stripe lane | Not run here (the workflow reads no secret); `ci.yml`'s `stripe-integration` on this pull request runs it on a stack built from the baseline alone |
+| 3. The whole browser suite on B, in one run | 324 passed, 5 failed, all in offers and negotiation (`offer-action-recovery` ×2, `negotiation-three-rounds`, `seller-agent`, `buyer-agent`): an accepted offer did not reach its order. A and B are identical in all four comparisons, so the database is the one main's CI tests; these tests pass on `main`, where the suite runs as four parts, each on its own fresh stack. The same four parts, `e2e-launch` and `stripe-integration` all passed on a stack built from the baseline alone in this pull request's CI (#255, run 42958266929): the five are an effect of the whole suite sharing one database |
+| 4. The Stripe lane | Not run here (the workflow reads no secret); passed in `ci.yml`'s `stripe-integration` on #255 (run 42958266929), on a stack built from the baseline alone |
 
 ## Not proven here
 
