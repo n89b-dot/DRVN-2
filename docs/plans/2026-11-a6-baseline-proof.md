@@ -91,16 +91,20 @@ An earlier version of this drill is worth recording. Its fault 4 "opened" `order
 
 ## The stack build (GitHub, `baseline-proof.yml`)
 
-Run 42950129754 on `db/a6-baseline-tools` at `fbbd1b04`, `scripts/baseline/stack-proof.sh`: two local Supabase stacks (CLI 2.116.0, real Storage and Auth, files applied as `postgres`), one after the other in one job.
+Run **42962854275** on `db/a6-baseline-tools` at `12540c4d`, `scripts/baseline/stack-proof.sh`: two local Supabase stacks (CLI 2.116.0, real Storage and Auth, files applied as `postgres`), one after the other in one job. (The first run, 42950129754 at `fbbd1b04`, had the same four comparisons identical before comparison 2 was widened, and had no control.)
 
 | Step | Result |
 |---|---|
-| A: a stack from the 298 archived files | started; captured 1,159 snapshot files, 1,201 catalog rows outside our schemas, 152 row lines, 43,674 `pg_dump` lines |
-| B: a stack from the baseline alone | started; captured the same counts |
+| A: a stack from the 298 archived files | captured 1,159 snapshot files, 1,375 catalog rows outside our schemas, 152 row lines, 43,674 `pg_dump` lines; `cron.job` shows 21 jobs to `postgres` (the captures) and 21 to `supabase_admin` |
+| A, the control: the whole browser suite in one run | 5 failed, the rest passed (18.0 min) |
+| B: a stack from the baseline alone | the same counts; 21 jobs to both logins |
 | 1. The four comparisons of A and B | **all four identical** (accepted: `public.product_grow_runs\|1\|0`; not counted: `public.worker_runs`) |
-| 2. May `postgres` revoke on schema `public` from `pg_database_owner`? | **Yes**: inside a rolled-back transaction the ACL of schema `public` changed (`revoke-answer.txt` in the run's artifact). The baseline's revoke is kept as it is |
-| 3. The whole browser suite on B, in one run | 324 passed, 5 failed, all in offers and negotiation (`offer-action-recovery` ×2, `negotiation-three-rounds`, `seller-agent`, `buyer-agent`): an accepted offer did not reach its order. A and B are identical in all four comparisons, so the database is the one main's CI tests; these tests pass on `main`, where the suite runs as four parts, each on its own fresh stack. The same four parts, `e2e-launch` and `stripe-integration` all passed on a stack built from the baseline alone in this pull request's CI (#255, run 42958266929): the five are an effect of the whole suite sharing one database |
-| 4. The Stripe lane | Not run here (the workflow reads no secret); passed in `ci.yml`'s `stripe-integration` on #255 (run 42958266929), on a stack built from the baseline alone |
+| 2. May `postgres` revoke on schema `public` from `pg_database_owner`? | **Yes**: inside a rolled-back transaction the ACL of schema `public` changed (`revoke-answer.txt`). The baseline's revoke is kept as it is |
+| 3. The fault drill on stack B (faults as `supabase_admin`, job faults as `postgres`) | **17 of 17 reported**, B identical to A after every undo |
+| 4. The whole browser suite on B in one run, against the control | 5 failed, the rest passed (17.7 min). **The same five fail on A** (`A-failures.txt` = `B-failures.txt`): `offer-action-recovery` ×2, `negotiation-three-rounds`, `seller-agent`, `buyer-agent`. They fail on the old files' stack too, so they come from the whole suite sharing one database, not from the baseline; in CI's four parts they pass on both |
+| 5. The Stripe lane | Not run here (the workflow reads no secret); passed in `ci.yml`'s `stripe-integration` on #255 (runs 42958266929, 42959530646, 42962996215), on a stack built from the baseline alone |
+
+The workflow's limit is raised from 45 to 100 minutes for the control run (`.github/workflows/baseline-proof.yml`).
 
 ## Comparison 2 widened (lead review of #255)
 
