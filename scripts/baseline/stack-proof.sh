@@ -10,16 +10,22 @@
 #
 # In order, stopping at the first that fails:
 #   A. a local stack (`supabase start`, CLI 2.116.0) built from the files the
-#      baseline replaces (supabase/migrations-archive/), captured with
-#      scripts/baseline/compare.sh, then stopped and its volume removed
+#      baseline replaces (supabase/migrations-archive/): captured with
+#      scripts/baseline/compare.sh, then the whole browser suite in one run as
+#      the CONTROL (its failures kept), then stopped and its volume removed
 #   B. a local stack built from supabase/migrations/ (the baseline alone),
 #      captured the same way
-#   1. the four comparisons of A and B are empty
+#   1. the four comparisons of A and B are empty, and on each stack the
+#      captures (as postgres) saw every scheduled job supabase_admin sees
+#      (cron.job has row security)
 #   2. may `postgres` revoke on schema public from pg_database_owner? Asked on
 #      B, in a transaction that is rolled back; the answer is written to
 #      $PROOF_OUT/revoke-answer.txt, and "may not" fails this run
-#   3. the whole browser suite on B (every project, first attempt only)
-#   4. the Stripe test-mode lane on B, when STRIPE_SECRET_KEY is set. This
+#   3. the fault drill on stack B (scripts/baseline/fault-drill.sh, faults made
+#      as supabase_admin): every fault reported, B whole after each undo
+#   4. the whole browser suite on B in one run: every test that fails on B
+#      must also fail on A, the control (lead review of #255); both lists kept
+#   5. the Stripe test-mode lane on B, when STRIPE_SECRET_KEY is set. This
 #      workflow reads no secret, so here it says it did not run; the lane runs
 #      on the baseline's stack in ci.yml's stripe-integration job on the A6
 #      pull request, whose supabase/migrations/ holds only the baseline.
@@ -33,6 +39,7 @@ root="$(cd "$(dirname "$0")/../.." && pwd)"
 out="${PROOF_OUT:?PROOF_OUT: the folder the evidence is kept in}"
 cli="supabase@2.116.0"
 url="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+admin_url="postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres"
 # The browser suite's stack (the e2e job's exclusions): Realtime runs.
 exclude="logflare,vector,studio,edge-runtime,imgproxy"
 mkdir -p "$out"
@@ -76,18 +83,53 @@ start_stack() { # label
 stop_stack() {
   npx --yes "$cli" stop --no-backup >>"$out/stop.log" 2>&1 || fail "the stack did not stop"
 }
+# cron.job has row security: a capture as postgres must see every job supabase_admin sees.
+jobs_seen() { # label
+  local mine all
+  mine=$(psql "$url" -X -At -c "select count(*) from cron.job") || fail "stack $1: cron.job not readable as postgres"
+  all=$(psql "$admin_url" -X -At -c "select count(*) from cron.job") || fail "stack $1: cannot sign in as supabase_admin"
+  note "stack $1: cron.job shows $mine jobs to postgres and $all to supabase_admin"
+  [ "$mine" = "$all" ] || fail "stack $1: the captures (as postgres) do not see every scheduled job"
+}
+browsers_ready=0
+# The whole browser suite in one run, as the first attempt; its failing tests go to <label>-failures.txt.
+run_suite() { # label
+  rm -rf test-results
+  GITHUB_ENV="$stage/env-$1" node scripts/prepare-ci-supabase.mjs >/dev/null || fail "could not prepare stack $1 for the browser suite"
+  if [ "$browsers_ready" = 0 ]; then
+    npx playwright install --with-deps >"$out/playwright-install.log" 2>&1 || { tail -30 "$out/playwright-install.log"; fail "could not install the browsers"; }
+    browsers_ready=1
+  fi
+  ( set -a; . "$stage/env-$1"; set +a
+    PAYMENTS_MODE=stub PAYMENTS_ALLOW_STUB_IN_PRODUCTION=true E2E_DIAGNOSTIC_RETRIES=0 npm run test:e2e ) >"$out/e2e-$1.log" 2>&1
+  local code=$?
+  cp -R test-results "$out/e2e-results-$1" 2>/dev/null || true
+  [ -s test-results/playwright.xml ] || fail "the browser suite on stack $1 wrote no results (exit $code; e2e-$1.log)"
+  node -e '
+    const x = require("fs").readFileSync(process.argv[1], "utf8");
+    const out = [];
+    for (const m of x.matchAll(/<testcase name="([^"]*)" classname="([^"]*)"[^>]*?(?:\/>|>([\s\S]*?)<\/testcase>)/g))
+      if (/<(failure|error)\b/.test(m[3] ?? "")) out.push(`${m[2]} > ${m[1]}`);
+    process.stdout.write(out.sort().join("\n") + (out.length ? "\n" : ""));
+  ' test-results/playwright.xml >"$out/$1-failures.txt"
+  note "stack $1: browser suite exit $code; $(grep -c . "$out/$1-failures.txt" | tr -d ' ') failing test(s) (in $1-failures.txt); $(grep -o 'passed ([^)]*)' "$out/e2e-$1.log" | tail -1)"
+}
 
 step "A: a stack from the $archived files the baseline replaces"
 rm -f supabase/migrations/*.sql
 cp supabase/migrations-archive/*.sql supabase/migrations/
 start_stack A
+jobs_seen A
 bash scripts/baseline/compare.sh capture "$url" "$out/A" | tee -a "$out/summary.txt"
 [ "${PIPESTATUS[0]}" -eq 0 ] || fail "could not capture stack A"
+step "A. The browser suite on stack A, in one run: the control"
+run_suite A
 stop_stack
 
 step "B: a stack from the baseline alone"
 restore
 start_stack B
+jobs_seen B
 bash scripts/baseline/compare.sh capture "$url" "$out/B" | tee -a "$out/summary.txt"
 [ "${PIPESTATUS[0]}" -eq 0 ] || fail "could not capture stack B"
 
@@ -126,18 +168,21 @@ printf '%s\n' "$answer" >"$out/revoke-answer.txt"
 note "postgres $answer"
 case "$answer" in "may not"*) fail "postgres may not revoke on schema public from pg_database_owner: tell the lead before changing the generator" ;; esac
 
-step "3. The browser suite on stack B"
-GITHUB_ENV="$stage/env" node scripts/prepare-ci-supabase.mjs >/dev/null || fail "could not prepare stack B for the browser suite"
-set -a; # shellcheck disable=SC1091
-. "$stage/env"; set +a
-npx playwright install --with-deps >"$out/playwright-install.log" 2>&1 || { tail -30 "$out/playwright-install.log"; fail "could not install the browsers"; }
-PAYMENTS_MODE=stub PAYMENTS_ALLOW_STUB_IN_PRODUCTION=true E2E_DIAGNOSTIC_RETRIES=0 \
-  npm run test:e2e >"$out/e2e.log" 2>&1; e2e=$?
-cp -R test-results "$out/e2e-results" 2>/dev/null || true
-tail -15 "$out/e2e.log" | tee -a "$out/summary.txt"
-[ "$e2e" -eq 0 ] || fail "the browser suite failed on the baseline's stack (e2e.log)"
+step "3. Can the comparison fail on a stack? The fault drill on stack B"
+FAULT_DRILL_ADMIN_URL="$admin_url" FAULT_DRILL_CRON_ROLE=postgres bash scripts/baseline/fault-drill.sh "$out/A" "$url" "$out/drill" | tee -a "$out/summary.txt"
+[ "${PIPESTATUS[0]}" -eq 0 ] || fail "the fault drill did not pass on stack B"
 
-step "4. The Stripe test-mode lane on stack B"
+step "4. The browser suite on stack B, in one run, against the control"
+run_suite B
+extra=$(LC_ALL=C comm -23 <(LC_ALL=C sort -u "$out/B-failures.txt") <(LC_ALL=C sort -u "$out/A-failures.txt"))
+if [ -n "$extra" ]; then
+  printf '%s\n' "$extra" >"$out/B-only-failures.txt"
+  note "Failing on B and passing on A:"; note "$extra"
+  fail "the browser suite fails on the baseline's stack where the control passes (B-only-failures.txt)"
+fi
+note "Every test that fails on B also fails on A ($(grep -c . "$out/B-failures.txt" | tr -d ' ') on B, $(grep -c . "$out/A-failures.txt" | tr -d ' ') on A)."
+
+step "5. The Stripe test-mode lane on stack B"
 if [ -n "${STRIPE_SECRET_KEY:-}" ]; then
   npm run test:stripe >"$out/stripe.log" 2>&1; stripe=$?
   tail -10 "$out/stripe.log" | tee -a "$out/summary.txt"

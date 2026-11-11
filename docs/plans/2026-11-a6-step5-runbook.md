@@ -8,7 +8,7 @@ Plan 2 item A6 (N1075, N786). The method is `docs/plans/2026-11-a6-baseline-anal
 
 Read on 11 November 2026 as `os_reader` (read-only sessions, nothing widened) with `scripts/baseline/reader-capture.mjs`, which runs the snapshot's own query with every read of a table `os_reader` cannot select left out and named. Each database's folder was compared with the stack build of the baseline (`baseline-proof.yml` run 42950129754, capture `B/snapshot`: real Storage and Auth, files applied as `postgres`, as on a hosted project).
 
-**Identical on both:** all 563 functions with their bodies and permissions, all 143 policies, every table but the two below, every trigger on staging, every index, sequence, view, publication, schema and default privilege, `agent_worker`'s grants. The five functions the 10 November review said were overwritten on shared dev are no longer different.
+**Identical on both:** all 564 functions (563 files: `supabase/schema/functions/public.hold_stripe_dispute.sql` holds its two overloads, which is why the generator says 564 and the folder has 563) with their bodies and permissions, all 143 policies, every table but the two below, every trigger on staging, every index, sequence, view, publication, schema and default privilege, `agent_worker`'s grants. The five functions the 10 November review said were overwritten on shared dev are no longer different.
 
 **Differences, every one:**
 
@@ -17,13 +17,24 @@ Read on 11 November 2026 as `os_reader` (read-only sessions, nothing widened) wi
 | 1 | both | `os_reader` (role, two settings, `grant os_reader to postgres`) | Made by hand for the Intelligence OS (7 and 8 Nov, Neil approved) | Written down; kept |
 | 2 | both | `public.account_deletion_requests`: `hold_order_id` sits before `retain_until` | Column order only: the hosted databases ran two files in merge order, not file-name order (#97) | Written down; nothing reads columns by position |
 | 3 | shared dev | `public.mod_items`: `origin` sits after `brand_key` | Column order only, as 2 | Written down |
-| 4 | shared dev | `agent_worker` is `login` (the baseline: `nologin`) | Changed by hand on shared dev | For the lead: fix forward (`alter role agent_worker nologin`) after approval, or write down |
-| 5 | shared dev | `deletion_write_guard` triggers on four more tables: `activity_post_listings`, `analytics_consents`, `beta_invitations`, `beta_memberships` | `20260905011618_remediation_integrity.sql` adds the trigger, by a loop, to every table that exists when it runs; shared dev ran it after those four tables existed | For the lead: drop the four (fix forward) after approval, or write down. They only refuse writes by a deleted account |
+| 4 | shared dev | `agent_worker` is `login` (the baseline: `nologin`) | Changed by hand on shared dev | Written down, nothing changed (lead's ruling, 11 Nov: no hand change during the freeze; to Neil with his shared-dev question, B1) |
+| 5 | shared dev | `deletion_write_guard` triggers on four more tables: `activity_post_listings`, `analytics_consents`, `beta_invitations`, `beta_memberships` | `20260905011618_remediation_integrity.sql` adds the trigger, by a loop, to every table that exists when it runs; shared dev ran it after those four tables existed | Written down, nothing changed (the same ruling). They only refuse writes by a deleted account |
 | 6 | both | `role-settings.sql`: the local stack's `jwt_secret`, `supabase_functions_admin` and (shared dev) `supabase_realtime_admin` settings, and shared dev's `supabase_admin statement_timeout=0` | The platform's own settings, not ours | Expected (production runbook §2) |
 | 7 | shared dev | History: 291 rows; 12 files without a row and 5 rows without a file (N786) | Rows without a file: `20260913014536`, `…014621`, `…134641`, `…135341`, `…144516`. Files without a row: `20260905011618`, `20260905143949`, `20260905224929`, `20260913144218`, `20260919203000`, `20260919204000`, `20260928120000`, `20260928181000`, `20261004100000`, `20261006100200`, `20261011121000`, `20261017140000` | Step 5 archives all 291 and records the baseline: N786 closes |
 | — | staging | History: 298 rows, one per file, nothing missing or extra | | Step 5 |
 
-**What `os_reader` cannot read** (no USAGE on `private` or `cron`, no SELECT on these; identical on both databases): the rows of the seven reference tables (`private.order_status_transitions`, `private.reserved_usernames`, `public.agent_beta_steps`, `public.agent_controls`, `public.agent_spend_limits`, `public.policy_announcements`, `public.settlement_settings`), `cron.job` (the 21 scheduled jobs) and `storage.buckets` (the 8 buckets). It also cannot count the rows of our 146 tables, and so cannot run comparisons 3 and 4 (`pg_dump` needs SELECT on every table); those compare a fresh build with a fresh build and say nothing about a database holding test data, so they are not asked for here. **Asked of the lead:** an owner session in a read-only transaction for those nine objects only, to compare their rows with the baseline's (`cron-jobs.sql`, `storage-buckets.sql`, `reference-data/`).
+**What `os_reader` cannot read** (no USAGE on `private` or `cron`, no SELECT on these; identical on both databases): the rows of the seven reference tables (`private.order_status_transitions`, `private.reserved_usernames`, `public.agent_beta_steps`, `public.agent_controls`, `public.agent_spend_limits`, `public.policy_announcements`, `public.settlement_settings`), `cron.job` (the 21 scheduled jobs) and `storage.buckets` (the 8 buckets). It also cannot count the rows of our 146 tables, and so cannot run comparisons 3 and 4 (`pg_dump` needs SELECT on every table); those compare a fresh build with a fresh build and say nothing about a database holding test data, so they are not asked for here. **The nine objects, read as the owner** (lead's ruling, 11 Nov: an owner session in a read-only transaction, those nine objects only; the session checked `transaction_read_only = on` before reading). Rendered the way the snapshot renders them and compared with stack B's capture:
+
+| Object | Staging | Shared dev |
+|---|---|---|
+| `cron.job` (21 jobs) | identical | identical |
+| `storage.buckets` (8) | identical | identical |
+| `private.order_status_transitions`, `private.reserved_usernames`, `public.agent_spend_limits`, `public.settlement_settings` | identical | identical |
+| `public.agent_beta_steps` | identical | **4 steps open**, reason "Opened for testing on shared dev at Neil's request, 24 Oct 2026" (the baseline: closed) |
+| `public.agent_controls` | identical | **the master switch cleared** (`cleared_at` 24 Oct 2026; the baseline: agents off) |
+| `public.policy_announcements` | identical | **`recipients` 23** (the baseline: 0): the 7 Nov announcement went to shared dev's 23 test members |
+
+Staging matches the baseline in all nine. Shared dev's three differences are test settings and a log of what happened there, made on purpose; written down, nothing changed. Step 5 writes none of these rows.
 
 
 ## Step 5: replace the history rows (staging first, then shared dev)

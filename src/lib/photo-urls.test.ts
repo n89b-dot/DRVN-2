@@ -86,7 +86,12 @@ describe("the signable places are the database's list (N940, #196 review A)", ()
   it("PHOTO_POSITIONS equals private.photo_signable_positions() as the database holds it", () => {
     // The function as the database holds it (supabase/schema/, plan 2 items A1 and A6).
     const body = fs.readFileSync(path.resolve(__dirname, "../../supabase/schema/functions/private.photo_signable_positions.sql"), "utf8");
-    const values = body.slice(body.indexOf("values"), body.indexOf("$$;"));
+    // The snapshot writes the body between $function$ quotes; bound the list to that body.
+    const start = body.indexOf("AS $function$");
+    const end = body.indexOf("$function$;", start + 1);
+    expect(start).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(start);
+    const values = body.slice(body.indexOf("values", start), end);
     const rows = [...values.matchAll(/\('(\w+)', '(\w+)', '([\w.]+)', (?:null::text|'([\w.]+)')\)/g)]
       .map((m) => `${m[1]} ${m[2]} ${m[3]} ${m[4] ?? "-"}`);
     expect(rows.length).toBeGreaterThan(10);

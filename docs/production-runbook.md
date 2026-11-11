@@ -72,7 +72,15 @@ baselined migration history, rehearsed restore.
 ## 2. Apply the schema
 
 On a **fresh, empty** project `supabase/migrations/` is one file, the
-baseline (plan 2 item A6), plus any migration dated after it. The baseline
+baseline (plan 2 item A6), plus any migration dated after it. The project
+must be **Postgres 17** (the baseline's session settings include
+`transaction_timeout`, which 16 does not have), and `pg_trgm` must not
+already be installed in a schema other than `public` (the baseline runs
+`create extension if not exists pg_trgm with schema public`, which does nothing
+if the extension exists elsewhere, and its indexes and grants then point at
+the wrong schema). Check both before applying:
+`select current_setting('server_version_num')::int / 10000, (select extnamespace::regnamespace from pg_extension where extname = 'pg_trgm');`
+must return `17` and nothing (or `public`). The baseline
 builds the whole schema in one transaction and refuses, with its own message,
 a database that already has tables in `public` or `private`; the runner also
 refuses it there. For an existing project apply only the reviewed, unapplied

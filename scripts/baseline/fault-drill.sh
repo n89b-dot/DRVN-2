@@ -4,10 +4,15 @@
 # comparisons are run, the fault is undone, and at the end the comparison must
 # be empty again. A fault that no comparison reports fails the drill.
 #
-#   bash scripts/baseline/fault-drill.sh <url of A> <url of B (a throwaway built from the baseline)> [out dir]
+#   bash scripts/baseline/fault-drill.sh <url of A, or a folder compare.sh captured A into> <url of B (a throwaway built from the baseline)> [out dir]
 #
 # B must be a throwaway: this script changes it. It refuses anything that is
-# not 127.0.0.1 on a disposable port (or 5432 in CI).
+# not 127.0.0.1 on a disposable port (or, in CI only, 5432 or the local
+# stack's 54322). A may be a capture folder, for two stacks that are never up
+# together (scripts/baseline/stack-proof.sh). FAULT_DRILL_ADMIN_URL, when set,
+# is the login the faults are made and undone with (a stack's own tables,
+# such as storage.objects' rules and auth.users' triggers, are not postgres's);
+# B is always captured with its own URL, as A was.
 set -uo pipefail
 
 A="${1:?url of the database built from the migration files}"
@@ -18,11 +23,17 @@ mkdir -p "$out"
 
 case "$B" in
   *@127.0.0.1:55440/*|*@127.0.0.1:55441/*|*@127.0.0.1:55442/*) ;;
-  *@127.0.0.1:5432/*|*@localhost:5432/*) [ "${CI:-}" = "true" ] || { echo "fault-drill: port 5432 is accepted only in CI." >&2; exit 2; } ;;
+  *@127.0.0.1:5432/*|*@localhost:5432/*|*@127.0.0.1:54322/*) [ "${CI:-}" = "true" ] || { echo "fault-drill: ports 5432 and 54322 are accepted only in CI." >&2; exit 2; } ;;
   *) echo "fault-drill: B must be a disposable database on 127.0.0.1 (55440, 55441 or 55442). It is changed on purpose." >&2; exit 2 ;;
 esac
 
-b() { psql "$B" -X -At -q -v ON_ERROR_STOP=1 "$@"; }
+admin="${FAULT_DRILL_ADMIN_URL:-$B}"
+case "$admin" in *@"${B#*@}") ;; *) echo "fault-drill: FAULT_DRILL_ADMIN_URL must point at B itself" >&2; exit 2 ;; esac
+b() { psql "$admin" -X -At -q -v ON_ERROR_STOP=1 "$@"; }
+# On a stack the jobs belong to postgres and cron.job's row security shows each login only its own:
+# FAULT_DRILL_CRON_ROLE=postgres makes and undoes the job faults as that role, so the job comes back as it was.
+cron_as="${FAULT_DRILL_CRON_ROLE:+set role $FAULT_DRILL_CRON_ROLE; }"
+cron_reset="${FAULT_DRILL_CRON_ROLE:+; reset role}"
 # A does not change during the drill, so it is captured once.
 compare() { bash "$root/scripts/baseline/compare.sh" capture "$B" "$1" >"$1.log" 2>&1 && bash "$root/scripts/baseline/compare.sh" compare "$out/A" "$1" >>"$1.log" 2>&1; }
 
@@ -45,8 +56,8 @@ faults=(
   "a table visitors cannot read is opened to anon|grant select on table public.admin_audit_log to anon|revoke select on table public.admin_audit_log from anon"
   "one storage rule dropped|drop policy \"$policy\" on storage.objects|$policy_sql"
   "the sign-up trigger dropped|drop trigger on_auth_user_created on auth.users|$trigger_sql"
-  "one scheduled job's time changed|select cron.alter_job((select jobid from cron.job where jobname = 'drvn-ledger-reconciliation'), schedule := '51 5 * * *')|select cron.alter_job((select jobid from cron.job where jobname = 'drvn-ledger-reconciliation'), schedule := '50 5 * * *')"
-  "one scheduled job removed|select cron.unschedule('drvn-ledger-reconciliation')|select cron.schedule('drvn-ledger-reconciliation', '50 5 * * *', \$job\$select public.invoke_remediation_worker('ledger-reconciliation');\$job\$)"
+  "one scheduled job's time changed|${cron_as}select cron.alter_job((select jobid from cron.job where jobname = 'drvn-ledger-reconciliation'), schedule := '51 5 * * *')${cron_reset}|${cron_as}select cron.alter_job((select jobid from cron.job where jobname = 'drvn-ledger-reconciliation'), schedule := '50 5 * * *')${cron_reset}"
+  "one scheduled job removed|${cron_as}select cron.unschedule('drvn-ledger-reconciliation')${cron_reset}|${cron_as}select cron.schedule('drvn-ledger-reconciliation', '50 5 * * *', \$job\$select public.invoke_remediation_worker('ledger-reconciliation');\$job\$)${cron_reset}"
   "the payout hold changed by a day|update public.settlement_settings set payout_hold_days = payout_hold_days + 1|update public.settlement_settings set payout_hold_days = payout_hold_days - 1"
   "one reserved username deleted|delete from private.reserved_usernames where username = 'admin'|insert into private.reserved_usernames (username, reason) values ('admin', '$reason')"
   "one index dropped|drop index public.listings_active_created_idx|$index_sql"
@@ -58,7 +69,11 @@ faults=(
   "one reserved username added|insert into private.reserved_usernames (username, reason) values ('drvnfaultdrill', '$reason')|delete from private.reserved_usernames where username = 'drvnfaultdrill'"
 )
 
-bash "$root/scripts/baseline/compare.sh" capture "$A" "$out/A" >"$out/A.log" 2>&1 || { echo "fault-drill: could not read A:" >&2; cat "$out/A.log" >&2; exit 2; }
+if [ -d "$A" ]; then
+  rm -rf "$out/A"; cp -R "$A" "$out/A"
+else
+  bash "$root/scripts/baseline/compare.sh" capture "$A" "$out/A" >"$out/A.log" 2>&1 || { echo "fault-drill: could not read A:" >&2; cat "$out/A.log" >&2; exit 2; }
+fi
 compare "$out/before" || { echo "fault-drill: A and B differ before any fault was made. Fix that first:" >&2; cat "$out/before.log" >&2; exit 2; }
 echo "Before any fault: all four comparisons identical."
 

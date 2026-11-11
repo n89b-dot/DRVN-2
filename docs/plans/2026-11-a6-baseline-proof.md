@@ -21,7 +21,7 @@ It stops at the first step that fails. In order:
 | Step | What it shows | Result (11 Nov, 298 files) |
 |---|---|---|
 | 0 | Applied by `psql` to A, which already has tables, the file refuses with its own message, and A is unchanged in all four captures | Refused (`DRVN baseline: this database already has tables in public or private…`); A identical before and after in all four captures |
-| 1 | The four comparisons of A and B are empty | All four identical: 1,159 snapshot files; 476 catalog rows outside our schemas; 152 row-count and content lines; 44,278 `pg_dump` lines |
+| 1 | The four comparisons of A and B are empty | All four identical: 1,159 snapshot files; 624 catalog rows outside our schemas (476 before comparison 2 was widened, below); 152 row-count and content lines; 44,278 `pg_dump` lines |
 | 2 | Each of the deliberate faults is reported, and B is whole again after each | 17 of 17 reported (table below); B identical to A again after every undo |
 | 3 | The migration runner's `--record-only` check reads the file and finds every object it creates on A | One outer transaction: yes. Marked as a baseline: yes. 3,727 objects checked in `auth`, `private`, `public`, `storage`; none refused |
 | 4 | The generated types file is unchanged against B | Unchanged |
@@ -101,6 +101,17 @@ Run 42950129754 on `db/a6-baseline-tools` at `fbbd1b04`, `scripts/baseline/stack
 | 2. May `postgres` revoke on schema `public` from `pg_database_owner`? | **Yes**: inside a rolled-back transaction the ACL of schema `public` changed (`revoke-answer.txt` in the run's artifact). The baseline's revoke is kept as it is |
 | 3. The whole browser suite on B, in one run | 324 passed, 5 failed, all in offers and negotiation (`offer-action-recovery` ×2, `negotiation-three-rounds`, `seller-agent`, `buyer-agent`): an accepted offer did not reach its order. A and B are identical in all four comparisons, so the database is the one main's CI tests; these tests pass on `main`, where the suite runs as four parts, each on its own fresh stack. The same four parts, `e2e-launch` and `stripe-integration` all passed on a stack built from the baseline alone in this pull request's CI (#255, run 42958266929): the five are an effect of the whole suite sharing one database |
 | 4. The Stripe lane | Not run here (the workflow reads no secret); passed in `ci.yml`'s `stripe-integration` on #255 (run 42958266929), on a stack built from the baseline alone |
+
+## Comparison 2 widened (lead review of #255)
+
+`scripts/baseline/outside-catalog.sql` now also reads, for everything outside `public` and `private`: comments (by object identity, through `pg_identify_object`; the old line read none), functions' `SECURITY DEFINER`, volatility and settings, relations' forced row security, columns' not-null and default, extension versions, and the permissions of every function an extension owns, wherever it is (`pg_trgm`'s sit in `public`, where the snapshot leaves extension members out). The guard proof was rerun with it on 11 November: all four comparisons identical (624 outside rows), 17 of 17 faults, 165 guards, 0 failed. Seen failing on B, each reported by comparison 2: a `pg_trgm` function's grant to `anon` removed, a comment on `storage.buckets`, forced row security on `storage.objects`, `storage.foldername` made `SECURITY DEFINER`, a column default on `storage.buckets` changed.
+
+## Written down
+
+- **Reference rows are read without an order.** `referenceRowsSql`'s `jsonb_agg` has no `ORDER BY`, so the baseline writes each reference table's rows in the order the source database returns them. With an `ORDER BY` the regenerated file differs (sha256 `e72b2801…`: the same rows in another order, on three lines), so it was left out: the baseline's bytes are final. The generator, rerun on a fresh build of the 298 files, reproduces `09abd847…` byte for byte. The snapshot and comparison 3 do not depend on that order.
+- `src/lib/agent/measures.test.ts` now reads one function (`agent_compute_metrics`), so it cannot see a measure computed in another.
+- Object ownership, sequence positions, and rows in `auth`, `realtime` and `vault` are not compared; no archived file touches them.
+- `supabase/tests/marketplace_assignment_guard.sql` keeps testing an archived one-time backfill (it replays it from `supabase/migrations-archive/`).
 
 ## Not proven here
 

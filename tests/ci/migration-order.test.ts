@@ -48,19 +48,22 @@ export function orderProblems(
   const problems: string[] = [];
   for (const file of baseFiles) {
     if (head.has(file)) continue;
+    // The move happens once: only while the base branch has no archive (A6's own pull request).
     const blob = archive.baseBlobs.get(file);
-    if (blob && archive.head.get(file) === blob) continue;
+    if (archive.base.size === 0 && blob && archive.head.get(file) === blob) continue;
     problems.push(
-      archive.head.has(file)
-        ? `${file} is on the base branch and this change archives it with different bytes; a file moves to ${ARCHIVE} unchanged`
-        : `${file} is on the base branch and this change renames or removes it; a merged migration is never renamed`,
+      archive.head.has(file) && archive.base.size > 0
+        ? `${file} is on the base branch and this change archives it; the history moved to ${ARCHIVE} once, with A6, and a merged migration is never archived since`
+        : archive.head.has(file)
+          ? `${file} is on the base branch and this change archives it with different bytes; a file moves to ${ARCHIVE} unchanged`
+          : `${file} is on the base branch and this change renames or removes it; a merged migration is never renamed`,
     );
   }
   for (const [file, blob] of archive.base) {
     if (archive.head.get(file) !== blob) problems.push(`${file} is in ${ARCHIVE} on the base branch and this change edits, renames or removes it; the archive never changes`);
   }
   for (const file of archive.head.keys()) {
-    if (!archive.base.has(file) && !(archive.baseBlobs.has(file) && !head.has(file))) {
+    if (!archive.base.has(file) && !(archive.base.size === 0 && archive.baseBlobs.has(file) && !head.has(file))) {
       problems.push(`${file} is new in ${ARCHIVE} and was not moved there from supabase/migrations/ unchanged; only the history the baseline replaced is archived`);
     }
   }
@@ -158,6 +161,22 @@ describe("migration files are added in date order and never renamed (#97)", () =
       "20261111120000_b.sql is in supabase/migrations-archive/ on the base branch and this change edits, renames or removes it; the archive never changes",
     ]);
     expect(after(new Map([["0001_a.sql", "aaa"]]))).toHaveLength(1);
+  });
+
+  it("allows the move to the archive once: never a merged migration after A6 (N1075)", () => {
+    const archived = new Map([["0001_a.sql", "aaa"]]);
+    const base = ["20261111130000_baseline.sql", "20261112000000_later.sql"];
+    // A later pull request archives a merged migration unchanged: refused.
+    expect(
+      orderProblems(base, ["20261111130000_baseline.sql"], {
+        base: archived,
+        head: new Map([...archived, ["20261112000000_later.sql", "lll"]]),
+        baseBlobs: new Map([["20261111130000_baseline.sql", "bbb"], ["20261112000000_later.sql", "lll"]]),
+      }),
+    ).toEqual([
+      "20261112000000_later.sql is on the base branch and this change archives it; the history moved to supabase/migrations-archive/ once, with A6, and a merged migration is never archived since",
+      "20261112000000_later.sql is new in supabase/migrations-archive/ and was not moved there from supabase/migrations/ unchanged; only the history the baseline replaced is archived",
+    ]);
   });
 
   const base = resolveBase();

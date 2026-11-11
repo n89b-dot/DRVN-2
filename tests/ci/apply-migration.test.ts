@@ -166,6 +166,16 @@ describe("parsing a migration file", () => {
     ]);
   });
 
+  // The real-file check of the dynamic-drop detector, kept on the archived 0001
+  // (the baseline has no DO block that drops): a destructive file's risky
+  // dynamic SQL is reported as destructive too (N1075).
+  it("still reads the archived 0001 as a destructive baseline with a dynamic drop (N1075)", () => {
+    const dir = path.join(repo, "supabase/migrations-archive");
+    const m = parseMigrationFile(path.join(dir, "0001_v3_schema.sql"), fs.readFileSync(path.join(dir, "0001_v3_schema.sql"), "utf8"), { migrationsDir: dir });
+    expect(m.destructive).toEqual(["marked DESTRUCTIVE", "a DO block runs destructive dynamic SQL (execute 'drop table if exists public.%I cascade')"]);
+    expect(m.risky).toEqual([]);
+  });
+
   it("has an allow-list entry, for its exact bytes, for every risky file in the tree and no other", () => {
     const allowed = loadDynamicSqlAllowed();
     const risky = tree().filter((m) => m.risky.length);
