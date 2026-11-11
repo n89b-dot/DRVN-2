@@ -25,7 +25,7 @@ import { directClientConfig, loadDynamicSqlAllowed, loadSupabaseRootCa, loadTarg
 
 const FILE_NAME = /^(\d{4}|\d{14})_([a-z0-9_]+)\.sql$/;
 // One constant key: two runners against the same database queue, not interleave.
-const RUN_LOCK_KEY = 7_243_001_131;
+export const RUN_LOCK_KEY = 7_243_001_131;
 
 const HISTORY_DDL = [
   "create schema if not exists supabase_migrations",
@@ -469,7 +469,7 @@ export async function readCatalog(client, schemas) {
   return catalogFromRows(rows);
 }
 
-const RECORDED_MARK = "-- recorded by scripts/apply-migration.mjs --record-only: every object verified on the target; this file was not run\n";
+export const RECORDED_MARK = "-- recorded by scripts/apply-migration.mjs --record-only: every object verified on the target; this file was not run\n";
 
 /**
  * Records `toRecord` in one transaction under the run lock, after verifying

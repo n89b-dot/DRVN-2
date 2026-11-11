@@ -1,6 +1,6 @@
 # A6: the proof that one file builds the same database
 
-**Status: a trial, not the proof.** This page is the form the proof takes. The numbers below come from a trial on 10 November 2026 against the 287 files then on the branch, on two throwaway databases on one Mac. The real run happens after `DATABASE FROZEN`, against the files as they stand then (with A2's and A3's migrations in them), and replaces every number here. Nothing on this page has touched shared dev or staging.
+**Status: the proof, run on 11 November 2026** against the 298 files on `main` at `d13f5a2f` (A1, A2 and A3 in them), on two throwaway databases on one Mac (guard build), and on GitHub for the stack build (below). It replaces the trial of 10 November (287 files). The baseline proven is `supabase/migrations/20261111130000_baseline.sql`: 39,874 lines, sha256 `09abd84753efe041eb9237247b438c338117aa899e13d1c12456afc0e98bc75b`; 564 functions, 146 tables, 143 policies, 289 triggers, 21 scheduled jobs. Nothing on this page touched shared dev or staging.
 
 The method and its reasons are in `docs/plans/2026-11-a6-baseline-analysis.md`. This page records what was run and what came back.
 
@@ -18,14 +18,14 @@ bash scripts/baseline/prove.sh --generate <baseline.sql> <evidence folder>
 
 It stops at the first step that fails. In order:
 
-| Step | What it shows | Trial result |
+| Step | What it shows | Result (11 Nov, 298 files) |
 |---|---|---|
 | 0 | Applied by `psql` to A, which already has tables, the file refuses with its own message, and A is unchanged in all four captures | Refused (`DRVN baseline: this database already has tables in public or private…`); A identical before and after in all four captures |
-| 1 | The four comparisons of A and B are empty | All four identical: 1,098 snapshot files; 475 catalog rows outside our schemas; 145 row-count and content lines; 41,937 `pg_dump` lines |
-| 2 | Each of the deliberate faults is reported, and B is whole again after each | 16 of 16 reported (table below); B identical to A again after every undo. A seventeenth, added afterwards, was tried by hand and reported |
-| 3 | The migration runner's `--record-only` check reads the file and finds every object it creates on A | One outer transaction: yes. Marked as a baseline: yes. 3,584 objects checked in `auth`, `private`, `public`, `storage`; none refused |
+| 1 | The four comparisons of A and B are empty | All four identical: 1,159 snapshot files; 476 catalog rows outside our schemas; 152 row-count and content lines; 44,278 `pg_dump` lines |
+| 2 | Each of the deliberate faults is reported, and B is whole again after each | 17 of 17 reported (table below); B identical to A again after every undo |
+| 3 | The migration runner's `--record-only` check reads the file and finds every object it creates on A | One outer transaction: yes. Marked as a baseline: yes. 3,727 objects checked in `auth`, `private`, `public`, `storage`; none refused |
 | 4 | The generated types file is unchanged against B | Unchanged |
-| 5 | Every SQL guard passes against B | 157 guards, 0 failed |
+| 5 | Every SQL guard passes against B | 165 guards, 0 failed |
 
 ## The four comparisons
 
@@ -63,7 +63,7 @@ Seven CHECK constraints were written with `between`. PostgreSQL stores `x betwee
 
 ## The deliberate faults
 
-Each was done to B, the four comparisons run, the fault undone, and B checked to be identical to A again before the next.
+All 17 run by `scripts/baseline/fault-drill.sh` on 11 November. Each was done to B, the four comparisons run, the fault undone, and B checked to be identical to A again before the next.
 
 | # | Fault | Reported by comparison |
 |---|---|---|
@@ -82,15 +82,27 @@ Each was done to B, the four comparisons run, the fault undone, and B checked to
 | 13 | A storage bucket made public | 1, 2 |
 | 14 | Row-level security switched off on one table | 1, 4 |
 | 15 | A table added outside our schemas | 2 |
-| 16 | One reserved username added | 1, 3 |
-| 17 | A second row in `product_grow_runs`, the one table allowed to differ | 3 (`expected and not found: public.product_grow_runs\|1\|0`) |
+| 16 | A second row in `product_grow_runs`, the one table allowed to differ | 3 (`expected and not found: public.product_grow_runs\|1\|0`) |
+| 17 | One reserved username added | 1, 3 |
 
 Every fault but two is seen by two comparisons that share no code. The two that only one can see are by their nature: a table outside our schemas is what comparison 2 exists for, and a row in a run log is counted, not rendered.
 
 An earlier version of this drill is worth recording. Its fault 4 "opened" `orders` to `anon`, which already holds a grant there, so the fault changed nothing; its undo then took away a real grant, and every later fault looked reported because of that leftover. The drill now checks B against A after every undo, so a fault that changes nothing, or an undo that is wrong, stops it.
 
+## The stack build (GitHub, `baseline-proof.yml`)
+
+Run 42950129754 on `db/a6-baseline-tools` at `fbbd1b04`, `scripts/baseline/stack-proof.sh`: two local Supabase stacks (CLI 2.116.0, real Storage and Auth, files applied as `postgres`), one after the other in one job.
+
+| Step | Result |
+|---|---|
+| A: a stack from the 298 archived files | started; captured 1,159 snapshot files, 1,201 catalog rows outside our schemas, 152 row lines, 43,674 `pg_dump` lines |
+| B: a stack from the baseline alone | started; captured the same counts |
+| 1. The four comparisons of A and B | **all four identical** (accepted: `public.product_grow_runs\|1\|0`; not counted: `public.worker_runs`) |
+| 2. May `postgres` revoke on schema `public` from `pg_database_owner`? | **Yes**: inside a rolled-back transaction the ACL of schema `public` changed (`revoke-answer.txt` in the run's artifact). The baseline's revoke is kept as it is |
+| 3. The whole browser suite on B, in one run | 324 passed, 5 failed, all in offers and negotiation (`offer-action-recovery` ×2, `negotiation-three-rounds`, `seller-agent`, `buyer-agent`): an accepted offer did not reach its order. A and B are identical in all four comparisons, so the database is the one main's CI tests; these tests pass on `main`, where the suite runs as four parts, each on its own fresh stack. The same four parts run on the baseline's stack in this pull request's `ci.yml` e2e jobs, which settle it |
+| 4. The Stripe lane | Not run here (the workflow reads no secret); `ci.yml`'s `stripe-integration` on this pull request runs it on a stack built from the baseline alone |
+
 ## Not proven here
 
-- **The stack build.** Two local Supabase stacks (real storage and sign-in tables, files applied as `postgres`), compared the same way, then the browser suite and the Stripe lane on the baseline's stack. It runs on GitHub through `.github/workflows/baseline-proof.yml`. In particular: the file revokes on schema `public` from `pg_database_owner`, which worked as `supabase_admin` here; whether `postgres` may do it is for that run to show.
-- **Shared dev and staging.** Compared, read-only, in step 4 of the plan. Nothing is written to either until `APPROVED A6 STEP 5`.
+- **Shared dev and staging.** Compared, read-only, in step 4 (`docs/plans/2026-11-a6-step5-runbook.md`: every function and policy identical; the differences listed there). Nothing is written to either until `APPROVED A6 STEP 5`.
 - **A new hosted project.** The first real proof is the production runbook's step: apply the baseline, then run the snapshot check read-only before anything else touches the database.

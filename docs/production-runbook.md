@@ -71,11 +71,12 @@ baselined migration history, rehearsed restore.
 
 ## 2. Apply the schema
 
-On a **fresh, empty** project the whole migration tree applies cleanly in
-filename order. 0001 drops every table in `public` — it is only safe on an
-empty database, and the runner refuses it on a database that has any table in
-`public`. For an existing project apply only the reviewed, unapplied files, as
-recorded in `supabase/MIGRATIONS.md`.
+On a **fresh, empty** project `supabase/migrations/` is one file, the
+baseline (plan 2 item A6), plus any migration dated after it. The baseline
+builds the whole schema in one transaction and refuses, with its own message,
+a database that already has tables in `public` or `private`; the runner also
+refuses it there. For an existing project apply only the reviewed, unapplied
+files, as recorded in `supabase/MIGRATIONS.md`.
 
 `scripts/apply-migration.mjs` is the committed runner (details in
 `supabase/MIGRATIONS.md`, "Applying without Docker or psql"). It reads
@@ -106,6 +107,25 @@ with `deploy_reader` (`docs/staging-setup.md` §11.4) and holds no owner
 password. The runner refuses a login given as read-only that could write.
 Every other mode still signs in as the owner.
 
+**Then at once, before anything else touches the database** (plan 2 item A6,
+ruling (d)): render it as the snapshot folder, read-only, and compare it with
+the stack build of the same baseline. A difference not in the expected list
+below stops the launch of that database; keep both outputs with the launch
+record.
+
+```bash
+# the baseline-proof workflow's capture of the baseline's stack, for the commit applied
+gh workflow run baseline-proof.yml --ref <that commit's branch>     # then download its artifact
+# the new project, as the owner, in a session where every transaction is read-only
+node scripts/baseline/render-snapshot.mjs "<owner connection string>" /tmp/drvn-production-snapshot
+diff -r <artifact>/B/snapshot /tmp/drvn-production-snapshot
+```
+
+Expected, and nothing else (from staging's comparison, `docs/plans/2026-11-a6-step5-runbook.md` step 4):
+`role-settings.sql` lines the platform sets on a hosted project or the local
+stack sets for itself, and any read-only login created for the project before
+the check (`deploy_reader`, `os_reader`) in `roles.sql` and `role-settings.sql`.
+
 Each file runs in one transaction with its row in
 `supabase_migrations.schema_migrations`; a failing self-check raises, rolls
 back that file (and its row) and stops the run. Rerunning the same command
@@ -127,34 +147,18 @@ Then verify:
   listing-images public; dispute-evidence, message-photos, account-exports
   private).
 
-## 3. Seed the migration history
+## 3. The migration history
 
 The runner records every file it applies in
 `supabase_migrations.schema_migrations` (version = the filename up to the
-first underscore, `0001`, …, `20261004150000`; name = the rest), so a project
-built with it needs no seeding. Only a project whose files were applied some
-other way (the SQL editor, or the runner before OS-W10) has gaps: shared dev
-records 16 files (0001–0011 and five from 13 September) and staging was seeded
-with 229 by hand. To fill gaps there, generate the statement from the files
-actually applied rather than maintaining a list by hand:
-
-```bash
-{
-  echo "create schema if not exists supabase_migrations;"
-  echo "create table if not exists supabase_migrations.schema_migrations (version text primary key, statements text[], name text);"
-  echo "insert into supabase_migrations.schema_migrations (version, name) values"
-  for f in supabase/migrations/*.sql; do
-    b=$(basename "$f" .sql); printf "  ('%s', '%s'),\n" "${b%%_*}" "${b#*_}"
-  done | sed '$ s/),$/)/'
-  echo "on conflict (version) do nothing;"
-} > /tmp/drvn-migration-history.sql
-```
-
-Edit it down to the files that really are applied (probe the objects; never
-infer from the file list), review it, then run it in the SQL editor. The
-runner only runs files from `supabase/migrations/`, so it won't run this one.
-`on conflict do nothing` makes it safe to repeat. Keep `supabase/MIGRATIONS.md`
-as the human record of what was applied where and when.
+first underscore; name = the rest), so a project built with it needs no
+seeding: a new project's history is the baseline's one row, then one row per
+later migration. Shared dev and staging, which the old files built, had their
+history replaced by the baseline's row in plan 2 item A6 step 5
+(`scripts/baseline/replace-history.mjs`, `docs/plans/2026-11-a6-step5-runbook.md`);
+their old rows are kept in `supabase_migrations.schema_migrations_archive_<yyyymmdd>`.
+Never hand-seed history rows: a missing row is recorded with `--record-only`,
+which verifies every object first (`supabase/MIGRATIONS.md`).
 
 ### 3a. Vehicle catalogue
 
@@ -173,7 +177,8 @@ node scripts/import-vehiclesdb.mjs --target production --apply --confirm <code f
 It imports VehiclesDB's car catalogue at the release pinned in
 `scripts/lib/vehicle-catalog.mjs` (commit and per-file sha256), then re-runs
 the curated generations seed and its backfill from
-`20261020100000_vehicle_generations.sql`, in one transaction. Moving to a
+`supabase/reference/curated-vehicle-generations.sql` (moved there byte for byte
+from `20261020100000_vehicle_generations.sql` by plan 2 item A6), in one transaction. Moving to a
 newer VehiclesDB release is a reviewed PR that changes the commit, the release
 name and both hashes together; then re-run the script on each project. A
 release that renames a make or model onto an existing name aborts the run on
