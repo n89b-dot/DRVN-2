@@ -290,9 +290,12 @@ describe("the real tree: the baseline (N1075)", () => {
   const files = fs.readdirSync(dir).filter((name) => name.endsWith(".sql"));
   const tree = analyseTree(files.map((base) => ({ base, text: fs.readFileSync(path.join(dir, base), "utf8") })));
 
+  // Migrations written after the baseline sit beside it; the baseline is still one file.
   it("is one file, and every function it creates has a signature and a literal body", () => {
-    expect(files).toEqual([expect.stringMatching(/^\d{14}_baseline\.sql$/)]);
-    const [entry] = [...tree.files.values()];
+    const baselines = files.filter((base) => /^\d{14}_baseline\.sql$/.test(base));
+    expect(baselines).toHaveLength(1);
+    expect([...files].sort()[0]).toBe(baselines[0]);
+    const entry = tree.files.get(baselines[0])!;
     const functions = entry.creates.filter((c: Create) => c.kind === "function");
     expect(functions.length).toBeGreaterThan(500);
     expect(functions.filter((c: Create) => c.final.op === "create" && c.final.body == null).map((c: Create) => c.label)).toEqual([]);
