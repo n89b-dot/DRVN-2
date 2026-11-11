@@ -9,7 +9,7 @@ it("accepts unknown part types but rejects invalid parents and leaves from other
   expect(isValidListingCategory("interior", null)).toBe(false);
 });
 
-it("keeps database catalog integrity aligned with the authored taxonomy", () => {
+it("keeps database catalog integrity aligned with the authored taxonomy (N1075)", () => {
   // The constraint as the database holds it (supabase/schema/, plan 2 items A1
   // and A6), not the text of the migration that first wrote it.
   const table = readFileSync("supabase/schema/tables/public.listings.sql", "utf8");
