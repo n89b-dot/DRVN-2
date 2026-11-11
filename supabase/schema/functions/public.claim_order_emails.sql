@@ -16,12 +16,14 @@ declare
   v_party boolean;
   v_buyer boolean;
   v_reason text;
+  v_handed timestamptz;
   v_lease uuid;
   v_limit integer := least(greatest(coalesce(p_limit, 10), 1), 50);
   v_claimed integer := 0;
 begin
   for v_row in
-    select q.id, q.recipient_id, q.order_id, q.kind, q.attempts, q.created_at, q.provider_held_at
+    select q.id, q.recipient_id, q.order_id, q.kind, q.attempts, q.created_at, q.provider_held_at,
+           q.status, q.lease_expires_at, q.handed_to_provider_at
       from public.order_email_outbox q
      where (q.status = 'pending' and q.next_attempt_at <= now())
         or (q.status = 'sending' and q.lease_expires_at < now())
@@ -41,6 +43,14 @@ begin
     v_buyer := v_row.recipient_id is not distinct from v_buyer_id;
     v_party := v_buyer or v_row.recipient_id is not distinct from v_seller_id;
 
+    -- When the provider may first have taken this row (20261111150000): an
+    -- attempt whose lease ran out may have been sent. A lease is five
+    -- minutes, so the attempt began five minutes before it ran out.
+    v_handed := v_row.handed_to_provider_at;
+    if v_row.status = 'sending' and v_handed is null then
+      v_handed := v_row.lease_expires_at - interval '5 minutes';
+    end if;
+
     v_reason := case
       when v_row.created_at < now() - case when v_row.provider_held_at is not null then interval '72 hours' else interval '24 hours' end then 'stale'
       when exists (select 1 from public.profiles p where p.id = v_row.recipient_id and p.suspended_at is not null)
@@ -59,19 +69,36 @@ begin
       continue;
     end if;
 
+    -- The provider keeps an idempotency key for 24 hours (Resend). Past 20,
+    -- a row it may have taken is never sent again: it fails, and an
+    -- operator is told, as for any order email that will not be sent.
+    if v_handed is not null and v_handed < now() - interval '20 hours' then
+      update public.order_email_outbox
+         set status = 'failed', handed_to_provider_at = v_handed,
+             last_error = 'may have been sent: past the provider''s idempotency window, not sent again',
+             lease_id = null, lease_expires_at = null, updated_at = now()
+       where order_email_outbox.id = v_row.id;
+      insert into public.admin_alert_outbox (kind, title, detail, order_id, dedup_key, status)
+      values ('order_email_failed', 'An order email may not have been sent',
+              format('%s for order %s (outbox row %s): an attempt the provider may have accepted is past its 24-hour idempotency window, so it was not sent again. Check the provider''s log; the in-app notice stands.', v_row.kind, v_row.order_id, v_row.id),
+              v_row.order_id, 'order-email-failed:' || v_row.id, 'pending')
+      on conflict (dedup_key) do nothing;
+      continue;
+    end if;
+
     -- Twenty an hour to one person: the rest wait half an hour, in order.
     if (select count(*) from public.order_email_outbox s
          where s.recipient_id = v_row.recipient_id
            and ((s.status = 'sent' and s.sent_at > now() - interval '1 hour') or s.status = 'sending')) >= 20 then
       update public.order_email_outbox
-         set status = 'pending', next_attempt_at = now() + interval '30 minutes', lease_id = null, lease_expires_at = null, updated_at = now()
+         set status = 'pending', next_attempt_at = now() + interval '30 minutes', handed_to_provider_at = v_handed, lease_id = null, lease_expires_at = null, updated_at = now()
        where order_email_outbox.id = v_row.id;
       continue;
     end if;
 
     v_lease := gen_random_uuid();
     update public.order_email_outbox
-       set status = 'sending', attempts = order_email_outbox.attempts + 1, lease_id = v_lease,
+       set status = 'sending', attempts = order_email_outbox.attempts + 1, handed_to_provider_at = v_handed, lease_id = v_lease,
            lease_expires_at = now() + interval '5 minutes', updated_at = now()
      where order_email_outbox.id = v_row.id;
 

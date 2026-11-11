@@ -94,6 +94,21 @@ describe("the order email drain (OS-W41, report five #116)", () => {
     expect(send.mock.calls[1][0].text).toContain("and 2 other sales");
   });
 
+  it("an order that cannot be read is retried as never handed to the provider, and nothing is sent (Codex final review, 20261111150000)", async () => {
+    const send = vi.fn(async () => ({ status: "sent" as const, providerId: "re_1" }));
+    const admin = fakeAdmin([row()]);
+    const from = admin.from;
+    admin.from = (table: string) => {
+      const builder = from(table);
+      if (table === "orders") builder.maybeSingle = async () => ({ data: null, error: null });
+      return builder;
+    };
+    const tally = await processOrderEmails(admin as never, { transport: { name: "t", send }, origin: "https://d.example", gapMs: 0 });
+    expect(send).not.toHaveBeenCalled();
+    expect(tally.retrying).toBe(1);
+    expect(admin.completed[0]).toMatchObject({ p_outcome: "retry", p_error: "order unreadable", p_reason: "not_sent" });
+  });
+
   it("a transport that hangs is given up after its timeout and retried later; one that throws is retried", async () => {
     vi.useFakeTimers();
     const hang = { name: "t", send: vi.fn(() => new Promise<never>(() => {})) };
