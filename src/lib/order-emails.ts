@@ -155,7 +155,7 @@ async function facts(admin: Admin, row: Pick<Claimed, "order_id" | "recipient_id
   };
 }
 
-async function complete(admin: Admin, row: Claimed, outcome: "sent" | "retry" | "rejected" | "provider" | "rate_limited" | "skipped", extra: { providerId?: string | null; error?: string; reason?: "muted" | "email_off"; retryAfter?: number } = {}) {
+async function complete(admin: Admin, row: Claimed, outcome: "sent" | "retry" | "rejected" | "provider" | "rate_limited" | "skipped", extra: { providerId?: string | null; error?: string; reason?: "muted" | "email_off" | "not_sent"; retryAfter?: number } = {}) {
   const { data, error } = await admin.rpc("complete_order_email", {
     p_id: row.id,
     p_attempt: row.attempt,
@@ -217,7 +217,8 @@ export async function processOrderEmails(
         }
         const loaded = await facts(admin, row);
         if (!loaded) {
-          await complete(admin, row, "retry", { error: "order unreadable" });
+          // Never handed to the provider: the retry keeps its window (20261111150000).
+          await complete(admin, row, "retry", { error: "order unreadable", reason: "not_sent" });
           tally.retrying += 1;
           continue;
         }

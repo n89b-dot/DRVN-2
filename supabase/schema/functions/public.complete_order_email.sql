@@ -27,8 +27,14 @@ begin
        where id = p_id;
       return 'failed';
     end if;
+    -- A retry after a send may have been accepted (a timeout, a 5xx): from
+    -- the attempt's start, the lease's less five minutes. 'not_sent': the
+    -- worker never called the provider (20261111150000).
     update public.order_email_outbox
        set status = 'pending', last_error = left(p_error, 200), lease_id = null, lease_expires_at = null,
+           handed_to_provider_at = case when p_reason is distinct from 'not_sent'
+                                        then coalesce(v_row.handed_to_provider_at, v_row.lease_expires_at - interval '5 minutes')
+                                        else v_row.handed_to_provider_at end,
            next_attempt_at = now() + (interval '10 minutes' * power(2, greatest(v_row.attempts - 1, 0))), updated_at = now()
      where id = p_id;
     return 'pending';

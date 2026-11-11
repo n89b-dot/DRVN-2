@@ -17,13 +17,15 @@ create table public.order_email_outbox (
   provider_message_id text,
   created_at timestamp with time zone default now() not null,
   sent_at timestamp with time zone,
-  updated_at timestamp with time zone default now() not null
+  updated_at timestamp with time zone default now() not null,
+  handed_to_provider_at timestamp with time zone
 );
 
 alter table public.order_email_outbox enable row level security;
 
 -- Comments
 comment on table public.order_email_outbox is 'Order emails waiting to be sent (20261111090000, #116): user id and order id only; the address is read at send. Service role only.';
+comment on column public.order_email_outbox.handed_to_provider_at is 'When the first attempt the email provider may have accepted began (20261111150000). Past 20 hours the row is never sent again.';
 
 -- Constraints
 alter table public.order_email_outbox add constraint order_email_outbox_attempts_check CHECK (attempts >= 0);

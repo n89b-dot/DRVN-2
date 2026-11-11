@@ -48,6 +48,14 @@ with any table in `public`. Details: "Applying without Docker or psql" below.
 
 **After pulling A6, on a local stack:** an existing local volume recorded the old file names, so `supabase start` would try to run the baseline over a full schema. Run `npx supabase db reset` once (it rebuilds the local database from the baseline; local data is lost). A new stack needs nothing.
 
+## November 11 — an order email the provider may have taken is not sent again after its key expires (Codex's final review)
+
+`20261111150000_order_email_resend_window.sql`. Apply with the app from the same PR (`src/lib/order-emails.ts` passes `p_reason => 'not_sent'` on a retry made before any send; the old app against the new database only ends such a row sooner). A provider-held row stayed retryable for 72 hours while the provider (Resend) keeps an idempotency key for 24, so an attempt it accepted before the worker died could be sent again a day later. New column `order_email_outbox.handed_to_provider_at`: when the first attempt the provider may have accepted began, set when a claim takes back a row whose lease ran out and on a retry (not on a refusal of our account, a rate limit, a rejection or `not_sent`). Restates `public.claim_order_emails` and `public.complete_order_email` (from `20261111090000`): a row with that time more than 20 hours ago is not claimed; it becomes `failed` and queues an `order_email_failed` alert (`admin_alert_outbox`, dedup `order-email-failed:<row>`). Rows never handed to the provider keep their 24- and 72-hour windows. Changes no data. Guard: `supabase/tests/order_email_resend_window_guard.sql`.
+
+| File | Applied to |
+|---|---|
+| `20261111150000_order_email_resend_window.sql` | not applied |
+
 ## November 11 — one baseline in place of the migration history (architecture plan 2, item A6)
 
 `20261111130000_baseline.sql` builds, on an empty database, what the 298 files from `0001_v3_schema.sql` to `20261111120000_order_status_guard.sql` built: 564 functions, 146 tables, 143 policies, 289 triggers, 21 scheduled jobs, 8 storage buckets, the `agent_worker` role, every grant written out from the catalog, the reference rows, and A3's default privileges last. It refuses, with its own message, a database that already has tables in `public` or `private`. Proven on the guard build and the stack build (`docs/plans/2026-11-a6-baseline-proof.md`). On shared dev and staging it is **recorded, not run** (11 November 2026, PR #255: staging 298 rows archived, shared dev 291, each history now the baseline's one row) (step 5 in `docs/plans/2026-11-a6-step5-runbook.md`): the 298 (staging) and 291 (shared dev) old history rows are copied to `supabase_migrations.schema_migrations_archive_<yyyymmdd>` and replaced by the baseline's one row, after `--record-only` has verified every object the file creates on the target. The curated vehicle generations it does not carry are in `supabase/reference/curated-vehicle-generations.sql`.

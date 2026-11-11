@@ -3689,6 +3689,7 @@ export type Database = {
         Row: {
           attempts: number
           created_at: string
+          handed_to_provider_at: string | null
           id: string
           kind: string
           last_error: string | null
@@ -3708,6 +3709,7 @@ export type Database = {
         Insert: {
           attempts?: number
           created_at?: string
+          handed_to_provider_at?: string | null
           id?: string
           kind: string
           last_error?: string | null
@@ -3727,6 +3729,7 @@ export type Database = {
         Update: {
           attempts?: number
           created_at?: string
+          handed_to_provider_at?: string | null
           id?: string
           kind?: string
           last_error?: string | null
