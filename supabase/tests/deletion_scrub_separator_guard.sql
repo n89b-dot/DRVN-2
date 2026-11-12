@@ -9,6 +9,10 @@
 --   T3  a body with only an ordinary title of theirs is still cut in place,
 --       the other titles kept
 --   T4  a saved-search notice that names none of their titles is untouched
+--   T5  (20261111160000, Codex fix-check) a second leaver owning both
+--       "Carol 07555 · turbo" and "turbo": the cut replaced the piece
+--       "turbo", so neither title was left whole and "Carol 07555" stayed
+--   T6  the same leaver's "turbo" alone in a body is still cut in place
 --   R1  the repair neutralises a notice an earlier scrub left with a
 --       scrubbed member's title in it, and nothing else
 --   R2  a second repair changes nothing
@@ -21,21 +25,24 @@ do $$
 declare
   leaver uuid := gen_random_uuid();
   old_leaver uuid := gen_random_uuid();
+  carol uuid := gen_random_uuid();
   fan uuid := gen_random_uuid();
   neutral constant text := 'Listings matched your saved search, including one by a member who has since left DRVN.';
-  n1 uuid; n2 uuid; n3 uuid; n4 uuid; n5 uuid; n6 uuid;
+  n1 uuid; n2 uuid; n3 uuid; n4 uuid; n5 uuid; n6 uuid; n7 uuid; n8 uuid;
   n integer;
   fails text[] := '{}';
 begin
   insert into public.job_config (key, value) values ('payments_mode', 'stub')
     on conflict (key) do update set value = excluded.value;
   insert into auth.users (id, email, raw_user_meta_data) values
-    (leaver, 'sep-leaver@drvn.test', '{}'), (old_leaver, 'sep-old@drvn.test', '{}'), (fan, 'sep-fan@drvn.test', '{}');
+    (leaver, 'sep-leaver@drvn.test', '{}'), (old_leaver, 'sep-old@drvn.test', '{}'), (carol, 'sep-carol@drvn.test', '{}'), (fan, 'sep-fan@drvn.test', '{}');
   insert into public.listings (seller_id, title, category, price_cents, status) values
     (leaver, 'Alice 07123 · turbo', 'performance', 50000, 'active'),
     (leaver, 'Alice 07123 ·', 'performance', 50000, 'active'),
     (leaver, 'Alice plain 07123', 'performance', 50000, 'active'),
     (old_leaver, 'Bob 07999 · wheels', 'performance', 50000, 'active'),
+    (carol, 'Carol 07555 · turbo', 'performance', 50000, 'active'),
+    (carol, 'turbo', 'performance', 50000, 'active'),
     (fan, 'Fan''s exhaust', 'performance', 30000, 'active');
 
   insert into public.notifications (user_id, kind, section, title, body, href) values
@@ -50,6 +57,12 @@ begin
   insert into public.notifications (user_id, kind, section, title, body, href) values
     (fan, 'saved_search', 'marketplace', 'New match for exhausts: Fan''s exhaust', 'Fan''s exhaust', '/marketplace?q=exhaust')
     returning id into n4;
+  insert into public.notifications (user_id, kind, section, title, body, href) values
+    (fan, 'saved_search', 'marketplace', '3 new parts match turbos', 'Fan''s exhaust · Carol 07555 · turbo · Someone''s intake', '/marketplace?q=turbo')
+    returning id into n7;
+  insert into public.notifications (user_id, kind, section, title, body, href) values
+    (fan, 'saved_search', 'marketplace', '2 new parts match turbos', 'turbo · Someone''s intake', '/marketplace?q=turbo')
+    returning id into n8;
 
   -- ---------- T ----------
   perform private.scrub_member_notices(leaver, null);
@@ -64,6 +77,13 @@ begin
   end if;
   if (select title || '|' || body from public.notifications where id = n4) is distinct from 'New match for exhausts: Fan''s exhaust|Fan''s exhaust' then
     fails := fails || 'FAIL T4: a notice naming none of their titles changed (Codex final review)'::text;
+  end if;
+  perform private.scrub_member_notices(carol, null);
+  if (select body from public.notifications where id = n7) ~ '07555' then
+    fails := fails || format('FAIL T5: with an overlapping shorter title cut first, a title containing " · " stayed: %s (Codex fix-check)', (select body from public.notifications where id = n7));
+  end if;
+  if (select body from public.notifications where id = n8) is distinct from 'A listing by a member who has since left DRVN · Someone''s intake' then
+    fails := fails || format('FAIL T6: an ordinary title of a leaver who also owns an overlapping title was not cut in place: %s (Codex fix-check)', (select body from public.notifications where id = n8));
   end if;
 
   -- ---------- R ----------

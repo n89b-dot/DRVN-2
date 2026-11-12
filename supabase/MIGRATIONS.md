@@ -49,6 +49,14 @@ with any table in `public`. Details: "Applying without Docker or psql" below.
 
 **After pulling A6, on a local stack:** an existing local volume recorded the old file names, so `supabase start` would try to run the baseline over a full schema. Run `npx supabase db reset` once (it rebuilds the local database from the baseline; local data is lost). A new stack needs nothing.
 
+## November 11 — a leaver's title with " · " left a notice when they also own one of its pieces (Codex's fix-check)
+
+`20261111160000_deletion_scrub_overlapping_titles.sql`. With titles `Alice 07123 · turbo` and `turbo`, the cut of 20261111140000 replaced the piece `turbo` first, so neither title was whole in what was left and `Alice 07123` stayed. Restates `private.scrub_member_notices` (from `20261111140000`) with only step 4's body expression changed: the body is also neutralised when a title of theirs is whole, between separators, in the original body but is not itself one of its pieces. No repair and no data change: a notice this case left no longer carries the title whole, so nothing can find it by title; the read-only counts were 0 on shared dev and staging on 11 November 2026, and no real members exist. Guard: `supabase/tests/deletion_scrub_separator_guard.sql` (T5, T6).
+
+| File | Applied to |
+|---|---|
+| `20261111160000_deletion_scrub_overlapping_titles.sql` | shared-dev 2026-11-12; staging 2026-11-12 |
+
 ## November 11 — an order email the provider may have taken is not sent again after its key expires (Codex's final review)
 
 `20261111150000_order_email_resend_window.sql`. Apply with the app from the same PR (`src/lib/order-emails.ts` passes `p_reason => 'not_sent'` on a retry made before any send; the old app against the new database only ends such a row sooner). A provider-held row stayed retryable for 72 hours while the provider (Resend) keeps an idempotency key for 24, so an attempt it accepted before the worker died could be sent again a day later. New column `order_email_outbox.handed_to_provider_at`: when the first attempt the provider may have accepted began, set when a claim takes back a row whose lease ran out and on a retry (not on a refusal of our account, a rate limit, a rejection or `not_sent`). Restates `public.claim_order_emails` and `public.complete_order_email` (from `20261111090000`): a row with that time more than 20 hours ago is not claimed; it becomes `failed` and queues an `order_email_failed` alert (`admin_alert_outbox`, dedup `order-email-failed:<row>`). Rows never handed to the provider keep their 24- and 72-hour windows. Changes no data: rows waiting or being sent beforehand (read-only), 0 on shared dev and 0 on staging. Guard: `supabase/tests/order_email_resend_window_guard.sql`.
