@@ -39,5 +39,10 @@ if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   exit 0
 fi
 
+# Next 16.4.x reloads every open tab in a loop after a restart (next.js
+# #100251). Apply the one-line upstream fix to the installed copy before each
+# start, so it survives `npm install`. Never blocks the start.
+node scripts/dev-patch-next-hmr.mjs || echo "[dev-server] dev-patch-next-hmr failed; starting anyway"
+
 echo "[dev-server] starting Next dev on :$PORT in $PROJECT_DIR"
 exec npm run dev -- -p "$PORT"
