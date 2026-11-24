@@ -6,7 +6,7 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 
 **Columns.** *Review* is one of `full`, `fix-check`, `full + fix-check`, `skipped` or `waived`. *Reviewed on* is the date of the newest review, or `—` when skipped or waived. *Verdict* is a one-word summary of the full review's worst finding (`clean`, `P2 found`, `P1 found`, `P0 found`), or the ruling a skipped or waived row rests on. The review texts stay in the reviewing machine's `~/drvn-worktrees/_plan/reviews/` (`pr<n>.review.md`, `pr<n>.fixcheck.md`) and are not copied here: the repository is public, and a review can describe a defect before its fix lands. A finding that still needs work is filed as an Intelligence OS item, not kept here.
 
-**Keeping it current.** Whoever merges a PR adds its row in their next PR: `skipped` with `docs only (ruling, 7 Nov)` when docs-only, otherwise `waived` with `waived (ruling, 10 Nov)`. `tests/ci/codex-queue.test.ts` checks every row's shape in CI, and refuses an `owed` row, because nothing is owed under the 10 November ruling. Where the full git history is present (a local checkout), it also checks that every PR merged to `main` since #61, more than two days ago, has a row.
+**Keeping it current.** Whoever merges a PR adds its row in their next PR: `skipped` with `docs only (ruling, 7 Nov)` when docs-only, otherwise `waived` with `waived (ruling, 10 Nov)`. `tests/ci/codex-queue.test.ts` checks every row's shape in CI, and refuses an `owed` row, because nothing is owed under the 10 November ruling. Once a night, from the app's own CI with the full git history (`npm run test:nightly`, `.github/workflows/nightly-checks.yml`), it also checks that every PR merged to `main` since #61, more than two days ago, has a row. That half reads the date, so it does not run on a pull request.
 
 | PR | Merged | Title | Review | Reviewed on | Verdict |
 |---|---|---|---|---|---|
@@ -168,6 +168,7 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #223 | 2026-11-10 | test(ci): a report's table for the Intelligence OS is checked here… (batch 1, #228) | waived | — | waived (ruling, 10 Nov) |
 | #224 | 2026-11-10 | Plan 2 A5: the launch switch settings are recorded… (batch 1, #228) | waived | — | waived (ruling, 10 Nov) |
 | #225 | 2026-11-10 | docs: plan 1 record brought current, the by-hand counter-notice procedure… (batch 1, #228) | skipped | — | docs only (ruling, 7 Nov) |
+| #226 | 2026-11-10 | N1078: a browser lane for the configuration DRVN launches with (plan 2 A4) | waived | — | waived (ruling, 10 Nov) |
 | #227 | 2026-11-10 | Plan 2 A0 follow-up: only a pull request into main can skip the browser suite… (plan 2 batch 1, #236) | waived | — | waived (ruling, 10 Nov) |
 | #228 | 2026-11-10 | Batch 1: #225 #218 #220 #223 #219 #216 #224 | waived | — | waived (ruling, 10 Nov) |
 | #229 | 2026-11-10 | Plan 2 A0b: the browser suite runs as four parts side by side… (plan 2 batch 1, #236) | waived | — | waived (ruling, 10 Nov) |
@@ -197,3 +198,8 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #253 | 2026-11-11 | A2 (1 of 2): the database makes every change to an order's status; fixes a dispute close that could overwrite a delivery recorded during it | waived | — | waived (ruling, 10 Nov) |
 | #254 | 2026-11-11 | A2 (2 of 2): the database refuses any change of an order's status its transition table does not hold, for every role | waived | — | waived (ruling, 10 Nov) |
 | #255 | 2026-11-11 | N1075 A6: one baseline in place of the migration history | waived | — | waived (ruling, 10 Nov) |
+| #256 | 2026-11-11 | Record: A6 merged (#255), its review-queue row | skipped | — | docs only (ruling, 7 Nov) |
+| #257 | 2026-11-11 | Codex review fixes: ledger counts each sale once, gate watch counts only runs finished before the merge | waived | — | waived (ruling, 10 Nov) |
+| #258 | 2026-11-11 | Deletion scrub: a listing title containing ' · ' no longer survives in saved-search notices | waived | — | waived (ruling, 10 Nov) |
+| #259 | 2026-11-11 | Order emails: never resend a possibly-accepted email past the provider's 24-hour key window | waived | — | waived (ruling, 10 Nov) |
+| #261 | 2026-11-12 | Fix the dev-server reload loop after a restart | waived | — | waived (ruling, 10 Nov) |

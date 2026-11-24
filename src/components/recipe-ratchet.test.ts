@@ -117,10 +117,13 @@ describe("recipe ratchet", () => {
       "New hand-rolled Livesheet recipe markup. Use the canonical component (see src/components/registry.ts); a deliberate exception means updating src/components/recipe-baseline.json in the same reviewed change.",
     ).toEqual([]);
 
-    // A migration happened: force the baseline down so the ratchet keeps teeth.
-    expect(
-      improvements,
-      "Counts dropped below baseline (nice). Run UPDATE_RECIPE_BASELINE=1 npx vitest run src/components/recipe-ratchet.test.ts to lock in the lower numbers.",
-    ).toEqual([]);
+    // A migration happened. The change that made the code better passes; the
+    // nightly run (DRVN_NIGHTLY_CHECKS=1, .github/workflows/nightly-checks.yml)
+    // is what insists the baseline comes down, so the ratchet keeps its teeth
+    // without failing the cleanup itself.
+    const lower =
+      "Counts dropped below baseline (nice). Run UPDATE_RECIPE_BASELINE=1 npx vitest run src/components/recipe-ratchet.test.ts to lock in the lower numbers.";
+    if (process.env.DRVN_NIGHTLY_CHECKS === "1") expect(improvements, lower).toEqual([]);
+    else if (improvements.length) console.warn(`[recipe-ratchet] ${lower} (${improvements.join("; ")})`);
   });
 });

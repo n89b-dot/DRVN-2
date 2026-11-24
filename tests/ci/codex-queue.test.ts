@@ -92,7 +92,11 @@ describe("the Codex review queue is in the repository (#95)", () => {
     expect(rows.filter((r) => r.review === "owed").map((r) => `#${r.pr}`)).toEqual([]);
   });
 
-  const merged = mergedPrs();
+  // The calendar half: it reads today's date and the merge history, so it runs
+  // once a night from the app's own CI (DRVN_NIGHTLY_CHECKS=1 and a full
+  // checkout, .github/workflows/nightly-checks.yml), not on a pull request,
+  // where it would fail work that merged nothing.
+  const merged = process.env.DRVN_NIGHTLY_CHECKS === "1" ? mergedPrs() : null;
   it.skipIf(!merged)("lists every PR merged to main since #61, two days after its merge", () => {
     const listed = new Set(rows.map((r) => r.pr));
     const cutoff = Date.now() - GRACE_DAYS * 24 * 60 * 60 * 1000;

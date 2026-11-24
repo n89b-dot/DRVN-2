@@ -1,0 +1,55 @@
+# The checks that depend on the calendar, or that ask for tidying after the
+# code got better. They are true or false whatever a pull request changed, so
+# they do not belong in a pull request's tests or in a push to main, where a
+# failure would hold every deploy (deploy.yml waits for release-gate):
+#
+#  - R-staging-behind: a migration two days old or more is recorded on
+#    staging, or listed as pending with a reason (tests/ci/migrations-md.test.ts).
+#  - #95: every pull request merged more than two days ago has its row in
+#    docs/review-evidence/codex-queue.md (tests/ci/codex-queue.test.ts).
+#  - The four ratchets: a count that fell below its checked-in baseline must
+#    have the baseline lowered, so the count cannot creep back up
+#    (recipe-ratchet, unbounded-reads, photo-owner-reads, unsigned-photo-reads).
+#
+# This is the application's own CI, not the Intelligence OS: the OS reads what
+# this repository records and never decides whether one of its checks runs.
+# Not part of release-gate. A failure goes to the alert channel as well as to
+# GitHub's own email. Reads no secret but the alert webhook.
+name: Nightly checks
+
+on:
+  schedule:
+    # 07:17 UTC. GitHub may delay a scheduled run on a quiet repository.
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          # The review-queue check reads the merge history.
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.22.0
+          cache: npm
+      - run: npm ci
+      - name: Calendar and baseline checks
+        run: npm run test:nightly
+      - name: Tell the alert channel
+        if: failure()
+        run: |
+          node scripts/deploy.mjs alert "DRVN nightly checks FAILED on ${GITHUB_SHA::7}: staging is behind, or a ratchet baseline can be lowered. Run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+        env:
+          ADMIN_ALERT_WEBHOOK_URL: ${{ secrets.ADMIN_ALERT_WEBHOOK_URL }}
