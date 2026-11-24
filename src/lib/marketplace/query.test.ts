@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
-import { COUNT_CAP, decodePosition, encodePosition, fetchListings, listingRowsQuery, SEARCH_CAP } from "./query";
+import { COUNT_CAP, decodePosition, encodePosition, fetchListings, hydrateListingCards, listingRowsQuery, SEARCH_CAP } from "./query";
 import { capture } from "@/lib/analytics";
 import { reportError } from "@/lib/monitoring";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
@@ -91,7 +91,7 @@ it("starts social lookups while fitment is still loading", async () => {
   const supabase = client({ data: [{ id: "listing", title: "Brakes", price_cents: 100, condition: "used", location: null }], count: 1, error: null });
   supabase.from = vi.fn((table: string) => {
     const query = {
-      select: () => query, eq: () => query, in: () => query, order: () => query,
+      select: () => query, eq: () => query, in: () => query, order: () => query, limit: () => query,
       then: (resolve: (value: { data: [] }) => unknown) => {
         started.push(table);
         return (table === "listing_fitments" ? fitment : Promise.resolve({ data: [] as [] })).then(resolve);
@@ -272,4 +272,40 @@ it("N30: card likes, questions and seller ratings come counted from the database
   expect(tables).not.toContain("likes");
   expect(tables).not.toContain("listing_questions");
   expect(tables).not.toContain("reviews");
+});
+
+it("reads one cover photo a listing, and the rest only for a listing whose first photo is gone", async () => {
+  // Every read of listing_images, as the filters it was built with.
+  const reads: [string, ...unknown[]][][] = [];
+  const supabase = {
+    from: vi.fn((table: string) => {
+      const filters: [string, ...unknown[]][] = [];
+      if (table === "listing_images") reads.push(filters);
+      const query: Record<string, unknown> = {};
+      for (const method of ["select", "eq", "in", "order", "limit"]) {
+        query[method] = (...args: unknown[]) => {
+          filters.push([method, ...args]);
+          return query;
+        };
+      }
+      query.then = (resolve: (value: { data: unknown[] }) => unknown) => {
+        if (table !== "listing_images") return resolve({ data: [] });
+        // The first read is the covers: "a" has one at position 0, "b" has none there.
+        if (reads.indexOf(filters) === 0) return resolve({ data: [{ listing_id: "a", url: "https://x.test/a0.webp", position: 0 }] });
+        return resolve({ data: [{ listing_id: "b", url: "https://x.test/b1.webp", position: 1 }, { listing_id: "b", url: "https://x.test/b2.webp", position: 2 }] });
+      };
+      return query;
+    }),
+    rpc: vi.fn(async () => ({ data: [] })),
+  };
+  const cards = await hydrateListingCards(supabase as never, [
+    { id: "a", title: "A", price_cents: 100, condition: "used", location: null },
+    { id: "b", title: "B", price_cents: 200, condition: "used", location: null },
+  ] as never);
+  expect(cards.map((card) => card.cover_url)).toEqual(["https://x.test/a0.webp", "https://x.test/b1.webp"]);
+  // The page's listings, covers only, one row each at most.
+  expect(reads[0]).toEqual(expect.arrayContaining([["in", "listing_id", ["a", "b"]], ["eq", "position", 0], ["limit", 2]]));
+  // Only the listing that had no cover is read again.
+  expect(reads).toHaveLength(2);
+  expect(reads[1]).toEqual(expect.arrayContaining([["in", "listing_id", ["b"]], ["order", "position"]]));
 });

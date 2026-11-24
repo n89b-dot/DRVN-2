@@ -129,11 +129,18 @@ export async function hydrateListingCards(
     { data: sourceCars },
     { data: activeCounts },
   ] = await Promise.all([
+      // The cover only. A card shows one photo, and this used to read every
+      // photo of every listing on the page (up to a dozen each) and keep the
+      // first. Both save paths number a listing's photos from 0
+      // (save_listing_creation, update_listing_atomic), so the cover is the
+      // row at position 0.
       supabase
         .from("listing_images")
         .select("listing_id, url, position")
         .in("listing_id", ids)
-        .order("position"),
+        .eq("position", 0)
+        // At most one row a listing.
+        .limit(ids.length),
       fetchWatchCounts(supabase, ids),
       sellerIds.length
         ? supabase
@@ -162,6 +169,23 @@ export async function hydrateListingCards(
   const coverByListing = new Map<string, string>();
   for (const image of images ?? []) {
     if (!coverByListing.has(image.listing_id)) coverByListing.set(image.listing_id, image.url);
+  }
+  // A listing with photos but none at position 0: its first photo was
+  // removed without the rest being renumbered (a copyright takedown deletes
+  // one row). Rare, so it is read only for the listings that need it, and
+  // its lowest position is the cover.
+  const uncovered = ids.filter((id) => !coverByListing.has(id));
+  if (uncovered.length) {
+    const { data: rest } = await supabase
+      .from("listing_images")
+      .select("listing_id, url, position")
+      .in("listing_id", uncovered)
+      .order("position")
+      // A few listings' photos at most; the first of each is all that is used.
+      .limit(1000);
+    for (const image of rest ?? []) {
+      if (!coverByListing.has(image.listing_id)) coverByListing.set(image.listing_id, image.url);
+    }
   }
 
   const ratingBySeller = new Map(
