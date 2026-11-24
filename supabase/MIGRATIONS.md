@@ -43,7 +43,7 @@ with any table in `public`. Details: "Applying without Docker or psql" below.
 - **At most three in review (R1).** No more than three pull requests that carry a migration are in review at once, across every session.
 - **Functions are closed by default (A3).** A new function is not executable by `PUBLIC`, `anon` or `authenticated` until a migration grants it, and pins its `search_path`. A helper function that is called on a member's behalf (from a trigger function, a policy or a default that is not `SECURITY DEFINER`) needs its own grants, because new functions are closed by default. Functions made by `create extension` are closed to `PUBLIC` too: grant what queries use, and check the snapshot.
 
-**Staging stays level with shared dev** (R-staging-behind). A migration PR is applied to shared dev *and* staging after its review is approved and before it merges, by the same session, with both cells filled. `tests/ci/migrations-md.test.ts` lets a row name `shared-dev` without `staging` (or say `not applied`) only while the file is less than two days old by its timestamp. A session that cannot reach staging lists the file in `supabase/migrations-staging-pending.json` with the reason, and the next session with the credential applies it and removes the entry.
+**Staging stays level with shared dev** (R-staging-behind). A migration PR is applied to shared dev *and* staging after its review is approved and before it merges, by the same session, with both cells filled. `tests/ci/migrations-md.test.ts` lets a row name `shared-dev` without `staging` (or say `not applied`) only while the file is less than two days old by its timestamp. That check reads the date, so it runs once a night from the app's own CI (`npm run test:nightly`, `.github/workflows/nightly-checks.yml`, which tells the alert channel when it fails) and not on a pull request or a push, where it would fail work that changed no migration. A session that cannot reach staging lists the file in `supabase/migrations-staging-pending.json` with the reason, and the next session with the credential applies it and removes the entry.
 
 **A merged migration is never renamed** (#97). Apply order on every target is merge order, so filename order must stay the same as merge order. A pull request may only add migration files, each with a timestamp later than every file already on `main`, and may never rename or remove a file `main` has. The one exception was A6's: the history moved, byte for byte, to `supabase/migrations-archive/`. `tests/ci/migration-order.test.ts` fails a PR that breaks either rule, naming the file.
 
@@ -63,7 +63,7 @@ with any table in `public`. Details: "Applying without Docker or psql" below.
 
 | File | Applied to |
 |---|---|
-| `20261124180000_refund_and_checkout_lock_order.sql` | not applied |
+| `20261124180000_refund_and_checkout_lock_order.sql` | shared-dev 2026-11-24; staging 2026-11-24 |
 
 ## November 11 — an order email the provider may have taken is not sent again after its key expires (Codex's final review)
 
