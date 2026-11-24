@@ -3293,6 +3293,7 @@ export type Database = {
           href: string | null
           id: string
           kind: string
+          listing_refs: Json | null
           read_at: string | null
           section: string
           target_id: string | null
@@ -3306,6 +3307,7 @@ export type Database = {
           href?: string | null
           id?: string
           kind: string
+          listing_refs?: Json | null
           read_at?: string | null
           section: string
           target_id?: string | null
@@ -3319,6 +3321,7 @@ export type Database = {
           href?: string | null
           id?: string
           kind?: string
+          listing_refs?: Json | null
           read_at?: string | null
           section?: string
           target_id?: string | null

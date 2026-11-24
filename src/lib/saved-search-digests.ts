@@ -40,7 +40,10 @@ export const SEND_BATCH = 25;
 export const ADMIT_BUDGET_MS = 120_000;
 export const SEND_BUDGET_MS = 120_000;
 
-export type DigestItem = { id: string; title: string; price_cents: number | null };
+/** `seller_id`: whose listing it is, so the item can be removed when that
+ *  seller leaves without consulting the listing, which may be gone
+ *  (20261124210000). Absent on items written before then. */
+export type DigestItem = { id: string; title: string; price_cents: number | null; seller_id?: string };
 
 export type AdmitTally = {
   checked: number;
@@ -118,7 +121,7 @@ async function admitOne(admin: Admin, search: DueSearch, tally: AdmitTally): Pro
       reportError("[saved-search-digests] match query failed", { id: search.saved_search_id, code: matchError.code });
       return null;
     }
-    items = (matches ?? []).map((m) => ({ id: m.id, title: m.title, price_cents: m.price_cents }));
+    items = (matches ?? []).map((m) => ({ id: m.id, title: m.title, price_cents: m.price_cents, seller_id: m.seller_id }));
     matchCount = Math.max(count ?? 0, items.length);
   }
 

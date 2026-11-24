@@ -92,6 +92,8 @@ async function run(request: Request) {
             .map((m) => m.title)
             .join(" · "),
           href: destination,
+          // The same three, in the same order: who sold each title above.
+          listingRefs: (matches ?? []).slice(0, 3).map((m) => ({ id: m.id, seller_id: m.seller_id, title: m.title })),
         });
         if (outcome === "delivered") notified += 1;
         // Retain the cursor after a failed delivery so the next pass retries.

@@ -14,15 +14,23 @@ declare
 begin
   with item as (
     select d.id as digest_id, e.i, e.ord,
-           -- The member's, or no longer there at all.
-           (e.i->>'id') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-             or not exists (select 1 from public.listings l where l.id = (e.i->>'id')::uuid and l.seller_id is distinct from p_user) as theirs
+           -- 20261124210000: an item written since then names its seller, and
+           -- is the member's exactly when that is them. Before, an item whose
+           -- listing no longer existed counted as theirs whoever had sold it,
+           -- so a part another seller had removed was blanked in other
+           -- members' digests when anyone at all left. Items with no seller
+           -- recorded keep the old rule: the member's, or no longer there.
+           case when e.i ? 'seller_id' then coalesce(e.i->>'seller_id' = p_user::text, false)
+                else (e.i->>'id') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                  or not exists (select 1 from public.listings l where l.id = (e.i->>'id')::uuid and l.seller_id is distinct from p_user)
+           end as theirs
       from public.saved_search_email_digests d
       cross join lateral jsonb_array_elements(d.items) with ordinality as e(i, ord)
   ), hit as (
     select digest_id,
            jsonb_agg(i order by ord) filter (where not theirs) as kept,
-           jsonb_agg(case when theirs then jsonb_set(i, '{title}', to_jsonb(a_listing)) else i end order by ord) as neutral,
+           -- A neutralised item no longer names the member either.
+           jsonb_agg(case when theirs then jsonb_set(i - 'seller_id', '{title}', to_jsonb(a_listing)) else i end order by ord) as neutral,
            count(*) filter (where theirs) as gone,
            bool_or(theirs and i->>'title' is distinct from a_listing) as changes
       from item group by digest_id

@@ -14,6 +14,8 @@ declare
   v_offer integer;
   v_order integer;
   v_matched integer;
+  -- 20261124210000
+  v_by_ref integer;
 begin
   update public.notifications nt
      set title = case
@@ -92,6 +94,39 @@ begin
   --    title>" for one match, the body is up to three titles joined by " · ").
   --    Nothing links such a notice to the listing, so it is found by the
   --    exact title, whole, in its place.
+  --
+  --    20261124210000: a notice written since then records which listings it
+  --    names (listing_refs: id, seller, title, in the order of its body).
+  --    Those are found by the seller's id, through an index, and cut exactly:
+  --    no reading of every notice, no guessing from a title, and it works
+  --    whether or not the listing still exists. The body is rebuilt from the
+  --    record, and the record itself is cleared of the member.
+  with hit as (
+    select nt.id,
+           (select string_agg(case when e.r->>'seller_id' = p_user::text then a_listing else e.r->>'title' end, ' · ' order by e.ord)
+              from jsonb_array_elements(nt.listing_refs) with ordinality as e(r, ord)) as body,
+           (select jsonb_agg(case when e.r->>'seller_id' = p_user::text then jsonb_build_object('title', a_listing) else e.r end order by e.ord)
+              from jsonb_array_elements(nt.listing_refs) with ordinality as e(r, ord)) as refs,
+           -- "New match for <search>: <title>": the title a single match ends with.
+           (select e.r->>'title' from jsonb_array_elements(nt.listing_refs) as e(r)
+             where e.r->>'seller_id' = p_user::text and nt.title like 'New match for %'
+               and right(nt.title, length(e.r->>'title') + 2) = ': ' || (e.r->>'title')
+             order by length(e.r->>'title') desc limit 1) as title_tail
+      from public.notifications nt
+     where nt.listing_refs @> jsonb_build_array(jsonb_build_object('seller_id', p_user::text))
+       and nt.user_id <> p_user
+  )
+  update public.notifications nt
+     set title = case when hit.title_tail is not null
+                      then left(nt.title, length(nt.title) - length(hit.title_tail)) || a_listing else nt.title end,
+         body = case when private.notification_member_text(nt.kind) = 'matched_titles' then hit.body else nt.body end,
+         listing_refs = hit.refs
+    from hit
+   where nt.id = hit.id;
+  get diagnostics v_by_ref = row_count;
+
+  --    Notices from before the record (listing_refs is null) keep the match
+  --    by title below, unchanged.
   with mine as (
     select distinct l.title from public.listings l
      where l.seller_id = p_user and l.title is not null and btrim(l.title) <> ''
@@ -111,13 +146,14 @@ begin
                      from unnest(string_to_array(nt.body, ' · ')) with ordinality as e(t, ord)) c)
    where private.notification_member_text(nt.kind) = 'matched_titles'
      and nt.user_id <> p_user
+     and nt.listing_refs is null
      and exists (
        select 1 from mine m
         where (nt.body is not null and strpos(' · ' || nt.body || ' · ', ' · ' || m.title || ' · ') > 0)
            or (nt.title like 'New match for %' and right(nt.title, length(m.title) + 2) = ': ' || m.title));
   get diagnostics v_matched = row_count;
 
-  return jsonb_build_object('notifications_sent', v_actor, 'offer_notice_bodies', v_offer, 'order_notice_bodies', v_order, 'saved_search_notices', v_matched);
+  return jsonb_build_object('notifications_sent', v_actor, 'offer_notice_bodies', v_offer, 'order_notice_bodies', v_order, 'saved_search_notices', v_matched + v_by_ref);
 end $function$;
 
 -- No role is granted execute on private.scrub_member_notices(p_user uuid, p_username text).
