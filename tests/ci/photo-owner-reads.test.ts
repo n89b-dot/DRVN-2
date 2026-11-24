@@ -121,7 +121,12 @@ describe("N940: a photo read from a table that carries its owner should carry th
       else if (now < allowed) improvements.push(file);
     }
     expect(regressions, "A read of a table that carries its owner asks for a photo without the owner column, so the signer cannot check whose folder the photo is in. Add the owner column to the select: see the top of tests/ci/photo-owner-reads.test.ts.").toEqual([]);
-    expect(improvements, "Fewer such reads than the baseline (good). Run UPDATE_PHOTO_OWNER_BASELINE=1 npx vitest run tests/ci/photo-owner-reads.test.ts to lock the lower numbers in.").toEqual([]);
+    // The change that removed a read passes; the nightly run
+    // (DRVN_NIGHTLY_CHECKS=1, .github/workflows/nightly-checks.yml) is what
+    // insists the baseline comes down.
+    const lower = "Fewer such reads than the baseline (good). Run UPDATE_PHOTO_OWNER_BASELINE=1 npx vitest run tests/ci/photo-owner-reads.test.ts to lock the lower numbers in.";
+    if (process.env.DRVN_NIGHTLY_CHECKS === "1") expect(improvements, lower).toEqual([]);
+    else if (improvements.length) console.warn(`[photo-owner-reads] ${lower} (${improvements.join("; ")})`);
     // The number the code's own comment gives (src/lib/photo-urls.ts) is this list's total; it may only fall.
     expect(Object.values(baseline).reduce((sum, n) => sum + n, 0)).toBeLessThanOrEqual(30);
   });
