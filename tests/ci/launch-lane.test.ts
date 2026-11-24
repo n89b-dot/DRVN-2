@@ -59,13 +59,16 @@ describe("the launch lane's environment is the recorded launch configuration (N1
     }
   });
 
-  it("resolves, in the app's own code, to the launch: Stripe, cache on, agent off, DRVN Shipping off", () => {
+  it("resolves, in the app's own code, to the launch: Stripe, cache on, agent off, listing import on, DRVN Shipping off", () => {
     const env = laneEnv(runner({ AGENTS_BETA: "on", FLAG_INTEGRATED_SHIPPING_V1: "true", PAYMENTS_MODE: "stub", PAYMENTS_ALLOW_STUB_IN_PRODUCTION: "true" }));
     expect(resolvePaymentsMode(env)).toBe("stripe");
     expect(resolveShippingMode(env)).toBe("disabled");
     expect(env.AGENTS_BETA).toBeUndefined();
-    expect(resolveAiConfig(env).mode).toBe("disabled");
-    expect(resolveImportConfig(env).aiMode).toBe("disabled");
+    // Listing import is on at launch (Neil, 24 November 2026), so the model
+    // key is present and the model can be called. The agent is still off:
+    // its own switch is absent, as the line above holds.
+    expect(resolveAiConfig(env).mode).toBe("anthropic");
+    expect(resolveImportConfig(env).aiMode).toBe("anthropic");
     expect(publicCacheEnabled(env)).toBe(true);
   });
 

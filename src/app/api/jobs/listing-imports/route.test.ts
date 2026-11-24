@@ -9,84 +9,54 @@ vi.mock("@/lib/tracked-worker", () => ({
 }));
 
 type Result = { data: unknown; error: unknown };
-let reads: Result[] = [];
-let updateError: unknown = null;
-const updates = vi.fn();
+/** What each database function answers, by name. */
+let answers: Record<string, Result> = {};
+const rpc = vi.fn(async (name: string) => answers[name] ?? { data: 0, error: null });
 
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({
-    from() {
-      let updating = false;
-      const builder: Record<string, unknown> = {};
-      for (const method of ["select", "not", "lt", "order", "limit", "in", "eq"]) builder[method] = () => builder;
-      builder.update = (values: unknown) => {
-        updating = true;
-        updates(values);
-        return builder;
-      };
-      builder.then = (resolve: (value: Result) => unknown) =>
-        resolve(updating ? { data: null, error: updateError } : (reads.shift() ?? { data: [], error: null }));
-      return builder;
-    },
-  }),
-}));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc }) }));
 
-import { POST } from "./route";
+import { POST, maxDuration } from "./route";
 
-const call = () =>
-  POST(new Request("https://drvn.test/api/jobs/listing-imports", { method: "POST", headers: { authorization: "Bearer cron" } }));
+const call = (authorization = "Bearer cron") =>
+  POST(new Request("https://drvn.test/api/jobs/listing-imports", { method: "POST", headers: { authorization } }));
 
 describe("listing-import sweep", () => {
   beforeEach(() => {
     process.env.CRON_SECRET = "cron";
-    reads = [];
-    updateError = null;
-    updates.mockClear();
+    answers = {};
+    rpc.mockClear();
   });
 
-  it("reports what it expired and scrubbed", async () => {
-    reads = [
-      { data: [{ id: "a", status: "ready" }], error: null },
-      { data: [{ id: "b" }], error: null },
-    ];
+  it("reports what the two statements expired and scrubbed", async () => {
+    answers = { expire_stale_listing_imports: { data: 3, error: null }, scrub_expired_listing_imports: { data: 2, error: null } };
     const response = await call();
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ expired: 1, scrubbed: 1 });
+    expect(await response.json()).toEqual({ expired: 3, scrubbed: 2 });
+    // One call each: the work is in the database, not a request per row.
+    expect(rpc.mock.calls.map(([name]) => name)).toEqual(["expire_stale_listing_imports", "scrub_expired_listing_imports"]);
   });
 
-  it("fails the run when the overdue imports can't be read, rather than reporting an empty sweep", async () => {
-    reads = [{ data: null, error: { message: "timeout" } }];
+  it("fails the run when the overdue imports can't be expired, rather than reporting an empty sweep", async () => {
+    answers = { expire_stale_listing_imports: { data: null, error: { message: "timeout" } } };
     const response = await call();
     expect(response.status).toBe(500);
-    expect(updates).not.toHaveBeenCalled();
+    expect(await response.json()).toMatchObject({ expired: 0, scrubbed: 0, error: "sweep failed" });
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 
-  it("fails the run when the stale imports can't be read", async () => {
-    reads = [
-      { data: [], error: null },
-      { data: null, error: { message: "timeout" } },
-    ];
-    expect((await call()).status).toBe(500);
-  });
-
-  it("fails the run when a row could not be scrubbed", async () => {
-    reads = [
-      { data: [], error: null },
-      { data: [{ id: "b" }], error: null },
-    ];
-    updateError = { message: "refused" };
+  it("fails the run when the stale imports can't be scrubbed, and still says what it expired", async () => {
+    answers = { expire_stale_listing_imports: { data: 4, error: null }, scrub_expired_listing_imports: { data: null, error: { message: "timeout" } } };
     const response = await call();
     expect(response.status).toBe(500);
-    expect(await response.json()).toMatchObject({ scrubbed: 0, failed: 1 });
+    expect(await response.json()).toMatchObject({ expired: 4, scrubbed: 0, error: "sweep failed" });
   });
 
-  it("works through more than one batch in a run", async () => {
-    const batch = Array.from({ length: 200 }, (_, index) => ({ id: `row-${index}`, status: "ready" }));
-    reads = [
-      { data: batch, error: null },
-      { data: [{ id: "last", status: "ready" }], error: null },
-      { data: [], error: null },
-    ];
-    expect(await (await call()).json()).toEqual({ expired: 201, scrubbed: 0 });
+  it("answers 404 to anyone without the job secret, and reads nothing", async () => {
+    expect((await call("Bearer wrong")).status).toBe(404);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("states its time limit", () => {
+    expect(maxDuration).toBe(60);
   });
 });

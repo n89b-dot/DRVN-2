@@ -34,6 +34,7 @@ function launchEnv(): Record<string, string | undefined> {
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_live_x",
     STRIPE_WEBHOOK_SECRET: "whsec_x",
     STRIPE_CONNECT_WEBHOOK_SECRET: "whsec_connect_x",
+    ANTHROPIC_API_KEY: "sk-ant-x",
   };
   const env: Record<string, string | undefined> = {
     NODE_ENV: "production",

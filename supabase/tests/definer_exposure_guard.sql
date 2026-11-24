@@ -36,7 +36,7 @@ declare
   member_reviewed text[] := array[
     'admin_set_agent_control(text,uuid,boolean,text)', -- refuses anyone but an admin with step-up (20261021100100)
     'admin_set_agent_beta_step(text,boolean,text)', -- refuses anyone but an admin with step-up (20261024100000)
-    'admin_set_agent_spend_limits(numeric,numeric,text)', -- refuses anyone but an admin with step-up (20261024100000)
+    'admin_set_agent_spend_limits(numeric,numeric,text,numeric)', -- refuses anyone but an admin with step-up (20261024100000; the monthly cap, 20261124200000)
     'admin_open_agent_chat(uuid,text,uuid,text)', -- admins with step-up only, a named case, audited (20261024100000)
     'admin_confirmed_factor()',                        -- the caller's own confirmed authenticator id, null for anyone else (20261107200550)
     'admin_enrolment_state()',                         -- the caller's own console membership: pending or confirmed, null otherwise (20261107200500)

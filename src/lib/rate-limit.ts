@@ -54,6 +54,9 @@ export const RATE_LIMITS = {
   /** Remote fetch + AI + media transfer — the most expensive user-triggered
    *  action in the product, so the tightest listing-side limit. */
   importListing: { action: "listing-import", limit: 10, windowSeconds: 60 * 60 },
+  /** A retry, a pasted fallback or a choice between items on an import
+   *  already started: each runs the fetch or the model again. */
+  importListingStep: { action: "listing-import-step", limit: 30, windowSeconds: 60 * 60 },
   /** Adding a mod by pasting a link (L-1). Far lighter than the importer —
    *  one page fetch, one thumbnail, no AI — so it gets a looser limit: a
    *  member filling in a build sheet in one sitting pastes a lot of links. */

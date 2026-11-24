@@ -6,16 +6,22 @@ CREATE OR REPLACE FUNCTION public.agent_spend_allowed(p_owner uuid)
  STABLE SECURITY DEFINER
  SET search_path TO 'public', 'pg_temp'
 AS $function$
-  with lim as (select per_member_daily_usd, global_daily_usd from public.agent_spend_limits where singleton),
+  with lim as (select per_member_daily_usd, global_daily_usd, global_monthly_usd from public.agent_spend_limits where singleton),
   today as (
     select coalesce(sum(cost_usd) filter (where owner_id = p_owner), 0) as member_usd, coalesce(sum(cost_usd), 0) as global_usd
     from public.agent_usage where created_at >= date_trunc('day', now() at time zone 'utc') at time zone 'utc'
+  ),
+  -- 20261124200000
+  month as (
+    select coalesce(sum(cost_usd), 0) as month_usd
+    from public.agent_usage where created_at >= date_trunc('month', now() at time zone 'utc') at time zone 'utc'
   )
   select jsonb_build_object(
-    'allowed', today.member_usd < lim.per_member_daily_usd and today.global_usd < lim.global_daily_usd,
-    'member_usd', today.member_usd, 'global_usd', today.global_usd,
-    'member_cap', lim.per_member_daily_usd, 'global_cap', lim.global_daily_usd)
-  from lim, today;
+    'allowed', today.member_usd < lim.per_member_daily_usd and today.global_usd < lim.global_daily_usd
+               and month.month_usd < lim.global_monthly_usd,
+    'member_usd', today.member_usd, 'global_usd', today.global_usd, 'month_usd', month.month_usd,
+    'member_cap', lim.per_member_daily_usd, 'global_cap', lim.global_daily_usd, 'month_cap', lim.global_monthly_usd)
+  from lim, today, month;
 $function$;
 
 grant execute on function public.agent_spend_allowed(p_owner uuid) to service_role;

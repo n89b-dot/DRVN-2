@@ -9,6 +9,14 @@ import { ImportFlow } from "./import-flow";
 
 export const metadata = { title: "Import a listing - DRVN" };
 
+/**
+ * The time a server action called from this page may run. Each import step
+ * (fetch the page, ask the model, copy photos) is bounded well under this;
+ * without a stated limit the host's default applies, which is ten seconds on
+ * some plans and would cut a slow source or model answer off mid-step.
+ */
+export const maxDuration = 60;
+
 export default async function ImportPage({
   searchParams,
 }: {

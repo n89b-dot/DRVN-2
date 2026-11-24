@@ -29,6 +29,7 @@ The dated record that each piece of production and staging infrastructure was se
 | Uptime check on `/api/health/workers` with the `CRON_SECRET` bearer, every 3–5 minutes, paging a phone: the primary worker monitor (runbook §9b, #104) | | | a deliberate stop that paged and recovered |
 | Worker monitor variables `DRVN_MONITOR_ENABLED`, `DRVN_MONITOR_ORIGIN`, secret `DRVN_MONITOR_SECRET` (D5) | | | |
 | First admin enrolled with MFA and confirmed (runbook §5, N666) | | | |
+| Model provider account (Anthropic): API key created, and a monthly spend limit set on it in the provider's console, as a backstop to the in-app cap | | | |
 
 ## Runbook §1: Supabase Auth settings (C6, D7)
 
@@ -69,7 +70,7 @@ Set in the host's environment for each project (never in the repository). `job_c
 | `ACCOUNT_EMAIL_DIGEST_KEY` | optional (recommended before launch), ≥ 32 chars | | | | |
 | `TRUST_PROXY_HEADERS` | unset on Vercel; `true` only behind another verified proxy; `false` to disable | | | | |
 | `FLAG_INTEGRATED_SHIPPING_V1`, `EASYPOST_API_KEY`, `EASYPOST_WEBHOOK_SECRET` | optional | | | | |
-| `ANTHROPIC_API_KEY` | optional; needed for the agent and the importer to call the model | | | | |
+| `ANTHROPIC_API_KEY` | required for launch: listing import and adding a mod from a shop link call the model (Neil, 24 November 2026); the agent uses it too when it is on | | | | Set a monthly spend limit on the key in the provider's console as a backstop to the in-app cap |
 | `LISTING_IMPORT_MODEL`, `LISTING_IMPORT_AI_MODE` | optional | | | | |
 | `LISTING_IMPORT_ALLOW_PRIVATE_HOSTS`, `LISTING_IMPORT_PUBLIC_BROWSER_ENABLED` | never in production | | | | |
 | `AGENT_MODEL` | optional (default `claude-opus-5-5`) | | | | |
@@ -92,6 +93,9 @@ Set in the host's environment for each project (never in the repository). `job_c
 |---|---|---|---|
 | `job_config.media_storage_origin` = the project's `https://<ref>.supabase.co` | 2026-11-07 (`https://zubstjuviwourzgrziqc.supabase.co`) | | `docs/staging-setup.md` |
 | `job_config.transfer_worker_url` and `transfer_worker_secret` | | | |
+| Model spend caps confirmed at `/admin/agent`: 50.00 a month in all (the default), 50.00 a day, 2.00 a member a day | | | |
+| Master stop cleared at `/admin/agent` so listing import can call the model (a new database starts with it set; the agent stays off: `AGENTS_BETA` absent, its four steps closed) | | | |
+| A live listing import on staging: one from a link, one from pasted text, and one mod added from a shop link, each reaching the model and landing in the sell or mod form | | n/a | |
 | `select count(*) from cron.job where jobname like 'drvn-%'` returns 21 | | | |
 | PostgREST max rows (Supabase → Project settings → Data API → Max rows) is **1000 or more**; 1000 is the default and `supabase/config.toml`'s value. Reads page by key until an empty page, so a lower value is still read in full, only slower; a higher one changes nothing (N718, `src/lib/supabase/paged-rows.ts`) | | | |
 | Vehicle catalogue imported; row count matches staging (D4) | | | |
