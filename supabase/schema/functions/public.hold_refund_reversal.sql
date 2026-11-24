@@ -9,8 +9,18 @@ AS $function$
 declare
   v_op public.refund_operations;
   v_recovery uuid;
+  -- 20261124180000
+  v_lock_order uuid;
 begin
   if nullif(p_detail, '') is null then raise exception 'Reversal recovery detail is required'; end if;
+  -- 20261124180000: order first, then the operation. The recovery case and
+  -- the alert below each name the order, and a row that references an order
+  -- takes a lock on it; taken after the operation's, that was the opposite
+  -- of every function that locks the order first.
+  select order_id into v_lock_order from public.refund_operations where id = p_operation;
+  if v_lock_order is not null then
+    perform 1 from public.orders where id = v_lock_order for update;
+  end if;
   select * into v_op
   from public.refund_operations
   where id = p_operation

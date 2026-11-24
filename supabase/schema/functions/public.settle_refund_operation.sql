@@ -32,7 +32,19 @@ declare
   v_adjustments int;
   v_net_before  int;
   v_net_after   int;
+  -- 20261124180000
+  v_lock_order  uuid;
 begin
+  -- 20261124180000: the order's lock is taken before the operation's, the
+  -- order begin_refund_replacement and claim_refund_replacement_provider
+  -- already use. This function took the operation first, so a settlement and
+  -- a replacement of the same refund each held the lock the other needed.
+  -- The operation is read unlocked only to learn its order (which never
+  -- changes), and read again under its own lock below.
+  select order_id into v_lock_order from public.refund_operations where id = p_operation_id;
+  if v_lock_order is not null then
+    perform 1 from public.orders where id = v_lock_order for update;
+  end if;
   select * into v_op from public.refund_operations
     where id = p_operation_id for update;
   if not found then

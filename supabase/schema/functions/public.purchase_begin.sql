@@ -21,6 +21,8 @@ declare
   v_requested uuid[];
   v_claimed uuid[];
   v_basket_total bigint;
+  -- 20261124180000
+  v_claimed_rows jsonb;
 begin
   if p_checkout_request_key is not null and (
     p_idempotency_key is null
@@ -74,33 +76,50 @@ begin
     return jsonb_build_object('orders', v_orders, 'skipped', v_skipped);
   end if;
 
-  drop table if exists _claimed;
-  create temp table _claimed on commit drop as
-  with claimed as (
-    update public.listings l
-    set status = 'reserved',
-        reserved_until = now() + p_reservation_window
+  -- 20261124180000: the parts are locked in id order before they are
+  -- reserved, so two baskets that share parts always wait for each other in
+  -- the same order and neither can hold what the other needs. The claimed
+  -- rows are kept in a variable: this used to create and drop a temporary
+  -- table on every checkout, which writes to the system catalogs each time.
+  with locked as (
+    select l.id
+    from public.listings l
     where l.id = any (v_requested)
       and l.status = 'active'
       and l.seller_id <> p_buyer_id
       and private.seller_can_take_payment(l.seller_id)
+    order by l.id
+    for update
+  ), claimed as (
+    update public.listings l
+    set status = 'reserved',
+        reserved_until = now() + p_reservation_window
+    from locked
+    where l.id = locked.id
     returning
       l.id, l.seller_id, l.title, l.price_cents, l.shipping_cents, l.currency
   )
-  select
-    c.id, c.seller_id, c.title, c.price_cents, c.currency,
-    greatest(
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', c.id, 'seller_id', c.seller_id, 'title', c.title,
+    'price_cents', c.price_cents, 'currency', c.currency,
+    'shipping_cents', greatest(
       coalesce((p_shipping_overrides ->> c.id::text)::int, c.shipping_cents),
       0
-    ) as shipping_cents
+    )
+  ) order by c.id), '[]'::jsonb)
+  into v_claimed_rows
   from claimed c;
 
-  select coalesce(array_agg(id), array[]::uuid[]) into v_claimed from _claimed;
+  select coalesce(array_agg(c.id), array[]::uuid[]) into v_claimed
+  from jsonb_to_recordset(v_claimed_rows)
+    as c(id uuid, seller_id uuid, title text, price_cents int, currency text, shipping_cents int);
 
   -- One payment covers the whole basket, so the bound is on the basket. Summed
   -- as bigint: a basket of large prices must be refused, not overflow below.
   select coalesce(sum(price_cents::bigint + shipping_cents::bigint), 0)
-    into v_basket_total from _claimed;
+    into v_basket_total
+    from jsonb_to_recordset(v_claimed_rows)
+      as c(id uuid, seller_id uuid, title text, price_cents int, currency text, shipping_cents int);
   if cardinality(v_claimed) > 0 and not public.charge_cents_in_bounds(v_basket_total) then
     raise exception 'A checkout total must be between $0.50 and $999,999.99'
       using errcode = '22003';
@@ -119,7 +138,8 @@ begin
       c.currency,
       sum(c.price_cents)::int as subtotal,
       sum(c.shipping_cents)::int as shipping
-    from _claimed c
+    from jsonb_to_recordset(v_claimed_rows)
+      as c(id uuid, seller_id uuid, title text, price_cents int, currency text, shipping_cents int)
     group by c.seller_id, c.currency
   loop
     v_fee := round((v_group.subtotal + v_group.shipping) * 1000.0 / 10000.0);
@@ -137,7 +157,8 @@ begin
 
     insert into public.order_items (order_id, listing_id, title, price_cents, shipping_cents)
     select v_order_id, c.id, c.title, c.price_cents, c.shipping_cents
-    from _claimed c
+    from jsonb_to_recordset(v_claimed_rows)
+      as c(id uuid, seller_id uuid, title text, price_cents int, currency text, shipping_cents int)
     where c.seller_id = v_group.seller_id and c.currency = v_group.currency;
 
     insert into public.payments (order_id, amount_cents, currency, idempotency_key, status)
@@ -162,7 +183,8 @@ begin
       'total_cents', v_group.subtotal + v_group.shipping,
       'listing_ids', (
         select jsonb_agg(c.id)
-        from _claimed c
+        from jsonb_to_recordset(v_claimed_rows)
+          as c(id uuid, seller_id uuid, title text, price_cents int, currency text, shipping_cents int)
         where c.seller_id = v_group.seller_id and c.currency = v_group.currency
       )
     );
