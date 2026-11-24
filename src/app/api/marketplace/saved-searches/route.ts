@@ -1,13 +1,13 @@
 import { createSavedSearch } from "@/features/marketplace/saved-search-actions";
+import { requireSameOrigin } from "@/lib/http/origin";
 
 const headers = { "Cache-Control": "no-store" };
 
 /** A small mutation response keeps saving independent of a results-page RSC
  * refresh. Authentication, normalization, RLS and deduplication stay shared. */
 export async function POST(request: Request) {
-  const origin = request.headers.get("origin");
-  const allowed = [new URL(request.url).origin, process.env.NEXT_PUBLIC_SITE_URL].filter(Boolean);
-  if (!origin || !allowed.includes(origin)) return Response.json({ error: "Invalid origin." }, { status: 403, headers });
+  const refused = requireSameOrigin(request, headers);
+  if (refused) return refused;
   try {
     const text = await request.text();
     if (text.length > 8000) return Response.json({ error: "This search is too large to save." }, { status: 413, headers });

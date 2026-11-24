@@ -317,3 +317,28 @@ describe("a withdrawn public copy (20261124220000)", () => {
     blocked.revoked.clear();
   });
 });
+
+describe("page Cache-Control", () => {
+  it("lets a signed-out visitor's browser keep a browse page for Back, and nothing else", async () => {
+    const visitor = await proxy(new NextRequest("https://drvn.example/marketplace"));
+    expect(visitor.headers.get("Cache-Control")).toBe("private, no-cache");
+    const checkout = await proxy(new NextRequest("https://drvn.example/checkout"));
+    expect(checkout.headers.get("Cache-Control")).toBe("private, no-store");
+  });
+
+  it("keeps every page of a signed-in member out of every cache", async () => {
+    const member = await proxy(new NextRequest("https://drvn.example/marketplace", { headers: { cookie: "sb-project-auth-token.0=chunk" } }));
+    expect(member.headers.get("Cache-Control")).toBe("private, no-store");
+  });
+
+  it("keeps a response that sets a cookie, or redirects, out of every cache", async () => {
+    session.update.mockImplementationOnce(async () => {
+      const response = NextResponse.next();
+      response.cookies.set("drvn_age_checked", "1");
+      return response;
+    });
+    expect((await proxy(new NextRequest("https://drvn.example/marketplace"))).headers.get("Cache-Control")).toBe("private, no-store");
+    session.update.mockImplementationOnce(async () => NextResponse.redirect("https://drvn.example/login"));
+    expect((await proxy(new NextRequest("https://drvn.example/marketplace"))).headers.get("Cache-Control")).toBe("private, no-store");
+  });
+});

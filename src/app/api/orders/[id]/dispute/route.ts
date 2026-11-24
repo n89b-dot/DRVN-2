@@ -1,9 +1,11 @@
 import { revalidatePath } from "@/lib/revalidate";
 import { openDisputeCommand } from "@/features/commerce/dispute-command";
+import { requireSameOrigin } from "@/lib/http/origin";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const headers = { "Cache-Control": "no-store" };
-  if (request.headers.get("origin") !== new URL(process.env.NEXT_PUBLIC_SITE_URL || request.url).origin) return Response.json({ error: "Invalid origin." }, { status: 403, headers });
+  const refused = requireSameOrigin(request, headers);
+  if (refused) return refused;
   if (!request.headers.get("content-type")?.startsWith("application/json")) return Response.json({ error: "Expected JSON." }, { status: 415, headers });
   const { id } = await params;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return Response.json({ error: "Invalid order." }, { status: 400, headers });

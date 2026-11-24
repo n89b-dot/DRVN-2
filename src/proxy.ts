@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { imageRequestObjectKey, mediaGateStatus } from "@/lib/copyright/blocked-media";
 import { buildContentSecurityPolicy, reportingEndpointsHeader } from "@/lib/csp";
 import { isIndexable } from "@/lib/deployment";
+import { pageCacheControl } from "@/lib/http/page-cache";
 import { memberPhotoSourceRefused } from "@/lib/photo-urls";
 import { updateSession } from "@/lib/supabase/proxy";
 
@@ -29,7 +30,18 @@ export async function proxy(request: NextRequest) {
   const response = await updateSession(request);
   response.headers.set("Content-Security-Policy", csp);
   response.headers.set("Reporting-Endpoints", reportingEndpointsHeader());
-  response.headers.set("Cache-Control", "private, no-store");
+  // A signed-out visitor's browse pages may be kept by the browser for Back;
+  // everything else is kept by nothing (src/lib/http/page-cache.ts).
+  response.headers.set(
+    "Cache-Control",
+    pageCacheControl({
+      method: request.method,
+      pathname: request.nextUrl.pathname,
+      cookieNames: request.cookies.getAll().map((cookie) => cookie.name),
+      status: response.status,
+      setsCookie: response.headers.has("set-cookie"),
+    }),
+  );
   return response;
 }
 

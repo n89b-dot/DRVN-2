@@ -18,7 +18,8 @@ function request(bytes: Uint8Array, bucket = "avatars", prefix = ME, target = bu
   return new Request("http://localhost/api/media/public-photo", {
     method: "POST",
     body: form,
-    headers: target ? { "x-upload-bucket": target } : {},
+    // The route takes writes from our own pages only (src/lib/http/origin.ts).
+    headers: { origin: "http://localhost", ...(target ? { "x-upload-bucket": target } : {}) },
   });
 }
 async function gpsPhoto() {
@@ -95,6 +96,16 @@ describe("public photo trust boundary", () => {
     expect((await POST(request(Buffer.from("anything")))).status).toBe(401);
     expect(fixture.staged).not.toHaveBeenCalled();
   });
+
+  it("takes an upload from our own pages only, whoever is signed in", async () => {
+    const elsewhere = request(Buffer.from("anything"));
+    elsewhere.headers.set("origin", "https://evil.example");
+    expect((await POST(elsewhere)).status).toBe(403);
+    const unnamed = request(Buffer.from("anything"));
+    unnamed.headers.delete("origin");
+    expect((await POST(unnamed)).status).toBe(403);
+    expect(fixture.staged).not.toHaveBeenCalled();
+  });
 });
 
 /**
@@ -159,7 +170,7 @@ describe("N955: the photo route refuses what a serverless host would drop withou
   });
 
   it("refuses on the declared length alone, before reading a byte, and again if the body outgrows the limit", async () => {
-    const declared = new Request("http://localhost/api/media/public-photo", { method: "POST", body: "x", headers: { "content-length": String(4 * MB + 256 * 1024 + 1) } });
+    const declared = new Request("http://localhost/api/media/public-photo", { method: "POST", body: "x", headers: { origin: "http://localhost", "content-length": String(4 * MB + 256 * 1024 + 1) } });
     expect((await POST(declared)).status).toBe(413);
     // No honest length: the stream is counted as it is read.
     const oversized = request(await jpegOf(5 * MB), "listing-images");

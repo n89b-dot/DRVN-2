@@ -63,7 +63,7 @@ with any table in `public`. Details: "Applying without Docker or psql" below.
 
 | File | Applied to |
 |---|---|
-| `20261124210000_notice_listing_refs.sql` | not applied |
+| `20261124210000_notice_listing_refs.sql` | shared-dev 2026-11-24; staging 2026-11-24 |
 
 ## November 24 — a monthly ceiling on model spend; the import sweep as two statements
 
