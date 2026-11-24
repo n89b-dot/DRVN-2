@@ -37,6 +37,9 @@ export { SERVER_UPLOAD_MAX_BYTES };
 export const tooLargeReason = (name: string, maxMb: number) =>
   `${name} is too large to upload (over ${maxMb} MB). Save a smaller copy and try again: most phones can resize a photo from its share or edit menu, and a screenshot of it works too.`;
 
+/** Long edges tried, in turn, for a photo that is still too heavy at the lowest quality. */
+const SMALLER_EDGES = [1920, 1440, 1080] as const;
+
 /** A decoded photo ready to draw, the right way up, and how to let go of it. */
 type Drawable = { source: CanvasImageSource; width: number; height: number; release: () => void };
 
@@ -102,24 +105,34 @@ export async function normalizePublicPhoto(file: File, shrink: { maxEdge: number
       bitmap.release();
       return file;
     }
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      bitmap.release();
-      return file;
-    }
-    ctx.drawImage(bitmap.source, 0, 0, canvas.width, canvas.height);
-    bitmap.release();
     // q0.85 puts a 2560px phone photo at about 1–2.5 MB. A very detailed one
     // can come out larger, so step the quality down until it fits the
-    // target, leaving headroom under SERVER_UPLOAD_MAX_BYTES (#118).
+    // target, leaving headroom under SERVER_UPLOAD_MAX_BYTES (#118). A photo
+    // that is still over at the lowest quality (dense foliage, gravel, a
+    // noisy night shot) is drawn again with a shorter long edge and tried
+    // once more, down to 1080px: it used to be refused as too large with
+    // advice to resize it by hand.
+    const firstEdge = Math.round(Math.max(bitmap.width, bitmap.height) * scale);
+    const edges = [firstEdge, ...SMALLER_EDGES.filter((edge) => edge < firstEdge)];
     let blob: Blob | null = null;
-    for (const quality of [0.85, 0.75, 0.65]) {
-      blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    for (const edge of edges) {
+      const edgeScale = edge / Math.max(bitmap.width, bitmap.height);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(bitmap.width * edgeScale);
+      canvas.height = Math.round(bitmap.height * edgeScale);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        bitmap.release();
+        return file;
+      }
+      ctx.drawImage(bitmap.source, 0, 0, canvas.width, canvas.height);
+      for (const quality of [0.85, 0.75, 0.65]) {
+        blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+        if (!blob || blob.size <= SHRINK_TARGET_BYTES) break;
+      }
       if (!blob || blob.size <= SHRINK_TARGET_BYTES) break;
     }
+    bitmap.release();
     if (!blob || (!heic && blob.size >= file.size)) return file;
     const name = file.name.replace(/\.[a-z0-9]+$/i, "") + ".jpg";
     return new File([blob], name, { type: "image/jpeg" });
@@ -164,6 +177,16 @@ export function uploadFailureMessage(failed: UploadFailure[]): string {
   return `${reasons.length} photos weren't added. ${reasons.join(" ")}`;
 }
 
+/**
+ * How many photos are on their way to the server at once. Photos are shrunk
+ * one at a time (decoding a camera photo takes tens of megabytes, and a phone
+ * has little to spare), but the wait is the upload itself, so up to this many
+ * are sent side by side. Eight photos used to go strictly one after another.
+ */
+export const UPLOADS_IN_FLIGHT = 3;
+
+type UploadOutcome = { uploaded: UploadedImage } | { failed: UploadFailure };
+
 export async function uploadImages({
   files,
   bucket,
@@ -181,30 +204,31 @@ export async function uploadImages({
   /** Run normalizePublicPhoto first (public photography only — never evidence). */
   normalize?: boolean;
 }): Promise<UploadImagesResult> {
-  const uploaded: UploadedImage[] = [];
-  const failed: UploadFailure[] = [];
+  const serverNormalized = SERVER_NORMALIZED_BUCKETS.includes(bucket);
 
-  for (let file of Array.from(files)) {
+  // One client for the batch, loaded on first use: several photos are sent
+  // side by side and each would otherwise load it for itself.
+  let client: Promise<ReturnType<typeof import("@/lib/supabase/client").createClient>> | null = null;
+  const browserClient = () => (client ??= import("@/lib/supabase/client").then(({ createClient }) => createClient()));
+
+  /** Checks and shrinks one photo, ready to send. One at a time. */
+  async function prepare(original: File): Promise<{ file: File } | { failed: UploadFailure }> {
+    let file = original;
     // The picker filters via accept="image/*", but drag-and-drop hands us
     // anything — without this a dropped PDF reaches the bucket's mime
     // allowlist and comes back as a raw storage error with a Retry that can
     // never succeed.
     if (!file.type.startsWith("image/") && !isHeicFile(file)) {
-      failed.push({ file, reason: `Photos only — ${file.name} isn't an image.`, retryable: false });
-      continue;
+      return { failed: { file, reason: `Photos only — ${file.name} isn't an image.`, retryable: false } };
     }
-    const serverNormalized = SERVER_NORMALIZED_BUCKETS.includes(bucket);
     if (isHeicFile(file)) {
       // Evidence keeps its original bytes, and its bucket takes no HEIC.
       if (!serverNormalized) {
-        failed.push({ file, reason: HEIC_EVIDENCE_REASON(file.name), retryable: false });
-        continue;
+        return { failed: { file, reason: HEIC_EVIDENCE_REASON(file.name), retryable: false } };
       }
-      const original = file;
       file = await normalizePublicPhoto(file, shrinkFor(bucket));
       if (isHeicFile(file)) {
-        failed.push({ file: original, reason: HEIC_PUBLIC_REASON(original.name), retryable: false });
-        continue;
+        return { failed: { file: original, reason: HEIC_PUBLIC_REASON(original.name), retryable: false } };
       }
     } else if (normalize || bucket === "avatars") {
       // A profile photo is always shrunk, whatever the caller asked (N1074):
@@ -214,9 +238,13 @@ export async function uploadImages({
     // Through the photo route, never more than the host will accept (#118).
     const limit = serverNormalized ? Math.min(maxBytes, SERVER_UPLOAD_MAX_BYTES) : maxBytes;
     if (file.size > limit) {
-      failed.push({ file, reason: tooLargeReason(file.name, Math.round(limit / (1024 * 1024))), retryable: false });
-      continue;
+      return { failed: { file, reason: tooLargeReason(file.name, Math.round(limit / (1024 * 1024))), retryable: false } };
     }
+    return { file };
+  }
+
+  /** Sends one prepared photo. Never rejects: a failure is that photo's own. */
+  async function send(file: File): Promise<UploadOutcome> {
     if (serverNormalized) {
       const body = new FormData(); body.set("file", file); body.set("bucket", bucket); body.set("pathPrefix", pathPrefix);
       let response: Response;
@@ -229,16 +257,13 @@ export async function uploadImages({
           headers: { "x-upload-bucket": bucket },
         });
       } catch {
-        failed.push({ file, ...publicPhotoFailureReason(file.name, 0, undefined, bucket) });
-        continue;
+        return { failed: { file, ...publicPhotoFailureReason(file.name, 0, undefined, bucket) } };
       }
       const result = (await response.json().catch(() => null)) as { url?: string; path?: string; error?: string } | null;
       if (!response.ok || !result?.url || !result.path) {
-        failed.push({ file, ...publicPhotoFailureReason(file.name, response.ok ? 0 : response.status, result?.error, bucket) });
-        continue;
+        return { failed: { file, ...publicPhotoFailureReason(file.name, response.ok ? 0 : response.status, result?.error, bucket) } };
       }
-      uploaded.push({ url: result.url, path: result.path, file });
-      continue;
+      return { uploaded: { url: result.url, path: result.path, file } };
     }
     // Only private buckets that keep original bytes (evidence) upload straight
     // from the browser. The client is
@@ -248,8 +273,7 @@ export async function uploadImages({
     // this file's retryable failure, never a rejection that loses the batch
     // (R2-10) — the same contract as the public path above.
     try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
+      const supabase = await browserClient();
       // Storage only accepts a plain `<uuid>.<ext>` file name here.
       const named = file.name.includes(".") ? file.name.split(".").pop()! : "";
       const ext = /^[A-Za-z0-9]{1,10}$/.test(named) ? named.toLowerCase() : "jpg";
@@ -258,8 +282,7 @@ export async function uploadImages({
         .from(bucket)
         .upload(path, file, { contentType: file.type });
       if (error) {
-        failed.push({ file, ...directUploadFailureReason(file.name, error.message) });
-        continue;
+        return { failed: { file, ...directUploadFailureReason(file.name, error.message) } };
       }
       const {
         data: { publicUrl },
@@ -267,12 +290,39 @@ export async function uploadImages({
       // Ledger the upload for GC (0029) before any DB row exists — if the
       // caller's persist step fails, the 48h sweep reclaims the object.
       void recordStagedUpload(bucket, path, publicUrl).catch(() => {});
-      uploaded.push({ url: publicUrl, path, file });
+      return { uploaded: { url: publicUrl, path, file } };
     } catch {
-      failed.push({ file, reason: `${file.name} failed to upload — check your connection and retry.`, retryable: true });
+      return { failed: { file, reason: `${file.name} failed to upload — check your connection and retry.`, retryable: true } };
     }
   }
 
+  // Results keep the order the photos were chosen in, whichever finishes
+  // first: a gallery's order is the order they are returned in.
+  const list = Array.from(files);
+  const outcomes: (UploadOutcome | undefined)[] = new Array(list.length);
+  const inFlight = new Set<Promise<void>>();
+  for (const [index, original] of list.entries()) {
+    const prepared = await prepare(original);
+    if ("failed" in prepared) {
+      outcomes[index] = prepared;
+      continue;
+    }
+    const task: Promise<void> = send(prepared.file).then((outcome) => {
+      outcomes[index] = outcome;
+      inFlight.delete(task);
+    });
+    inFlight.add(task);
+    if (inFlight.size >= UPLOADS_IN_FLIGHT) await Promise.race(inFlight);
+  }
+  await Promise.all(inFlight);
+
+  const uploaded: UploadedImage[] = [];
+  const failed: UploadFailure[] = [];
+  for (const outcome of outcomes) {
+    if (!outcome) continue;
+    if ("uploaded" in outcome) uploaded.push(outcome.uploaded);
+    else failed.push(outcome.failed);
+  }
   return { uploaded, failed };
 }
 

@@ -335,3 +335,28 @@ describe("photos stay under what a serverless host accepts (N955, report five #1
     expect(sent.size).toBeLessThanOrEqual(3_500_000);
   });
 });
+
+describe("uploadImages — several photos at once", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sends up to three at a time and returns them in the order chosen, with a failure kept in its place", async () => {
+    let inFlight = 0;
+    let most = 0;
+    // The later a photo is in the list, the sooner its upload answers, so
+    // arrival order is the reverse of the order chosen.
+    const delays: Record<string, number> = { "1.png": 50, "2.png": 40, "3.png": 30, "4.png": 20, "5.png": 10, "6.png": 5 };
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init: { body: FormData }) => {
+      const name = (init.body.get("file") as File).name;
+      inFlight += 1;
+      most = Math.max(most, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, delays[name]));
+      inFlight -= 1;
+      if (name === "4.png") return new Response(null, { status: 413 });
+      return Response.json({ url: `https://cdn.test/${name}`, path: `u1/${name}` });
+    }));
+    const result = await uploadImages({ files: Object.keys(delays).map(file), bucket: "car-images", pathPrefix: "u1" });
+    expect(most).toBe(3);
+    expect(result.uploaded.map((u) => u.file.name)).toEqual(["1.png", "2.png", "3.png", "5.png", "6.png"]);
+    expect(result.failed.map((f) => f.file.name)).toEqual(["4.png"]);
+  });
+});
