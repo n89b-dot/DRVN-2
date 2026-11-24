@@ -55,7 +55,7 @@ with any table in `public`. Details: "Applying without Docker or psql" below.
 
 | File | Applied to |
 |---|---|
-| `20261124180000_refund_and_checkout_lock_order.sql` | not applied |
+| `20261124180000_refund_and_checkout_lock_order.sql` | shared-dev 2026-11-24; staging 2026-11-24 |
 
 ## November 11 — an order email the provider may have taken is not sent again after its key expires (Codex's final review)
 
