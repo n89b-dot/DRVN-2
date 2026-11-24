@@ -20,6 +20,8 @@ declare
   v_recovery_id uuid;
   v_adjustment_id uuid;
   v_known_order uuid;
+  -- 20261124180000
+  v_lock_order uuid;
 begin
   if p_event_id is null or length(p_event_id) < 3
      or p_refund_reference is null or length(p_refund_reference) < 3
@@ -71,6 +73,20 @@ begin
       'operation_id', v_op.id,
       'replayed', true
     );
+  end if;
+
+  -- 20261124180000: order first, then the operation, as every other refund
+  -- function does. The operation is read unlocked only to learn its order;
+  -- where there is no operation yet, the order the provider named (if it is
+  -- one of ours) is the order the branch below locks anyway.
+  if p_operation_id is not null then
+    select order_id into v_lock_order from public.refund_operations where id = p_operation_id;
+  else
+    select order_id into v_lock_order from public.refund_operations where refund_reference = p_refund_reference;
+  end if;
+  v_lock_order := coalesce(v_lock_order, v_known_order);
+  if v_lock_order is not null then
+    perform 1 from public.orders where id = v_lock_order for update;
   end if;
 
   if p_operation_id is not null then

@@ -203,3 +203,4 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #258 | 2026-11-11 | Deletion scrub: a listing title containing ' · ' no longer survives in saved-search notices | waived | — | waived (ruling, 10 Nov) |
 | #259 | 2026-11-11 | Order emails: never resend a possibly-accepted email past the provider's 24-hour key window | waived | — | waived (ruling, 10 Nov) |
 | #261 | 2026-11-12 | Fix the dev-server reload loop after a restart | waived | — | waived (ruling, 10 Nov) |
+| #262 | 2026-11-24 | CI: date-based checks run nightly in the app's own CI, and a cleanup no longer fails its own pull request | waived | — | waived (ruling, 10 Nov) |
