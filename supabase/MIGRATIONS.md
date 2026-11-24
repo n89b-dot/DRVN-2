@@ -55,7 +55,7 @@ with any table in `public`. Details: "Applying without Docker or psql" below.
 
 | File | Applied to |
 |---|---|
-| `20261124200000_ai_monthly_spend_cap_and_import_sweep.sql` | not applied |
+| `20261124200000_ai_monthly_spend_cap_and_import_sweep.sql` | shared-dev 2026-11-24; staging 2026-11-24 |
 
 ## November 24 — the suspended-members list leaves the public API; unused table privileges are removed
 
