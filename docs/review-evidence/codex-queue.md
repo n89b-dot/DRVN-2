@@ -206,4 +206,9 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #262 | 2026-11-24 | CI: date-based checks run nightly in the app's own CI, and a cleanup no longer fails its own pull request | waived | — | waived (ruling, 10 Nov) |
 | #263 | 2026-11-24 | Refunds and checkout take their database locks in one order | waived | — | waived (ruling, 10 Nov) |
 | #264 | 2026-11-24 | The suspended-members list leaves the public API; unused table privileges are removed | waived | — | waived (ruling, 10 Nov) |
+| #265 | 2026-11-24 | Signed-out browse pages can be kept for Back; photos upload three at a time | waived | — | waived (ruling, 10 Nov) |
+| #266 | 2026-11-24 | Part-number search reads only parts for sale; one origin check for cookie-authenticated writes | waived | — | waived (ruling, 10 Nov) |
+| #267 | 2026-11-24 | Batch: #265 #266 (back-button caching and uploads; commerce fixes) | waived | — | waived (ruling, 10 Nov) |
+| #269 | 2026-11-24 | A notice and a digest record which listings they name, so a leaver's titles are removed by id | waived | — | waived (ruling, 10 Nov) |
 | #270 | 2026-11-24 | Marketplace cards read one cover photo a listing, not every photo | waived | — | waived (ruling, 10 Nov) |
+| #271 | 2026-11-24 | Batch: #267 #268 #269 (commerce fixes, back-button caching and uploads; importer and monthly AI spend cap; notices record their listings) | waived | — | waived (ruling, 10 Nov) |

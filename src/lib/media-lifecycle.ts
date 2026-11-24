@@ -1,3 +1,4 @@
+import { schedulePublicPhotoSync } from "@/lib/media-public-copies";
 import { after } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -203,6 +204,10 @@ export async function finalizeMediaUrls(supabase: ServerClient, urls: string[]):
     .in("path", paths)
     .is("consumed_at", null);
   if (error) reportError("[media-gc] finalize failed", { paths: paths.length, error });
+  // What was just saved may now be shown publicly (or have stopped being):
+  // bring this member's public copies in line after the response. Every
+  // path is in its owner's own folder, so the first segment is the member.
+  schedulePublicPhotoSync(paths[0].split("/")[0]);
 }
 
 /**
@@ -367,6 +372,8 @@ export function scheduleMediaCleanup(ownerId: string): void {
         reportError("[media-cleanup] immediate run failed", error);
       }
     });
+    // A delete also ends whatever was shown publicly: withdraw its copies now.
+    schedulePublicPhotoSync(ownerId);
   } catch {
     // Not inside a request: the scheduled media job drains the queue.
   }

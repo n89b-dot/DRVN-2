@@ -14,7 +14,7 @@ select cron.schedule('drvn-ledger-reconciliation', '50 5 * * *', 'select public.
 select cron.schedule('drvn-listing-edit-sweep', '45 3 * * *', 'select public.prune_listing_edit_requests();');
 select cron.schedule('drvn-listing-import-sweep', '37 3 * * *', 'select public.invoke_remediation_worker(''listing-imports'');');
 select cron.schedule('drvn-marketplace-counts', '30 seconds', 'select public.refresh_marketplace_facet_counts();');
-select cron.schedule('drvn-media-gc', '17 3 * * *', 'select public.invoke_remediation_worker(''media-gc'');');
+select cron.schedule('drvn-media-gc', '*/10 * * * *', 'select public.invoke_remediation_worker(''media-gc'');');
 select cron.schedule('drvn-prune-rate-limits', '15 3 * * *', 'select public.prune_rate_limits();');
 select cron.schedule('drvn-release-reservations', '*/5 * * * *', 'select public.release_expired_reservations();');
 select cron.schedule('drvn-saved-search-digests', '41 * * * *', 'select public.invoke_remediation_worker(''saved-search-digests'');');

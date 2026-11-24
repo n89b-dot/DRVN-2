@@ -40,8 +40,17 @@ export const BLOCKED_MEDIA_TTL_MS = 15_000;
 /** How many objects' answers an instance remembers; the oldest go first. */
 export const BLOCKED_MEDIA_REMEMBERED = 5_000;
 
-const answers = new Map<string, { blocked: boolean; at: number }>();
-const asking = new Map<string, Promise<boolean | null>>();
+/**
+ * What the database says about an object (public.media_gate_status,
+ * 20261124220000): under a copyright takedown; a public copy that was
+ * withdrawn (its car hidden, its listing archived), refused for the day a
+ * resized copy of it can last; or neither. One call answers both, so the
+ * gate still makes one lookup an object.
+ */
+export type MediaGateStatus = "copyright" | "revoked" | "ok";
+
+const answers = new Map<string, { status: MediaGateStatus; at: number }>();
+const asking = new Map<string, Promise<MediaGateStatus | null>>();
 
 let client: ReturnType<typeof createClient<Database>> | null = null;
 function admin() {
@@ -55,10 +64,10 @@ function admin() {
   return client;
 }
 
-async function lookUp(key: string): Promise<boolean> {
-  const { data, error } = await admin().from("copyright_blocked_media").select("object_key").eq("object_key", key).maybeSingle();
+async function lookUp(key: string): Promise<MediaGateStatus> {
+  const { data, error } = await admin().rpc("media_gate_status", { p_key: key });
   if (error) throw error;
-  return data !== null;
+  return data === "copyright" || data === "revoked" ? data : "ok";
 }
 
 /**
@@ -67,29 +76,39 @@ async function lookUp(key: string): Promise<boolean> {
  * no earlier answer for it.
  */
 export async function mediaIsBlocked(key: string, now: number = Date.now()): Promise<boolean | null> {
+  const status = await mediaGateStatus(key, now);
+  return status === null ? null : status === "copyright";
+}
+
+/**
+ * The gate's answer for this storage object ('<bucket>/<path>'), or null
+ * when the database could not be asked and this instance has no earlier
+ * answer for it.
+ */
+export async function mediaGateStatus(key: string, now: number = Date.now()): Promise<MediaGateStatus | null> {
   const known = answers.get(key);
-  if (known && now - known.at < BLOCKED_MEDIA_TTL_MS) return known.blocked;
+  if (known && now - known.at < BLOCKED_MEDIA_TTL_MS) return known.status;
   let ask = asking.get(key);
   if (!ask) {
     ask = lookUp(key)
-      .then((blocked) => {
+      .then((status) => {
         // Aged from the caller's clock, the same one the check above reads: a
         // lookup that resolved late must not make the answer look fresher
         // than it is (and the tests' clock is the caller's).
         answers.delete(key);
-        answers.set(key, { blocked, at: now });
+        answers.set(key, { status, at: now });
         if (answers.size > BLOCKED_MEDIA_REMEMBERED) {
           for (const oldest of answers.keys()) {
             answers.delete(oldest);
             if (answers.size <= BLOCKED_MEDIA_REMEMBERED) break;
           }
         }
-        return blocked;
+        return status;
       })
       .catch((error) => {
         reportError("[copyright] blocked media lookup unavailable", { error });
         // The last answer stands; it is asked again on the next request.
-        return answers.get(key)?.blocked ?? null;
+        return answers.get(key)?.status ?? null;
       })
       .finally(() => {
         asking.delete(key);

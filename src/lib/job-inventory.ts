@@ -31,7 +31,7 @@ export const JOB_INVENTORY: readonly ScheduledJob[] = [
   { job: "drvn-listing-edit-sweep", schedule: "45 3 * * *", families: [], budgetMinutes: 26 * 60 },
   { job: "drvn-listing-import-sweep", schedule: "37 3 * * *", families: ["listingImports"], budgetMinutes: 26 * 60 },
   { job: "drvn-marketplace-counts", schedule: "30 seconds", families: [], budgetMinutes: 10 },
-  { job: "drvn-media-gc", schedule: "17 3 * * *", families: ["media"], budgetMinutes: 26 * 60 },
+  { job: "drvn-media-gc", schedule: "*/10 * * * *", families: ["media"], budgetMinutes: 45 },
   { job: "drvn-prune-rate-limits", schedule: "15 3 * * *", families: [], budgetMinutes: 26 * 60 },
   { job: "drvn-release-reservations", schedule: "*/5 * * * *", families: [], budgetMinutes: 30 },
   { job: "drvn-saved-search-digests", schedule: "41 * * * *", families: ["savedSearchDigests"], budgetMinutes: 180 },

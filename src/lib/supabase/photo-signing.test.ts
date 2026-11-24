@@ -597,3 +597,29 @@ describe("N1051: a signer is given its clock and its client, and keeps its own m
   });
 });
 
+
+describe("a published photo's public copy (20261124220000)", () => {
+  const url = canonical("car-images", "shown.webp");
+  const copy = `${O}/storage/v1/object/public/public-car-images/${ME}/shown.webp`;
+  const reads = () => mocks.rpc.mock.calls.filter(([fn]) => fn === "photo_signatures_read").length;
+
+  it("is handed out in place of a signed link, without asking Storage to sign, and asked about again after a minute", async () => {
+    const quiet = mocks.rpc.getMockImplementation()!;
+    mocks.rpc.mockImplementation(async (fn: string, args: { p_signed?: unknown[] }) =>
+      fn === "photo_signatures_read" ? { data: [{ bucket: "car-images", path: `${ME}/shown.webp`, signed_url: copy }], error: null } : quiet(fn, args));
+    expect((await signedPhotoUrls([url])).get(url)).toBe(copy);
+    expect(mocks.sign).not.toHaveBeenCalled();
+    expect(reads()).toBe(1);
+
+    // Inside the minute it comes from this process's memory.
+    expect((await signedPhotoUrls([url], START + 30_000)).get(url)).toBe(copy);
+    expect(reads()).toBe(1);
+
+    // After it the database is asked again. The copy was withdrawn (the car
+    // was hidden), so the photo is signed, as it was before it had a copy.
+    mocks.rpc.mockImplementation(quiet);
+    const after = await signedPhotoUrls([url], START + 61_000);
+    expect(reads()).toBe(2);
+    expect(after.get(url)).toBe(signedFor("car-images", `${ME}/shown.webp`));
+  });
+});

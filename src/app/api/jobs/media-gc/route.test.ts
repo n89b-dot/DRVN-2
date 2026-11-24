@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   processMediaCleanupQueue: vi.fn(),
   removeMediaObject: vi.fn(),
+  syncPublicPhotoCopies: vi.fn(),
   staged: [] as { id: string; owner_id: string; bucket: string; path: string }[],
 }));
 
@@ -22,6 +23,7 @@ vi.mock("@/lib/media-lifecycle", () => ({
   processMediaCleanupQueue: mocks.processMediaCleanupQueue,
   removeMediaObject: mocks.removeMediaObject,
 }));
+vi.mock("@/lib/media-public-copies", () => ({ syncPublicPhotoCopies: mocks.syncPublicPhotoCopies }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: () => {
@@ -45,6 +47,8 @@ beforeEach(() => {
   vi.useFakeTimers({ now: START });
   mocks.processMediaCleanupQueue.mockReset();
   mocks.removeMediaObject.mockReset();
+  mocks.syncPublicPhotoCopies.mockReset();
+  mocks.syncPublicPhotoCopies.mockResolvedValue({ retired: 0, removed: 0, copied: 0, orphans: 0, unavailable: 0, failed: 0 });
   mocks.staged = [];
 });
 afterEach(() => vi.useRealTimers());
@@ -77,5 +81,32 @@ describe("media-gc time budget", () => {
     expect(body).toMatchObject({ removed: 3, outOfTime: true });
     // Everything finished inside maxDuration (300 s).
     expect(Date.now() - START).toBeLessThanOrEqual(300_000);
+  });
+});
+
+describe("public copies of published photos (20261124220000)", () => {
+  it("brings them in line first, for everyone, inside the first minute, and reports what it did", async () => {
+    mocks.processMediaCleanupQueue.mockResolvedValue(emptyRun);
+    // A photo whose bytes are missing is noted, and is not a failed run.
+    mocks.syncPublicPhotoCopies.mockResolvedValue({ retired: 2, removed: 2, copied: 5, orphans: 0, unavailable: 3, failed: 0 });
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    expect((await response.json()).copies).toEqual({ retired: 2, removed: 2, copied: 5, orphans: 0, unavailable: 3, failed: 0 });
+    // No member named: the whole-site run. Its deadline is a minute after the start.
+    expect(mocks.syncPublicPhotoCopies).toHaveBeenCalledWith(expect.objectContaining({ deadline: START + 60_000 }));
+    expect(mocks.syncPublicPhotoCopies.mock.calls[0][0]).not.toHaveProperty("ownerId");
+    expect(mocks.syncPublicPhotoCopies.mock.invocationCallOrder[0]).toBeLessThan(mocks.processMediaCleanupQueue.mock.invocationCallOrder[0]);
+  });
+
+  it("fails the run when a copy step failed or the copies could not be reached, and still does the rest of its work", async () => {
+    mocks.processMediaCleanupQueue.mockResolvedValue(emptyRun);
+    mocks.syncPublicPhotoCopies.mockResolvedValue({ retired: 0, removed: 0, copied: 0, orphans: 0, unavailable: 0, failed: 1 });
+    expect((await POST(request())).status).toBe(503);
+
+    mocks.syncPublicPhotoCopies.mockRejectedValue(new Error("Public photo copies could not be retired"));
+    const unreachable = await POST(request());
+    expect(unreachable.status).toBe(503);
+    expect((await unreachable.json()).copies).toEqual({ error: true });
+    expect(mocks.processMediaCleanupQueue).toHaveBeenCalled();
   });
 });

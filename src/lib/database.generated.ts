@@ -4929,6 +4929,33 @@ export type Database = {
           },
         ]
       }
+      public_photo_copies: {
+        Row: {
+          bucket: string
+          created_at: string
+          owner_id: string
+          path: string
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          owner_id: string
+          path: string
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          owner_id?: string
+          path?: string
+          state?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       purchase_attempts: {
         Row: {
           buyer_id: string | null
@@ -5656,6 +5683,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      revoked_photo_copies: {
+        Row: {
+          expires_at: string
+          object_key: string
+          revoked_at: string
+        }
+        Insert: {
+          expires_at: string
+          object_key: string
+          revoked_at?: string
+        }
+        Update: {
+          expires_at?: string
+          object_key?: string
+          revoked_at?: string
+        }
+        Relationships: []
       }
       saved_search_email_cursors: {
         Row: {
@@ -8430,6 +8475,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      media_gate_status: { Args: { p_key: string }; Returns: string }
       media_object_referenced: {
         Args: { p_bucket: string; p_path: string }
         Returns: boolean
@@ -8763,6 +8809,36 @@ export type Database = {
       profile_shares_deal_with_me: { Args: { p_id: string }; Returns: boolean }
       prune_listing_edit_requests: { Args: never; Returns: number }
       prune_rate_limits: { Args: never; Returns: undefined }
+      public_photo_copies_claim: {
+        Args: { p_limit?: number; p_owner?: string }
+        Returns: {
+          bucket: string
+          path: string
+        }[]
+      }
+      public_photo_copies_retire: {
+        Args: { p_owner?: string }
+        Returns: number
+      }
+      public_photo_copy_confirm: {
+        Args: { p_bucket: string; p_path: string }
+        Returns: string
+      }
+      public_photo_copy_orphans: {
+        Args: { p_limit?: number }
+        Returns: {
+          bucket: string
+          path: string
+        }[]
+      }
+      public_photo_copy_removed: {
+        Args: { p_bucket: string; p_path: string }
+        Returns: boolean
+      }
+      public_photo_copy_unavailable: {
+        Args: { p_bucket: string; p_path: string }
+        Returns: undefined
+      }
       purchase_begin: {
         Args: {
           p_buyer_id: string

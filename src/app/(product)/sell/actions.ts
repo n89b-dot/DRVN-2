@@ -13,6 +13,7 @@ import { integratedShippingEnabled } from "@/lib/shipping/provider";
 import { getCategory, isValidListingCategory } from "@/lib/marketplace/taxonomy";
 import { sellerCanPublish } from "@/lib/payments/connect";
 import { deleteMediaIfUnreferenced, finalizeMediaUrls, scheduleMediaCleanup } from "@/lib/media-lifecycle";
+import { schedulePublicPhotoSync } from "@/lib/media-public-copies";
 import { keepValidGalleryImages } from "@/lib/media-url";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
@@ -797,7 +798,7 @@ export async function withdrawListing(
   _prev: ListingActionState,
   formData: FormData
 ): Promise<ListingActionState> {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "Missing listing." };
   const { data, error } = await supabase.rpc("withdraw_listing", { p_listing: id });
@@ -808,6 +809,9 @@ export async function withdrawListing(
     return { error: "Couldn't withdraw it. Nothing changed — try again." };
   }
   const ended = Number((data as { offers_ended?: number } | null)?.offers_ended ?? 0);
+  // An archived listing's photos are no longer shown publicly: withdraw
+  // their public copies now (src/lib/media-public-copies.ts).
+  schedulePublicPhotoSync(user.id);
   revalidatePath("/sell");
   revalidatePath("/listings");
   revalidatePath(`/listings/${id}`);

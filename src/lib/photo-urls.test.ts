@@ -453,3 +453,28 @@ describe("an RPC's body path is walked as a body (N940, review of #210)", () => 
     expect(signedAt("rpc/car_update_page", [{ id: "p", body: [{ type: "text", x: { type: "images", urls: [theirs] } }] }])).toEqual([]);
   });
 });
+
+describe("a published photo's public copy (20261124220000)", () => {
+  const copy = (bucket: string, file = "a.webp") => `${O}/storage/v1/object/public/public-${bucket}/${ME}/${file}`;
+
+  it("turns back into the member photo's own address before the database sees it, alone or in a body", () => {
+    for (const bucket of ["car-images", "listing-images", "activity-images"]) {
+      expect(canonicalPhotoUrl(copy(bucket), O)).toBe(canonical(bucket));
+    }
+    const body = JSON.stringify({ urls: [copy("listing-images"), signed("listing-images", "b.webp")], cover: copy("car-images", "c.webp") });
+    expect(canonicalizePhotoUrlsInText(body, O)).toBe(
+      JSON.stringify({ urls: [canonical("listing-images"), canonical("listing-images", "b.webp")], cover: canonical("car-images", "c.webp") }),
+    );
+  });
+
+  it("is only that for our own three buckets, on our own origin, with a path that can be named", () => {
+    expect(canonicalPhotoUrl(copy("avatars"), O)).toBe(copy("avatars"));
+    expect(canonicalPhotoUrl(copy("car-images").replace(O, "https://evil.example"), O)).toBe(copy("car-images").replace(O, "https://evil.example"));
+    expect(canonicalPhotoUrl(`${O}/storage/v1/object/public/public-car-images/${ME}/../x.webp`, O)).toBe(`${O}/storage/v1/object/public/public-car-images/${ME}/../x.webp`);
+  });
+
+  it("is not a member photo's bare address: the optimiser gate does not refuse it, and no signed link is looked for", () => {
+    expect(memberPhotoSourceRefused(copy("car-images"), Date.now())).toBe(false);
+    expect(canonicalPhotoUrlsInText(JSON.stringify({ url: copy("car-images") }), O)).toEqual([]);
+  });
+});

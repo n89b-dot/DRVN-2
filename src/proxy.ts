@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 
-import { imageRequestObjectKey, mediaIsBlocked } from "@/lib/copyright/blocked-media";
+import { imageRequestObjectKey, mediaGateStatus } from "@/lib/copyright/blocked-media";
 import { buildContentSecurityPolicy, reportingEndpointsHeader } from "@/lib/csp";
 import { isIndexable } from "@/lib/deployment";
 import { pageCacheControl } from "@/lib/http/page-cache";
@@ -60,19 +60,28 @@ async function imageGate(request: NextRequest) {
   // A copyright takedown first (R69-dmca): its 451 says why, whatever the
   // spelling of the link.
   const key = imageRequestObjectKey(request.nextUrl);
-  const blocked = key ? await mediaIsBlocked(key) : false;
+  const status = key ? await mediaGateStatus(key) : "ok";
   // Unknown (the database could not be asked, and this instance has no
   // earlier answer for this photo): refuse it for now rather than serve one
   // a takedown may have removed (N718).
-  if (blocked === null) {
+  if (status === null) {
     return new NextResponse("Photos are briefly unavailable. Try again in a moment.", {
       status: 503,
       headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8", "Retry-After": "15" },
     });
   }
-  if (blocked) {
+  if (status === "copyright") {
     return new NextResponse("This image was removed after a copyright notice.", {
       status: 451,
+      headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+  // A public copy that was withdrawn (20261124220000): its car was hidden or
+  // its listing archived. The copy itself is deleted; this refuses the
+  // resized copies of it the optimiser may still hold.
+  if (status === "revoked") {
+    return new NextResponse("Not found", {
+      status: 404,
       headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" },
     });
   }

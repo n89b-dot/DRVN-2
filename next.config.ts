@@ -67,7 +67,12 @@ const nextConfig: NextConfig = {
     // token has expired before the cache can answer (src/proxy.ts, #178
     // review). The AVIF re-encode (0.6–1 s per image) happens about once an
     // hour per photo and width.
-    minimumCacheTTL: 3600,
+    // 20261124220000: a day. A published photo is served from its public
+    // copy, whose address does not change, so its resized variants are kept
+    // for a day and encoded once, not once an hour. A signed link is not
+    // kept past its life by this: the proxy refuses one whose token has run
+    // out, and a withdrawn copy is refused there too (media_gate_status).
+    minimumCacheTTL: 86400,
     // Uploads are capped at 2560px (src/lib/media-upload.ts), so a 3840px
     // variant is an upscale nobody needs — and the slowest encode there is.
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 2560],

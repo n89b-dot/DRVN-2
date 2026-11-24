@@ -1,5 +1,6 @@
 import { trackedWorker } from "@/lib/tracked-worker";
 import { ensureMediaStorageOrigin, processMediaCleanupQueue, removeMediaObject } from "@/lib/media-lifecycle";
+import { syncPublicPhotoCopies, type PublicCopySync } from "@/lib/media-public-copies";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { flushMonitoring, reportError } from "@/lib/monitoring";
 import { cronAuthorized } from "@/lib/cron-auth";
@@ -35,6 +36,10 @@ const BATCH = 200;
 // still room for it: the cleanup queue until 120 s, the staged sweep until
 // 230 s, leaving the rest for calls in flight and the response.
 const CLEANUP_DEADLINE_MS = 120_000;
+// Public copies of published photos (20261124220000) go first and get the
+// first minute: withdrawing a hidden photo's copy is the part with a clock on
+// it, and it is why this job runs every ten minutes.
+const COPIES_DEADLINE_MS = 60_000;
 const SWEEP_DEADLINE_MS = 230_000;
 
 async function run(request: Request) {
@@ -52,6 +57,14 @@ async function run(request: Request) {
     const cutoff = new Date(Date.now() - STALE_AFTER_MS).toISOString();
 
     await ensureMediaStorageOrigin(admin);
+    // A failure here is reported and counted, and the rest of the run goes
+    // on: the cleanup below must not wait on it.
+    let copies: PublicCopySync | { error: true } = { error: true };
+    try {
+      copies = await syncPublicPhotoCopies({ admin, limit: BATCH, deadline: started + COPIES_DEADLINE_MS });
+    } catch (error) {
+      reportError("[media-gc] public photo copies failed", error);
+    }
     // Drain the deleted-content queue in batches until its deadline, so a
     // backlog still clears within the day the privacy page promises. Stop
     // early when a batch makes no progress (only busy or failing rows left).
@@ -112,9 +125,9 @@ async function run(request: Request) {
       }
     }
 
-    const failing = skipped + cleanup.failed;
+    const failing = skipped + cleanup.failed + ("error" in copies ? 1 : copies.failed);
     return Response.json(
-      { scanned: stale?.length ?? 0, removed, healed, skipped, rejected, cleanup, outOfTime },
+      { scanned: stale?.length ?? 0, removed, healed, skipped, rejected, cleanup, copies, outOfTime },
       { status: failing ? 503 : 200 }
     );
   } catch (error) {

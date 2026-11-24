@@ -344,7 +344,7 @@ judges each job against its budget:
 | `drvn-dispute-sla` | `5 8 * * *` | `escalate_stale_disputes()` (SQL) |
 | `drvn-search-worker` | `*/2 * * * *` | `invoke_remediation_worker('search')` → `/api/jobs/search` |
 | `drvn-deletion-worker` | `*/5 * * * *` | `invoke_remediation_worker('account-deletions')` → `/api/jobs/account-deletions` (deletions and exports) |
-| `drvn-media-gc` | `17 3 * * *` | `invoke_remediation_worker('media-gc')` → `/api/jobs/media-gc` |
+| `drvn-media-gc` | `*/10 * * * *` | `invoke_remediation_worker('media-gc')` → `/api/jobs/media-gc`. Every ten minutes since 20261124220000: it withdraws and makes the public copies of published photos, then does its older work (photos of deleted content, uploads nobody attached) |
 | `drvn-saved-search-worker` | `*/30 * * * *` | `invoke_remediation_worker('saved-searches')` → `/api/jobs/saved-searches` |
 | `drvn-saved-search-digests` | `41 * * * *` | `invoke_remediation_worker('saved-search-digests')` → `/api/jobs/saved-search-digests` (20261107200300) |
 | `drvn-listing-import-sweep` | `37 3 * * *` | `invoke_remediation_worker('listing-imports')` → `/api/jobs/listing-imports` (20261004150000) |
