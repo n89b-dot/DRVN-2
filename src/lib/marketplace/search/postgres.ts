@@ -43,14 +43,20 @@ export class PostgresSearchProvider implements SearchProvider {
       const variantList = [...variants];
 
       const [primary, alternates] = await Promise.all([
+        // Only parts for sale. This client reads past the row policies, so
+        // without the filter a draft, sold or removed part with the same
+        // number took a place in the limit and was thrown away by the
+        // caller, which could leave an autocomplete of three with none.
         admin
           .from("listings")
           .select("id")
+          .eq("status", "active")
           .or(variantList.map((v) => `part_number_compact.ilike.%${v}%`).join(","))
           .limit(limit),
         admin
           .from("listing_part_numbers")
-          .select("listing_id")
+          .select("listing_id, listings!inner(status)")
+          .eq("listings.status", "active")
           .in("number_compact", variantList)
           .limit(limit),
       ]);

@@ -3,7 +3,17 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
-import { createClient } from "@/lib/supabase/client";
+import type { createClient } from "@/lib/supabase/client";
+
+type BrowserClient = ReturnType<typeof createClient>;
+
+/**
+ * The browser client, loaded when a component first needs it. LiveInbox is on
+ * every signed-in page, so a plain import put supabase-js in the first script
+ * of each one; this way it arrives after the page is up, which is when the
+ * socket is opened anyway.
+ */
+const loadClient = (): Promise<BrowserClient> => import("@/lib/supabase/client").then((module) => module.createClient());
 
 /**
  * Live messaging (20260928140000 adds `messages` and `conversation_unreads`
@@ -42,7 +52,7 @@ function catchUpOnRecovery(refresh: () => void) {
  * fallback refresh. Hand Realtime the session's token first, then subscribe.
  * (supabase-js keeps it current on TOKEN_REFRESHED/SIGNED_IN after that.)
  */
-async function authorizeRealtime(supabase: ReturnType<typeof createClient>) {
+async function authorizeRealtime(supabase: BrowserClient) {
   const { data } = await supabase.auth.getSession();
   if (data.session?.access_token) await supabase.realtime.setAuth(data.session.access_token);
 }
@@ -69,13 +79,16 @@ export function LiveConversation({ conversationId }: { conversationId: string | 
   });
 
   useEffect(() => {
-    const supabase = createClient();
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let supabase: BrowserClient | null = null;
+    let channel: ReturnType<BrowserClient["channel"]> | null = null;
     let cancelled = false;
     if (conversationId) {
-      void authorizeRealtime(supabase).then(() => {
+      void loadClient().then(async (client) => {
         if (cancelled) return;
-        channel = supabase
+        supabase = client;
+        await authorizeRealtime(client);
+        if (cancelled) return;
+        channel = client
           .channel(`conversation:${conversationId}`)
           .on(
             "postgres_changes",
@@ -91,7 +104,7 @@ export function LiveConversation({ conversationId }: { conversationId: string | 
     return () => {
       cancelled = true;
       clearInterval(poll);
-      if (channel) void supabase.removeChannel(channel);
+      if (channel && supabase) void supabase.removeChannel(channel);
     };
   }, [conversationId]);
 
@@ -113,12 +126,15 @@ export function LiveInbox({ userId }: { userId: string }) {
   });
 
   useEffect(() => {
-    const supabase = createClient();
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let supabase: BrowserClient | null = null;
+    let channel: ReturnType<BrowserClient["channel"]> | null = null;
     let cancelled = false;
-    void authorizeRealtime(supabase).then(() => {
+    void loadClient().then(async (client) => {
       if (cancelled) return;
-      channel = supabase
+      supabase = client;
+      await authorizeRealtime(client);
+      if (cancelled) return;
+      channel = client
         .channel(`unreads:${userId}`)
         .on(
           "postgres_changes",
@@ -140,7 +156,7 @@ export function LiveInbox({ userId }: { userId: string }) {
     return () => {
       cancelled = true;
       document.removeEventListener("visibilitychange", onVisibility);
-      if (channel) void supabase.removeChannel(channel);
+      if (channel && supabase) void supabase.removeChannel(channel);
     };
   }, [userId]);
 

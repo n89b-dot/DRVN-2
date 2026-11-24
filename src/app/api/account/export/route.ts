@@ -1,3 +1,5 @@
+import { requireSameOrigin } from "@/lib/http/origin";
+import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -9,9 +11,16 @@ async function authenticated() {
   return { supabase, user };
 }
 
-export async function POST() {
+export async function POST(request: Request) {
+  // Acts on the session cookie, so it must come from our own pages.
+  const refused = requireSameOrigin(request, noStore);
+  if (refused) return refused;
   const { supabase, user } = await authenticated();
   if (!user) return Response.json({ error: "Sign in to request your data." }, { status: 401, headers: noStore });
+  // Each request queues a job that reads everything the member has.
+  if (!(await allowAction(RATE_LIMITS.accountExport, user.id))) {
+    return Response.json({ error: rateLimitMessage(RATE_LIMITS.accountExport) }, { status: 429, headers: { ...noStore, "Retry-After": String(RATE_LIMITS.accountExport.windowSeconds) } });
+  }
   const { data: requestId, error } = await supabase.rpc("request_account_export");
   if (error || !requestId) return Response.json({ error: "Your export could not be queued." }, { status: 503, headers: noStore });
   return Response.json({ id: requestId, status: "pending" }, { status: 202, headers: noStore });

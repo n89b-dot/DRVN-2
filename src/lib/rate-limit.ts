@@ -103,6 +103,14 @@ export const RATE_LIMITS = {
   /** Where no address can be trusted every visitor shares one bucket, so it
    *  is a ceiling on the endpoint as a whole rather than on one person. */
   searchSuggestUnattributed: { action: "search-suggest-shared", limit: 600, windowSeconds: 60 },
+  /** The fitment picker's model list for one make (/api/vehicles/models):
+   *  public and signed-out, and a make never asked for before costs one call
+   *  to the vehicle registry and a write. Keyed like autocomplete. */
+  vehicleModels: { action: "vehicle-models", limit: 60, windowSeconds: 60 },
+  vehicleModelsUnattributed: { action: "vehicle-models-shared", limit: 600, windowSeconds: 60 },
+  /** "Download my data" (/api/account/export): each request queues a job
+   *  that reads everything the member has. */
+  accountExport: { action: "account-export", limit: 3, windowSeconds: 60 * 60 },
 } as const satisfies Record<string, RateLimitRule>;
 
 /** True when the caller is within the limit and the attempt may proceed. */
