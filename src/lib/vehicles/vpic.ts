@@ -125,6 +125,10 @@ export async function getVehicleMakes(admin: Admin): Promise<{ id: number; name:
  * result isn't re-fetched on every keystroke.
  */
 export async function getVehicleModels(admin: Admin, makeName: string): Promise<string[]> {
+  // The lookup below is a case-insensitive match of the whole name, and `%`,
+  // `_` and `*` are wildcards to it: "a%" used to match the first make that
+  // begins with "a" and fetch its models. No make's name holds one.
+  if (/[%_*\\]/.test(makeName)) return [];
   const { data: make } = await admin
     .from("vehicle_makes")
     .select("id, name, models_fetched_at")

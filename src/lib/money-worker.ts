@@ -59,7 +59,11 @@ export async function runMoneyWorkerPass(admin: Admin): Promise<MoneyWorkerPass>
       return { ...transfers, failed: transfers.failed + carryPayouts.failed, carryPayouts };
     },
     transferReconciliation: () => reconcileTransferRecords(admin),
-    refunds: () => resumeIncompleteRefunds(admin, { batch: 3 }),
+    // The sweep that finishes refunds a crash or a slow provider left part
+    // done (a refund is carried out when it is asked for; this is the catch
+    // up). Twenty a pass, the sweep's own default: it was three, so after an
+    // outage that left many unfinished only eighteen an hour were resumed.
+    refunds: () => resumeIncompleteRefunds(admin, { batch: 20 }),
     // The shipping provider's queues: unused-label refunds and carrier
     // trackers for seller-entered tracking (N110). One family, one health
     // check, but each queue runs whatever happens to the other: label voids

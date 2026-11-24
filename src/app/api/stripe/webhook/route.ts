@@ -22,6 +22,14 @@ import { flushMonitoring, reportError } from "@/lib/monitoring";
  * `payouts_enabled` sync on account.updated. Every handler is idempotent, so
  * Stripe's redeliveries (up to 3 days of retries) are safe to replay.
  */
+/**
+ * Stripe gives a delivery about twenty seconds before it counts it failed and
+ * retries, so nothing useful happens here after that. Without a stated limit
+ * the route runs for the host's default, which is as short as ten seconds on
+ * some plans; a minute covers a slow database round trip on every plan.
+ */
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   // Two Stripe endpoints point here: the platform endpoint (payments,
   // refunds, disputes) and the Connect endpoint, which carries events on
