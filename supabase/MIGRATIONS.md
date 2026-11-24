@@ -55,7 +55,7 @@ with any table in `public`. Details: "Applying without Docker or psql" below.
 
 | File | Applied to |
 |---|---|
-| `20261124190000_rls_internal_and_unused_grants.sql` | not applied |
+| `20261124190000_rls_internal_and_unused_grants.sql` | shared-dev 2026-11-24; staging 2026-11-24 |
 
 ## November 24 — refunds and checkout take their locks in one order
 
