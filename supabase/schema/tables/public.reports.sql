@@ -31,6 +31,6 @@ CREATE INDEX reports_resolved_by_idx ON public.reports USING btree (resolved_by)
 CREATE INDEX reports_subject_idx ON public.reports USING btree (subject_type, subject_id);
 
 -- Grants
-grant insert, maintain, references, select, trigger, truncate on table public.reports to anon;
-grant insert, maintain, references, select, trigger, truncate on table public.reports to authenticated;
+grant insert, select on table public.reports to anon;
+grant insert, select on table public.reports to authenticated;
 grant all on table public.reports to service_role;

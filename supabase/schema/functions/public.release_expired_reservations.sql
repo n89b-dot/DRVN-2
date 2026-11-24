@@ -18,8 +18,17 @@ begin
  order by o.created_at,o.id limit 500
  on conflict(dedup_key) do nothing;
  get diagnostics queued=row_count;
+ -- 20261124190000: at most 200 offers a run, oldest first, skipping any a
+ -- member is acting on right now (its row is locked). The rest go on the next
+ -- run, five minutes later, so one run never waits on a member or holds a
+ -- long list of rows.
  update public.offers set status='expired',responded_at=now()
- where status in ('open','countered') and expires_at<now();
+ where id in (
+   select o.id from public.offers o
+   where o.status in ('open','countered') and o.expires_at<now()
+   order by o.expires_at, o.id
+   limit 200
+   for update skip locked);
  return jsonb_build_object('queued',queued,'listings_released',0,'orders_cancelled',0);
 end $function$;
 

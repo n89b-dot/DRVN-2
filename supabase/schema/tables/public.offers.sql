@@ -41,6 +41,6 @@ CREATE UNIQUE INDEX offers_one_live_buyer_listing ON public.offers USING btree (
 CREATE INDEX offers_status_idx ON public.offers USING btree (status) WHERE (status = ANY (ARRAY['open'::text, 'countered'::text]));
 
 -- Grants
-grant maintain, select on table public.offers to anon;
-grant maintain, select on table public.offers to authenticated;
+grant select on table public.offers to anon;
+grant select on table public.offers to authenticated;
 grant all on table public.offers to service_role;

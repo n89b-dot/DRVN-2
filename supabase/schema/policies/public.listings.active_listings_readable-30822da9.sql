@@ -4,4 +4,4 @@ create policy "active listings readable" on public.listings
   as permissive
   for select
   to public
-  using ((status = ANY (ARRAY['active'::text, 'reserved'::text, 'sold'::text])) AND NOT (seller_id IN ( SELECT public.suspended_profile_ids() AS suspended_profile_ids)) OR (( SELECT auth.uid() AS uid)) = seller_id OR ( SELECT public.is_admin() AS is_admin));
+  using ((status = ANY (ARRAY['active'::text, 'reserved'::text, 'sold'::text])) AND NOT (seller_id IN ( SELECT rls_internal.suspended_profile_ids() AS suspended_profile_ids)) OR (( SELECT auth.uid() AS uid)) = seller_id OR ( SELECT public.is_admin() AS is_admin));

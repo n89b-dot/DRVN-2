@@ -4,4 +4,4 @@ create policy "upload own message photos" on storage.objects
   as permissive
   for insert
   to authenticated
-  with check (bucket_id = 'message-photos'::text AND (storage.foldername(name))[1] = auth.uid()::text);
+  with check (bucket_id = 'message-photos'::text AND (storage.foldername(name))[1] = ((( SELECT auth.uid() AS uid))::text));

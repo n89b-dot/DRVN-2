@@ -18,6 +18,6 @@ alter table public.likes add constraint likes_user_id_fkey FOREIGN KEY (user_id)
 CREATE INDEX likes_target_idx ON public.likes USING btree (target_type, target_id);
 
 -- Grants
-grant all on table public.likes to anon;
-grant all on table public.likes to authenticated;
+grant delete, insert, select, update on table public.likes to anon;
+grant delete, insert, select, update on table public.likes to authenticated;
 grant all on table public.likes to service_role;

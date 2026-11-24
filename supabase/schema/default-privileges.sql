@@ -21,7 +21,7 @@ alter default privileges for role supabase_admin in schema public grant select, 
 alter default privileges for role supabase_admin in schema public grant select, update, usage on sequences to authenticated;
 alter default privileges for role supabase_admin in schema public grant select, update, usage on sequences to postgres;
 alter default privileges for role supabase_admin in schema public grant select, update, usage on sequences to service_role;
-alter default privileges for role supabase_admin in schema public grant all on tables to anon;
-alter default privileges for role supabase_admin in schema public grant all on tables to authenticated;
+alter default privileges for role supabase_admin in schema public grant delete, insert, select, update on tables to anon;
+alter default privileges for role supabase_admin in schema public grant delete, insert, select, update on tables to authenticated;
 alter default privileges for role supabase_admin in schema public grant all on tables to postgres;
 alter default privileges for role supabase_admin in schema public grant all on tables to service_role;

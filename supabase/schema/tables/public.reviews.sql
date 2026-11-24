@@ -27,6 +27,6 @@ CREATE INDEX reviews_reviewee_idx ON public.reviews USING btree (reviewee_id);
 CREATE INDEX reviews_reviewer_id_idx ON public.reviews USING btree (reviewer_id);
 
 -- Grants
-grant all on table public.reviews to anon;
-grant all on table public.reviews to authenticated;
+grant delete, insert, select, update on table public.reviews to anon;
+grant delete, insert, select, update on table public.reviews to authenticated;
 grant all on table public.reviews to service_role;

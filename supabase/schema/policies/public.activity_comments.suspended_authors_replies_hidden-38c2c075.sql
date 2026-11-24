@@ -4,4 +4,4 @@ create policy "suspended authors' replies hidden" on public.activity_comments
   as restrictive
   for select
   to anon, authenticated
-  using (author_id = (( SELECT auth.uid() AS uid)) OR ( SELECT public.is_admin() AS is_admin) OR NOT (author_id IN ( SELECT public.suspended_profile_ids() AS suspended_profile_ids)));
+  using (author_id = (( SELECT auth.uid() AS uid)) OR ( SELECT public.is_admin() AS is_admin) OR NOT (author_id IN ( SELECT rls_internal.suspended_profile_ids() AS suspended_profile_ids)));

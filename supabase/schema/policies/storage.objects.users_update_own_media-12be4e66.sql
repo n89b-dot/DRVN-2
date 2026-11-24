@@ -4,4 +4,4 @@ create policy "users update own media" on storage.objects
   as permissive
   for update
   to public
-  using ((bucket_id = ANY (ARRAY['avatars'::text, 'car-images'::text, 'activity-images'::text, 'listing-images'::text])) AND (storage.foldername(name))[1] = auth.uid()::text);
+  using ((bucket_id = ANY (ARRAY['avatars'::text, 'car-images'::text, 'activity-images'::text, 'listing-images'::text])) AND (storage.foldername(name))[1] = ((( SELECT auth.uid() AS uid))::text));

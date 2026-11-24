@@ -15,7 +15,7 @@ AS $function$
    and a.published_at is not null
    and a.published_at > now() - make_interval(days => greatest(1, least(p_days, 365)))
   where c.is_public
-    and c.owner_id not in (select public.suspended_profile_ids())
+    and c.owner_id not in (select rls_internal.suspended_profile_ids())
     and c.make is not null
     and c.model is not null
   group by c.make, c.model

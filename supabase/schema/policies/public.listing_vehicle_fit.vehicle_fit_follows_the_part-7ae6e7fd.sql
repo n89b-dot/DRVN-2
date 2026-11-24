@@ -4,4 +4,4 @@ create policy "vehicle fit follows the part" on public.listing_vehicle_fit
   as permissive
   for select
   to anon, authenticated
-  using ((via = 'stated'::text OR car_public OR car_owner_id = (( SELECT auth.uid() AS uid))) AND (seller_id = (( SELECT auth.uid() AS uid)) OR NOT (seller_id IN ( SELECT public.suspended_profile_ids() AS suspended_profile_ids))));
+  using ((via = 'stated'::text OR car_public OR car_owner_id = (( SELECT auth.uid() AS uid))) AND (seller_id = (( SELECT auth.uid() AS uid)) OR NOT (seller_id IN ( SELECT rls_internal.suspended_profile_ids() AS suspended_profile_ids))));

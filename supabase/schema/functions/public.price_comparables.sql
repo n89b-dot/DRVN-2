@@ -138,7 +138,7 @@ begin
       and l.status = 'active'
       and coalesce(l.currency, 'USD') = p_currency
       and l.id is distinct from p_exclude_listing
-      and l.seller_id not in (select public.suspended_profile_ids())
+      and l.seller_id not in (select rls_internal.suspended_profile_ids())
   ),
   by_condition as (
     select condition, count(*) as n, percentile_disc(0.5) within group (order by price_cents) as median_cents

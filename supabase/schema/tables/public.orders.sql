@@ -110,6 +110,6 @@ CREATE INDEX orders_seller_idx ON public.orders USING btree (seller_id, created_
 CREATE INDEX orders_status_idx ON public.orders USING btree (status);
 
 -- Grants
-grant all on table public.orders to anon;
-grant all on table public.orders to authenticated;
+grant delete, insert, select, update on table public.orders to anon;
+grant delete, insert, select, update on table public.orders to authenticated;
 grant all on table public.orders to service_role;

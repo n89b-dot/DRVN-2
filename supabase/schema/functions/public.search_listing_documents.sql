@@ -39,7 +39,7 @@ AS $function$
   from public.listings l
   left join public.cars c on c.id = l.source_car_id
   where l.id = any(p_ids) and l.status = 'active'
-    and l.seller_id not in (select public.suspended_profile_ids());
+    and l.seller_id not in (select rls_internal.suspended_profile_ids());
 $function$;
 
 grant execute on function public.search_listing_documents(p_ids uuid[]) to service_role;

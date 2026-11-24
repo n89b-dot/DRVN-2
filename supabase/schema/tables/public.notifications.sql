@@ -32,7 +32,7 @@ CREATE INDEX notifications_unread_idx ON public.notifications USING btree (user_
 CREATE INDEX notifications_user_idx ON public.notifications USING btree (user_id, created_at DESC);
 
 -- Grants
-grant delete, insert, maintain, references, select, trigger, truncate on table public.notifications to anon;
-grant delete, insert, maintain, references, select, trigger, truncate on table public.notifications to authenticated;
+grant delete, insert, select on table public.notifications to anon;
+grant delete, insert, select on table public.notifications to authenticated;
 grant all on table public.notifications to service_role;
 grant update (read_at) on table public.notifications to authenticated;

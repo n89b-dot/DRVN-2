@@ -20,6 +20,6 @@ CREATE INDEX activity_images_media_key_idx ON public.activity_images USING btree
 CREATE INDEX activity_images_post_idx ON public.activity_images USING btree (post_id);
 
 -- Grants
-grant all on table public.activity_images to anon;
-grant all on table public.activity_images to authenticated;
+grant delete, insert, select, update on table public.activity_images to anon;
+grant delete, insert, select, update on table public.activity_images to authenticated;
 grant all on table public.activity_images to service_role;

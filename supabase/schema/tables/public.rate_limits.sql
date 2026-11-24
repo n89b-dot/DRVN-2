@@ -14,5 +14,8 @@ comment on table public.rate_limits is 'Fixed-window rate limiter. Written only 
 -- Constraints
 alter table public.rate_limits add constraint rate_limits_pkey PRIMARY KEY (key);
 
+-- Indexes
+CREATE INDEX rate_limits_window_start_idx ON public.rate_limits USING btree (window_start);
+
 -- Grants
 grant all on table public.rate_limits to service_role;

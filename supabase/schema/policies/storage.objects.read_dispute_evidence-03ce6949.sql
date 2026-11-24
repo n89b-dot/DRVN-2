@@ -4,7 +4,7 @@ create policy "read dispute evidence" on storage.objects
   as permissive
   for select
   to public
-  using (bucket_id = 'dispute-evidence'::text AND ((storage.foldername(name))[1] = auth.uid()::text OR public.is_admin() OR (EXISTS ( SELECT 1
+  using (bucket_id = 'dispute-evidence'::text AND ((storage.foldername(name))[1] = ((( SELECT auth.uid() AS uid))::text) OR ( SELECT public.is_admin() AS is_admin) OR (EXISTS ( SELECT 1
    FROM public.dispute_evidence de
      JOIN public.orders o ON o.id = de.order_id
-  WHERE de.storage_path = objects.name AND (auth.uid() = o.buyer_id OR auth.uid() = o.seller_id)))));
+  WHERE de.storage_path = objects.name AND ((( SELECT auth.uid() AS uid)) = o.buyer_id OR (( SELECT auth.uid() AS uid)) = o.seller_id)))));

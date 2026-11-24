@@ -10,7 +10,7 @@ AS $function$
     select w.word, count(*)::integer as uses
     from public.listings l
     cross join lateral regexp_split_to_table(lower(coalesce(l.title, '') || ' ' || coalesce(l.brand, '')), '[^[:alpha:]]+') w(word)
-    where l.status = 'active' and l.seller_id not in (select public.suspended_profile_ids())
+    where l.status = 'active' and l.seller_id not in (select rls_internal.suspended_profile_ids())
       and length(w.word) between 4 and 30
     group by w.word
   ),

@@ -13,7 +13,7 @@
 -- oids, and anything that belongs to an extension.
 
 with
-ns as (select oid, nspname from pg_namespace where nspname in ('public', 'private')),
+ns as (select oid, nspname from pg_namespace where nspname in ('public', 'private', 'rls_internal')),
 ext as (select classid, objid from pg_depend where deptype = 'e'),
 -- Roles the Supabase image creates. Anything else is a role a migration made.
 platform_roles(rolname) as (values
@@ -61,7 +61,7 @@ select jsonb_build_object(
 'schemas', (
   select jsonb_agg(jsonb_build_object('name', n.nspname, 'acl', ACL(n.nspacl, 'n', n.nspowner),
                                       'comment', obj_description(n.oid, 'pg_namespace')) order by n.nspname)
-  from pg_namespace n where n.nspname in ('public', 'private')),
+  from pg_namespace n where n.nspname in ('public', 'private', 'rls_internal')),
 
 'extensions', (
   select jsonb_agg(jsonb_build_object('name', e.extname, 'schema', e.extnamespace::regnamespace::text) order by e.extname)
@@ -257,7 +257,7 @@ select jsonb_build_object(
   from pg_policy pol
   join pg_class c on c.oid = pol.polrelid
   join pg_namespace pn on pn.oid = c.relnamespace
-  where pn.nspname in ('public', 'private', 'storage')),
+  where pn.nspname in ('public', 'private', 'rls_internal', 'storage')),
 
 -- How many rows each of our tables holds in a database nobody has used. A row
 -- here was put there by a migration; the generator insists each such table is

@@ -24,6 +24,6 @@ CREATE INDEX dispute_evidence_storage_path_idx ON public.dispute_evidence USING 
 CREATE INDEX dispute_evidence_uploader_id_idx ON public.dispute_evidence USING btree (uploader_id) WHERE (uploader_id IS NOT NULL);
 
 -- Grants
-grant all on table public.dispute_evidence to anon;
-grant all on table public.dispute_evidence to authenticated;
+grant delete, insert, select, update on table public.dispute_evidence to anon;
+grant delete, insert, select, update on table public.dispute_evidence to authenticated;
 grant all on table public.dispute_evidence to service_role;

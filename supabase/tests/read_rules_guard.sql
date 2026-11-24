@@ -46,7 +46,7 @@ begin
   update public.profiles set suspended_at = now(), suspended_reason = 'guard' where id = v_suspended;
 
   -- The set the policies test against is exactly the suspended members.
-  if (select array_agg(id) from public.suspended_profile_ids() id where id in (v_seller, v_suspended, v_viewer)) <> array[v_suspended] then
+  if (select array_agg(id) from rls_internal.suspended_profile_ids() id where id in (v_seller, v_suspended, v_viewer)) <> array[v_suspended] then
     raise exception 'suspended_profile_ids() does not match profiles.suspended_at';
   end if;
 
@@ -102,9 +102,34 @@ begin
   if v_bad is not null then
     raise exception 'Read policies call a per-row visibility function again: %', v_bad;
   end if;
-  if not exists (select 1 from pg_proc p where p.oid = 'public.suspended_profile_ids()'::regprocedure and p.prosecdef
+  if not exists (select 1 from pg_proc p where p.oid = 'rls_internal.suspended_profile_ids()'::regprocedure and p.prosecdef
                    and exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%')) then
     raise exception 'suspended_profile_ids() must be SECURITY DEFINER with a pinned search_path';
+  end if;
+
+  -- 20261124190000: the list is not something the API can be asked for. It
+  -- lives in a schema the API does not serve, nothing by that name is left in
+  -- the ones it does, and a visitor's policies can still run it.
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+             where p.proname = 'suspended_profile_ids' and n.nspname in ('public', 'graphql_public')) then
+    raise exception 'suspended_profile_ids() is in a schema the API serves';
+  end if;
+  if not has_schema_privilege('anon', 'rls_internal', 'USAGE')
+     or not has_function_privilege('anon', 'rls_internal.suspended_profile_ids()', 'EXECUTE')
+     or not has_function_privilege('authenticated', 'rls_internal.suspended_profile_ids()', 'EXECUTE') then
+    raise exception 'A read policy can no longer run suspended_profile_ids() for a visitor or a member';
+  end if;
+  -- Visitors and members hold none of the table privileges that row level
+  -- security does not govern.
+  select string_agg(distinct c.relname, ', ') into v_bad
+  from pg_class c
+  join pg_namespace n on n.oid = c.relnamespace
+  cross join unnest(array['anon', 'authenticated']) r(role)
+  cross join unnest(array['TRUNCATE', 'TRIGGER', 'REFERENCES', 'MAINTAIN']) p(priv)
+  where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm')
+    and has_table_privilege(r.role, c.oid, p.priv);
+  if v_bad is not null then
+    raise exception 'anon or authenticated holds TRUNCATE, TRIGGER, REFERENCES or MAINTAIN on: %', v_bad;
   end if;
 
   raise notice 'all read rule checks passed';

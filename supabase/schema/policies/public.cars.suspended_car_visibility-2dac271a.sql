@@ -4,4 +4,4 @@ create policy "suspended car visibility" on public.cars
   as restrictive
   for select
   to anon, authenticated
-  using (owner_id = (( SELECT auth.uid() AS uid)) OR NOT (owner_id IN ( SELECT public.suspended_profile_ids() AS suspended_profile_ids)));
+  using (owner_id = (( SELECT auth.uid() AS uid)) OR NOT (owner_id IN ( SELECT rls_internal.suspended_profile_ids() AS suspended_profile_ids)));

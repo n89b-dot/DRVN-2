@@ -39,7 +39,7 @@ begin
 
   -- The browse function's rules: for sale, seller not suspended (or the
   -- viewer), plus whatever the shopper chose. Every value is quoted in.
-  filters := ' and l.status = ''active'' and (l.seller_id not in (select public.suspended_profile_ids())'
+  filters := ' and l.status = ''active'' and (l.seller_id not in (select rls_internal.suspended_profile_ids())'
     || replace(own, '{col}', 'l.seller_id') || ')';
   base_filters := filters;
   if coalesce(p_category, '') <> '' then filters := filters || format(' and l.category = %L', p_category); end if;
@@ -61,7 +61,7 @@ begin
   if not (coalesce(p_ymin, 0) = 0 and coalesce(p_ymax, 9999) = 9999) then
     filters := filters || format(
       ' and exists (select 1 from public.cars c where c.id = l.source_car_id and (c.is_public%s)'
-      ' and (c.owner_id not in (select public.suspended_profile_ids())%s) and c.year between %s and %s)',
+      ' and (c.owner_id not in (select rls_internal.suspended_profile_ids())%s) and c.year between %s and %s)',
       replace(own, '{col}', 'c.owner_id'), replace(own, '{col}', 'c.owner_id'), coalesce(p_ymin, 0), coalesce(p_ymax, 9999));
   end if;
   -- A page the search engine found: those ids, still passing every rule.
@@ -82,10 +82,10 @@ begin
 
   -- How a stated or source-car row decides a match (20261011100000).
   -- {years} is the stated rows' year test.
-  fit_seller := ' and (v.seller_id not in (select public.suspended_profile_ids())' || replace(own, '{col}', 'v.seller_id') || ')';
+  fit_seller := ' and (v.seller_id not in (select rls_internal.suspended_profile_ids())' || replace(own, '{col}', 'v.seller_id') || ')';
   fit_rule := 'case when v.via = ''stated'' then {years} else not v.stated_also and (v.car_public'
     || replace(own, '{col}', 'v.car_owner_id') || ') and (v.car_owner_id = v.seller_id'
-    || replace(own, '{col}', 'v.car_owner_id') || ' or v.car_owner_id not in (select public.suspended_profile_ids())) end';
+    || replace(own, '{col}', 'v.car_owner_id') || ' or v.car_owner_id not in (select rls_internal.suspended_profile_ids())) end';
 
   if coalesce(p_vehicle, '') <> '' then
     select m.name, mo.name into make_name, model_name

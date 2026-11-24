@@ -27,6 +27,6 @@ CREATE INDEX listing_fitments_listing_idx ON public.listing_fitments USING btree
 CREATE INDEX listing_fitments_vehicle_idx ON public.listing_fitments USING btree (lower(make), lower(model));
 
 -- Grants
-grant all on table public.listing_fitments to anon;
-grant all on table public.listing_fitments to authenticated;
+grant delete, insert, select, update on table public.listing_fitments to anon;
+grant delete, insert, select, update on table public.listing_fitments to authenticated;
 grant all on table public.listing_fitments to service_role;

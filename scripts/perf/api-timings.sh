@@ -112,7 +112,7 @@ explore() {
 
 # ── After 20261011100000-130000: the requests the app sends now ─────────
 pos() { # offset -> "created_at|id" of the part at that depth, newest first
-  q "select created_at::text || '|' || id from public.listings where status = 'active' and seller_id not in (select public.suspended_profile_ids()) order by created_at desc, id desc offset $1 limit 1"
+  q "select created_at::text || '|' || id from public.listings where status = 'active' and seller_id not in (select rls_internal.suspended_profile_ids()) order by created_at desc, id desc offset $1 limit 1"
 }
 P101=$(pos 2399); P1001=$(pos 23999)
 PAGE="/rpc/marketplace_page?$CARD"

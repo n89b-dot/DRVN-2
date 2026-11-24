@@ -20,6 +20,6 @@ CREATE INDEX listing_part_numbers_compact_idx ON public.listing_part_numbers USI
 CREATE UNIQUE INDEX listing_part_numbers_key ON public.listing_part_numbers USING btree (listing_id, number_compact);
 
 -- Grants
-grant all on table public.listing_part_numbers to anon;
-grant all on table public.listing_part_numbers to authenticated;
+grant delete, insert, select, update on table public.listing_part_numbers to anon;
+grant delete, insert, select, update on table public.listing_part_numbers to authenticated;
 grant all on table public.listing_part_numbers to service_role;

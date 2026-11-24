@@ -41,6 +41,6 @@ CREATE INDEX messages_sender_idx ON public.messages USING btree (sender_id);
 CREATE INDEX messages_unread_idx ON public.messages USING btree (recipient_id) WHERE (read_at IS NULL);
 
 -- Grants
-grant all on table public.messages to anon;
-grant all on table public.messages to authenticated;
+grant delete, insert, select, update on table public.messages to anon;
+grant delete, insert, select, update on table public.messages to authenticated;
 grant all on table public.messages to service_role;

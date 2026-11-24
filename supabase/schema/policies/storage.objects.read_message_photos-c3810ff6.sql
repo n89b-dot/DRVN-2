@@ -4,4 +4,4 @@ create policy "read message photos" on storage.objects
   as permissive
   for select
   to public
-  using (bucket_id = 'message-photos'::text AND ((storage.foldername(name))[1] = auth.uid()::text OR (storage.foldername(name))[2] = auth.uid()::text OR public.is_admin()));
+  using (bucket_id = 'message-photos'::text AND ((storage.foldername(name))[1] = ((( SELECT auth.uid() AS uid))::text) OR (storage.foldername(name))[2] = ((( SELECT auth.uid() AS uid))::text) OR ( SELECT public.is_admin() AS is_admin)));

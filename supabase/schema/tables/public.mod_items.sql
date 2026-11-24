@@ -65,6 +65,6 @@ CREATE INDEX mod_items_search_doc_trgm_idx ON public.mod_items USING gin (public
 CREATE UNIQUE INDEX mod_items_source_order_item_key ON public.mod_items USING btree (source_order_item_id) WHERE (source_order_item_id IS NOT NULL);
 
 -- Grants
-grant all on table public.mod_items to anon;
-grant all on table public.mod_items to authenticated;
+grant delete, insert, select, update on table public.mod_items to anon;
+grant delete, insert, select, update on table public.mod_items to authenticated;
 grant all on table public.mod_items to service_role;

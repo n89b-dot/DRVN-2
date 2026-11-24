@@ -32,7 +32,7 @@ begin
     from public.explore_builder_rankings r
     join public.profiles p on p.id = r.profile_id
     where p.username is not null
-      and p.id not in (select public.suspended_profile_ids())
+      and p.id not in (select rls_internal.suspended_profile_ids())
       and (p_viewer is null or p.id <> p_viewer)
       and not exists (select 1 from public.follows f
                        where p_viewer is not null and f.follower_id = p_viewer
