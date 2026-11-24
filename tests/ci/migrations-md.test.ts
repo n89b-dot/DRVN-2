@@ -122,6 +122,8 @@ describe("supabase/MIGRATIONS.md records every migration (OS-signals)", () => {
 });
 
 const PENDING = path.join(root, "supabase/migrations-staging-pending.json");
+/** Set only by the nightly workflow (.github/workflows/nightly-checks.yml). */
+const NIGHTLY = process.env.DRVN_NIGHTLY_CHECKS === "1";
 const TWO_DAYS = 2 * 24 * 60 * 60 * 1000;
 
 /** A dated migration's timestamp as UTC milliseconds, or null for the four-digit baseline files. */
@@ -162,13 +164,23 @@ describe("staging stays level with shared dev (R-staging-behind)", () => {
     ]);
   });
 
-  it("R-staging-behind: every migration two days old or more is recorded on staging, or listed as pending with a reason", () => {
-    const rows = recordedCells(fs.readFileSync(MIGRATIONS_MD, "utf8"));
-    const pending = (JSON.parse(fs.readFileSync(PENDING, "utf8")) as { pending: Record<string, string> }).pending;
-    for (const [file, reason] of Object.entries(pending)) {
+  const readPending = () => (JSON.parse(fs.readFileSync(PENDING, "utf8")) as { pending: Record<string, string> }).pending;
+
+  it("R-staging-behind: every migration listed as pending has a file and a reason", () => {
+    for (const [file, reason] of Object.entries(readPending())) {
       expect(fs.existsSync(path.join(MIGRATIONS_DIR, file)), `${file} is listed as pending but has no file`).toBe(true);
       expect(reason.trim().length, `${file} needs a reason`).toBeGreaterThan(0);
     }
+  });
+
+  // The calendar half. It reads today's date, so on a pull request or a push
+  // it would fail work that changed nothing about migrations, and a red main
+  // holds every deploy (deploy.yml waits for release-gate). It runs once a
+  // night from the app's own CI, which sets DRVN_NIGHTLY_CHECKS=1 and reports
+  // a failure to the alert channel (.github/workflows/nightly-checks.yml).
+  it.runIf(NIGHTLY)("R-staging-behind: every migration two days old or more is recorded on staging, or listed as pending with a reason", () => {
+    const rows = recordedCells(fs.readFileSync(MIGRATIONS_MD, "utf8"));
+    const pending = readPending();
     expect(
       behindStaging(rows, pending, Date.now()),
       "Apply these to staging with the runner and add their staging cell (supabase/MIGRATIONS.md), or list them in supabase/migrations-staging-pending.json with the reason",
