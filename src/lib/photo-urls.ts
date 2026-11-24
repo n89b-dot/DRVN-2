@@ -40,6 +40,15 @@ function publicPattern(origin: string, flags = "g"): RegExp {
   return new RegExp(`${escapeRegExp(origin)}/storage/v1/object/public/(${BUCKETS})/(${PATH})`, flags);
 }
 
+/**
+ * A public copy of a published photo (20261124220000): the same path in the
+ * bucket `public-<bucket>`. The app hands this address out in place of a
+ * signed link; like a signed link it is never what the database stores.
+ */
+function copyPattern(origin: string, flags = "g"): RegExp {
+  return new RegExp(`${escapeRegExp(origin)}/storage/v1/object/public/public-(${BUCKETS})/(${PATH})`, flags);
+}
+
 function signedPattern(origin: string, flags = "g"): RegExp {
   return new RegExp(`${escapeRegExp(origin)}/storage/v1/object/sign/(${BUCKETS})/(${PATH})\\?token=[A-Za-z0-9._~-]+`, flags);
 }
@@ -64,7 +73,8 @@ function safePath(raw: string): string | null {
  */
 export function canonicalPhotoUrl<T>(value: T, origin: string | null = storageOrigin()): T {
   if (typeof value !== "string" || !origin) return value;
-  const match = signedPattern(origin, "").exec(value);
+  const signed = signedPattern(origin, "").exec(value);
+  const match = signed && signed.index === 0 && signed[0].length === value.length ? signed : copyPattern(origin, "").exec(value);
   if (!match || match.index !== 0 || match[0].length !== value.length) return value;
   const path = safePath(match[2]);
   return (path ? `${origin}/storage/v1/object/public/${match[1]}/${path}` : value) as T;
@@ -72,11 +82,12 @@ export function canonicalPhotoUrl<T>(value: T, origin: string | null = storageOr
 
 /** Every signed photo URL in a text (a request body, a query string) back to its canonical spelling. */
 export function canonicalizePhotoUrlsInText(text: string, origin: string | null = storageOrigin()): string {
-  if (!origin || !text.includes("/storage/v1/object/sign/")) return text;
-  return text.replace(signedPattern(origin), (whole, bucket: string, raw: string) => {
+  if (!origin || (!text.includes("/storage/v1/object/sign/") && !text.includes("/storage/v1/object/public/public-"))) return text;
+  const canonical = (whole: string, bucket: string, raw: string) => {
     const path = safePath(raw);
     return path ? `${origin}/storage/v1/object/public/${bucket}/${path}` : whole;
-  });
+  };
+  return text.replace(signedPattern(origin), canonical).replace(copyPattern(origin), canonical);
 }
 
 /** The distinct canonical photo URLs a text (a database response) contains, in a signed bucket. */

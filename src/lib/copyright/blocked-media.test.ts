@@ -3,23 +3,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ lookup: vi.fn(), reportError: vi.fn(), tables: [] as string[] }));
 
 vi.mock("@supabase/supabase-js", () => ({
-  // One object is looked up by the table's key (N718): select → eq(object_key) → maybeSingle.
+  // One object is asked about by its key (N718), in one call that answers
+  // for a takedown and for a withdrawn public copy (media_gate_status,
+  // 20261124220000).
   createClient: () => ({
-    from: (table: string) => {
-      mocks.tables.push(table);
-      return { select: () => ({ eq: (column: string, key: string) => ({ maybeSingle: () => mocks.lookup(column, key) }) }) };
+    rpc: (fn: string, args: { p_key: string }) => {
+      mocks.tables.push(fn);
+      return mocks.lookup("object_key", args.p_key);
     },
   }),
 }));
 vi.mock("@/lib/env", () => ({ requireServerEnv: () => ({ url: "https://proj.supabase.co", serviceRoleKey: "service" }) }));
 vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
 
-const { BLOCKED_MEDIA_REMEMBERED, BLOCKED_MEDIA_TTL_MS, forgetBlockedMedia, imageRequestObjectKey, mediaIsBlocked } = await import("./blocked-media");
+const { BLOCKED_MEDIA_REMEMBERED, BLOCKED_MEDIA_TTL_MS, forgetBlockedMedia, imageRequestObjectKey, mediaGateStatus, mediaIsBlocked } = await import("./blocked-media");
 
 const OWNER = "8f6c2a52-3d1e-4b8a-9c3f-2b1d4e5f6a7b";
 const KEY = "listing-images/a/b.webp";
-const found = (key: string) => ({ data: { object_key: key }, error: null });
-const none = { data: null, error: null };
+// The key is not in the answer; the argument is kept so each test still says which object it means.
+const found = (key: string) => (void key, { data: "copyright", error: null });
+const none = { data: "ok", error: null };
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -81,7 +84,7 @@ describe("N718: the blocklist is asked about one object, however long it is (wor
     mocks.lookup.mockImplementation(async (_column: string, key: string) => (key === "listing-images/o/01004.webp" ? found(key) : none));
     expect(await mediaIsBlocked("listing-images/o/01004.webp")).toBe(true);
     expect(await mediaIsBlocked("listing-images/o/00001.webp")).toBe(false);
-    expect(mocks.tables).toEqual(["copyright_blocked_media", "copyright_blocked_media"]);
+    expect(mocks.tables).toEqual(["media_gate_status", "media_gate_status"]);
     expect(mocks.lookup.mock.calls).toEqual([["object_key", "listing-images/o/01004.webp"], ["object_key", "listing-images/o/00001.webp"]]);
   });
 
@@ -93,5 +96,26 @@ describe("N718: the blocklist is asked about one object, however long it is (wor
     expect(mocks.lookup).not.toHaveBeenCalled();
     await mediaIsBlocked("car-images/o/0.webp", 5_001);
     expect(mocks.lookup).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("a withdrawn public copy (20261124220000)", () => {
+  it("is its own answer, apart from a takedown, from the same one call", async () => {
+    mocks.lookup.mockImplementation(async (_column: string, key: string) =>
+      key.startsWith("public-car-images/") ? { data: "revoked", error: null } : key === KEY ? found(key) : none);
+    expect(await mediaGateStatus("public-car-images/o/hidden.webp")).toBe("revoked");
+    // A withdrawn copy is refused by the gate, but it is not a copyright block.
+    expect(await mediaIsBlocked("public-car-images/o/hidden.webp")).toBe(false);
+    expect(await mediaGateStatus(KEY)).toBe("copyright");
+    expect(await mediaGateStatus("car-images/o/fine.webp")).toBe("ok");
+    // Three objects, three calls: the second question about the copy was answered from memory.
+    expect(mocks.tables).toEqual(["media_gate_status", "media_gate_status", "media_gate_status"]);
+  });
+
+  it("treats an answer it does not know as not refused, and no answer at all as unknown", async () => {
+    mocks.lookup.mockResolvedValueOnce({ data: "something-new", error: null });
+    expect(await mediaGateStatus("car-images/o/odd.webp")).toBe("ok");
+    mocks.lookup.mockResolvedValueOnce({ data: null, error: { message: "down" } });
+    expect(await mediaGateStatus("car-images/o/unasked.webp")).toBeNull();
   });
 });

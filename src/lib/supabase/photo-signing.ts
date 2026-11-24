@@ -46,6 +46,9 @@ import {
 type Signed = { window: number; url: string; localUntil?: number };
 
 const MAX_MEMO = 20_000;
+/** How long this process hands out a public copy's address before asking the database again whether the copy is still live. */
+export const PUBLIC_COPY_RECHECK_MS = 60_000;
+const isPublicCopyUrl = (url: string) => url.includes("/storage/v1/object/public/public-");
 
 /** The Supabase client the signer uses: Storage's signer and the shared memo's two functions. */
 export type SigningClient = ReturnType<typeof createSupabaseClient>;
@@ -248,7 +251,10 @@ export function createPhotoSigner({
       const url = urlByObject.get(`${row.bucket}/${row.path}`);
       if (!url) continue;
       out.set(url, row.signed_url);
-      memo.set(url, { window, url: row.signed_url });
+      // A live public copy's address (20261124220000) is not a signed link:
+      // it has no token. It is kept for a minute only, so a copy withdrawn
+      // (its car hidden) stops being handed out by this process within one.
+      memo.set(url, isPublicCopyUrl(row.signed_url) ? { window, url: row.signed_url, localUntil: now() + PUBLIC_COPY_RECHECK_MS } : { window, url: row.signed_url });
     }
 
     const calls: { bucket: string; settled: boolean; done: Promise<void> }[] = [];

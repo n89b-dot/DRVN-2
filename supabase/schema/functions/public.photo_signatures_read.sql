@@ -6,10 +6,30 @@ CREATE OR REPLACE FUNCTION public.photo_signatures_read(p_window bigint, p_objec
  STABLE SECURITY DEFINER
  SET search_path TO ''
 AS $function$
+  with asked as (
+    select o.bucket, o.path
+      from jsonb_to_recordset(coalesce(p_objects, '[]'::jsonb)) as o(bucket text, path text)
+  ),
+  -- 20261124220000: where the storage origin is recorded, a photo whose
+  -- public copy is live is answered with the copy's address, which does not
+  -- change. The caller treats whatever comes back as the link to hand out.
+  origin as (
+    select rtrim(c.value, '/') as value from public.job_config c
+     where c.key = 'media_storage_origin' and c.value ~ '^https?://[^/?#@]+/?$'
+  ),
+  copies as (
+    select a.bucket, a.path, g.value || '/storage/v1/object/public/public-' || a.bucket || '/' || a.path as url
+      from asked a
+      join public.public_photo_copies c on c.bucket = a.bucket and c.path = a.path and c.state = 'live'
+      cross join origin g
+  )
+  select k.bucket, k.path, k.url from copies k
+  union all
   select s.bucket, s.path, s.signed_url
-    from jsonb_to_recordset(coalesce(p_objects, '[]'::jsonb)) as o(bucket text, path text)
+    from asked o
     join private.photo_signatures s
-      on s.bucket = o.bucket and s.path = o.path and s.signing_window = p_window;
+      on s.bucket = o.bucket and s.path = o.path and s.signing_window = p_window
+   where not exists (select 1 from copies k where k.bucket = o.bucket and k.path = o.path);
 $function$;
 
 grant execute on function public.photo_signatures_read(p_window bigint, p_objects jsonb) to service_role;

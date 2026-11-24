@@ -5,14 +5,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const session = vi.hoisted(() => ({ update: vi.fn() }));
-const blocked = vi.hoisted(() => ({ keys: vi.fn() }));
+const blocked = vi.hoisted(() => ({ keys: vi.fn(), revoked: new Set<string>() }));
 vi.mock("@/lib/supabase/proxy", () => ({ updateSession: session.update }));
 vi.mock("@/lib/copyright/blocked-media", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/copyright/blocked-media")>()),
   // The proxy asks about one object; these tests still say which objects are blocked (null: unknown).
-  mediaIsBlocked: async (key: string) => {
+  // A key in `blocked.revoked` is a public copy that was withdrawn.
+  mediaGateStatus: async (key: string) => {
     const keys: Set<string> | null | undefined = await blocked.keys();
-    return keys === null ? null : (keys?.has(key) ?? false);
+    if (keys === null) return null;
+    if (keys?.has(key)) return "copyright";
+    return blocked.revoked.has(key) ? "revoked" : "ok";
   },
 }));
 session.update.mockImplementation(async () => NextResponse.next());
@@ -292,5 +295,25 @@ describe("N958: only the deployment named production serves a sitemap (work revi
     }
     // The proxy runs on these paths at all.
     for (const url of ["/sitemap.xml", "/catalog/sitemap/index.xml"]) expect(unstable_doesMiddlewareMatch({ config, url }), url).toBe(true);
+  });
+});
+
+describe("a withdrawn public copy (20261124220000)", () => {
+  const copy = (name: string) =>
+    new NextRequest(`https://drvn.example/_next/image?url=${encodeURIComponent(`https://project.supabase.co/storage/v1/object/public/public-car-images/8f6c2a52-3d1e-4b8a-9c3f-2b1d4e5f6a7b/${name}`)}&w=640&q=75`);
+
+  it("is refused at the optimiser with 404 and nothing cacheable, while a live copy passes with no signed link", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://project.supabase.co");
+    blocked.keys.mockResolvedValue(new Set());
+    blocked.revoked.clear();
+    blocked.revoked.add("public-car-images/8f6c2a52-3d1e-4b8a-9c3f-2b1d4e5f6a7b/hidden.webp");
+    const refused = await proxy(copy("hidden.webp"));
+    expect(refused.status).toBe(404);
+    expect(refused.headers.get("Cache-Control")).toBe("no-store");
+    // A public copy has no token, and is not a member photo's bare address: it is served.
+    const served = await proxy(copy("shown.webp"));
+    expect(served.status).toBe(200);
+    expect(served.headers.get("x-middleware-next")).toBe("1");
+    blocked.revoked.clear();
   });
 });

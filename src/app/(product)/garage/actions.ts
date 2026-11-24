@@ -8,6 +8,7 @@ import { slugify } from "@/lib/format";
 import { ACTIVITY_TITLE_MAX } from "@/lib/limits";
 import { blockMediaUrls, normalizeBlocks, type ActivityBlock } from "@/lib/activity-blocks";
 import { deleteMediaIfUnreferenced, finalizeMediaUrls, scheduleMediaCleanup } from "@/lib/media-lifecycle";
+import { schedulePublicPhotoSync } from "@/lib/media-public-copies";
 import { isAllowedVideoUrl, isOwnedStorageUrl, keepValidImageUrls } from "@/lib/media-url";
 import { MOD_CATEGORIES, type ModCategory } from "@/lib/mods/parse";
 import { allowAction, rateLimitMessage, RATE_LIMITS } from "@/lib/rate-limit";
@@ -194,7 +195,7 @@ export async function createCar(_prev: ActionState, formData: FormData): Promise
 }
 
 export async function updateCar(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
 
   const id = String(formData.get("id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
@@ -276,6 +277,10 @@ export async function updateCar(_prev: ActionState, formData: FormData): Promise
   if (error) return { error: error.message };
   if (!updated) return { error: "Car not found." };
 
+  // The public/private switch decides whether the car's photos may have
+  // public copies: withdraw them now if it was just hidden, make them if it
+  // was just shown (src/lib/media-public-copies.ts).
+  schedulePublicPhotoSync(user.id);
   // Covers edits AND the public/private toggle: syncCarToSearch removes an
   // ineligible car (and its posts) from the index, or re-adds them.
   revalidatePath("/garage");
