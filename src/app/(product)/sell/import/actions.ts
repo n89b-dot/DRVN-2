@@ -215,6 +215,12 @@ export async function providePasteFallback(
   formData: FormData
 ): Promise<ImportStartState> {
   const { user } = await requireUser();
+  // Each of these starts another round of fetching or of the model, as a new
+  // import does, so it is counted (its own allowance: a seller who retries
+  // should not be stopped from starting the next import).
+  if (!(await allowAction(RATE_LIMITS.importListingStep, user.id))) {
+    return { error: rateLimitMessage(RATE_LIMITS.importListingStep) };
+  }
 
   const importId = String(formData.get("import_id") ?? "");
   const text = String(formData.get("post_text") ?? "").trim();
@@ -288,6 +294,12 @@ export async function pollImport(importId: string): Promise<ImportProgress | { e
 /** Retry a failed step. The engine resumes from whatever survived. */
 export async function retryImport(importId: string): Promise<ImportProgress | { error: string }> {
   const { user } = await requireUser();
+  // Each of these starts another round of fetching or of the model, as a new
+  // import does, so it is counted (its own allowance: a seller who retries
+  // should not be stopped from starting the next import).
+  if (!(await allowAction(RATE_LIMITS.importListingStep, user.id))) {
+    return { error: rateLimitMessage(RATE_LIMITS.importListingStep) };
+  }
   const admin = createAdminClient();
   const { data: row } = await admin
     .from("listing_imports")
@@ -321,6 +333,12 @@ export async function chooseImportItem(
   itemIndex: number
 ): Promise<ImportProgress | { error: string }> {
   const { user } = await requireUser();
+  // Each of these starts another round of fetching or of the model, as a new
+  // import does, so it is counted (its own allowance: a seller who retries
+  // should not be stopped from starting the next import).
+  if (!(await allowAction(RATE_LIMITS.importListingStep, user.id))) {
+    return { error: rateLimitMessage(RATE_LIMITS.importListingStep) };
+  }
   const admin = createAdminClient();
   const { data: row } = await admin
     .from("listing_imports")

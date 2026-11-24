@@ -81,7 +81,9 @@ test("queued account export crosses media pages without including another member
     await page.getByRole("button", { name: /log in|sign in/i }).click();
     await page.waitForURL(/\/home/);
 
-    const queuedResponse = await page.request.post("/api/account/export");
+    // The route acts on the session cookie, so it takes writes from our own
+    // pages only; a request made outside a page has to name its origin.
+    const queuedResponse = await page.request.post("/api/account/export", { headers: { origin: new URL(page.url()).origin } });
     const queued = await queuedResponse.json();
     expect(queuedResponse.status(), JSON.stringify(queued)).toBe(202);
     expect(queued).toMatchObject({ status: "pending" });

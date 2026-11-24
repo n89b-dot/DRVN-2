@@ -33,6 +33,11 @@ function laneValues(): Record<string, string> {
     // only be unguessable for the length of one run.
     STRIPE_WEBHOOK_SECRET: `whsec_lane_${secret()}`,
     STRIPE_CONNECT_WEBHOOK_SECRET: `whsec_lane_connect_${secret()}`,
+    // Present at launch (listing import is on), so the lane boots with one.
+    // It is not a real key: the lane imports nothing, and a call made with
+    // it would be refused by the provider, which the app treats as the
+    // model being unavailable.
+    ANTHROPIC_API_KEY: `sk-ant-lane-${secret()}`,
   };
 }
 

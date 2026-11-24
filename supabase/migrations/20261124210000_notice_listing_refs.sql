@@ -1,0 +1,241 @@
+-- ============================================================================
+-- 20261124210000 — a notice and a digest record which listings they name
+--
+-- When a member leaves, their listings' titles are taken out of what other
+-- members were sent: saved-search notices and saved-search email digests.
+-- Nothing linked a notice to a listing, so it was found by matching the
+-- title's text in every notice, with rules for a title that contains the
+-- separator. A digest item named its listing but not the seller, so an item
+-- whose listing was gone counted as the leaver's whoever had sold it.
+--
+--   * public.notifications.listing_refs (jsonb, null for a notice that names
+--     no listing): for each listing named, in the order of the body, its id,
+--     its seller and the title as written. The saved-search job fills it.
+--     Indexed for "names a listing of this seller".
+--   * private.scrub_member_notices: a notice with the record is found by the
+--     seller's id and cut exactly, and the record is cleared of the member.
+--     A notice without it (all of those written before this) keeps the match
+--     by title, unchanged.
+--   * private.scrub_member_digest_items: an item that names its seller is the
+--     member's exactly when that is them; a neutralised item drops the
+--     seller. An item with no seller recorded keeps the old rule.
+--
+-- Recorded now because it cannot be added afterwards: a notice written
+-- without the record has only its text. No existing row is changed.
+-- ============================================================================
+
+alter table public.notifications add column listing_refs jsonb;
+alter table public.notifications add constraint notifications_listing_refs_check
+  check (listing_refs is null or (jsonb_typeof(listing_refs) = 'array' and jsonb_array_length(listing_refs) between 1 and 10));
+comment on column public.notifications.listing_refs is 'The listings this notice names, in the order of its body: [{id, seller_id, title}]. Null when it names none. Lets a departing member''s listings be found by seller, not by matching titles (20261124210000).';
+create index notifications_listing_refs_idx on public.notifications using gin (listing_refs jsonb_path_ops) where listing_refs is not null;
+
+CREATE OR REPLACE FUNCTION private.scrub_member_notices(p_user uuid, p_username text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  left_drvn constant text := 'A member who has since left DRVN';
+  a_listing constant text := 'A listing by a member who has since left DRVN';
+  a_matches constant text := 'Listings matched your saved search, including one by a member who has since left DRVN.';
+  v_actor integer;
+  v_offer integer;
+  v_order integer;
+  v_matched integer;
+  -- 20261124210000
+  v_by_ref integer;
+begin
+  update public.notifications nt
+     set title = case
+           -- Not the actor's words: DRVN's title stays. An unclassified kind is treated as theirs.
+           when coalesce(private.notification_member_text(nt.kind), 'actor') <> 'actor' then nt.title
+           when nt.kind = 'follow' then left_drvn || ' followed you'
+           when nt.kind = 'car_follow' then left_drvn || ' is following your build'
+           when nt.kind in ('save', 'listing_save') then left_drvn || ' saved this'
+           when nt.kind = 'comment' then left_drvn || ' commented on your update'
+           when nt.kind = 'reaction' then left_drvn || ' reacted to your update'
+           when nt.kind = 'review' then left_drvn || ' left you a review'
+           when nt.kind = 'question' then left_drvn || ' wrote about your part'
+           when nt.kind = 'message' then 'Message from a member who has since left DRVN'
+           else left_drvn
+         end,
+         body = case
+           -- Offer, order and saved-search bodies are decided by linkage below.
+           when coalesce(private.notification_member_text(nt.kind), 'actor') <> 'actor' then nt.body
+           when nt.body is null then null
+           else '(removed)'
+         end,
+         href = case
+           when nt.target_id = p_user or (p_username is not null and nt.href = '/u/' || p_username) then null
+           else nt.href
+         end,
+         actor_id = null
+   where nt.actor_id = p_user;
+  get diagnostics v_actor = row_count;
+
+  -- 2. Offers on the member's listings, as their buyers were told.
+  with linked as (
+    select o.buyer_id, '/offers/' || o.id as href from public.offers o
+      join public.listings l on l.id = o.listing_id
+     where l.seller_id = p_user and o.buyer_id <> p_user
+    union all
+    select x.buyer_id, '/orders/' || x.id || suffix from public.orders x
+      join public.offers o on o.id = x.origin_offer_id
+      join public.listings l on l.id = o.listing_id
+      cross join (values (''), ('/checkout')) as v(suffix)
+     where l.seller_id = p_user and x.buyer_id <> p_user
+  )
+  update public.notifications nt
+     set body = case nt.kind
+           when 'offer_listing_withdrawn' then 'Your offer on a listing by a member who has since left DRVN has ended. Nothing was charged.'
+           when 'offer_agent_out_of_rounds' then a_listing || coalesce(substring(nt.body from ' · \$[0-9,.]+ over your max$'), '')
+           else a_listing
+         end
+    from linked
+   where nt.user_id = linked.buyer_id and nt.href = linked.href
+     and coalesce(private.notification_member_text(nt.kind), 'listing_title') = 'listing_title' and nt.body is not null
+     and nt.body not like a_listing || '%' and nt.body not like 'Your offer on a listing by a member who has since left DRVN%';
+  get diagnostics v_offer = row_count;
+
+  -- 3. Order notices quoting what the member wrote, as the other party got them.
+  update public.notifications nt
+     set body = case nt.kind
+           when 'order_disputed' then 'The description of the problem was removed because the member who wrote it left DRVN. See the order for details.'
+           else 'The reason was removed because a member on this order left DRVN. See the order for details.'
+         end
+    from public.orders x
+   where p_user in (x.buyer_id, x.seller_id)
+     and nt.user_id in (x.buyer_id, x.seller_id) and nt.user_id <> p_user
+     and nt.href = '/orders/' || x.id
+     and nt.body is not null
+     and (
+       (nt.kind = 'order_disputed' and coalesce(x.disputed_by, x.buyer_id) = p_user)
+       or (nt.kind in ('order_cancelled', 'order_refunded')
+           and nt.body not in ('checkout not completed in time', 'checkout abandoned')
+           and nt.body !~* 'payouts weren''t set up within 14 days')
+     )
+     and nt.body not like 'The % was removed because %';
+  get diagnostics v_order = row_count;
+
+  -- 4. Saved-search notices that named the member's listings to other members
+  --    (src/app/api/jobs/saved-searches/route.ts: the title ends ": <listing
+  --    title>" for one match, the body is up to three titles joined by " · ").
+  --    Nothing links such a notice to the listing, so it is found by the
+  --    exact title, whole, in its place.
+  --
+  --    20261124210000: a notice written since then records which listings it
+  --    names (listing_refs: id, seller, title, in the order of its body).
+  --    Those are found by the seller's id, through an index, and cut exactly:
+  --    no reading of every notice, no guessing from a title, and it works
+  --    whether or not the listing still exists. The body is rebuilt from the
+  --    record, and the record itself is cleared of the member.
+  with hit as (
+    select nt.id,
+           (select string_agg(case when e.r->>'seller_id' = p_user::text then a_listing else e.r->>'title' end, ' · ' order by e.ord)
+              from jsonb_array_elements(nt.listing_refs) with ordinality as e(r, ord)) as body,
+           (select jsonb_agg(case when e.r->>'seller_id' = p_user::text then jsonb_build_object('title', a_listing) else e.r end order by e.ord)
+              from jsonb_array_elements(nt.listing_refs) with ordinality as e(r, ord)) as refs,
+           -- "New match for <search>: <title>": the title a single match ends with.
+           (select e.r->>'title' from jsonb_array_elements(nt.listing_refs) as e(r)
+             where e.r->>'seller_id' = p_user::text and nt.title like 'New match for %'
+               and right(nt.title, length(e.r->>'title') + 2) = ': ' || (e.r->>'title')
+             order by length(e.r->>'title') desc limit 1) as title_tail
+      from public.notifications nt
+     where nt.listing_refs @> jsonb_build_array(jsonb_build_object('seller_id', p_user::text))
+       and nt.user_id <> p_user
+  )
+  update public.notifications nt
+     set title = case when hit.title_tail is not null
+                      then left(nt.title, length(nt.title) - length(hit.title_tail)) || a_listing else nt.title end,
+         body = case when private.notification_member_text(nt.kind) = 'matched_titles' then hit.body else nt.body end,
+         listing_refs = hit.refs
+    from hit
+   where nt.id = hit.id;
+  get diagnostics v_by_ref = row_count;
+
+  --    Notices from before the record (listing_refs is null) keep the match
+  --    by title below, unchanged.
+  with mine as (
+    select distinct l.title from public.listings l
+     where l.seller_id = p_user and l.title is not null and btrim(l.title) <> ''
+  )
+  update public.notifications nt
+     set title = coalesce((
+           select left(nt.title, length(nt.title) - length(m.title)) || a_listing from mine m
+            where nt.title like 'New match for %' and right(nt.title, length(m.title) + 2) = ': ' || m.title
+            order by length(m.title) desc limit 1), nt.title),
+         -- A title is cut out whole, in its place. One that cannot be (it
+         -- contains the separator, so no piece equals it, or any of their
+         -- titles is still in what is left) takes the whole body with it
+         -- (20261111140000, Codex's final review).
+         body = (
+           select case when exists (select 1 from mine m where strpos(c.cut, m.title) > 0) then a_matches else c.cut end
+             from (select string_agg(case when exists (select 1 from mine m where m.title = e.t) then a_listing else e.t end, ' · ' order by e.ord) as cut
+                     from unnest(string_to_array(nt.body, ' · ')) with ordinality as e(t, ord)) c)
+   where private.notification_member_text(nt.kind) = 'matched_titles'
+     and nt.user_id <> p_user
+     and nt.listing_refs is null
+     and exists (
+       select 1 from mine m
+        where (nt.body is not null and strpos(' · ' || nt.body || ' · ', ' · ' || m.title || ' · ') > 0)
+           or (nt.title like 'New match for %' and right(nt.title, length(m.title) + 2) = ': ' || m.title));
+  get diagnostics v_matched = row_count;
+
+  return jsonb_build_object('notifications_sent', v_actor, 'offer_notice_bodies', v_offer, 'order_notice_bodies', v_order, 'saved_search_notices', v_matched + v_by_ref);
+end $function$;
+
+CREATE OR REPLACE FUNCTION private.scrub_member_digest_items(p_user uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  a_listing constant text := 'A listing by a member who has since left DRVN';
+  v_trimmed integer;
+  v_skipped integer;
+  v_neutral integer;
+begin
+  with item as (
+    select d.id as digest_id, e.i, e.ord,
+           -- 20261124210000: an item written since then names its seller, and
+           -- is the member's exactly when that is them. Before, an item whose
+           -- listing no longer existed counted as theirs whoever had sold it,
+           -- so a part another seller had removed was blanked in other
+           -- members' digests when anyone at all left. Items with no seller
+           -- recorded keep the old rule: the member's, or no longer there.
+           case when e.i ? 'seller_id' then coalesce(e.i->>'seller_id' = p_user::text, false)
+                else (e.i->>'id') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                  or not exists (select 1 from public.listings l where l.id = (e.i->>'id')::uuid and l.seller_id is distinct from p_user)
+           end as theirs
+      from public.saved_search_email_digests d
+      cross join lateral jsonb_array_elements(d.items) with ordinality as e(i, ord)
+  ), hit as (
+    select digest_id,
+           jsonb_agg(i order by ord) filter (where not theirs) as kept,
+           -- A neutralised item no longer names the member either.
+           jsonb_agg(case when theirs then jsonb_set(i - 'seller_id', '{title}', to_jsonb(a_listing)) else i end order by ord) as neutral,
+           count(*) filter (where theirs) as gone,
+           bool_or(theirs and i->>'title' is distinct from a_listing) as changes
+      from item group by digest_id
+    having bool_or(theirs)
+  ), done as (
+    update public.saved_search_email_digests d
+       set items = case when d.status in ('pending', 'sending') and hit.kept is not null then hit.kept else hit.neutral end,
+           match_count = case when d.status in ('pending', 'sending') and hit.kept is not null
+                              then greatest(d.match_count - hit.gone::integer, jsonb_array_length(hit.kept)) else d.match_count end,
+           status = case when d.status in ('pending', 'sending') and hit.kept is null then 'skipped' else d.status end,
+           skip_reason = case when d.status in ('pending', 'sending') and hit.kept is null then 'listings_removed' else d.skip_reason end,
+           updated_at = now()
+      from hit
+     where d.id = hit.digest_id
+       and (d.status in ('pending', 'sending') or hit.changes)
+    returning (d.status = 'skipped' and d.skip_reason = 'listings_removed' and hit.kept is null) as skipped,
+              (hit.kept is not null and d.items = hit.kept) as trimmed
+  )
+  select count(*) filter (where trimmed and not skipped), count(*) filter (where skipped), count(*) filter (where not trimmed and not skipped)
+    into v_trimmed, v_skipped, v_neutral from done;
+  return jsonb_build_object('digests_trimmed', v_trimmed, 'digests_not_sent', v_skipped, 'digest_titles_removed', v_neutral);
+end $function$;

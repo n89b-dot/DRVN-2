@@ -22,6 +22,7 @@ export const MEMBER_JSON_COLUMNS: readonly string[] = [
   "agent_events.result", // what a tool answered, member text included
   "order_items.commercial_snapshot", // a copy of the seller's listing text
   "order_items.condition_snapshot", // a copy of the seller's condition checklist
+  "notifications.listing_refs", // the listings a notice names: id, seller and a copy of the seller's title; no photo
 ];
 
 /** Only the server, an operator or a provider writes these; no member text is read from a photo key in them. */

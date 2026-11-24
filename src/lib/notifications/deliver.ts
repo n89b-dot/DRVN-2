@@ -20,6 +20,9 @@ import type { NotificationSection } from "./kinds";
  * channel doesn't need workflow orchestration, and DRVN must not depend on a
  * hosted notification service to function. The seam is this file.
  */
+/** One listing a notice names: its id, its seller and its title as written. */
+export type ListingRef = { id: string; seller_id: string; title: string };
+
 export async function deliverNotification({
   userId,
   kind,
@@ -28,6 +31,7 @@ export async function deliverNotification({
   body,
   href,
   actorId = null,
+  listingRefs,
 }: {
   userId: string;
   kind: string;
@@ -36,6 +40,14 @@ export async function deliverNotification({
   body?: string | null;
   href?: string | null;
   actorId?: string | null;
+  /**
+   * The listings the notice names, in the order of its body, each with its
+   * seller and the title as written (notifications.listing_refs,
+   * 20261124210000). A notice that puts a listing's title in front of
+   * another member must pass this: it is how the title is found and removed
+   * when that seller leaves, without matching text.
+   */
+  listingRefs?: readonly ListingRef[];
 }): Promise<"delivered" | "muted" | "failed"> {
   const admin = createAdminClient();
 
@@ -58,6 +70,7 @@ export async function deliverNotification({
     body: body ?? null,
     href: href ?? null,
     actor_id: actorId,
+    listing_refs: listingRefs?.length ? listingRefs.map(({ id, seller_id, title }) => ({ id, seller_id, title })) : null,
   });
   if (error) {
     reportError("[notifications] delivery failed", { kind, error });

@@ -77,20 +77,24 @@ export async function setAgentBetaStep(_previous: AgentControlState, formData: F
   return { ok: open ? "Opened for every member." : "Closed. Its controls no longer show." };
 }
 
-/** The daily model spend caps (agent_spend_limits), audited. */
+/** The model spend caps (agent_spend_limits): two a day and one a month, audited. */
 export async function setAgentSpendLimits(_previous: AgentControlState, formData: FormData): Promise<AgentControlState> {
   const context = await getAdminContext();
   if (!context) return { error: "Not found." };
   if (context.role !== "admin") return { error: "Read-only access." };
   const member = Number(formData.get("member_usd"));
   const global = Number(formData.get("global_usd"));
+  const monthly = Number(formData.get("monthly_usd"));
   const reason = String(formData.get("reason") ?? "").trim();
   if (!Number.isFinite(member) || !Number.isFinite(global) || member < 0 || global < 0 || member > global) {
-    return { error: "Both caps are dollar amounts, and the member cap is no more than the global one." };
+    return { error: "Both daily caps are dollar amounts, and the member cap is no more than the everyone cap." };
+  }
+  if (String(formData.get("monthly_usd") ?? "").trim() === "" || !Number.isFinite(monthly) || monthly < 0) {
+    return { error: "The monthly cap is a dollar amount, zero or more." };
   }
   if (!reason || reason.length > 1000) return { error: "Say why — it goes in the audit log." };
   const session = await createClient();
-  const { error } = await session.rpc("admin_set_agent_spend_limits", { p_member_usd: member, p_global_usd: global, p_reason: reason });
+  const { error } = await session.rpc("admin_set_agent_spend_limits", { p_member_usd: member, p_global_usd: global, p_monthly_usd: monthly, p_reason: reason });
   if (error) {
     if (error.code === "42501") return { error: "This needs a fresh authenticator check. Reload to verify again." };
     if (error.code === "22023") return { error: error.message };

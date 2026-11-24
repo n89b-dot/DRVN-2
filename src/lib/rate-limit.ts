@@ -54,6 +54,9 @@ export const RATE_LIMITS = {
   /** Remote fetch + AI + media transfer — the most expensive user-triggered
    *  action in the product, so the tightest listing-side limit. */
   importListing: { action: "listing-import", limit: 10, windowSeconds: 60 * 60 },
+  /** A retry, a pasted fallback or a choice between items on an import
+   *  already started: each runs the fetch or the model again. */
+  importListingStep: { action: "listing-import-step", limit: 30, windowSeconds: 60 * 60 },
   /** Adding a mod by pasting a link (L-1). Far lighter than the importer —
    *  one page fetch, one thumbnail, no AI — so it gets a looser limit: a
    *  member filling in a build sheet in one sitting pastes a lot of links. */
@@ -100,6 +103,14 @@ export const RATE_LIMITS = {
   /** Where no address can be trusted every visitor shares one bucket, so it
    *  is a ceiling on the endpoint as a whole rather than on one person. */
   searchSuggestUnattributed: { action: "search-suggest-shared", limit: 600, windowSeconds: 60 },
+  /** The fitment picker's model list for one make (/api/vehicles/models):
+   *  public and signed-out, and a make never asked for before costs one call
+   *  to the vehicle registry and a write. Keyed like autocomplete. */
+  vehicleModels: { action: "vehicle-models", limit: 60, windowSeconds: 60 },
+  vehicleModelsUnattributed: { action: "vehicle-models-shared", limit: 600, windowSeconds: 60 },
+  /** "Download my data" (/api/account/export): each request queues a job
+   *  that reads everything the member has. */
+  accountExport: { action: "account-export", limit: 3, windowSeconds: 60 * 60 },
 } as const satisfies Record<string, RateLimitRule>;
 
 /** True when the caller is within the limit and the attempt may proceed. */

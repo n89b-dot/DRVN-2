@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireSameOrigin } from "@/lib/http/origin";
 import { allowAction } from "@/lib/rate-limit";
 import { SERVER_UPLOAD_MAX_BYTES, serverUploadMaxBytes } from "@/lib/upload-limits";
 import { ensureMediaStorageOrigin } from "@/lib/media-lifecycle";
@@ -47,6 +48,9 @@ function validPrefix(bucket: string, prefix: string, userId: string): boolean {
 }
 
 export async function POST(request: Request) {
+  // Acts on the session cookie, so it must come from our own pages.
+  const refused = requireSameOrigin(request);
+  if (refused) return refused;
   const client = await createClient();
   const { data: { user } } = await client.auth.getUser();
   if (!user) return Response.json({ error: "Sign in to upload photos." }, { status: 401 });

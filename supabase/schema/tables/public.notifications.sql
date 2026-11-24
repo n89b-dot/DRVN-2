@@ -11,22 +11,26 @@ create table public.notifications (
   actor_id uuid,
   read_at timestamp with time zone,
   created_at timestamp with time zone default now() not null,
-  target_id uuid
+  target_id uuid,
+  listing_refs jsonb
 );
 
 alter table public.notifications enable row level security;
 
 -- Comments
 comment on column public.notifications.target_id is 'What the notification is about (a post, part, car or member), read from href on insert. Not a foreign key; cleared with its subject (20261107180100).';
+comment on column public.notifications.listing_refs is 'The listings this notice names, in the order of its body: [{id, seller_id, title}]. Null when it names none. Lets a departing member''s listings be found by seller, not by matching titles (20261124210000).';
 
 -- Constraints
 alter table public.notifications add constraint notifications_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
+alter table public.notifications add constraint notifications_listing_refs_check CHECK (listing_refs IS NULL OR jsonb_typeof(listing_refs) = 'array'::text AND jsonb_array_length(listing_refs) >= 1 AND jsonb_array_length(listing_refs) <= 10);
 alter table public.notifications add constraint notifications_pkey PRIMARY KEY (id);
 alter table public.notifications add constraint notifications_section_check CHECK (section = ANY (ARRAY['engagement'::text, 'marketplace'::text]));
 alter table public.notifications add constraint notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
 
 -- Indexes
 CREATE INDEX notifications_actor_id_idx ON public.notifications USING btree (actor_id) WHERE (actor_id IS NOT NULL);
+CREATE INDEX notifications_listing_refs_idx ON public.notifications USING gin (listing_refs jsonb_path_ops) WHERE (listing_refs IS NOT NULL);
 CREATE INDEX notifications_target_idx ON public.notifications USING btree (target_id) WHERE (target_id IS NOT NULL);
 CREATE INDEX notifications_unread_idx ON public.notifications USING btree (user_id) WHERE (read_at IS NULL);
 CREATE INDEX notifications_user_idx ON public.notifications USING btree (user_id, created_at DESC);

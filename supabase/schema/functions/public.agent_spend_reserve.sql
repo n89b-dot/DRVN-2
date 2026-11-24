@@ -12,6 +12,9 @@ declare
   v_member numeric;
   v_global numeric;
   v_hold uuid;
+  -- 20261124200000
+  v_month timestamptz := date_trunc('month', now() at time zone 'utc') at time zone 'utc';
+  v_month_total numeric;
 begin
   if p_owner is null or p_feature is null or p_feature not in ('agent_chat', 'agent_eval', 'listing_import', 'marketplace_filters')
      or p_amount_usd is null or p_amount_usd <= 0 or p_amount_usd > 5 then
@@ -50,6 +53,31 @@ begin
     return jsonb_build_object('allowed', false, 'reason', 'spend_cap',
       'member_usd', v_member, 'global_usd', v_global,
       'member_cap', v_limits.per_member_daily_usd, 'global_cap', v_limits.global_daily_usd);
+  end if;
+
+  -- 20261124200000: the month's ceiling, everyone's, over every feature that
+  -- calls the model. Counted the same way as the day's: what was used since
+  -- the first of the month (UTC) plus every hold still open. The first
+  -- refusal of a month tells the operators, once, because from then until
+  -- the cap is raised or the month ends no member's import or chat reaches
+  -- the model.
+  select
+    coalesce((select sum(u.cost_usd) from public.agent_usage u where u.created_at >= v_month), 0)
+      + coalesce((select sum(h.amount_usd) from public.agent_spend_holds h where h.created_at >= v_month), 0)
+  into v_month_total;
+  if v_month_total + p_amount_usd > v_limits.global_monthly_usd then
+    insert into public.admin_alert_outbox(kind, title, detail, payload, dedup_key, status)
+    values (
+      'ai_month_cap_reached',
+      'The month''s model spend limit has been reached',
+      'Listing import and anything else that calls the model is refused until the limit is raised (Admin, Agent, Model spend) or the month ends. Spent or held this month: $'
+        || to_char(v_month_total, 'FM999990.00') || ' of $' || to_char(v_limits.global_monthly_usd, 'FM999990.00') || '.',
+      jsonb_build_object('month_usd', v_month_total, 'month_cap', v_limits.global_monthly_usd),
+      'ai-month-cap:' || to_char(v_month, 'YYYY-MM'),
+      'pending'
+    ) on conflict (dedup_key) do nothing;
+    return jsonb_build_object('allowed', false, 'reason', 'spend_cap', 'period', 'month',
+      'month_usd', v_month_total, 'month_cap', v_limits.global_monthly_usd);
   end if;
 
   insert into public.agent_spend_holds(owner_id, feature, amount_usd)

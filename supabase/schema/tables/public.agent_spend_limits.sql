@@ -5,14 +5,19 @@ create table public.agent_spend_limits (
   per_member_daily_usd numeric(10,2) default 2.00 not null,
   global_daily_usd numeric(10,2) default 50.00 not null,
   changed_by uuid,
-  changed_at timestamp with time zone default now() not null
+  changed_at timestamp with time zone default now() not null,
+  global_monthly_usd numeric(10,2) default 50.00 not null
 );
 
 alter table public.agent_spend_limits enable row level security;
 
+-- Comments
+comment on column public.agent_spend_limits.global_monthly_usd is 'The most every model feature together may spend in a calendar month (UTC), in dollars. Changed in the admin console (20261124200000).';
+
 -- Constraints
 alter table public.agent_spend_limits add constraint agent_spend_limits_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES public.profiles(id) ON DELETE SET NULL;
 alter table public.agent_spend_limits add constraint agent_spend_limits_global_daily_usd_check CHECK (global_daily_usd >= 0::numeric);
+alter table public.agent_spend_limits add constraint agent_spend_limits_global_monthly_usd_check CHECK (global_monthly_usd >= 0::numeric);
 alter table public.agent_spend_limits add constraint agent_spend_limits_per_member_daily_usd_check CHECK (per_member_daily_usd >= 0::numeric);
 alter table public.agent_spend_limits add constraint agent_spend_limits_pkey PRIMARY KEY (singleton);
 alter table public.agent_spend_limits add constraint agent_spend_limits_singleton_check CHECK (singleton);

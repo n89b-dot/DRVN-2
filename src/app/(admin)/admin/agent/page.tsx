@@ -72,12 +72,13 @@ export default async function AdminAgentPage() {
     ).then(({ rows, error }) => ({ data: rows && [...rows].sort((a, b) => (a.set_at < b.set_at ? 1 : a.set_at > b.set_at ? -1 : 0)), error })),
     admin.rpc("agent_health"),
     admin.from("agent_beta_steps").select("step, open, changed_at, reason"),
-    admin.from("agent_spend_limits").select("per_member_daily_usd, global_daily_usd").maybeSingle(),
+    admin.from("agent_spend_limits").select("per_member_daily_usd, global_daily_usd, global_monthly_usd").maybeSingle(),
     admin.rpc("agent_spend_allowed", { p_owner: "00000000-0000-0000-0000-000000000000" }),
     admin.from("agent_metrics_daily").select("day, scope, measure, value, sample").gte("day", since).order("day"),
   ]);
   const stepOpen = new Map((steps.data ?? []).map((row) => [row.step, row]));
   const globalSpend = (spend.data as { global_usd?: number } | null)?.global_usd ?? 0;
+  const monthSpend = (spend.data as { month_usd?: number } | null)?.month_usd ?? 0;
   const computedDays = new Set((metrics.data ?? []).map((row) => row.day));
   const rowOf = (day: string, scope: string, measure: string) =>
     (metrics.data ?? []).find((row) => row.day === day && row.scope === scope && row.measure === measure);
@@ -212,11 +213,15 @@ export default async function AdminAgentPage() {
           <TileHead label="Model spend, today" end={<span className="chip">${Number(globalSpend).toFixed(2)}</span>} />
           <KeyValueTable
             rows={[
-              { label: "Per member, per day", value: `$${Number(limits.data?.per_member_daily_usd ?? 0).toFixed(2)}` },
+              { label: "Spent this month", value: `$${Number(monthSpend).toFixed(2)} of $${Number(limits.data?.global_monthly_usd ?? 0).toFixed(2)}` },
+              { label: "Everyone, per month", value: `$${Number(limits.data?.global_monthly_usd ?? 0).toFixed(2)}` },
               { label: "Everyone, per day", value: `$${Number(limits.data?.global_daily_usd ?? 0).toFixed(2)}` },
+              { label: "Per member, per day", value: `$${Number(limits.data?.per_member_daily_usd ?? 0).toFixed(2)}` },
             ]}
           />
-          <p className="order__meta mt-3">A turn past either cap is refused before the model is called. Usage is stored per model call (model, tokens, cost), never the conversation.</p>
+          <p className="order__meta mt-3">
+            A call past any cap is refused before the model is called. That covers listing import, a mod added from a shop link, and the agent. When the month&apos;s cap is reached an alert is sent once, and nothing calls the model until the cap is raised here or the month ends (UTC). Usage is stored per model call (model, tokens, cost), never the conversation.
+          </p>
           {canAct ? (
             <div className="mt-4">
               <AgentActionForm
@@ -225,8 +230,9 @@ export default async function AdminAgentPage() {
                 hidden={{}}
                 fields={
                   <div className="field--row">
-                    <TextField id="agent-spend-member" name="member_usd" label="Per member, $" inputMode="decimal" defaultValue={String(limits.data?.per_member_daily_usd ?? "")} required />
-                    <TextField id="agent-spend-global" name="global_usd" label="Everyone, $" inputMode="decimal" defaultValue={String(limits.data?.global_daily_usd ?? "")} required />
+                    <TextField id="agent-spend-member" name="member_usd" label="Per member, $ a day" inputMode="decimal" defaultValue={String(limits.data?.per_member_daily_usd ?? "")} required />
+                    <TextField id="agent-spend-global" name="global_usd" label="Everyone, $ a day" inputMode="decimal" defaultValue={String(limits.data?.global_daily_usd ?? "")} required />
+                    <TextField id="agent-spend-monthly" name="monthly_usd" label="Everyone, $ a month" inputMode="decimal" defaultValue={String(limits.data?.global_monthly_usd ?? "")} required />
                   </div>
                 }
                 submitLabel="Save caps"

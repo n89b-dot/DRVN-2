@@ -78,11 +78,13 @@ test("admin runs the agent's controls, each change audited", async ({ page }) =>
 
     // The spend caps.
     const spend = page.getByRole("region", { name: "Model spend" });
-    await spend.getByLabel("Per member, $").fill("3");
-    await spend.getByLabel("Everyone, $").fill("60");
+    await spend.getByLabel("Per member, $ a day").fill("3");
+    await spend.getByLabel("Everyone, $ a day").fill("60");
+    // The month's cap, the one that binds (20261124200000).
+    await spend.getByLabel("Everyone, $ a month").fill("75");
     await spend.getByLabel("Reason").fill(`e2e caps ${stamp}`);
     await spend.getByRole("button", { name: "Save caps" }).click();
-    await expect.poll(async () => (await admin.from("agent_spend_limits").select("per_member_daily_usd, global_daily_usd").single()).data).toEqual({ per_member_daily_usd: 3, global_daily_usd: 60 });
+    await expect.poll(async () => (await admin.from("agent_spend_limits").select("per_member_daily_usd, global_daily_usd, global_monthly_usd").single()).data).toEqual({ per_member_daily_usd: 3, global_daily_usd: 60, global_monthly_usd: 75 });
     await page.screenshot({ path: "test-results/design/admin-agent-1440.png", fullPage: true });
 
     // One member's agent, and the chat gate.
@@ -100,7 +102,7 @@ test("admin runs the agent's controls, each change audited", async ({ page }) =>
     const opened = await admin.from("admin_audit_log").select("action, subject_id, metadata").eq("actor_id", actorId).eq("action", "agent.chat_opened").single();
     expect(opened.data).toMatchObject({ subject_id: memberId, metadata: { case_kind: "report", case_id: caseId } });
   } finally {
-    await admin.from("agent_spend_limits").update({ per_member_daily_usd: 2, global_daily_usd: 50 }).eq("singleton", true);
+    await admin.from("agent_spend_limits").update({ per_member_daily_usd: 2, global_daily_usd: 50, global_monthly_usd: 50 }).eq("singleton", true);
     if (reportId) await admin.from("reports").delete().eq("id", reportId);
     await cleanupFixtureUser(memberId);
     await cleanupFixtureUser(actorId);

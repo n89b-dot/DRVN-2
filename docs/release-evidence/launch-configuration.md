@@ -1,6 +1,6 @@
 # Launch configuration
 
-The switch settings DRVN launches with. Recorded 2026-11-10 under plan 2 item A5 (`docs/plans/2026-11-architecture-remediation-plan.md`), approved by Neil with decision DA1 (the cart is not limited to one seller). Nothing is deleted to reach this configuration: every feature below that is off can be switched on later by setting a variable.
+The switch settings DRVN launches with. Recorded 2026-11-10 under plan 2 item A5 (`docs/plans/2026-11-architecture-remediation-plan.md`), approved by Neil with decision DA1 (the cart is not limited to one seller). **Changed 2026-11-24 by Neil's ruling:** importing a listing from a link is on at launch, and so is adding a mod from a shop link, which uses the same key. The agent stays off. Nothing is deleted to reach this configuration: every feature below that is off can be switched on later by setting a variable.
 
 The same record as data is `docs/release-evidence/launch-configuration.json`. `tests/ci/launch-configuration.test.ts` holds the two together and hands the variables to the app's own code to prove what each setting resolves to. The launch-configuration browser lane (plan 2 item A4) builds its environment from that file.
 
@@ -12,7 +12,8 @@ The same record as data is `docs/release-evidence/launch-configuration.json`. `t
 | DRVN Shipping (labels bought through DRVN) | **Off** | A seller sets a flat shipping price or offers pickup, and ships the part themselves. No labels are sold, so no label refunds and no label costs carried against later payouts |
 | Carrier tracking | **Off** | A seller types in a tracking number; DRVN does not ask the carrier for updates. The buyer confirms delivery, or the order confirms itself after 21 days |
 | The agent | **Off** | No member sees agent controls. Every task works without it |
-| Importing a listing from a link | **Off** | It needs the same model key as the agent. A seller fills in the sell form by hand |
+| Importing a listing from a link | **On** | A seller pastes a link to their own post elsewhere, or its text, and reviews a prefilled sell form. A site that refuses the fetch falls back to pasted text. Each import calls the model, inside the spend caps below |
+| Adding a mod from a shop link | **On** | The same model key reads the product page into the mod's fields. A shop's photo never becomes a listing photo |
 | Shared copy of public pages (the cache) | **On** | A signed-out visitor's pages are answered from a copy up to 60 seconds old (5 minutes for some content). A seller's change clears it |
 | Search | Postgres | The database's own search. No separate search service |
 | Analytics | **Off** | Nothing is sent to an analytics provider |
@@ -39,7 +40,7 @@ The same record as data is `docs/release-evidence/launch-configuration.json`. `t
 | `AGENTS_BETA` | absent | **The agent switch.** Anything but `on` is off |
 | `AGENT_AI_MODE` | absent | |
 | `AGENT_WORKER_DATABASE_URL` | absent | The agent's worker does not run without it |
-| `ANTHROPIC_API_KEY` | absent | One key serves the agent and the listing importer; without it both report that they are off |
+| `ANTHROPIC_API_KEY` | present | One key serves the listing importer, adding a mod from a shop link, and the agent. The agent stays off because `AGENTS_BETA` is absent |
 | `LISTING_IMPORT_AI_MODE` | absent | |
 | `LISTING_IMPORT_ALLOW_STUB_IN_PRODUCTION` | absent | Sandbox only |
 | `DRVN_PUBLIC_CACHE` | absent | The cache is on unless this says `off` |
@@ -56,8 +57,8 @@ Each line is asserted by `tests/ci/launch-configuration.test.ts`, which calls th
 - `drvnShipping`: disabled (`resolveShippingMode`, `src/lib/shipping/provider.ts`)
 - `carrierTracking`: off (`resolveTrackingMode`, `src/lib/shipping/tracker-registration.ts`)
 - `agent`: off (`agentsBetaOn`, `src/lib/agent/beta.ts`, reads `AGENTS_BETA`)
-- `agentModel`: disabled (`resolveAiConfig`, `src/lib/ai/config.ts`)
-- `listingImporter`: disabled (`resolveImportConfig`, `src/lib/listing-import/config.ts`)
+- `agentModel`: anthropic (`resolveAiConfig`, `src/lib/ai/config.ts`): the model can be called, by the importer and the mod link. No agent surface is shown while `agent` is off
+- `listingImporter`: anthropic (`resolveImportConfig`, `src/lib/listing-import/config.ts`)
 - `publicDataCache`: on (`publicCacheEnabled`, `src/lib/supabase/public-cache.ts`)
 - `searchEngine`: postgres (`src/lib/search/typesense.ts` needs both Typesense variables)
 - `analytics`: off (`src/lib/analytics.ts` needs `POSTHOG_KEY`)
@@ -71,9 +72,9 @@ A new database built from the migrations starts with these. They are part of the
 
 | Row | Starts as | Changed by |
 |---|---|---|
-| `agent_controls`, scope `all` | The master stop is set: no agent acts | `/admin/agent` |
+| `agent_controls`, scope `all` | The master stop is set: no agent acts, **and nothing calls the model, listing import included**. For import to work at launch an admin clears it once at `/admin/agent` (audited). The agent still does not act: `AGENTS_BETA` is absent and its four steps are closed | `/admin/agent` |
 | `agent_beta_steps` (seller, buyer, chat, jobs) | All four closed | `/admin/agent`. Ignored while `AGENTS_BETA` is not `on` |
-| `agent_spend_limits` | 2.00 a member a day, 50.00 a day in all | `/admin/agent` |
+| `agent_spend_limits` | 2.00 a member a day, 50.00 a day in all, and 50.00 a month in all (the month's cap is the one that binds; Neil, 24 November 2026). At the month's cap one alert is sent and nothing calls the model until it is raised or the month ends | `/admin/agent` |
 | `settlement_settings` | Payout 2 days after delivery; an untracked order confirms itself after 21 days with 3 days' notice; receipt release after 3 days; card verification from 500.00 | `/admin` settings |
 | `job_config.payments_mode` | No row, which means Stripe rules apply: a seller must be payable to publish | The row exists only on CI's stub stack |
 | `job_config.media_storage_origin`, `transfer_worker_url`, `transfer_worker_secret` | No rows | The deploy step (runbook §4) |

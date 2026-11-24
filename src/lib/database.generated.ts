@@ -1204,6 +1204,7 @@ export type Database = {
           changed_at: string
           changed_by: string | null
           global_daily_usd: number
+          global_monthly_usd: number
           per_member_daily_usd: number
           singleton: boolean
         }
@@ -1211,6 +1212,7 @@ export type Database = {
           changed_at?: string
           changed_by?: string | null
           global_daily_usd?: number
+          global_monthly_usd?: number
           per_member_daily_usd?: number
           singleton?: boolean
         }
@@ -1218,6 +1220,7 @@ export type Database = {
           changed_at?: string
           changed_by?: string | null
           global_daily_usd?: number
+          global_monthly_usd?: number
           per_member_daily_usd?: number
           singleton?: boolean
         }
@@ -3290,6 +3293,7 @@ export type Database = {
           href: string | null
           id: string
           kind: string
+          listing_refs: Json | null
           read_at: string | null
           section: string
           target_id: string | null
@@ -3303,6 +3307,7 @@ export type Database = {
           href?: string | null
           id?: string
           kind: string
+          listing_refs?: Json | null
           read_at?: string | null
           section: string
           target_id?: string | null
@@ -3316,6 +3321,7 @@ export type Database = {
           href?: string | null
           id?: string
           kind?: string
+          listing_refs?: Json | null
           read_at?: string | null
           section?: string
           target_id?: string | null
@@ -6964,7 +6970,12 @@ export type Database = {
         Returns: string
       }
       admin_set_agent_spend_limits: {
-        Args: { p_global_usd: number; p_member_usd: number; p_reason: string }
+        Args: {
+          p_global_usd: number
+          p_member_usd: number
+          p_monthly_usd?: number
+          p_reason: string
+        }
         Returns: undefined
       }
       admin_users_page: {
@@ -7650,6 +7661,10 @@ export type Database = {
         Returns: Json
       }
       expire_refund_offers: { Args: { p_limit?: number }; Returns: number }
+      expire_stale_listing_imports: {
+        Args: { p_limit?: number }
+        Returns: number
+      }
       explore_build_rows: {
         Args: { p_query: string }
         Returns: {
@@ -9143,6 +9158,10 @@ export type Database = {
       scrub_deleted_account: {
         Args: { p_digest_key: string; p_email_digest: string; p_user: string }
         Returns: Json
+      }
+      scrub_expired_listing_imports: {
+        Args: { p_limit?: number }
+        Returns: number
       }
       search_car_ids: { Args: { p_query: string }; Returns: string[] }
       search_listing_documents: {

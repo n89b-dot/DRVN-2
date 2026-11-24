@@ -202,6 +202,10 @@ test.describe("agent surfaces meet automated WCAG A/AA", () => {
       // come back (the panel's hidden composer used to hide it).
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto("/home");
+      // The bar is its own Suspense fallback (app-shell.tsx): while the page
+      // streams, the finished bar arrives in a hidden holder before it takes
+      // the fallback's place, so for a moment there are two. Wait for the one.
+      await expect(page.locator(".bnav")).toHaveCount(1);
       await expect(page.locator(".bnav")).toBeVisible();
       await assertAccessible(page, "/home with the bottom bar");
 
