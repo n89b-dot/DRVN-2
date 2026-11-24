@@ -1,12 +1,11 @@
 import { removeFollow, removeSave } from "@/features/social/actions";
+import { requireSameOrigin } from "@/lib/http/origin";
 
 const headers = { "Cache-Control": "no-store" };
 
 export async function POST(request: Request) {
-  const origin = request.headers.get("origin");
-  if (!origin || ![new URL(request.url).origin, process.env.NEXT_PUBLIC_SITE_URL].includes(origin)) {
-    return Response.json({ error: "Invalid origin." }, { status: 403, headers });
-  }
+  const refused = requireSameOrigin(request, headers);
+  if (refused) return refused;
   try {
     const text = await request.text();
     if (text.length > 1000) return Response.json({ error: "Request too large." }, { status: 413, headers });
