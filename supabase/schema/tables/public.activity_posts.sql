@@ -47,6 +47,6 @@ CREATE INDEX activity_posts_search_text_trgm_idx ON public.activity_posts USING 
 CREATE INDEX activity_posts_title_trgm_idx ON public.activity_posts USING gin (title public.gin_trgm_ops);
 
 -- Grants
-grant all on table public.activity_posts to anon;
-grant all on table public.activity_posts to authenticated;
+grant delete, insert, select, update on table public.activity_posts to anon;
+grant delete, insert, select, update on table public.activity_posts to authenticated;
 grant all on table public.activity_posts to service_role;

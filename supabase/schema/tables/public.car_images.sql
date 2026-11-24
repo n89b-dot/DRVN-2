@@ -20,6 +20,6 @@ CREATE INDEX car_images_car_idx ON public.car_images USING btree (car_id);
 CREATE INDEX car_images_media_key_idx ON public.car_images USING btree (private.media_object_key(url));
 
 -- Grants
-grant all on table public.car_images to anon;
-grant all on table public.car_images to authenticated;
+grant delete, insert, select, update on table public.car_images to anon;
+grant delete, insert, select, update on table public.car_images to authenticated;
 grant all on table public.car_images to service_role;

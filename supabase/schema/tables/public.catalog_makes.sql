@@ -25,6 +25,6 @@ CREATE UNIQUE INDEX catalog_makes_vdb_key ON public.catalog_makes USING btree (v
 CREATE UNIQUE INDEX catalog_makes_vpic_key ON public.catalog_makes USING btree (vpic_make_id) WHERE (vpic_make_id IS NOT NULL);
 
 -- Grants
-grant all on table public.catalog_makes to anon;
-grant all on table public.catalog_makes to authenticated;
+grant delete, insert, select, update on table public.catalog_makes to anon;
+grant delete, insert, select, update on table public.catalog_makes to authenticated;
 grant all on table public.catalog_makes to service_role;

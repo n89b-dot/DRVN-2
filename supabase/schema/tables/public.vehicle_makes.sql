@@ -14,6 +14,6 @@ alter table public.vehicle_makes add constraint vehicle_makes_name_key UNIQUE (n
 alter table public.vehicle_makes add constraint vehicle_makes_pkey PRIMARY KEY (id);
 
 -- Grants
-grant all on table public.vehicle_makes to anon;
-grant all on table public.vehicle_makes to authenticated;
+grant delete, insert, select, update on table public.vehicle_makes to anon;
+grant delete, insert, select, update on table public.vehicle_makes to authenticated;
 grant all on table public.vehicle_makes to service_role;

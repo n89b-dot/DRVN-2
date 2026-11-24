@@ -30,6 +30,6 @@ CREATE INDEX payments_order_idx ON public.payments USING btree (order_id);
 CREATE INDEX payments_provider_reference_idx ON public.payments USING btree (provider, provider_reference) WHERE (provider_reference IS NOT NULL);
 
 -- Grants
-grant all on table public.payments to anon;
-grant all on table public.payments to authenticated;
+grant delete, insert, select, update on table public.payments to anon;
+grant delete, insert, select, update on table public.payments to authenticated;
 grant all on table public.payments to service_role;

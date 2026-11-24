@@ -6,4 +6,4 @@ create policy "listing images follow listing" on public.listing_images
   to public
   using ((EXISTS ( SELECT 1
    FROM public.listings l
-  WHERE l.id = listing_images.listing_id AND ((l.status = ANY (ARRAY['active'::text, 'reserved'::text, 'sold'::text])) AND NOT (l.seller_id IN ( SELECT public.suspended_profile_ids() AS suspended_profile_ids)) OR l.seller_id = (( SELECT auth.uid() AS uid)) OR ( SELECT public.is_admin() AS is_admin)))));
+  WHERE l.id = listing_images.listing_id AND ((l.status = ANY (ARRAY['active'::text, 'reserved'::text, 'sold'::text])) AND NOT (l.seller_id IN ( SELECT rls_internal.suspended_profile_ids() AS suspended_profile_ids)) OR l.seller_id = (( SELECT auth.uid() AS uid)) OR ( SELECT public.is_admin() AS is_admin)))));

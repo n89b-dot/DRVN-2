@@ -11,7 +11,7 @@ AS $function$
   left join public.cars c on c.id = p.car_id
   where p.published_at is not null
     and (p.car_id is null or (c.is_public and c.slug is not null))
-    and p.author_id not in (select public.suspended_profile_ids())
+    and p.author_id not in (select rls_internal.suspended_profile_ids())
   order by p.id
   offset greatest(coalesce(p_start, 0), 0)
   limit least(greatest(coalesce(p_count, 0), 0), 1000);

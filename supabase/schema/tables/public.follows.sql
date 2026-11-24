@@ -20,6 +20,6 @@ CREATE INDEX follows_follower_type_page_idx ON public.follows USING btree (follo
 CREATE INDEX follows_target_idx ON public.follows USING btree (target_type, target_id);
 
 -- Grants
-grant all on table public.follows to anon;
-grant all on table public.follows to authenticated;
+grant delete, insert, select, update on table public.follows to anon;
+grant delete, insert, select, update on table public.follows to authenticated;
 grant all on table public.follows to service_role;

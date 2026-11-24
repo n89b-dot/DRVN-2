@@ -24,6 +24,6 @@ CREATE INDEX listing_questions_listing_idx ON public.listing_questions USING btr
 CREATE INDEX listing_questions_parent_idx ON public.listing_questions USING btree (parent_id) WHERE (parent_id IS NOT NULL);
 
 -- Grants
-grant all on table public.listing_questions to anon;
-grant all on table public.listing_questions to authenticated;
+grant delete, insert, select, update on table public.listing_questions to anon;
+grant delete, insert, select, update on table public.listing_questions to authenticated;
 grant all on table public.listing_questions to service_role;

@@ -49,5 +49,5 @@ CREATE INDEX listing_imports_status_idx ON public.listing_imports USING btree (s
 CREATE INDEX listing_imports_user_idx ON public.listing_imports USING btree (user_id, created_at DESC);
 
 -- Grants
-grant all on table public.listing_imports to authenticated;
+grant delete, insert, select, update on table public.listing_imports to authenticated;
 grant all on table public.listing_imports to service_role;

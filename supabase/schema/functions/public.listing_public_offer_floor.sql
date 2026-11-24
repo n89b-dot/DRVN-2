@@ -12,7 +12,7 @@ AS $function$
   where l.id = p_listing
     and l.show_offer_floor
     and l.status in ('active', 'reserved', 'sold')
-    and (l.seller_id = (select auth.uid()) or not (l.seller_id in (select public.suspended_profile_ids())));
+    and (l.seller_id = (select auth.uid()) or not (l.seller_id in (select rls_internal.suspended_profile_ids())));
 $function$;
 
 comment on function public.listing_public_offer_floor(p_listing uuid) is 'A listing''s offer minimum, only when its seller chose to show it (O-3); null otherwise.';

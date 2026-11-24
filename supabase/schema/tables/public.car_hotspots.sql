@@ -27,6 +27,6 @@ CREATE INDEX car_hotspots_image_media_key_idx ON public.car_hotspots USING btree
 CREATE INDEX car_hotspots_mod_item_id_idx ON public.car_hotspots USING btree (mod_item_id) WHERE (mod_item_id IS NOT NULL);
 
 -- Grants
-grant all on table public.car_hotspots to anon;
-grant all on table public.car_hotspots to authenticated;
+grant delete, insert, select, update on table public.car_hotspots to anon;
+grant delete, insert, select, update on table public.car_hotspots to authenticated;
 grant all on table public.car_hotspots to service_role;

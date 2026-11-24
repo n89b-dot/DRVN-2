@@ -12,7 +12,7 @@ AS $function$
            coalesce(l.subcategory, '') as subkey,
            count(*) as total
     from public.listings l
-    where l.status = 'active' and l.seller_id not in (select public.suspended_profile_ids())
+    where l.status = 'active' and l.seller_id not in (select rls_internal.suspended_profile_ids())
     group by grouping sets ((l.category, l.subcategory), (l.brand), (l.condition))
     having (grouping(l.category) = 0) or (grouping(l.brand) = 0 and l.brand is not null)
         or (grouping(l.condition) = 0 and l.condition is not null)

@@ -25,6 +25,6 @@ CREATE INDEX staged_uploads_owner_created_idx ON public.staged_uploads USING btr
 CREATE INDEX staged_uploads_unconsumed_created_idx ON public.staged_uploads USING btree (created_at) WHERE (consumed_at IS NULL);
 
 -- Grants
-grant maintain, references, select, trigger, truncate on table public.staged_uploads to authenticated;
+grant select on table public.staged_uploads to authenticated;
 grant all on table public.staged_uploads to service_role;
 grant update (consumed_at) on table public.staged_uploads to authenticated;

@@ -42,7 +42,7 @@ begin
   end if;
 
   -- The visitor's read rule and the shopper's filters, values quoted in.
-  filters := ' and l.status = ''active'' and l.seller_id not in (select public.suspended_profile_ids())';
+  filters := ' and l.status = ''active'' and l.seller_id not in (select rls_internal.suspended_profile_ids())';
   if coalesce(p_category, '') <> '' then filters := filters || format(' and l.category = %L', p_category); end if;
   if coalesce(p_subcategory, '') <> '' then filters := filters || format(' and l.subcategory = %L', p_subcategory); end if;
   if coalesce(p_condition, '') <> '' then filters := filters || format(' and l.condition = %L', p_condition); end if;

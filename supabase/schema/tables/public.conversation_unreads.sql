@@ -17,6 +17,6 @@ alter table public.conversation_unreads add constraint conversation_unreads_user
 CREATE INDEX conversation_unreads_user_idx ON public.conversation_unreads USING btree (user_id);
 
 -- Grants
-grant all on table public.conversation_unreads to anon;
-grant all on table public.conversation_unreads to authenticated;
+grant delete, insert, select, update on table public.conversation_unreads to anon;
+grant delete, insert, select, update on table public.conversation_unreads to authenticated;
 grant all on table public.conversation_unreads to service_role;

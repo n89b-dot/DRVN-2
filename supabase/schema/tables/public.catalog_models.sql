@@ -26,6 +26,6 @@ CREATE UNIQUE INDEX catalog_models_make_name_key ON public.catalog_models USING 
 CREATE UNIQUE INDEX catalog_models_vdb_key ON public.catalog_models USING btree (vdb_id) WHERE (vdb_id IS NOT NULL);
 
 -- Grants
-grant all on table public.catalog_models to anon;
-grant all on table public.catalog_models to authenticated;
+grant delete, insert, select, update on table public.catalog_models to anon;
+grant delete, insert, select, update on table public.catalog_models to authenticated;
 grant all on table public.catalog_models to service_role;

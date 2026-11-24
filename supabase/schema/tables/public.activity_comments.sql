@@ -22,6 +22,6 @@ CREATE INDEX activity_comments_post_idx ON public.activity_comments USING btree 
 CREATE INDEX activity_comments_post_page_idx ON public.activity_comments USING btree (post_id, created_at DESC, id DESC);
 
 -- Grants
-grant all on table public.activity_comments to anon;
-grant all on table public.activity_comments to authenticated;
+grant delete, insert, select, update on table public.activity_comments to anon;
+grant delete, insert, select, update on table public.activity_comments to authenticated;
 grant all on table public.activity_comments to service_role;

@@ -24,6 +24,6 @@ CREATE INDEX conversations_participant_a_idx ON public.conversations USING btree
 CREATE INDEX conversations_participant_b_idx ON public.conversations USING btree (participant_b, last_message_at DESC);
 
 -- Grants
-grant all on table public.conversations to anon;
-grant all on table public.conversations to authenticated;
+grant delete, insert, select, update on table public.conversations to anon;
+grant delete, insert, select, update on table public.conversations to authenticated;
 grant all on table public.conversations to service_role;

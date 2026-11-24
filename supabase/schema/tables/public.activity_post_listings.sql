@@ -21,6 +21,6 @@ alter table public.activity_post_listings add constraint activity_post_listings_
 CREATE INDEX activity_post_listings_listing_idx ON public.activity_post_listings USING btree (listing_id);
 
 -- Grants
-grant all on table public.activity_post_listings to anon;
-grant all on table public.activity_post_listings to authenticated;
+grant delete, insert, select, update on table public.activity_post_listings to anon;
+grant delete, insert, select, update on table public.activity_post_listings to authenticated;
 grant all on table public.activity_post_listings to service_role;

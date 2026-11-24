@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION public.marketplace_browse_rows(p_query text DEFAULT '
 AS $function$
  select l.* from public.listings l where trim(p_query)='' and l.status='active'
  and (p_viewer is not distinct from auth.uid() or current_user='service_role')
- and (l.seller_id not in (select public.suspended_profile_ids()) or l.seller_id=p_viewer)
+ and (l.seller_id not in (select rls_internal.suspended_profile_ids()) or l.seller_id=p_viewer)
  and (p_vehicle='' or exists(
    select 1 from public.catalog_makes m
    left join public.catalog_models mo on mo.make_id=m.id and mo.id=case when p_vehicle ~ '^[1-9][0-9]{0,9}-[1-9][0-9]{0,9}$' then split_part(p_vehicle,'-',2)::bigint else 0 end
@@ -16,14 +16,14 @@ AS $function$
    and (position('-' in p_vehicle)=0 or mo.id is not null)
    and case when v.via='stated' then p_vyear=0 or v.years @> p_vyear
      else not v.stated_also and (v.car_public or v.car_owner_id=p_viewer)
-       and (v.car_owner_id=v.seller_id or v.car_owner_id=p_viewer or v.car_owner_id not in (select public.suspended_profile_ids())) end))
+       and (v.car_owner_id=v.seller_id or v.car_owner_id=p_viewer or v.car_owner_id not in (select rls_internal.suspended_profile_ids())) end))
  and ((p_ymin=0 and p_ymax=9999) or exists(select 1 from public.cars c where c.id=l.source_car_id and (c.is_public or c.owner_id=p_viewer) and (public.profile_is_visible(c.owner_id) or c.owner_id=p_viewer) and c.year between p_ymin and p_ymax))
  and (not p_fit or exists(select 1 from public.cars g
    join public.listing_vehicle_fit v on v.listing_id=l.id and v.make_key=lower(g.make) and v.model_key=lower(g.model)
    where g.owner_id=(select p_viewer) and g.make is not null and g.model is not null
    and case when v.via='stated' then case when coalesce(g.year,0)=0 then v.all_years else v.years @> g.year end
      else not v.stated_also and (v.car_public or v.car_owner_id=p_viewer)
-       and (v.car_owner_id=v.seller_id or v.car_owner_id=p_viewer or v.car_owner_id not in (select public.suspended_profile_ids())) end))
+       and (v.car_owner_id=v.seller_id or v.car_owner_id=p_viewer or v.car_owner_id not in (select rls_internal.suspended_profile_ids())) end))
  union all
  select s.* from public.marketplace_search_browse_rows(p_query, p_vehicle, p_vyear, p_ymin, p_ymax, p_fit, p_viewer) s;
 $function$;

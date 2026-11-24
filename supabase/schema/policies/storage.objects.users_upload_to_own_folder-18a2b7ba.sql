@@ -4,4 +4,4 @@ create policy "users upload to own folder" on storage.objects
   as permissive
   for insert
   to public
-  with check ((bucket_id = ANY (ARRAY['avatars'::text, 'car-images'::text, 'activity-images'::text, 'listing-images'::text])) AND auth.role() = 'authenticated'::text AND (storage.foldername(name))[1] = auth.uid()::text);
+  with check ((bucket_id = ANY (ARRAY['avatars'::text, 'car-images'::text, 'activity-images'::text, 'listing-images'::text])) AND (( SELECT auth.role() AS role)) = 'authenticated'::text AND (storage.foldername(name))[1] = ((( SELECT auth.uid() AS uid))::text));

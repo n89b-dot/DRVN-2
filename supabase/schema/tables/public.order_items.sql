@@ -30,6 +30,6 @@ CREATE INDEX order_items_order_idx ON public.order_items USING btree (order_id);
 CREATE INDEX order_items_snapshot_part_recent_idx ON public.order_items USING btree (NULLIF(regexp_replace(lower(COALESCE(((commercial_snapshot -> 'part'::text) ->> 'part_number'::text), ''::text)), '[^a-z0-9]'::text, ''::text, 'g'::text), ''::text), ((commercial_snapshot ->> 'captured_at'::text)) DESC) WHERE (((commercial_snapshot -> 'part'::text) ->> 'part_number'::text) IS NOT NULL);
 
 -- Grants
-grant all on table public.order_items to anon;
-grant all on table public.order_items to authenticated;
+grant delete, insert, select, update on table public.order_items to anon;
+grant delete, insert, select, update on table public.order_items to authenticated;
 grant all on table public.order_items to service_role;

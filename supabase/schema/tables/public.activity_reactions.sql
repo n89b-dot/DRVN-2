@@ -20,6 +20,6 @@ CREATE INDEX activity_reactions_post_idx ON public.activity_reactions USING btre
 CREATE INDEX activity_reactions_user_id_idx ON public.activity_reactions USING btree (user_id);
 
 -- Grants
-grant all on table public.activity_reactions to anon;
-grant all on table public.activity_reactions to authenticated;
+grant delete, insert, select, update on table public.activity_reactions to anon;
+grant delete, insert, select, update on table public.activity_reactions to authenticated;
 grant all on table public.activity_reactions to service_role;

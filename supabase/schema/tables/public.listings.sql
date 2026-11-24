@@ -96,8 +96,8 @@ CREATE INDEX listings_status_created_idx ON public.listings USING btree (status,
 CREATE INDEX listings_title_trgm_idx ON public.listings USING gin (title public.gin_trgm_ops);
 
 -- Grants
-grant maintain, select on table public.listings to anon;
-grant delete, maintain, select on table public.listings to authenticated;
+grant select on table public.listings to anon;
+grant delete, select on table public.listings to authenticated;
 grant all on table public.listings to service_role;
 grant insert (id, seller_id, source_car_id, title, description, category, subcategory, condition, price_cents, location, compatibility_notes, status, shipping_cents, allows_collection, part_number, grade, condition_checklist, shipping_mode, weight_oz, length_in, width_in, height_in, brand, part_miles, part_miles_unit, show_offer_floor) on table public.listings to authenticated;
 grant update (source_car_id, title, description, category, subcategory, condition, price_cents, location, compatibility_notes, status, shipping_cents, allows_collection, part_number, grade, condition_checklist, shipping_mode, weight_oz, length_in, width_in, height_in, brand, part_miles, part_miles_unit, show_offer_floor) on table public.listings to authenticated;

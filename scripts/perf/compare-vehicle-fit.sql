@@ -16,7 +16,7 @@ stable
 as $function$
  select l.* from public.listings l where l.status='active'
  and (p_viewer is not distinct from auth.uid() or current_user='service_role')
- and (l.seller_id not in (select public.suspended_profile_ids()) or l.seller_id=p_viewer)
+ and (l.seller_id not in (select rls_internal.suspended_profile_ids()) or l.seller_id=p_viewer)
  and (p_vehicle='' or exists(
    select 1 from public.catalog_makes m
    left join public.catalog_models mo on mo.make_id=m.id and mo.id=case when p_vehicle ~ '^[1-9][0-9]{0,9}-[1-9][0-9]{0,9}$' then split_part(p_vehicle,'-',2)::bigint else 0 end

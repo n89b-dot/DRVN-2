@@ -20,6 +20,6 @@ CREATE INDEX saves_user_idx ON public.saves USING btree (user_id, created_at DES
 CREATE INDEX saves_user_type_page_idx ON public.saves USING btree (user_id, target_type, created_at DESC, target_id DESC);
 
 -- Grants
-grant all on table public.saves to anon;
-grant all on table public.saves to authenticated;
+grant delete, insert, select, update on table public.saves to anon;
+grant delete, insert, select, update on table public.saves to authenticated;
 grant all on table public.saves to service_role;

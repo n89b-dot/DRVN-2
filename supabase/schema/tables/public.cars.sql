@@ -68,8 +68,8 @@ CREATE INDEX cars_public_feed_idx ON public.cars USING btree (created_at DESC, i
 CREATE INDEX cars_search_doc_trgm_idx ON public.cars USING gin (public.car_search_doc(name, make, model, year, tags, about) public.gin_trgm_ops) WHERE is_public;
 
 -- Grants
-grant delete, insert, maintain, references, trigger, truncate, update on table public.cars to anon;
-grant delete, insert, maintain, references, trigger, truncate, update on table public.cars to authenticated;
+grant delete, insert, update on table public.cars to anon;
+grant delete, insert, update on table public.cars to authenticated;
 grant all on table public.cars to service_role;
 grant select (id, owner_id, slug, name, make, model, year, color, about, tags, cover_image_url, is_public, created_at, updated_at, trim, engine, drivetrain, body_class, vin_decoded_at, catalog_make_id, catalog_model_id, identity_source, cover_focal_x, cover_focal_y, make_key, model_key, generation_id, generation_source) on table public.cars to anon;
 grant select (id, owner_id, slug, name, make, model, year, color, about, tags, cover_image_url, is_public, created_at, updated_at, trim, engine, drivetrain, body_class, vin_decoded_at, catalog_make_id, catalog_model_id, identity_source, cover_focal_x, cover_focal_y, make_key, model_key, generation_id, generation_source) on table public.cars to authenticated;

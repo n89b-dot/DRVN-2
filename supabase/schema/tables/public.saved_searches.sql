@@ -23,6 +23,6 @@ CREATE INDEX saved_searches_alert_idx ON public.saved_searches USING btree (aler
 CREATE INDEX saved_searches_user_idx ON public.saved_searches USING btree (user_id, created_at DESC);
 
 -- Grants
-grant all on table public.saved_searches to anon;
-grant all on table public.saved_searches to authenticated;
+grant delete, insert, select, update on table public.saved_searches to anon;
+grant delete, insert, select, update on table public.saved_searches to authenticated;
 grant all on table public.saved_searches to service_role;

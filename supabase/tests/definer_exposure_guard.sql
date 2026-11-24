@@ -29,8 +29,7 @@ declare
     'search_update_ids(text)',            -- ids of published updates on visible public builds; same reason
     'username_available(text)',           -- 'invalid' | 'taken' | 'available' for one handle; reserved and retired read as taken, so no deleted account's handle is revealed (N38, 20261107220500)
     'search_word_corrections(text)',      -- the words of a query absent from the titles/brands of parts for sale, each with its closest word there; words anyone can read (20261011130000)
-    'settlement_hold_policy()',           -- the public part of settlement_settings: periods, and whether each fraud control is on, never its amount (20261107210000)
-    'suspended_profile_ids()'             -- the set the read policies test against, once per query; ids only (20261010095900)
+    'settlement_hold_policy()'            -- the public part of settlement_settings: periods, and whether each fraud control is on, never its amount (20261107210000)
   ];
   -- Callable by signed-in members (not visitors): each answers or acts only
   -- for the caller, or requires an admin. Reviewed 17 Oct 2026 (A0).

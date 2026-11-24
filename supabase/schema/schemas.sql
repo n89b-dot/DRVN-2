@@ -11,3 +11,9 @@ grant usage on schema public to authenticated;
 grant create, usage on schema public to pg_database_owner;
 grant usage on schema public to public;
 grant usage on schema public to service_role;
+
+create schema if not exists rls_internal;
+comment on schema rls_internal is 'Helpers the row level security policies call. Not served by the API (supabase/config.toml), so a function here can be run by a policy on a visitor''s behalf without being callable by that visitor.';
+grant usage on schema rls_internal to anon;
+grant usage on schema rls_internal to authenticated;
+grant usage on schema rls_internal to service_role;

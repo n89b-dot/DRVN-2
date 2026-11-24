@@ -67,8 +67,8 @@ CREATE INDEX profiles_suspended_idx ON public.profiles USING btree (id) WHERE (s
 CREATE INDEX profiles_username_trgm_idx ON public.profiles USING gin (username public.gin_trgm_ops);
 
 -- Grants
-grant delete, insert, maintain, references, trigger, truncate on table public.profiles to anon;
-grant delete, insert, maintain, references, trigger, truncate on table public.profiles to authenticated;
+grant delete, insert on table public.profiles to anon;
+grant delete, insert on table public.profiles to authenticated;
 grant all on table public.profiles to service_role;
 grant select (id, username, display_name, avatar_url, bio, location, links, profile_type, created_at, updated_at, headline, payouts_enabled, main_car_id, store_note, country, region) on table public.profiles to anon;
 grant select (id, username, display_name, avatar_url, bio, location, links, profile_type, created_at, updated_at, headline, payouts_enabled, import_attested_at, main_car_id, store_note, country, region) on table public.profiles to authenticated;

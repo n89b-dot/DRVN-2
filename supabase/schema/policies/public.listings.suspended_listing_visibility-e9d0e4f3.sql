@@ -4,4 +4,4 @@ create policy "suspended listing visibility" on public.listings
   as restrictive
   for select
   to anon, authenticated
-  using (seller_id = (( SELECT auth.uid() AS uid)) OR NOT (seller_id IN ( SELECT public.suspended_profile_ids() AS suspended_profile_ids)));
+  using (seller_id = (( SELECT auth.uid() AS uid)) OR NOT (seller_id IN ( SELECT rls_internal.suspended_profile_ids() AS suspended_profile_ids)));

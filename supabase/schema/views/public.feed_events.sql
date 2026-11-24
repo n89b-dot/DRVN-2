@@ -30,6 +30,6 @@ UNION ALL
 comment on view public.feed_events is 'Explore feed timeline: public cars, published build updates (with or without a car), active listings — one recency-ordered source (see src/lib/feed.ts).';
 
 -- Grants
-grant all on table public.feed_events to anon;
-grant all on table public.feed_events to authenticated;
+grant delete, insert, select, update on table public.feed_events to anon;
+grant delete, insert, select, update on table public.feed_events to authenticated;
 grant all on table public.feed_events to service_role;

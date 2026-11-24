@@ -21,8 +21,8 @@ CREATE INDEX listing_images_listing_idx ON public.listing_images USING btree (li
 CREATE INDEX listing_images_media_key_idx ON public.listing_images USING btree (private.media_object_key(url));
 
 -- Grants
-grant maintain, select on table public.listing_images to anon;
-grant delete, maintain, select on table public.listing_images to authenticated;
+grant select on table public.listing_images to anon;
+grant delete, select on table public.listing_images to authenticated;
 grant all on table public.listing_images to service_role;
 grant insert (listing_id, url, alt, position) on table public.listing_images to authenticated;
 grant update (url, alt, position) on table public.listing_images to authenticated;

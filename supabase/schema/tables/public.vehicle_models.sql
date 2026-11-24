@@ -18,6 +18,6 @@ alter table public.vehicle_models add constraint vehicle_models_pkey PRIMARY KEY
 CREATE INDEX vehicle_models_make_idx ON public.vehicle_models USING btree (make_id);
 
 -- Grants
-grant all on table public.vehicle_models to anon;
-grant all on table public.vehicle_models to authenticated;
+grant delete, insert, select, update on table public.vehicle_models to anon;
+grant delete, insert, select, update on table public.vehicle_models to authenticated;
 grant all on table public.vehicle_models to service_role;
