@@ -213,3 +213,4 @@ Every pull request merged since #61, and whether GPT (through the Codex CLI) has
 | #270 | 2026-11-24 | Marketplace cards read one cover photo a listing, not every photo | waived | — | waived (ruling, 10 Nov) |
 | #271 | 2026-11-24 | Batch: #267 #268 #269 (commerce fixes, back-button caching and uploads; importer and monthly AI spend cap; notices record their listings) | waived | — | waived (ruling, 10 Nov) |
 | #272 | 2026-11-24 | Published photos get a public copy; drafts and private cars stay signed | waived | — | waived (ruling, 10 Nov) |
+| #273 | 2026-11-24 | Review-queue rows for the photo split and this pull request | skipped | — | docs only (ruling, 7 Nov) |
