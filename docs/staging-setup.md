@@ -490,7 +490,8 @@ on a separate host (`docs/remediation-release-and-monitoring.md`).
    deploys each `main` commit to staging once its `release-gate` has passed
    and staging has every migration, then waits for `/api/version` to report
    that commit. Production deploys only by hand, for an annotated
-   `rc-YYYYMMDD` tag on `main`, through the `production` environment.
+   `rc-YYYYMMDD` tag on `main` whose evidence packet is on `main` and
+   passes the 15 gates (§13), through the `production` environment.
    - Repository secret: `ADMIN_ALERT_WEBHOOK_URL` (both jobs post to it).
    - **Environment secrets, not repository secrets (#123):** put each of the
      following on the environment that uses it (Settings → Environments →
@@ -595,6 +596,9 @@ photo per hour, not once per instance.
      "operator": "<responsible person>"
    }
    ```
+   `shippingMode` is `"off"` when staging runs the launch settings (DRVN
+   Shipping off, `docs/release-evidence/launch-configuration.md`), and
+   `"stub"` or `"easypost-test"` when it rehearses labels.
 2. From a **clean committed checkout** of the deployed commit:
    `node scripts/release-candidate.mjs build /path/config.json /path/outside/candidate.json`.
    It runs `npm run build` and binds source SHA, build digest, migrations
@@ -627,6 +631,12 @@ photo per hour, not once per instance.
    Missing, duplicated, stale, future or mismatched evidence blocks
    promotion. The script checks the package, not its contents — the owner
    (or a reviewer they name) still reads each evidence file.
+5. Commit the packet (`candidate.json`, `reports.json` and the evidence
+   files) to `docs/release-evidence/candidates/<tag>/` by a pull request,
+   then tag the candidate commit. The production deploy runs
+   `release-candidate.mjs promote` on that folder and stops without it
+   (`docs/release-evidence/candidates/README.md` has the order and what
+   may go in a public folder).
 
 ## What only the owner can do — summary
 

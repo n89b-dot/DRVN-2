@@ -36,3 +36,52 @@ test('N540: the hosted variable listing may not carry the sandbox payment or shi
  assert.deepEqual(forbiddenHostedVariables('SHIPPING_ALLOW_STUB_IN_PRODUCTION\nPAYMENTS_ALLOW_STUB_IN_PRODUCTION'),['PAYMENTS_ALLOW_STUB_IN_PRODUCTION','SHIPPING_ALLOW_STUB_IN_PRODUCTION']);
  assert.deepEqual(forbiddenHostedVariables('X_PAYMENTS_ALLOW_STUB_IN_PRODUCTION Encrypted'),[]);
 });
+
+test('a candidate can declare DRVN Shipping off, the launch setting, and still no live or unknown provider',()=>{
+ assert.equal(validateConfiguration({...config,shippingMode:'off'}).shippingMode,'off');
+ for(const shippingMode of ['easypost-live','easypost','none',undefined])assert.throws(()=>validateConfiguration({...config,shippingMode}));
+ assert.throws(()=>validateConfiguration({...config,shippingMode:'off',paymentMode:'stripe-live'}),/test providers/);
+});
+
+test('production deploys a tag only with a complete packet for exactly that commit, fresh when the tag was made',async()=>{
+ const {mkdtempSync,mkdirSync,writeFileSync,rmSync}=await import('node:fs');
+ const {tmpdir}=await import('node:os');const {join}=await import('node:path');
+ const {createHash}=await import('node:crypto');const {verifyRelease,sourceDigests}=await import('./release-candidate.mjs');
+ const sha256=value=>createHash('sha256').update(value).digest('hex');
+ const dir=mkdtempSync(join(tmpdir(),'drvn-release-'));
+ try {
+  const root=join(dir,'checkout');mkdirSync(join(root,'supabase/migrations'),{recursive:true});
+  writeFileSync(join(root,'supabase/migrations/20261124000000_one.sql'),'select 1;');writeFileSync(join(root,'package-lock.json'),'{"lockfileVersion":3}');
+  const source=sourceDigests(root);const sha='a'.repeat(40);const taggedAt=Date.parse('2026-12-01T12:00:00Z');
+  const write=(change=()=>{})=>{
+   const packet=mkdtempSync(join(dir,'packet-'));
+   const made={candidate:{sourceSha:sha,buildDigest:'b'.repeat(64),migrationsDigest:source.migrationsDigest,lockfileDigest:source.lockfileDigest,configuration:{...config,shippingMode:'off'}},evidence:{}};
+   made.reports=REQUIRED_GATES.map(gate=>{made.evidence[`${gate}.txt`]=`${gate} passed`;return {gate,sourceSha:sha,buildDigest:made.candidate.buildDigest,migrationsDigest:source.migrationsDigest,environmentId:'staging',passed:true,evidencePath:`${gate}.txt`,evidenceDigest:sha256(`${gate} passed`),observedAt:'2026-11-29T12:00:00Z',counts:{expected:100,flaky:0,unexpected:0}};});
+   change(made);
+   for(const [name,body] of Object.entries(made.evidence))writeFileSync(join(packet,name),body);
+   if(made.candidate!==undefined)writeFileSync(join(packet,'candidate.json'),JSON.stringify(made.candidate));
+   writeFileSync(join(packet,'reports.json'),JSON.stringify(made.reports));
+   return packet;
+  };
+  const good=write();
+  assert.deepEqual(verifyRelease(good,root,sha,taggedAt),{eligible:true,sourceSha:sha,buildDigest:'b'.repeat(64),gateCount:15});
+  assert.throws(()=>verifyRelease(good,root,'c'.repeat(40),taggedAt),/not the tagged commit/);
+  assert.throws(()=>verifyRelease(good,root,sha,NaN),/no readable date/);
+  assert.throws(()=>verifyRelease(join(dir,'absent'),root,sha,taggedAt),/no readable candidate\.json/);
+  assert.throws(()=>verifyRelease(write(m=>{m.candidate=undefined;}),root,sha,taggedAt),/no readable candidate\.json/);
+  assert.throws(()=>verifyRelease(write(m=>{m.reports.pop();}),root,sha,taggedAt),/staging-soak: one unambiguous report required/);
+  assert.throws(()=>verifyRelease(write(m=>{m.reports[0].passed=false;}),root,sha,taggedAt),/blocked/);
+  // Older than seven days when the tag was made, and gathered after the tag.
+  assert.throws(()=>verifyRelease(write(m=>{m.reports[3].observedAt='2026-11-24T11:59:00Z';}),root,sha,taggedAt),/sql: failed, stale or mismatched/);
+  assert.throws(()=>verifyRelease(write(m=>{m.reports[3].observedAt='2026-12-01T12:00:01Z';}),root,sha,taggedAt),/sql: failed, stale or mismatched/);
+  assert.throws(()=>verifyRelease(write(m=>{m.evidence['privacy.txt']='edited afterwards';}),root,sha,taggedAt),/digest mismatch/);
+  assert.throws(()=>verifyRelease(write(m=>{delete m.evidence['privacy.txt'];}),root,sha,taggedAt),/ENOENT/);
+  assert.throws(()=>verifyRelease(write(m=>{m.reports='none';}),root,sha,taggedAt),/Gate reports required/);
+  // The tagged commit's own files decide: a packet built before a migration or a dependency changed is refused.
+  writeFileSync(join(root,'supabase/migrations/20261125000000_two.sql'),'select 2;');
+  assert.throws(()=>verifyRelease(good,root,sha,taggedAt),/different migrations/);
+  rmSync(join(root,'supabase/migrations/20261125000000_two.sql'));
+  writeFileSync(join(root,'package-lock.json'),'{"lockfileVersion":3,"changed":true}');
+  assert.throws(()=>verifyRelease(good,root,sha,taggedAt),/different lockfile/);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});

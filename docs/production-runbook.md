@@ -1,6 +1,14 @@
 # Production runbook
 
-For the September 2026 change, follow [the remediation rollout](remediation-rollout.md) before using the historical setup instructions below. Its migrations have been applied to disposable local databases and, on 2026-09-24, to the shared dev project (see `supabase/MIGRATIONS.md`) — never to production.
+Read these first; each is the current record for its part, and this runbook is the long reference behind them:
+
+- `docs/owner/README.md`: the owner's checklist, in order.
+- `docs/staging-setup.md`: standing up staging, and the 15 gates a release must pass (§13).
+- `docs/release-evidence/launch-configuration.md`: the switch settings DRVN launches with.
+- `docs/release-evidence/infrastructure.md`: what has been set up on each environment, with dates.
+- `supabase/MIGRATIONS.md`: every migration and where it has been applied. Migrations are applied with `scripts/apply-migration.mjs`, to a target named in `supabase/migration-targets.json`.
+
+No production project exists yet (24 November 2026). [The September 2026 remediation rollout](remediation-rollout.md) is history: its migrations are part of the consolidated baseline in `supabase/migrations/`, and a new database gets them from there.
 
 How to stand up (and stand back up) a production DRVN, separate from the dev
 project `grunnjojhdevhuckujmc`. Written to be followed top to bottom the first
@@ -1038,8 +1046,10 @@ next workflow deploy silently replaces it.
 **Production.** Actions → Deploy → Run workflow, with the previous good
 release tag (`rc-YYYYMMDD[-n]`, `git tag -l 'rc-*' --sort=-creatordate`). The
 job checks that the tag is an annotated release tag on `main`, that its
-`release-gate` passed and that production has every migration that tag
-carries. An older tag carries fewer files, so this passes. The job then waits
+`release-gate` passed, that its evidence packet is still on `main`
+(`docs/release-evidence/candidates/<tag>/`; it is judged as of the day the
+tag was made, so an old release is not refused for its age) and that
+production has every migration that tag carries. An older tag carries fewer files, so this passes. The job then waits
 for the `production` environment's reviewer, deploys, waits until
 `/api/version` reports the tag's commit, and tells the alert channel.
 

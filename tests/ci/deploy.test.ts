@@ -67,6 +67,26 @@ describe("the deploy workflow (N634, N528)", () => {
     for (const before of [tag, gate, migrations, overrides]) expect(before).toBeLessThan(ship);
   });
 
+  it("N634: production deploys a tag only when its evidence packet on main passes the 15 gates", () => {
+    const production = deploy.jobs.production;
+    const gate = indexOf(production, runs("scripts/deploy.mjs gate"));
+    const packet = indexOf(production, runs("release-candidate.mjs promote"));
+    const build = indexOf(production, runs("vercel@65.2.0 build --prod"));
+    // After the tag is known to be a release tag on main, and before anything is built or served.
+    expect(gate).toBeLessThan(packet);
+    expect(packet).toBeLessThan(build);
+    const step = production.steps[packet];
+    expect(step.if).toBeUndefined();
+    expect(step.env).toEqual({ TAG: "${{ inputs.tag }}", SHA: "${{ steps.tag.outputs.sha }}" });
+    // The packet is main's copy, for this tag only; a tag with none stops here.
+    expect(step.run).toContain('PACKET="docs/release-evidence/candidates/$TAG"');
+    expect(step.run).toContain('git cat-file -e "origin/main:$PACKET/candidate.json"');
+    expect(step.run).toContain('git archive origin/main "$PACKET"');
+    // Judged against the tagged commit, as of the moment the tag was made.
+    expect(step.run).toContain("%(taggerdate:iso-strict)");
+    expect(step.run).toContain('release-candidate.mjs promote "$RUNNER_TEMP/packet/$PACKET" "$SHA" "$TAGGED_AT"');
+  });
+
   it("N634: never applies a migration, never interpolates an input into a script, and pins the host's CLI", () => {
     for (const job of Object.values(deploy.jobs)) {
       for (const step of job.steps) {
