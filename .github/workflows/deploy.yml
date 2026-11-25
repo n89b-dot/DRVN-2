@@ -8,6 +8,9 @@
 # rc-YYYYMMDD[-n] on main whose release-gate passed, through the "production"
 # environment (the owner sets its required reviewers), with the same
 # migration check and the sandbox overrides absent from the host (N540).
+# The tag also needs its evidence packet on main, passing the 15 gates
+# (docs/release-evidence/candidates/README.md): without one, the job stops
+# before it builds.
 # The tag must be annotated (who made it, and when), not cryptographically
 # signed: the sign-off is the production environment's required reviewer,
 # who approves the run in GitHub (report five #113).
@@ -215,6 +218,27 @@ jobs:
         env:
           SHA: ${{ steps.tag.outputs.sha }}
           GITHUB_TOKEN: ${{ github.token }}
+
+      # The 15 gates (scripts/release-candidate.mjs, docs/staging-setup.md §13).
+      # The packet for this tag, as it stands on main, must be for exactly
+      # this commit, with every gate's evidence present, unchanged, and no
+      # older than seven days when the tag was made. It is read from main, not
+      # from the tag, because the evidence is gathered after the commit it
+      # describes; the script that judges it is the tagged commit's own.
+      - name: The evidence packet for this tag passes the 15 gates
+        env:
+          TAG: ${{ inputs.tag }}
+          SHA: ${{ steps.tag.outputs.sha }}
+        run: |
+          PACKET="docs/release-evidence/candidates/$TAG"
+          if ! git cat-file -e "origin/main:$PACKET/candidate.json" 2>/dev/null; then
+            echo "::error::No evidence packet for $TAG on main: $PACKET/ (docs/release-evidence/candidates/README.md)"
+            exit 1
+          fi
+          mkdir "$RUNNER_TEMP/packet"
+          git archive origin/main "$PACKET" | tar -x -C "$RUNNER_TEMP/packet"
+          TAGGED_AT="$(git for-each-ref --format='%(taggerdate:iso-strict)' "refs/tags/$TAG")"
+          node scripts/release-candidate.mjs promote "$RUNNER_TEMP/packet/$PACKET" "$SHA" "$TAGGED_AT"
 
       - name: Production has every migration
         env:
